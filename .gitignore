@@ -1,0 +1,21 @@
+# 虚拟环境
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+
+# 本地数据与生成文件（如需把 crm.db 纳入版本控制，可删掉下一行）
+crm.db
+index.html
+
+# 应用上传与回收站
+attachments/
+deleted_files/
+
+.DS_Store
+.env
+.env.*
