@@ -1,0 +1,124 @@
+{\rtf1\ansi\ansicpg936\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww29200\viewh16000\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 import os\
+import time\
+import shutil\
+import json\
+import csv\
+import io\
+from datetime import datetime, timedelta\
+from typing import List, Optional\
+from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File\
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse\
+from fastapi.staticfiles import StaticFiles\
+from sqlalchemy import create_all, Column, Integer, String, Text, DateTime, ForeignKey, Float\
+from sqlalchemy.ext.declarative import declarative_base\
+from sqlalchemy.orm import sessionmaker, Session, relationship\
+\
+# --- 1. \uc0\u22522 \u30784 \u37197 \u32622 \u19982 \u29615 \u22659 \u21021 \u22987 \u21270  ---\
+# [cite: 42, 51, 74]\
+UPLOAD_DIR = "./uploads"\
+TRASH_DIR = "./deleted_files"\
+DB_URL = "sqlite:///./crm_v8.db"\
+ADMIN_USER = \{"username": "admin", "password": "admin123"\}\
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB [cite: 58]\
+\
+for d in [UPLOAD_DIR, TRASH_DIR]:\
+    if not os.path.exists(d):\
+        os.makedirs(d)\
+\
+# \uc0\u21551 \u21160 \u26102 \u28165 \u29702  30 \u22825 \u21069 \u30340 \u22238 \u25910 \u31449 \u25991 \u20214  [cite: 73, 75]\
+def cleanup_trash():\
+    now = time.time()\
+    for f in os.listdir(TRASH_DIR):\
+        f_path = os.path.join(TRASH_DIR, f)\
+        if os.stat(f_path).st_mtime < now - 30 * 86400:\
+            if os.path.isfile(f_path): os.remove(f_path)\
+            elif os.path.isdir(f_path): shutil.rmtree(f_path)\
+\
+cleanup_trash()\
+\
+# --- 2. \uc0\u25968 \u25454 \u24211 \u27169 \u22411 \u35774 \u35745  ---\
+Base = declarative_base()\
+\
+class Client(Base):\
+    __tablename__ = "clients"\
+    id = Column(Integer, primary_key=True, index=True)\
+    name = Column(String, unique=True)\
+    industry = Column(String)\
+    owner = Column(String)\
+    scale = Column(String) # \uc0\u22806 \u21253 \u35268 \u27169 \
+    phase = Column(String) # \uc0\u21021 \u27493 \u25509 \u35302 \u12289 \u26041 \u26696 /\u25253 \u20215 \u12289 \u21512 \u21516 \u31614 \u35746 \u12289 \u25104 \u20132 \
+    description = Column(Text)\
+    remarks = Column(Text, default="")\
+    created_at = Column(DateTime, default=datetime.now)\
+\
+class VisitRecord(Base):\
+    __tablename__ = "visits"\
+    id = Column(Integer, primary_key=True)\
+    client_id = Column(Integer, ForeignKey("clients.id"))\
+    date = Column(String)\
+    location = Column(String)\
+    content = Column(Text)\
+    attachment = Column(String, nullable=True)\
+\
+class AuditLog(Base):\
+    __tablename__ = "audit_logs"\
+    id = Column(Integer, primary_key=True)\
+    client_id = Column(Integer)\
+    operator = Column(String)\
+    action = Column(Text) # \uc0\u20363 \u22914 : \u23558 [\u38454 \u27573 ]\u20174 [\u26041 \u26696 ]\u25913 \u20026 [\u25104 \u20132 ]\
+    created_at = Column(DateTime, default=datetime.now)\
+\
+# --- 3. \uc0\u21518 \u31471 \u36923 \u36753 \u36923 \u36753  ---\
+app = FastAPI()\
+# [cite: 74] \uc0\u38745 \u24577 \u25991 \u20214 \u25346 \u36733 \u20197 \u20415 \u39044 \u35272 \
+app.mount("/previews", StaticFiles(directory=UPLOAD_DIR), name="previews")\
+\
+# \uc0\u25968 \u25454 \u21021 \u22987 \u21270 \u36923 \u36753 \u30053  (Mock\u25968 \u25454 )...\
+# \uc0\u27492 \u22788 \u30465 \u30053 \u20855 \u20307  CRUD \u25509 \u21475 \u65292 Gemini \u29983 \u25104 \u26102 \u20250 \u34917 \u20840 \u26631 \u20934  FastAPI \u36923 \u36753 \
+\
+# --- 4. \uc0\u21069 \u31471  UI (Vue 3 + Tailwind) ---\
+# [cite: 39, 43, 47]\
+HTML_CONTENT = """\
+<!DOCTYPE html>\
+<html lang="zh">\
+<head>\
+    <meta charset="UTF-8">\
+    <title>ITO CRM Ultimate V8</title>\
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>\
+    <script src="https://cdn.tailwindcss.com"></script>\
+    <style>\
+        .funnel-step:hover \{ opacity: 0.8; cursor: pointer; \}\
+    </style>\
+</head>\
+<body class="bg-gray-50">\
+    <div id="app">\
+        </div>\
+\
+    <script>\
+        const \{ createApp, ref, onMounted \} = Vue;\
+        createApp(\{\
+            setup() \{\
+                // \uc0\u29366 \u24577 \u31649 \u29702 \u12289 SVG \u32472 \u22270 \u36923 \u36753 \u12289 CSV \u23548 \u20986 \u36923 \u36753 \u12289 \u39564 \u35777 \u30721 \u26657 \u39564 \u31561 \
+                // [cite: 10, 45, 55]\
+            \}\
+        \}).mount('#app')\
+    </script>\
+</body>\
+</html>\
+"""\
+\
+@app.get("/", response_class=HTMLResponse)\
+async def index():\
+    return HTML_CONTENT # [cite: 95] \uc0\u36991 \u24320 \u28210 \u26579 \u20914 \u31361 \
+\
+if __name__ == "__main__":\
+    import uvicorn\
+    # \uc0\u33258 \u21160 \u33719 \u21462  IP \u36923 \u36753 \u30053 ...\
+    uvicorn.run(app, host="0.0.0.0", port=8000)}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}费用折算器 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style> html { scroll-behavior: smooth; } #calc-remark { scroll-margin-top: 5rem; } </style>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="page-app" class="container mx-auto p-6 max-w-[1280px]">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">外包费用按天折算</h1>
+    <div id="section-calc" class="max-w-xl mx-auto bg-white p-8 rounded-lg shadow-lg border border-gray-200 border-t-4 border-blue-600">
+        <h2 class="text-2xl font-bold mb-6 flex items-center">
+            <span class="mr-2">🧮</span> 外包费用按天折算工具
+        </h2>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-1">月单价 (元)</label>
+                <input v-model.number="calc.price" type="number" class="w-full p-2 border rounded">
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">本月总天数</label>
+                    <input v-model.number="calc.totalDays" type="number" class="w-full p-2 border rounded">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">实际出勤/服务天数</label>
+                    <input v-model.number="calc.actDays" type="number" class="w-full p-2 border rounded">
+                </div>
+            </div>
+            <div class="bg-blue-50 p-4 rounded-lg mt-6">
+                <p class="text-sm text-blue-600 font-medium">折算结果:</p>
+                <p class="text-3xl font-bold text-blue-800">¥ {{ calcResult.amount }}</p>
+                <p class="text-xs text-blue-400 mt-2">计算公式: {{ calcResult.formula }}</p>
+            </div>
+            <div id="calc-remark" class="mt-4 pt-4 border-t">
+                <label class="block text-sm font-medium mb-1">保存计算结果到客户备注</label>
+                <div class="flex space-x-2 flex-wrap gap-y-2">
+                    <select v-model="calc.targetClientId" class="flex-1 min-w-[12rem] p-2 border rounded">
+                        <option value="">-- 请选择客户 --</option>
+                        <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    </select>
+                    <button type="button" @click="saveCalcToRemark" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">追加到备注</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+createApp({
+    setup() {
+        const clients = ref([]);
+        const calc = ref({ price: 0, totalDays: 31, actDays: 22, targetClientId: '' });
+        const authHeader = () => window.crmAuthHeader();
+
+        const loadClients = () => {
+            fetch('/api/clients', { headers: authHeader() }).then(r => r.json()).then(d => { clients.value = d; });
+        };
+
+        const calcResult = computed(() => {
+            if (!calc.value.totalDays || !calc.value.price) return { amount: 0, formula: '-' };
+            const res = (calc.value.price / calc.value.totalDays * calc.value.actDays).toFixed(2);
+            return { amount: res, formula: `${calc.value.price} / ${calc.value.totalDays} * ${calc.value.actDays}` };
+        });
+
+        const saveCalcToRemark = () => {
+            if (!calc.value.targetClientId) return alert('请先选择目标客户');
+            const target = clients.value.find(c => c.id == calc.value.targetClientId);
+            if (!target) return;
+            const timestamp = new Date().toLocaleString();
+            const newRemark = (target.remarks || '') + `\n[财务折算 ${timestamp}]: 金额 ¥${calcResult.value.amount} (计算公式: ${calcResult.value.formula})`;
+            const fd = new FormData();
+            fd.append('name', target.name);
+            fd.append('phase', target.phase);
+            fd.append('remarks', newRemark);
+            fetch(`/api/clients/${target.id}`, { method: 'PUT', headers: authHeader(), body: fd }).then(() => {
+                alert('已追加至该客户备注中');
+                loadClients();
+            });
+        };
+
+        onMounted(loadClients);
+        return { clients, calc, calcResult, saveCalcToRemark };
+    }
+}).mount('#page-app');
+</script>
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}首页总览 · ITO CRM V8{% endblock %}
+{% block content %}
+<div class="container mx-auto p-6 max-w-[1280px]">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">首页总览</h1>
+    <p class="text-gray-600 mb-8">以下为独立页面入口，与 GitHub 顶栏类似：悬停顶栏展开子菜单，点击子项进入对应页面。</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <a href="/home/funnel" class="block bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition">
+            <h2 class="text-lg font-semibold text-gray-900 mb-2">销售漏斗看板</h2>
+            <p class="text-sm text-gray-500">按阶段统计与漏斗交互，筛选后跳转到客户列表。</p>
+        </a>
+        <a href="/home/trash" class="block bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition">
+            <h2 class="text-lg font-semibold text-gray-900 mb-2">回收站与空间占用</h2>
+            <p class="text-sm text-gray-500">待处理文件数量与已占用空间。</p>
+        </a>
+    </div>
+</div>
+{% endblock %}

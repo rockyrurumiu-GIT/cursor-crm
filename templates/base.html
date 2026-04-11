@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ITO CRM V8{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    {% block head_extra %}{% endblock %}
+    <style>
+        .funnel-layer:hover { filter: brightness(1.1); cursor: pointer; }
+        /* 父级若 overflow 非 visible，下拉会被裁切 — nav 禁止横向 overflow 裁剪 */
+        .crm-header-nav-wrap { overflow: visible; min-width: 0; }
+        .gh-nav-item { position: relative; }
+        .gh-mega {
+            position: absolute; left: 0; top: 100%; padding-top: 0.45rem; z-index: 200;
+            opacity: 0; visibility: hidden; transform: translateY(-4px); pointer-events: none;
+            transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+        }
+        .gh-nav-item:hover .gh-mega,
+        .gh-nav-item:focus-within .gh-mega {
+            opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto;
+        }
+        .gh-mega-panel {
+            border-radius: 0.75rem;
+            border: 1px solid #d0d7de;
+            background: #ffffff;
+            color: #1f2328;
+            box-shadow: 0 16px 48px rgba(1, 4, 9, 0.18);
+            min-width: 36rem;
+            max-width: min(90vw, 52rem);
+        }
+        .gh-mega-col-h {
+            font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em;
+            color: #656d76; text-transform: uppercase; margin-bottom: 0.65rem;
+        }
+        .gh-mega-link {
+            display: block; padding: 0.35rem 0; font-size: 0.9rem; color: #1f2328;
+            border-radius: 0.25rem;
+        }
+        .gh-mega-link:hover { color: #0969da; }
+        .gh-mega-footer {
+            margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid #d8dee4;
+            background: #f6f8fa; margin-left: -1rem; margin-right: -1rem;
+            margin-bottom: -1rem; padding-left: 1rem; padding-right: 1rem;
+            padding-bottom: 0.75rem; border-radius: 0 0 0.75rem 0.75rem;
+        }
+        .nav-trigger {
+            display: inline-flex; align-items: center; gap: 0.25rem;
+            padding: 0.75rem 0.75rem; font-size: 0.875rem; font-weight: 500;
+            color: #e6edf3; border-radius: 0.375rem; background: transparent; border: none;
+            cursor: default; white-space: nowrap;
+        }
+        .nav-trigger:hover { background: rgba(255,255,255,0.06); }
+        .gh-nav-item.nav-active > .nav-trigger { color: #fff; background: rgba(255,255,255,0.08); }
+    </style>
+</head>
+<body class="bg-[#f6f8fa] text-gray-800">
+    <div id="login-overlay" class="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] hidden">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-96">
+            <h2 class="text-2xl font-bold mb-6 text-center text-blue-600">ITO CRM 登录</h2>
+            <input id="login-user" type="text" placeholder="用户名" class="w-full p-2 border rounded mb-4">
+            <input id="login-pwd" type="password" placeholder="密码" class="w-full p-2 border rounded mb-6">
+            <p id="login-err" class="text-sm text-red-600 mb-2 hidden"></p>
+            <button type="button" id="login-btn" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">进入系统</button>
+        </div>
+    </div>
+
+    <div id="main-shell" class="min-h-screen flex flex-col hidden">
+        <header class="border-b border-[#30363d] bg-[#010409] text-[#e6edf3] shrink-0 relative z-[100] overflow-visible">
+            <div class="max-w-[1280px] mx-auto px-4 flex items-center justify-between min-h-[3.5rem] gap-4 overflow-visible">
+                <div class="crm-header-nav-wrap flex items-center flex-1">
+                    <a href="/home" class="text-white font-semibold tracking-tight shrink-0 mr-4 md:mr-8">ITO CRM<span class="text-[#8b949e] font-normal text-xs ml-1.5">V8</span></a>
+                    {% include "partials/nav.html" %}
+                </div>
+                <div class="flex items-center gap-3 shrink-0 text-sm">
+                    <span id="header-user" class="text-[#8b949e] hidden sm:inline"></span>
+                    <button type="button" id="logout-btn" class="text-[#58a6ff] hover:underline font-medium">退出</button>
+                </div>
+            </div>
+        </header>
+        <main class="flex-1">{% block content %}{% endblock %}</main>
+    </div>
+
+    <script>
+        window.crmAuthHeader = function () {
+            var b = localStorage.getItem('crm_b64');
+            return b ? { 'Authorization': 'Basic ' + b } : {};
+        };
+        window.crmExportCsv = async function (e) {
+            if (e) { e.preventDefault(); }
+            var b = localStorage.getItem('crm_b64');
+            if (!b) { alert('请先登录'); return; }
+            try {
+                var r = await fetch('/api/export/clients', { headers: { 'Authorization': 'Basic ' + b } });
+                if (!r.ok) { alert('导出失败'); return; }
+                var blob = await r.blob();
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'clients_' + Date.now() + '.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+            } catch (err) { alert('导出失败'); }
+        };
+
+        (function () {
+            var overlay = document.getElementById('login-overlay');
+            var shell = document.getElementById('main-shell');
+            var errEl = document.getElementById('login-err');
+
+            function showLogin(msg) {
+                shell.classList.add('hidden');
+                overlay.classList.remove('hidden');
+                if (msg) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
+                else { errEl.classList.add('hidden'); }
+            }
+
+            async function verifySession() {
+                var b = localStorage.getItem('crm_b64');
+                if (!b) { showLogin(); return; }
+                try {
+                    var r = await fetch('/api/stats', { headers: { 'Authorization': 'Basic ' + b } });
+                    if (!r.ok) {
+                        localStorage.removeItem('crm_b64');
+                        localStorage.removeItem('crm_user');
+                        showLogin('会话已失效，请重新登录');
+                        return;
+                    }
+                    overlay.classList.add('hidden');
+                    shell.classList.remove('hidden');
+                    var u = localStorage.getItem('crm_user') || '';
+                    document.getElementById('header-user').textContent = u ? ('欢迎，' + u) : '';
+                } catch (e) {
+                    showLogin('无法连接服务器');
+                }
+            }
+
+            document.getElementById('login-btn').onclick = async function () {
+                var u = document.getElementById('login-user').value.trim();
+                var p = document.getElementById('login-pwd').value;
+                errEl.classList.add('hidden');
+                try {
+                    var b64 = btoa(u + ':' + p);
+                    var r = await fetch('/api/stats', { headers: { 'Authorization': 'Basic ' + b64 } });
+                    if (!r.ok) { showLogin('账号或密码错误'); return; }
+                    localStorage.setItem('crm_b64', b64);
+                    localStorage.setItem('crm_user', u);
+                    await verifySession();
+                } catch (e) { showLogin('服务器连接失败'); }
+            };
+
+            document.getElementById('logout-btn').onclick = function () {
+                localStorage.removeItem('crm_b64');
+                localStorage.removeItem('crm_user');
+                document.getElementById('login-pwd').value = '';
+                showLogin();
+            };
+
+            verifySession();
+        })();
+    </script>
+    {% block page_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}回收站与空间 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="page-app" class="container mx-auto p-6 max-w-[1280px]">
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">回收站与空间占用</h1>
+    <div class="max-w-md bg-white p-6 rounded-lg shadow border border-gray-200/80">
+        <div class="space-y-4">
+            <div class="p-4 bg-gray-50 rounded">
+                <p class="text-sm text-gray-500">回收站待处理文件</p>
+                <p class="text-2xl font-bold text-orange-600">{{ stats.trash.count }} 个</p>
+            </div>
+            <div class="p-4 bg-gray-50 rounded">
+                <p class="text-sm text-gray-500">已占用空间</p>
+                <p class="text-xl font-bold">{{ stats.trash.size }}</p>
+            </div>
+            <p class="text-xs text-gray-400">提示：超过30天的已删除文件将在系统重启时自动清除。</p>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+    setup() {
+        const stats = ref({ funnel: {}, trash: { count: 0, size: '0MB' } });
+        onMounted(() => {
+            fetch('/api/stats', { headers: window.crmAuthHeader() }).then(r => r.json()).then(d => { stats.value = d; });
+        });
+        return { stats };
+    }
+}).mount('#page-app');
+</script>
+{% endblock %}

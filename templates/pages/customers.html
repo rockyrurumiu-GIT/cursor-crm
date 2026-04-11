@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+{% block title %}客户列表 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="page-app">
+    <div class="container mx-auto p-6 max-w-[1280px] space-y-4">
+        <div class="flex justify-between items-center flex-wrap gap-2">
+            <h1 class="text-2xl font-bold text-gray-900">客户列表</h1>
+            <div class="flex items-center space-x-2">
+                <span v-if="filterPhase" class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-sm">
+                    筛选: {{ filterPhase }} <button type="button" @click="clearPhase" class="ml-1 text-red-500">×</button>
+                </span>
+                <a href="/customers/new" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ 新增客户</a>
+                <button type="button" @click="exportCSV" class="border border-blue-600 text-blue-600 px-4 py-2 rounded hover:bg-blue-50">导出全量名单 (CSV)</button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="p-4">客户名称</th>
+                        <th class="p-4">销售负责人</th>
+                        <th class="p-4">外包规模</th>
+                        <th class="p-4">开拓阶段</th>
+                        <th class="p-4">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="c in clients" :key="c.id" class="border-t hover:bg-gray-50">
+                        <td class="p-4 font-medium">{{ c.name }}</td>
+                        <td class="p-4">{{ c.owner }}</td>
+                        <td class="p-4">{{ c.scale }}</td>
+                        <td class="p-4">
+                            <span :class="phaseColor(c.phase)" class="px-2 py-1 rounded text-xs">{{ c.phase }}</span>
+                        </td>
+                        <td class="p-4 space-x-3">
+                            <button type="button" @click="openDetail(c)" class="text-blue-600 text-sm">详情/记录</button>
+                            <button type="button" @click="confirmDelete(c)" class="text-red-600 text-sm">删除</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div v-if="showDetail" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-5/6 flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
+                <h3 class="text-xl font-bold">{{ selectedClient.name }} - 全景档案</h3>
+                <button type="button" @click="showDetail=false" class="text-gray-500 hover:text-black text-2xl">×</button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-bold border-l-4 border-blue-600 pl-2">拜访/沟通记录</h4>
+                        <button type="button" @click="showAddVisit=true" class="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">+ 新记录</button>
+                    </div>
+                    <div v-if="details.visits.length===0" class="text-center py-10 text-gray-400">暂无记录</div>
+                    <div v-for="v in details.visits" :key="v.id" class="mb-4 p-4 border rounded relative bg-white shadow-sm">
+                        <div class="flex justify-between text-xs text-gray-500 mb-2">
+                            <span>{{ v.date }} | {{ v.location }}</span>
+                        </div>
+                        <p class="text-sm">{{ v.content }}</p>
+                        <div v-if="v.attachment" class="mt-3 pt-3 border-t">
+                            <div v-if="isImage(v.attachment)">
+                                <img :src="'/previews/'+v.attachment" class="w-16 h-16 object-cover rounded border cursor-zoom-in" @click="viewFull('/previews/'+v.attachment)">
+                            </div>
+                            <div v-else class="flex items-center">
+                                <span class="text-xs text-blue-600 underline cursor-pointer" @click="viewFull('/previews/'+v.attachment)">📄 查看预览 (PDF/TXT)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-6">
+                    <div>
+                        <h4 class="font-bold border-l-4 border-orange-500 pl-2 mb-4">备注与折算记录</h4>
+                        <textarea v-model="selectedClient.remarks" class="w-full h-32 p-2 border rounded text-sm bg-yellow-50" placeholder="点击保存按钮同步修改..."></textarea>
+                        <button type="button" @click="updateClient(selectedClient)" class="mt-2 w-full bg-orange-500 text-white text-sm py-1 rounded">保存备注及阶段修改</button>
+                    </div>
+                    <div>
+                        <h4 class="font-bold border-l-4 border-gray-400 pl-2 mb-4">字段变更记录 (审计)</h4>
+                        <div class="text-xs space-y-3">
+                            <div v-for="log in details.logs" :key="log.id" class="flex items-start">
+                                <div class="w-2 h-2 bg-gray-300 rounded-full mt-1.5 mr-2"></div>
+                                <div class="flex-1">
+                                    <p class="text-gray-400">{{ formatDate(log.created_at) }} - {{ log.operator }}</p>
+                                    <p class="text-gray-700">{{ log.action }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showAddVisit" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h3 class="font-bold mb-4">新增拜访记录</h3>
+            <div class="space-y-3">
+                <input v-model="visitForm.date" type="date" class="w-full p-2 border rounded">
+                <input v-model="visitForm.location" placeholder="地点" class="w-full p-2 border rounded">
+                <textarea v-model="visitForm.content" placeholder="内容" rows="4" class="w-full p-2 border rounded"></textarea>
+                <input type="file" @change="onVisitFileChange" class="text-sm">
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button type="button" @click="showAddVisit=false" class="flex-1 bg-gray-200 py-2 rounded">取消</button>
+                <button type="button" @click="submitVisit" class="flex-1 bg-blue-600 text-white py-2 rounded">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showDelete" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded shadow-lg w-80 text-center">
+            <h3 class="text-lg font-bold text-red-600 mb-4">确认删除客户？</h3>
+            <p class="text-sm mb-4">删除后数据将进入回收站。请输入下方随机码进行确认：</p>
+            <p class="text-2xl font-mono font-bold tracking-widest bg-gray-100 py-2 mb-4">{{ deleteCaptcha }}</p>
+            <input v-model="deleteInput" type="text" placeholder="输入4位数字" class="w-full p-2 border rounded mb-4 text-center">
+            <div class="flex space-x-2">
+                <button type="button" @click="showDelete=false" class="flex-1 bg-gray-200 py-2 rounded">取消</button>
+                <button type="button" @click="executeDelete" :disabled="deleteInput!==deleteCaptcha" :class="deleteInput===deleteCaptcha?'bg-red-600':'bg-red-300'" class="flex-1 text-white py-2 rounded">确认删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+
+createApp({
+    setup() {
+        const params = new URLSearchParams(window.location.search);
+        const clients = ref([]);
+        const filterPhase = ref(params.get('phase') || '');
+        const showDetail = ref(false);
+        const showAddVisit = ref(false);
+        const showDelete = ref(false);
+        const selectedClient = ref({});
+        const details = ref({ visits: [], logs: [] });
+        const deleteCaptcha = ref('');
+        const deleteInput = ref('');
+        const clientToDelete = ref(null);
+        const visitForm = ref({ date: '', location: '', content: '' });
+        const visitFile = ref(null);
+        const onVisitFileChange = (e) => {
+            const f = e.target.files;
+            visitFile.value = f && f[0] ? f[0] : null;
+        };
+
+        const authHeader = () => window.crmAuthHeader();
+
+        const loadClients = () => {
+            const url = filterPhase.value
+                ? `/api/clients?phase=${encodeURIComponent(filterPhase.value)}`
+                : '/api/clients';
+            fetch(url, { headers: authHeader() }).then(r => r.json()).then(d => { clients.value = d; });
+        };
+
+        const clearPhase = () => {
+            filterPhase.value = '';
+            window.history.replaceState({}, '', '/customers');
+            loadClients();
+        };
+
+        const phaseColor = (p) => {
+            const m = {
+                '初步接触': 'bg-blue-100 text-blue-800',
+                '方案/报价': 'bg-indigo-100 text-indigo-800',
+                '合同签订': 'bg-purple-100 text-purple-800',
+                '成交': 'bg-green-100 text-green-800'
+            };
+            return m[p] || 'bg-gray-100';
+        };
+
+        const openDetail = (c) => {
+            selectedClient.value = { ...c };
+            fetch(`/api/clients/${c.id}/details`, { headers: authHeader() }).then(r => r.json()).then(d => {
+                details.value = d;
+                showDetail.value = true;
+            });
+        };
+
+        const updateClient = (c) => {
+            const fd = new FormData();
+            fd.append('name', c.name);
+            fd.append('phase', c.phase);
+            fd.append('remarks', c.remarks || '');
+            fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: authHeader(), body: fd }).then(() => {
+                alert('保存成功');
+                loadClients();
+                showDetail.value = false;
+            });
+        };
+
+        const confirmDelete = (c) => {
+            clientToDelete.value = c;
+            deleteCaptcha.value = Math.floor(1000 + Math.random() * 9000).toString();
+            deleteInput.value = '';
+            showDelete.value = true;
+        };
+
+        const executeDelete = () => {
+            fetch(`/api/clients/${clientToDelete.value.id}`, { method: 'DELETE', headers: authHeader() }).then(() => {
+                showDelete.value = false;
+                loadClients();
+            });
+        };
+
+        const submitVisit = async () => {
+            const fd = new FormData();
+            fd.append('client_id', selectedClient.value.id);
+            fd.append('date', visitForm.value.date);
+            fd.append('location', visitForm.value.location);
+            fd.append('content', visitForm.value.content);
+            if (visitFile.value) { fd.append('file', visitFile.value); }
+            const r = await fetch('/api/visits', { method: 'POST', headers: authHeader(), body: fd });
+            if (r.ok) {
+                showAddVisit.value = false;
+                visitForm.value = { date: '', location: '', content: '' };
+                visitFile.value = null;
+                const fin = document.querySelector('#page-app input[type=file]');
+                if (fin) fin.value = '';
+                openDetail(selectedClient.value);
+            } else alert('保存失败');
+        };
+
+        const exportCSV = () => window.crmExportCsv();
+
+        const isImage = (path) => /\.(jpg|jpeg|png|gif)$/i.test(path);
+        const viewFull = (url) => window.open(url, '_blank');
+        const formatDate = (ds) => new Date(ds).toLocaleString();
+
+        onMounted(loadClients);
+
+        return {
+            clients, filterPhase, showDetail, showAddVisit, showDelete, selectedClient, details,
+            deleteCaptcha, deleteInput, visitForm, onVisitFileChange,
+            loadClients, clearPhase, phaseColor, openDetail, updateClient, confirmDelete, executeDelete,
+            submitVisit, exportCSV, isImage, viewFull, formatDate
+        };
+    }
+}).mount('#page-app');
+</script>
+{% endblock %}

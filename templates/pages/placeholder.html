@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} · ITO CRM V8{% endblock %}
+{% block content %}
+<div class="container mx-auto p-6 max-w-[1280px]">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-8 max-w-3xl">
+        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">{{ section_label or '模块' }}</p>
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">{{ title }}</h1>
+        {% if subtitle %}
+        <p class="text-gray-600 mb-6">{{ subtitle }}</p>
+        {% endif %}
+        <div class="prose prose-sm text-gray-700">
+            <p>此页面为独立路由，可在后续接入列表、图表或表单。顶栏悬停选择其他子模块即可切换页面。</p>
+        </div>
+        <a href="javascript:history.back()" class="inline-block mt-8 text-sm text-[#0969da] hover:underline">← 返回上一页</a>
+    </div>
+</div>
+{% endblock %}

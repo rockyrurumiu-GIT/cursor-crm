@@ -1,0 +1,125 @@
+{% set path = request.url.path %}
+<nav class="flex items-stretch gap-0 flex-wrap md:flex-nowrap">
+    <!-- 首页 -->
+    <div class="gh-nav-item{% if path.startswith('/home') %} nav-active{% endif %}">
+        <span class="nav-trigger cursor-default">首页
+            <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </span>
+        <div class="gh-mega">
+            <div class="gh-mega-panel p-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <div class="gh-mega-col-h">销售与资产概览</div>
+                        <a class="gh-mega-link" href="/home/funnel">销售漏斗看板</a>
+                        <a class="gh-mega-link" href="/home/trash">回收站与空间占用</a>
+                    </div>
+                    <div>
+                        <div class="gh-mega-col-h">快捷入口</div>
+                        <a class="gh-mega-link" href="/home">首页总览</a>
+                    </div>
+                </div>
+                <div class="gh-mega-footer">
+                    <a href="/home" class="text-sm font-medium text-[#0969da] hover:underline">查看全部首页模块 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 客户（含费用折算器子项） -->
+    <div class="gh-nav-item{% if path.startswith('/customers') or path.startswith('/tools/calc') %} nav-active{% endif %}">
+        <span class="nav-trigger cursor-default">客户
+            <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </span>
+        <div class="gh-mega">
+            <div class="gh-mega-panel p-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-8">
+                    <div>
+                        <div class="gh-mega-col-h">客户与名单</div>
+                        <a class="gh-mega-link" href="/customers">客户列表</a>
+                        <a class="gh-mega-link" href="/customers/new">新增客户</a>
+                        <a class="gh-mega-link" href="#" onclick="crmExportCsv(event)">导出 CSV</a>
+                    </div>
+                    <div>
+                        <div class="gh-mega-col-h">外包费用</div>
+                        <a class="gh-mega-link" href="/tools/calc">费用折算器（按天折算）</a>
+                        <a class="gh-mega-link" href="/tools/calc#calc-remark">折算并写入客户备注</a>
+                    </div>
+                </div>
+                <div class="gh-mega-footer">
+                    <a href="/customers" class="text-sm font-medium text-[#0969da] hover:underline">进入客户管理 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 商机（GitHub 式多列：每列独立标题 + 链接） -->
+    <div class="gh-nav-item{% if path.startswith('/opportunity') %} nav-active{% endif %}">
+        <span class="nav-trigger cursor-default">商机
+            <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </span>
+        <div class="gh-mega">
+            <div class="gh-mega-panel p-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-8">
+                    <div>
+                        <div class="gh-mega-col-h">销售线索</div>
+                        <a class="gh-mega-link font-medium" href="/opportunity/leads">线索池与跟进</a>
+                        <p class="text-xs text-[#656d76] mt-1 leading-relaxed">独立页面：录入、筛选与转化跟踪。</p>
+                    </div>
+                    <div>
+                        <div class="gh-mega-col-h">销售公海池</div>
+                        <a class="gh-mega-link font-medium" href="/opportunity/pool">公海领取与回收</a>
+                        <p class="text-xs text-[#656d76] mt-1 leading-relaxed">独立页面：公海规则与池内客户。</p>
+                    </div>
+                    <div>
+                        <div class="gh-mega-col-h">销售仪表盘</div>
+                        <a class="gh-mega-link font-medium" href="/opportunity/dashboard">阶段与预测</a>
+                        <p class="text-xs text-[#656d76] mt-1 leading-relaxed">独立页面：赢率、阶段分布与预测。</p>
+                    </div>
+                </div>
+                <div class="gh-mega-footer">
+                    <a href="/opportunity/leads" class="text-sm font-medium text-[#0969da] hover:underline">查看全部商机模块 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 目标 -->
+    <div class="gh-nav-item{% if path.startswith('/goals') %} nav-active{% endif %}">
+        <span class="nav-trigger cursor-default">目标
+            <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </span>
+        <div class="gh-mega">
+            <div class="gh-mega-panel p-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div>
+                        <div class="gh-mega-col-h">目标与指标</div>
+                        <a class="gh-mega-link" href="/goals/quarter">季度目标</a>
+                        <a class="gh-mega-link" href="/goals/personal">个人指标</a>
+                        <a class="gh-mega-link" href="/goals/team">团队看板</a>
+                    </div>
+                </div>
+                <div class="gh-mega-footer">
+                    <a href="/goals/quarter" class="text-sm font-medium text-[#0969da] hover:underline">查看季度目标 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 联系人 -->
+    <div class="gh-nav-item{% if path.startswith('/contacts') %} nav-active{% endif %}">
+        <span class="nav-trigger cursor-default">联系人
+            <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </span>
+        <div class="gh-mega">
+            <div class="gh-mega-panel p-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div>
+                        <div class="gh-mega-col-h">通讯录与关系</div>
+                        <a class="gh-mega-link" href="/contacts/all">全部联系人</a>
+                        <a class="gh-mega-link" href="/contacts/tags">分组与标签</a>
+                        <a class="gh-mega-link" href="/contacts/import">导入与导出</a>
+                    </div>
+                </div>
+                <div class="gh-mega-footer">
+                    <a href="/contacts/all" class="text-sm font-medium text-[#0969da] hover:underline">打开联系人库 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>

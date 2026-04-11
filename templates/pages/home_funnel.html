@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}销售漏斗看板 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{# Vue 与 Jinja 均使用 {{ }}，此处必须 raw，否则服务端渲染报错 #}
+{% raw %}
+<div id="page-app" class="container mx-auto p-6 max-w-[1280px]">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-900">销售漏斗看板</h1>
+        <p class="text-sm text-gray-500 mt-1">点击各层级将打开「客户列表」并套用对应阶段筛选。</p>
+    </div>
+    <div class="bg-white p-6 rounded-lg shadow border border-gray-200/80 max-w-3xl">
+        <div class="flex justify-center">
+            <svg width="400" height="300" viewBox="0 0 400 300">
+                <polygon @click="goPhase('初步接触')" points="20,20 380,20 340,80 60,80" class="funnel-layer" fill="#93C5FD" />
+                <text x="200" y="55" text-anchor="middle" fill="#1E3A8A" class="pointer-events-none">初步接触: {{ stats.funnel['初步接触'] }}</text>
+                <polygon @click="goPhase('方案/报价')" points="65,85 335,85 300,145 100,145" class="funnel-layer" fill="#60A5FA" />
+                <text x="200" y="120" text-anchor="middle" fill="white" class="pointer-events-none">方案/报价: {{ stats.funnel['方案/报价'] }}</text>
+                <polygon @click="goPhase('合同签订')" points="105,150 295,150 270,210 130,210" class="funnel-layer" fill="#3B82F6" />
+                <text x="200" y="185" text-anchor="middle" fill="white" class="pointer-events-none">合同签订: {{ stats.funnel['合同签订'] }}</text>
+                <polygon @click="goPhase('成交')" points="135,215 265,215 240,275 160,275" class="funnel-layer" fill="#1D4ED8" />
+                <text x="200" y="250" text-anchor="middle" fill="white" class="pointer-events-none">已成交: {{ stats.funnel['成交'] }}</text>
+            </svg>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+    setup() {
+        const stats = ref({ funnel: { '初步接触': 0, '方案/报价': 0, '合同签订': 0, '成交': 0 }, trash: { count: 0, size: '0MB' } });
+        const loadStats = () => {
+            fetch('/api/stats', { headers: window.crmAuthHeader() }).then(r => r.json()).then(d => { stats.value = d; });
+        };
+        const goPhase = (p) => {
+            window.location.href = '/customers?phase=' + encodeURIComponent(p);
+        };
+        onMounted(loadStats);
+        return { stats, goPhase };
+    }
+}).mount('#page-app');
+</script>
+{% endblock %}

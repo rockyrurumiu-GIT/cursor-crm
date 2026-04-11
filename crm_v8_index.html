@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITO CRM 终极版 V8</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .funnel-layer:hover { filter: brightness(1.1); cursor: pointer; }
+        /* GitHub 风格顶栏下拉：悬停展开 */
+        .gh-nav-item { position: relative; }
+        .gh-nav-item > button { display: inline-flex; align-items: center; gap: 0.25rem; }
+        .gh-dropdown {
+            position: absolute; left: 0; top: 100%; padding-top: 0.45rem; z-index: 50;
+            opacity: 0; visibility: hidden; transform: translateY(-4px); pointer-events: none;
+            transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+        }
+        .gh-nav-item:hover .gh-dropdown,
+        .gh-nav-item:focus-within .gh-dropdown {
+            opacity: 1; visibility: visible; transform: translateY(0); pointer-events: auto;
+        }
+        .gh-dd-panel {
+            border-radius: 0.375rem; border: 1px solid #30363d; background: #161b22;
+            box-shadow: 0 16px 32px rgba(1,4,9,0.45); min-width: 15rem; padding: 0.35rem 0;
+        }
+        .gh-dd-item {
+            display: block; width: 100%; text-align: left; padding: 0.55rem 1rem; font-size: 0.875rem;
+            color: #e6edf3; background: transparent; border: none; cursor: pointer;
+        }
+        .gh-dd-item:hover { background: #21262d; }
+        .gh-dd-hint { font-size: 0.75rem; color: #8b949e; padding: 0 1rem 0.35rem; }
+        html { scroll-behavior: smooth; }
+        .section-card { scroll-margin-top: 5rem; }
+    </style>
+</head>
+<body class="bg-[#f6f8fa] text-gray-800">
+    <div id="app" class="min-h-screen flex flex-col">
+        <div v-if="!isLoggedIn" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-8 rounded-lg shadow-xl w-96">
+                <h2 class="text-2xl font-bold mb-6 text-center text-blue-600">ITO CRM 登录</h2>
+                <input v-model="loginForm.user" type="text" placeholder="用户名" class="w-full p-2 border rounded mb-4">
+                <input v-model="loginForm.pwd" type="password" placeholder="密码" class="w-full p-2 border rounded mb-6">
+                <button @click="login" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">进入系统</button>
+            </div>
+        </div>
+
+        <!-- GitHub 风格顶栏：左侧品牌 + 下拉导航，右侧用户 -->
+        <header v-if="isLoggedIn" class="border-b border-[#30363d] bg-[#010409] text-[#e6edf3] shrink-0">
+            <div class="max-w-[1280px] mx-auto px-4 flex items-center justify-between min-h-[3.5rem] gap-4">
+                <div class="flex items-center min-w-0 flex-1">
+                    <span class="text-white font-semibold tracking-tight shrink-0 mr-4 md:mr-8">ITO CRM<span class="text-[#8b949e] font-normal text-xs ml-1.5">V8</span></span>
+                    <nav class="flex items-stretch gap-0 overflow-x-auto no-scrollbar">
+                        <!-- 首页 -->
+                        <div class="gh-nav-item">
+                            <button type="button" @click.prevent="scrollToId('home-top')"
+                                class="px-3 py-3 text-sm font-medium rounded-md transition-colors text-white bg-white/[0.08]">
+                                首页
+                                <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                            <div class="gh-dropdown">
+                                <div class="gh-dd-panel">
+                                    <p class="gh-dd-hint">销售与资产概览</p>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-funnel')">销售漏斗看板</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-trash')">回收站与空间占用</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 客户 -->
+                        <div class="gh-nav-item">
+                            <button type="button" @click.prevent="scrollToId('section-clients')"
+                                class="px-3 py-3 text-sm font-medium rounded-md transition-colors text-[#e6edf3] hover:bg-white/[0.06]">
+                                客户
+                                <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                            <div class="gh-dropdown">
+                                <div class="gh-dd-panel">
+                                    <p class="gh-dd-hint">客户与名单</p>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-clients')">客户列表</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="openCreateClient">新增客户</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="exportCSV">导出 CSV</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 商机 -->
+                        <div class="gh-nav-item">
+                            <button type="button" @click.prevent="scrollToId('section-leads')"
+                                class="px-3 py-3 text-sm font-medium rounded-md transition-colors text-[#e6edf3] hover:bg-white/[0.06]">
+                                商机
+                                <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                            <div class="gh-dropdown">
+                                <div class="gh-dd-panel">
+                                    <p class="gh-dd-hint">商机与销售流程</p>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-leads')">销售线索</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-pool')">销售公海池</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-opp-dashboard')">商机仪表盘</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 目标 -->
+                        <div class="gh-nav-item">
+                            <button type="button" @click.prevent="scrollToId('section-goal-quarter')"
+                                class="px-3 py-3 text-sm font-medium rounded-md transition-colors text-[#e6edf3] hover:bg-white/[0.06]">
+                                目标
+                                <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                            <div class="gh-dropdown">
+                                <div class="gh-dd-panel">
+                                    <p class="gh-dd-hint">目标与指标</p>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-goal-quarter')">季度目标</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-goal-personal')">个人指标</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-goal-team')">团队看板</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 联系人 -->
+                        <div class="gh-nav-item">
+                            <button type="button" @click.prevent="scrollToId('section-contact-all')"
+                                class="px-3 py-3 text-sm font-medium rounded-md transition-colors text-[#e6edf3] hover:bg-white/[0.06]">
+                                联系人
+                                <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                            <div class="gh-dropdown">
+                                <div class="gh-dd-panel">
+                                    <p class="gh-dd-hint">通讯录与关系</p>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-contact-all')">全部联系人</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-contact-tags')">分组与标签</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-contact-import')">导入与导出</button>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 费用折算器 -->
+                        <div class="gh-nav-item">
+                            <button type="button" @click.prevent="scrollToId('section-calc')"
+                                class="px-3 py-3 text-sm font-medium rounded-md transition-colors text-[#e6edf3] hover:bg-white/[0.06]">
+                                费用折算器
+                                <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </button>
+                            <div class="gh-dropdown">
+                                <div class="gh-dd-panel">
+                                    <p class="gh-dd-hint">外包费用折算</p>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToId('section-calc')">按天折算</button>
+                                    <button type="button" class="gh-dd-item" @click.prevent="scrollToCalcRemark">折算并写入备注</button>
+                                </div>
+                            </div>
+                        </div>
+                    </nav>
+                </div>
+                <div class="flex items-center gap-3 shrink-0 text-sm">
+                    <span class="text-[#8b949e] hidden sm:inline">欢迎，{{currentUser}}</span>
+                    <button type="button" @click="logout" class="text-[#58a6ff] hover:underline font-medium">退出</button>
+                </div>
+            </div>
+        </header>
+
+        <main id="home-top" class="flex-1 container mx-auto p-6 max-w-[1280px]">
+            <!-- 首页单页：所有模块在同一页滚动，顶栏仅锚点滚动不跳转路由 -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div id="section-funnel" class="section-card md:col-span-2 bg-white p-6 rounded-lg shadow border border-gray-200/80">
+                    <h3 class="font-bold mb-4">销售漏斗看板 (点击各层级查看)</h3>
+                    <div class="flex justify-center">
+                        <svg width="400" height="300" viewBox="0 0 400 300">
+                            <polygon @click="filterByPhase('初步接触')" points="20,20 380,20 340,80 60,80" class="funnel-layer" fill="#93C5FD" />
+                            <text x="200" y="55" text-anchor="middle" fill="#1E3A8A" class="pointer-events-none">初步接触: {{stats.funnel['初步接触']}}</text>
+                            <polygon @click="filterByPhase('方案/报价')" points="65,85 335,85 300,145 100,145" class="funnel-layer" fill="#60A5FA" />
+                            <text x="200" y="120" text-anchor="middle" fill="white" class="pointer-events-none">方案/报价: {{stats.funnel['方案/报价']}}</text>
+                            <polygon @click="filterByPhase('合同签订')" points="105,150 295,150 270,210 130,210" class="funnel-layer" fill="#3B82F6" />
+                            <text x="200" y="185" text-anchor="middle" fill="white" class="pointer-events-none">合同签订: {{stats.funnel['合同签订']}}</text>
+                            <polygon @click="filterByPhase('成交')" points="135,215 265,215 240,275 160,275" class="funnel-layer" fill="#1D4ED8" />
+                            <text x="200" y="250" text-anchor="middle" fill="white" class="pointer-events-none">已成交: {{stats.funnel['成交']}}</text>
+                        </svg>
+                    </div>
+                </div>
+                <div id="section-trash" class="section-card bg-white p-6 rounded-lg shadow border border-gray-200/80">
+                    <h3 class="font-bold mb-4">资产与回收站</h3>
+                    <div class="space-y-4">
+                        <div class="p-4 bg-gray-50 rounded">
+                            <p class="text-sm text-gray-500">回收站待处理文件</p>
+                            <p class="text-2xl font-bold text-orange-600">{{stats.trash.count}} 个</p>
+                        </div>
+                        <div class="p-4 bg-gray-50 rounded">
+                            <p class="text-sm text-gray-500">已占用空间</p>
+                            <p class="text-xl font-bold">{{stats.trash.size}}</p>
+                        </div>
+                        <p class="text-xs text-gray-400">提示：超过30天的已删除文件将在系统重启时自动清除。</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 商机（占位区块，供顶栏锚点） -->
+            <div class="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div id="section-leads" class="section-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-900 mb-2">销售线索</h4>
+                    <p class="text-sm text-gray-500">线索池、跟进与转化（可在此接入列表与看板）。</p>
+                </div>
+                <div id="section-pool" class="section-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-900 mb-2">销售公海池</h4>
+                    <p class="text-sm text-gray-500">公海领取规则与回收（可在此接入公海列表）。</p>
+                </div>
+                <div id="section-opp-dashboard" class="section-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-900 mb-2">商机仪表盘</h4>
+                    <p class="text-sm text-gray-500">阶段分布、赢率与预测（可在此接入图表）。</p>
+                </div>
+            </div>
+
+            <!-- 目标（占位） -->
+            <div class="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div id="section-goal-quarter" class="section-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-900 mb-2">季度目标</h4>
+                    <p class="text-sm text-gray-500">团队/个人季度 OKR 与完成率。</p>
+                </div>
+                <div id="section-goal-personal" class="section-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-900 mb-2">个人指标</h4>
+                    <p class="text-sm text-gray-500">个人配额与达成进度。</p>
+                </div>
+                <div id="section-goal-team" class="section-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-900 mb-2">团队看板</h4>
+                    <p class="text-sm text-gray-500">团队排名与对比。</p>
+                </div>
+            </div>
+
+            <!-- 联系人（占位） -->
+            <div class="mt-10 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div id="section-contact-all" class="section-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-900 mb-2">全部联系人</h4>
+                    <p class="text-sm text-gray-500">统一联系人库与关联客户。</p>
+                </div>
+                <div id="section-contact-tags" class="section-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-900 mb-2">分组与标签</h4>
+                    <p class="text-sm text-gray-500">标签体系与智能分组。</p>
+                </div>
+                <div id="section-contact-import" class="section-card bg-white p-5 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-semibold text-gray-900 mb-2">导入与导出</h4>
+                    <p class="text-sm text-gray-500">批量导入、导出与去重。</p>
+                </div>
+            </div>
+
+            <div id="section-clients" class="section-card space-y-4 mt-10">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-2">
+                        <span v-if="filterPhase" class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-sm">
+                            筛选: {{filterPhase}} <button @click="filterPhase='';loadClients()" class="ml-1 text-red-500">×</button>
+                        </span>
+                        <button @click="showCreate=true" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ 新增客户</button>
+                    </div>
+                    <button @click="exportCSV" class="border border-blue-600 text-blue-600 px-4 py-2 rounded hover:bg-blue-50">导出全量名单 (CSV)</button>
+                </div>
+
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <table class="w-full text-left">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="p-4">客户名称</th>
+                                <th class="p-4">销售负责人</th>
+                                <th class="p-4">外包规模</th>
+                                <th class="p-4">开拓阶段</th>
+                                <th class="p-4">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="c in clients" :key="c.id" class="border-t hover:bg-gray-50">
+                                <td class="p-4 font-medium">{{c.name}}</td>
+                                <td class="p-4">{{c.owner}}</td>
+                                <td class="p-4">{{c.scale}}</td>
+                                <td class="p-4">
+                                    <span :class="phaseColor(c.phase)" class="px-2 py-1 rounded text-xs">{{c.phase}}</span>
+                                </td>
+                                <td class="p-4 space-x-3">
+                                    <button @click="openDetail(c)" class="text-blue-600 text-sm">详情/记录</button>
+                                    <button @click="confirmDelete(c)" class="text-red-600 text-sm">删除</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="section-calc" class="section-card max-w-xl mx-auto bg-white p-8 rounded-lg shadow-lg border border-gray-200 mt-10 border-t-4 border-blue-600">
+                <h2 class="text-2xl font-bold mb-6 flex items-center">
+                    <span class="mr-2">🧮</span> 外包费用按天折算工具
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">月单价 (元)</label>
+                        <input v-model.number="calc.price" type="number" class="w-full p-2 border rounded">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">本月总天数</label>
+                            <input v-model.number="calc.totalDays" type="number" class="w-full p-2 border rounded">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">实际出勤/服务天数</label>
+                            <input v-model.number="calc.actDays" type="number" class="w-full p-2 border rounded">
+                        </div>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg mt-6">
+                        <p class="text-sm text-blue-600 font-medium">折算结果:</p>
+                        <p class="text-3xl font-bold text-blue-800">¥ {{calcResult.amount}}</p>
+                        <p class="text-xs text-blue-400 mt-2">计算公式: {{calcResult.formula}}</p>
+                    </div>
+                    <div id="calc-remark" class="mt-4 pt-4 border-t scroll-mt-24">
+                        <label class="block text-sm font-medium mb-1">保存计算结果到客户备注</label>
+                        <div class="flex space-x-2">
+                            <select v-model="calc.targetClientId" class="flex-1 p-2 border rounded">
+                                <option value="">-- 请选择客户 --</option>
+                                <option v-for="c in clients" :value="c.id">{{c.name}}</option>
+                            </select>
+                            <button @click="saveCalcToRemark" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">追加到备注</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div v-if="showDetail" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
+            <div class="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-5/6 flex flex-col">
+                <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+                    <h3 class="text-xl font-bold">{{selectedClient.name}} - 全景档案</h3>
+                    <button @click="showDetail=false" class="text-gray-500 hover:text-black text-2xl">×</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-bold border-l-4 border-blue-600 pl-2">拜访/沟通记录</h4>
+                            <button @click="showAddVisit=true" class="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">+ 新记录</button>
+                        </div>
+                        <div v-if="details.visits.length===0" class="text-center py-10 text-gray-400">暂无记录</div>
+                        <div v-for="v in details.visits" :key="v.id" class="mb-4 p-4 border rounded relative bg-white shadow-sm">
+                            <div class="flex justify-between text-xs text-gray-500 mb-2">
+                                <span>{{v.date}} | {{v.location}}</span>
+                            </div>
+                            <p class="text-sm">{{v.content}}</p>
+                            <div v-if="v.attachment" class="mt-3 pt-3 border-t">
+                                <div v-if="isImage(v.attachment)">
+                                    <img :src="'/previews/'+v.attachment" class="w-16 h-16 object-cover rounded border cursor-zoom-in" @click="viewFull('/previews/'+v.attachment)">
+                                </div>
+                                <div v-else class="flex items-center">
+                                    <span class="text-xs text-blue-600 underline cursor-pointer" @click="viewFull('/previews/'+v.attachment)">📄 查看预览 (PDF/TXT)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-6">
+                        <div>
+                            <h4 class="font-bold border-l-4 border-orange-500 pl-2 mb-4">备注与折算记录</h4>
+                            <textarea v-model="selectedClient.remarks" class="w-full h-32 p-2 border rounded text-sm bg-yellow-50" placeholder="点击保存按钮同步修改..."></textarea>
+                            <button @click="updateClient(selectedClient)" class="mt-2 w-full bg-orange-500 text-white text-sm py-1 rounded">保存备注及阶段修改</button>
+                        </div>
+                        <div>
+                            <h4 class="font-bold border-l-4 border-gray-400 pl-2 mb-4">字段变更记录 (审计)</h4>
+                            <div class="text-xs space-y-3">
+                                <div v-for="log in details.logs" :key="log.id" class="flex items-start">
+                                    <div class="w-2 h-2 bg-gray-300 rounded-full mt-1.5 mr-2"></div>
+                                    <div class="flex-1">
+                                        <p class="text-gray-400">{{formatDate(log.created_at)}} - {{log.operator}}</p>
+                                        <p class="text-gray-700">{{log.action}}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showDelete" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded shadow-lg w-80 text-center">
+                <h3 class="text-lg font-bold text-red-600 mb-4">确认删除客户？</h3>
+                <p class="text-sm mb-4">删除后数据将进入回收站。请输入下方随机码进行确认：</p>
+                <p class="text-2xl font-mono font-bold tracking-widest bg-gray-100 py-2 mb-4">{{deleteCaptcha}}</p>
+                <input v-model="deleteInput" type="text" placeholder="输入4位数字" class="w-full p-2 border rounded mb-4 text-center">
+                <div class="flex space-x-2">
+                    <button @click="showDelete=false" class="flex-1 bg-gray-200 py-2 rounded">取消</button>
+                    <button @click="executeDelete" :disabled="deleteInput!==deleteCaptcha" :class="deleteInput===deleteCaptcha?'bg-red-600':'bg-red-300'" class="flex-1 text-white py-2 rounded">确认删除</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+        createApp({
+            setup() {
+                const isLoggedIn = ref(false);
+                const currentUser = ref('');
+                const loginForm = ref({ user: '', pwd: '' });
+                const clients = ref([]);
+                const stats = ref({ funnel: {}, trash: {count:0, size:'0MB'} });
+                const filterPhase = ref('');
+
+                const showCreate = ref(false);
+                const showDetail = ref(false);
+                const showAddVisit = ref(false);
+                const showDelete = ref(false);
+
+                const selectedClient = ref({});
+                const details = ref({ visits: [], logs: [] });
+
+                const deleteCaptcha = ref('');
+                const deleteInput = ref('');
+                const clientToDelete = ref(null);
+
+                const calc = ref({ price: 0, totalDays: 31, actDays: 22, targetClientId: '' });
+
+                const authHeader = () => ({ 'Authorization': 'Basic ' + btoa(loginForm.value.user + ':' + loginForm.value.pwd) });
+
+                const login = async () => {
+                    try {
+                        const res = await fetch('/api/stats', { headers: authHeader() });
+                        if(res.ok) {
+                            isLoggedIn.value = true;
+                            currentUser.value = loginForm.value.user;
+                            loadAll();
+                        } else { alert("账号或密码错误"); }
+                    } catch(e) { alert("服务器连接失败"); }
+                };
+
+                const logout = () => { isLoggedIn.value = false; loginForm.value.pwd = ''; };
+
+                const loadAll = () => { loadStats(); loadClients(); };
+                const loadStats = () => fetch('/api/stats', { headers: authHeader() }).then(r => r.json()).then(d => stats.value = d);
+                const loadClients = () => {
+                    const url = filterPhase.value ? `/api/clients?phase=${encodeURIComponent(filterPhase.value)}` : '/api/clients';
+                    fetch(url, { headers: authHeader() }).then(r => r.json()).then(d => clients.value = d);
+                };
+
+                const scrollToId = (id) => {
+                    nextTick(() => {
+                        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                };
+
+                const scrollToCalcRemark = () => {
+                    nextTick(() => {
+                        document.getElementById('calc-remark')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    });
+                };
+
+                const filterByPhase = (p) => {
+                    filterPhase.value = p;
+                    loadClients();
+                    scrollToId('section-clients');
+                };
+
+                const openCreateClient = () => {
+                    showCreate.value = true;
+                    loadClients();
+                    scrollToId('section-clients');
+                };
+
+                const phaseColor = (p) => {
+                    const m = { "初步接触": "bg-blue-100 text-blue-800", "方案/报价": "bg-indigo-100 text-indigo-800", "合同签订": "bg-purple-100 text-purple-800", "成交": "bg-green-100 text-green-800" };
+                    return m[p] || "bg-gray-100";
+                };
+
+                const openDetail = (c) => {
+                    selectedClient.value = {...c};
+                    fetch(`/api/clients/${c.id}/details`, { headers: authHeader() }).then(r => r.json()).then(d => {
+                        details.value = d;
+                        showDetail.value = true;
+                    });
+                };
+
+                const updateClient = (c) => {
+                    const fd = new FormData();
+                    fd.append("name", c.name); fd.append("phase", c.phase); fd.append("remarks", c.remarks || "");
+                    fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: authHeader(), body: fd }).then(() => {
+                        alert("保存成功"); loadAll(); showDetail.value = false;
+                    });
+                };
+
+                const confirmDelete = (c) => {
+                    clientToDelete.value = c;
+                    deleteCaptcha.value = Math.floor(1000 + Math.random() * 9000).toString();
+                    deleteInput.value = '';
+                    showDelete.value = true;
+                };
+
+                const executeDelete = () => {
+                    fetch(`/api/clients/${clientToDelete.value.id}`, { method: 'DELETE', headers: authHeader() }).then(() => {
+                        showDelete.value = false; loadAll();
+                    });
+                };
+
+                const calcResult = computed(() => {
+                    if(!calc.value.totalDays || !calc.value.price) return { amount: 0, formula: '-' };
+                    const res = (calc.value.price / calc.value.totalDays * calc.value.actDays).toFixed(2);
+                    return { amount: res, formula: `${calc.value.price} / ${calc.value.totalDays} * ${calc.value.actDays}` };
+                });
+
+                const saveCalcToRemark = () => {
+                    if(!calc.value.targetClientId) return alert("请先选择目标客户");
+                    const target = clients.value.find(c => c.id === calc.value.targetClientId);
+                    const timestamp = new Date().toLocaleString();
+                    const newRemark = (target.remarks || "") + `\\n[财务折算 ${timestamp}]: 金额 ¥${calcResult.value.amount} (计算公式: ${calcResult.value.formula})`;
+
+                    const fd = new FormData();
+                    fd.append("name", target.name); fd.append("phase", target.phase); fd.append("remarks", newRemark);
+                    fetch(`/api/clients/${target.id}`, { method: 'PUT', headers: authHeader(), body: fd }).then(() => {
+                        alert("已追加至该客户备注中"); loadClients();
+                    });
+                };
+
+                const exportCSV = () => {
+                    window.open('/api/export/clients', '_blank');
+                };
+
+                const isImage = (path) => /\.(jpg|jpeg|png|gif)$/i.test(path);
+                const viewFull = (url) => window.open(url, '_blank');
+                const formatDate = (ds) => new Date(ds).toLocaleString();
+
+                return {
+                    isLoggedIn, currentUser, loginForm, clients, stats, filterPhase, showCreate, showDetail, showAddVisit, showDelete, selectedClient, details, deleteCaptcha, deleteInput, calc, calcResult,
+                    login, logout, loadClients, filterByPhase, scrollToId, scrollToCalcRemark, openCreateClient, phaseColor, openDetail, updateClient, confirmDelete, executeDelete, saveCalcToRemark, exportCSV, isImage, viewFull, formatDate
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
