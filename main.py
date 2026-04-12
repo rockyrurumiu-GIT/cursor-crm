@@ -19,13 +19,14 @@ from sqlalchemy.orm import sessionmaker, Session
 # --- 1. 配置与初始化 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 TRASH_DIR = os.path.join(BASE_DIR, "deleted_files")
 DB_URL = "sqlite:///./crm_v8.db"
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 ADMIN_USER = {"username": "admin", "password": "admin123"}
 
-for d in [UPLOAD_DIR, TRASH_DIR]:
+for d in [STATIC_DIR, UPLOAD_DIR, TRASH_DIR]:
     os.makedirs(d, exist_ok=True)
 
 
@@ -89,6 +90,7 @@ Base.metadata.create_all(bind=engine)
 
 # --- 3. 后端核心逻辑 ---
 app = FastAPI(title="ITO CRM Ultimate")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/previews", StaticFiles(directory=UPLOAD_DIR), name="previews")
 security = HTTPBasic()
 

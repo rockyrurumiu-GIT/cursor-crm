@@ -68,17 +68,18 @@
     <div id="main-shell" class="min-h-screen flex flex-col hidden">
         <header class="border-b border-[#30363d] bg-[#010409] text-[#e6edf3] shrink-0 relative z-[100] overflow-visible">
             <div class="max-w-[1280px] mx-auto px-4 flex items-center justify-between min-h-[3.5rem] gap-4 overflow-visible">
-                <div class="crm-header-nav-wrap flex items-center flex-1">
-                    <a href="/home" class="text-white font-semibold tracking-tight shrink-0 mr-4 md:mr-8">ITO CRM<span class="text-[#8b949e] font-normal text-xs ml-1.5">V8</span></a>
+                <div class="crm-header-nav-wrap flex items-center flex-1 min-w-0">
+                    <a href="/home" class="text-white font-semibold tracking-tight shrink-0 mr-4 md:mr-8">ITO CRM{% block brand_badge %}<span class="text-[#8b949e] font-normal text-xs ml-1.5">V8</span>{% endblock %}</a>
                     {% include "partials/nav.html" %}
                 </div>
+                {% block header_extra %}{% endblock %}
                 <div class="flex items-center gap-3 shrink-0 text-sm">
                     <span id="header-user" class="text-[#8b949e] hidden sm:inline"></span>
                     <button type="button" id="logout-btn" class="text-[#58a6ff] hover:underline font-medium">退出</button>
                 </div>
             </div>
         </header>
-        <main class="flex-1">{% block content %}{% endblock %}</main>
+        <main class="flex-1 {% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
     </div>
 
     <script>
