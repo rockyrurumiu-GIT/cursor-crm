@@ -1,18 +1,173 @@
 {% extends "base.html" %}
-{% block title %}首页总览 · ITO CRM V8{% endblock %}
-{% block content %}
-<div class="container mx-auto p-6 max-w-[1280px]">
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">首页总览</h1>
-    <p class="text-gray-600 mb-8">以下为独立页面入口，与 GitHub 顶栏类似：悬停顶栏展开子菜单，点击子项进入对应页面。</p>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <a href="/home/funnel" class="block bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition">
-            <h2 class="text-lg font-semibold text-gray-900 mb-2">销售漏斗看板</h2>
-            <p class="text-sm text-gray-500">按阶段统计与漏斗交互，筛选后跳转到客户列表。</p>
-        </a>
-        <a href="/home/trash" class="block bg-white p-6 rounded-xl border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition">
-            <h2 class="text-lg font-semibold text-gray-900 mb-2">回收站与空间占用</h2>
-            <p class="text-sm text-gray-500">待处理文件数量与已占用空间。</p>
-        </a>
+{% block title %}首页总览 · ITO CRM{% endblock %}
+
+{% block brand_badge %}{% endblock %}
+
+{% block head_extra %}
+<style>
+    /* 主标题：大字、常规字重（非粗体） */
+    .home-hero-headline {
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+            "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        font-weight: 400;
+        letter-spacing: -0.025em;
+        font-feature-settings: "kern" 1;
+    }
+    /* 底部 icon：体积光 + 轻微光泽 */
+    .home-mascot-img {
+        filter:
+            saturate(0.9) brightness(1.08) hue-rotate(-3deg)
+            drop-shadow(0 0 18px rgba(196, 181, 253, 0.35))
+            drop-shadow(0 0 28px rgba(56, 189, 248, 0.18))
+            drop-shadow(0 14px 28px rgba(0, 0, 0, 0.38));
+        position: relative;
+        z-index: 2;
+    }
+    /* 自下而上的体积光 / bloom（参考 GitHub 底栏） */
+    .home-mascot-glow {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        width: 130%;
+        height: 95%;
+        pointer-events: none;
+        z-index: 0;
+        background:
+            radial-gradient(ellipse 65% 50% at 50% 88%, rgba(255, 255, 255, 0.14) 0%, transparent 48%),
+            radial-gradient(ellipse 58% 48% at 50% 72%, rgba(216, 180, 254, 0.5) 0%, transparent 58%),
+            radial-gradient(ellipse 50% 42% at 42% 65%, rgba(56, 189, 248, 0.28) 0%, transparent 55%),
+            radial-gradient(ellipse 50% 42% at 62% 64%, rgba(244, 114, 182, 0.22) 0%, transparent 55%);
+        filter: blur(20px);
+        opacity: 0.92;
+        animation: homeBloom 6s ease-in-out infinite alternate;
+    }
+    @keyframes homeBloom {
+        from { opacity: 0.82; filter: blur(18px); }
+        to { opacity: 0.98; filter: blur(24px); }
+    }
+    /* 细星点 */
+    .home-mascot-stars {
+        position: absolute;
+        inset: -8% -10% 0 -10%;
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0.6;
+        background-image:
+            radial-gradient(1.5px 1.5px at 22% 38%, rgba(255,255,255,0.9) 50%, transparent 52%),
+            radial-gradient(1px 1px at 48% 22%, rgba(255,255,255,0.5) 50%, transparent 52%),
+            radial-gradient(1px 1px at 58% 58%, rgba(255,255,255,0.45) 50%, transparent 52%),
+            radial-gradient(1.5px 1.5px at 76% 34%, rgba(255,255,255,0.75) 50%, transparent 52%),
+            radial-gradient(1px 1px at 88% 52%, rgba(255,255,255,0.55) 50%, transparent 52%),
+            radial-gradient(1px 1px at 34% 68%, rgba(255,255,255,0.4) 50%, transparent 52%);
+    }
+    /* 四角星 ✨（多层 SVG，与圆点星错开） */
+    .home-mascot-sparkles {
+        position: absolute;
+        inset: -12% -14% -4% -14%;
+        pointer-events: none;
+        z-index: 1;
+        opacity: 0.9;
+        mix-blend-mode: screen;
+        --star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 0l1.2 4h4L8.2 7.4l1.4 4.6L6 9.8 2.4 12 3.8 7.4 0 4h4.1z'/%3E%3C/svg%3E");
+        --starSoft: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath fill='%23e9d5ff' d='M5 0l1 3.2h3.4L7.2 5.8 8.4 9 5 7.2 1.6 9l1.2-3.2L0 3.2h3.4z'/%3E%3C/svg%3E");
+        background-image: var(--star), var(--starSoft), var(--star), var(--starSoft), var(--star), var(--star);
+        background-size: 11px 11px, 9px 9px, 10px 10px, 8px 8px, 11px 11px, 9px 9px;
+        background-repeat: no-repeat;
+        background-position:
+            11% 52%, 30% 24%, 46% 58%, 61% 20%, 76% 46%, 90% 38%;
+        animation: homeTwinkle 4.2s ease-in-out infinite;
+    }
+    @keyframes homeTwinkle {
+        0%, 100% { opacity: 0.65; }
+        50% { opacity: 0.98; }
+    }
+    .home-mascot-img.home-mascot-bob {
+        animation: homeBob 4.8s ease-in-out infinite;
+    }
+    .home-mascot-bob-d1 { animation-delay: 0s; }
+    .home-mascot-bob-d2 { animation-delay: 0.7s; }
+    .home-mascot-bob-d3 { animation-delay: 1.35s; }
+    @keyframes homeBob {
+        0%, 100% { margin-top: 0; }
+        50% { margin-top: -6px; }
+    }
+</style>
+{% endblock %}
+
+{% block header_extra %}
+<form id="home-search-form" action="/customers" method="get" class="hidden md:flex items-center shrink-0 min-w-0 mr-1 lg:mr-3" role="search" aria-label="站内搜索">
+    <div class="relative w-[min(100%,17rem)] lg:w-[18rem]">
+        <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8b949e] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input id="home-search-input" name="q" type="search" autocomplete="off"
+            class="w-full rounded-md border border-[#30363d] bg-[#0d1117] py-1.5 pl-8 pr-10 text-sm text-[#e6edf3] placeholder-[#8b949e] focus:border-[#58a6ff] focus:outline-none focus:ring-1 focus:ring-[#58a6ff]"
+            placeholder="搜索或跳转至……" />
+        <span class="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] leading-none text-[#8b949e] border border-[#30363d] rounded px-1 py-0.5 font-mono select-none" title="快捷键">/</span>
     </div>
-</div>
+</form>
+{% endblock %}
+
+{% block main_class %}bg-[#010409] min-h-0 flex flex-col{% endblock %}
+
+{% block content %}
+<section class="relative flex-1 flex flex-col overflow-hidden min-h-[calc(100vh-3.5rem)] text-[#e6edf3]">
+    <!-- 底部紫蓝光晕（模仿 GitHub 首页氛围） -->
+    <div class="absolute inset-0 pointer-events-none bg-[#010409]" aria-hidden="true"
+        style="background-image: radial-gradient(ellipse 130% 90% at 50% 100%, rgba(124, 58, 237, 0.42) 0%, rgba(37, 99, 235, 0.18) 38%, transparent 62%);"></div>
+    <!-- 星点 -->
+    <div class="absolute inset-0 pointer-events-none opacity-60" aria-hidden="true"
+        style="background-image: radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.35) 50%, transparent 51%), radial-gradient(1px 1px at 75% 55%, rgba(255,255,255,0.25) 50%, transparent 51%), radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,0.2) 50%, transparent 51%);"></div>
+
+    <div class="relative z-10 flex-1 flex flex-col items-center justify-start px-4 sm:px-6 pt-12 sm:pt-16 md:pt-20 lg:pt-24 pb-40 sm:pb-48 md:pb-52 text-center max-w-[1100px] mx-auto w-full">
+        <h1 class="home-hero-headline text-[2.05rem] sm:text-[2.6rem] md:text-[3rem] lg:text-[3.35rem] text-white mb-4 md:mb-5 leading-[1.16] px-1 max-w-[min(100%,44rem)] text-balance">
+            信任源于客情维护与业务深度
+        </h1>
+        <p class="text-sm sm:text-base md:text-lg text-[#8b949e] max-w-2xl mb-9 md:mb-10 leading-relaxed">
+            工具与流程不断迭代，但长期信任来自持续跟进与对业务的理解。借助 ITO CRM，客户、漏斗与团队目标汇聚于同一平台，让协作与沉淀推动增长。
+        </p>
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 justify-center w-full max-w-xl">
+            <a href="/home/funnel"
+                class="inline-flex h-11 sm:h-12 items-center justify-center rounded-md bg-[#238636] hover:bg-[#2ea043] text-white font-semibold px-6 sm:px-8 text-sm sm:text-base shadow-[0_8px_24px_rgba(35,134,54,0.35)] transition-colors">
+                销售漏斗看板
+            </a>
+            <a href="/customers"
+                class="inline-flex h-11 sm:h-12 items-center justify-center rounded-md border border-[#30363d] bg-transparent hover:bg-white/[0.06] text-white font-semibold px-6 sm:px-8 text-sm sm:text-base transition-colors">
+                客户列表
+            </a>
+        </div>
+    </div>
+
+    <!-- 底部装饰：聚拢三角 + 自下而上光晕 + 星点/四角星 + 轻微浮动 -->
+    <div class="absolute bottom-0 left-0 right-0 pointer-events-none z-[5] flex justify-center px-4 pb-3 sm:pb-5 overflow-visible select-none" aria-hidden="true">
+        <div class="relative w-[min(92vw,21.5rem)] sm:w-[23.5rem] md:w-[24.5rem] h-[10.5rem] sm:h-[12rem] md:h-[12.75rem]">
+            <div class="home-mascot-glow" aria-hidden="true"></div>
+            <div class="home-mascot-stars" aria-hidden="true"></div>
+            <div class="home-mascot-sparkles" aria-hidden="true"></div>
+            <img src="/static/images/home-icon-frog.png" width="256" height="256" alt=""
+                class="home-mascot-img home-mascot-bob home-mascot-bob-d1 absolute left-[6%] top-[42%] -translate-y-1/2 h-[4rem] sm:h-[4.85rem] md:h-[5.25rem] w-auto object-contain object-center -rotate-[6deg] sm:-rotate-[7deg]" decoding="async" />
+            <img src="/static/images/home-icon-dragon.png" width="256" height="256" alt=""
+                class="home-mascot-img home-mascot-bob home-mascot-bob-d2 absolute right-[18%] sm:right-[20%] md:right-[22%] top-0 sm:top-0.5 h-[4.5rem] sm:h-[5.35rem] md:h-[5.85rem] w-auto object-contain object-top rotate-[5deg] sm:rotate-[6deg]" decoding="async" />
+            <img src="/static/images/home-icon-bottom-saturn.png" width="320" height="240" alt=""
+                class="home-mascot-img home-mascot-bob home-mascot-bob-d3 absolute left-1/2 bottom-0 -translate-x-1/2 h-[4.85rem] sm:h-[5.85rem] md:h-[6.35rem] w-auto object-contain object-bottom rotate-[2deg]" decoding="async" />
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block page_scripts %}
+<script>
+(function () {
+    var input = document.getElementById('home-search-input');
+    if (!input) return;
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== '/') return;
+        var tag = (e.target && e.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+        e.preventDefault();
+        input.focus();
+    });
+})();
+</script>
 {% endblock %}
