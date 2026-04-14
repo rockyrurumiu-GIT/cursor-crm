@@ -24,11 +24,12 @@ TEMPLATES = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 TRASH_DIR = os.path.join(BASE_DIR, "deleted_files")
+BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 DB_URL = "sqlite:///./crm_v8.db"
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 ADMIN_USER = {"username": "admin", "password": "admin123"}
 
-for d in [STATIC_DIR, UPLOAD_DIR, TRASH_DIR]:
+for d in [STATIC_DIR, UPLOAD_DIR, TRASH_DIR, BACKUP_DIR]:
     os.makedirs(d, exist_ok=True)
 
 
@@ -118,6 +119,32 @@ class RosterEntry(Base):
     zntx_separation_type = Column(String, default="")
     zntx_compensation_amount = Column(String, default="")
     leave_reason = Column(String, default="")
+    remarks = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class DeliverySettlementEntry(Base):
+    __tablename__ = "delivery_settlement_entries"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    serial_no = Column(String, default="")
+    progress_updated_at = Column(String, default="")
+    customer_name = Column(String, default="")
+    fee_month = Column(String, default="")
+    chase_month = Column(String, default="")
+    amount = Column(String, default="")
+    internal_attendance_confirm = Column(String, default="")
+    client_confirm = Column(String, default="")
+    invoiced = Column(String, default="")
+    invoice_date = Column(String, default="")
+    paid = Column(String, default="")
+    expected_payment_date = Column(String, default="")
+    actual_payment_date = Column(String, default="")
+    payment_days = Column(String, default="")
+    payment_cycle = Column(String, default="")
+    payment_nature = Column(String, default="")
+    po_no = Column(String, default="")
+    invoice_no = Column(String, default="")
     remarks = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.now)
 
@@ -240,6 +267,219 @@ def _normalize_roster_payload(d: Dict[str, Any]) -> Dict[str, str]:
             v = ""
         out[k] = str(v).strip()
     return out
+
+
+def _settlement_entry_to_dict(e: DeliverySettlementEntry) -> Dict[str, str]:
+    return {
+        "id": e.id,
+        "client_id": e.client_id,
+        "serial_no": e.serial_no or "",
+        "progress_updated_at": e.progress_updated_at or "",
+        "customer_name": e.customer_name or "",
+        "fee_month": e.fee_month or "",
+        "chase_month": e.chase_month or "",
+        "amount": e.amount or "",
+        "internal_attendance_confirm": e.internal_attendance_confirm or "",
+        "client_confirm": e.client_confirm or "",
+        "invoiced": e.invoiced or "",
+        "invoice_date": e.invoice_date or "",
+        "paid": e.paid or "",
+        "expected_payment_date": e.expected_payment_date or "",
+        "actual_payment_date": e.actual_payment_date or "",
+        "payment_days": e.payment_days or "",
+        "payment_cycle": e.payment_cycle or "",
+        "payment_nature": e.payment_nature or "",
+        "po_no": e.po_no or "",
+        "invoice_no": e.invoice_no or "",
+        "remarks": e.remarks or "",
+    }
+
+
+def _normalize_settlement_payload(d: Dict[str, Any]) -> Dict[str, str]:
+    keys = [
+        "serial_no",
+        "progress_updated_at",
+        "customer_name",
+        "fee_month",
+        "chase_month",
+        "amount",
+        "internal_attendance_confirm",
+        "client_confirm",
+        "invoiced",
+        "invoice_date",
+        "paid",
+        "expected_payment_date",
+        "actual_payment_date",
+        "payment_days",
+        "payment_cycle",
+        "payment_nature",
+        "po_no",
+        "invoice_no",
+        "remarks",
+    ]
+    out: Dict[str, str] = {}
+    for k in keys:
+        v = d.get(k, "")
+        if v is None:
+            v = ""
+        out[k] = str(v).strip()
+    return out
+
+
+def _resequence_settlement_serial_no(db: Session, client_id: int) -> None:
+    rows = (
+        db.query(DeliverySettlementEntry)
+        .filter(DeliverySettlementEntry.client_id == client_id)
+        .order_by(DeliverySettlementEntry.id)
+        .all()
+    )
+    for idx, row in enumerate(rows, start=1):
+        row.serial_no = str(idx)
+
+
+def _resequence_settlement_serial_no_all(db: Session) -> None:
+    rows = db.query(DeliverySettlementEntry).order_by(DeliverySettlementEntry.id).all()
+    for idx, row in enumerate(rows, start=1):
+        row.serial_no = str(idx)
+
+
+SETTLEMENT_REQUIRED_FIELDS = (
+    "customer_name",
+    "fee_month",
+    "amount",
+    "internal_attendance_confirm",
+    "client_confirm",
+    "invoiced",
+    "paid",
+    "payment_cycle",
+)
+
+
+SETTLEMENT_REQUIRED_LABELS = {
+    "customer_name": "客户",
+    "fee_month": "费用月份",
+    "amount": "金额",
+    "internal_attendance_confirm": "内部确认考勤",
+    "client_confirm": "客户确认",
+    "invoiced": "是否开票",
+    "paid": "是否回款",
+    "payment_cycle": "回款周期",
+}
+
+
+def _validate_settlement_payload(data: Dict[str, str]) -> None:
+    missing = [k for k in SETTLEMENT_REQUIRED_FIELDS if not str(data.get(k, "")).strip()]
+    if missing:
+        labels = [SETTLEMENT_REQUIRED_LABELS.get(k, k) for k in missing]
+        raise HTTPException(status_code=400, detail=f"以下必填项未填写：{'、'.join(labels)}")
+
+    for k, label in (
+        ("internal_attendance_confirm", "内部确认考勤"),
+        ("client_confirm", "客户确认"),
+        ("invoiced", "是否开票"),
+        ("paid", "是否回款"),
+    ):
+        v = str(data.get(k, "")).strip()
+        if v and v not in ("是", "否"):
+            raise HTTPException(status_code=400, detail=f"{label}仅支持“是/否”")
+
+    payment_cycle = str(data.get("payment_cycle", "")).strip()
+    if payment_cycle and payment_cycle not in ("月度", "双月", "季度", "半年度"):
+        raise HTTPException(status_code=400, detail="回款周期仅支持：月度、双月、季度、半年度")
+
+    payment_nature = str(data.get("payment_nature", "")).strip()
+    if payment_nature and payment_nature not in ("增量回款", "存量回款"):
+        raise HTTPException(status_code=400, detail="回款性质仅支持：增量回款、存量回款")
+
+
+def _resolve_settlement_client_id(db: Session, customer_name: str, require_existing: bool) -> Optional[int]:
+    name = str(customer_name or "").strip()
+    c = db.query(Client).filter(Client.name == name).first() if name else None
+    if require_existing and not c:
+        raise HTTPException(status_code=400, detail="手动新增/修改时，客户必须从已建客户名单中选择")
+    return c.id if c else None
+
+
+def _settlement_dedup_key(customer_name: str, fee_month: str) -> str:
+    cn = str(customer_name or "").strip()
+    fm = str(fee_month or "").strip()
+    if not cn or not fm:
+        return ""
+    return f"{cn}||{fm}"
+
+
+def _write_settlement_backup_csv(rows: List[DeliverySettlementEntry]) -> str:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    name = f"settlement_backup_{ts}.csv"
+    path = os.path.join(BACKUP_DIR, name)
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(SETTLEMENT_EXPORT_HEADERS)
+        for e in rows:
+            d = _settlement_entry_to_dict(e)
+            writer.writerow([d.get(SETTLEMENT_HEADER_MAP[h], "") for h in SETTLEMENT_EXPORT_HEADERS])
+    return name
+
+
+def _write_roster_backup_csv(client: Client, rows: List[RosterEntry]) -> str:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = "".join(ch for ch in client.name if ch.isalnum() or ch in (" ", "-", "_")).strip() or f"client_{client.id}"
+    name = f"roster_backup_{safe_name}_{client.id}_{ts}.csv"
+    path = os.path.join(BACKUP_DIR, name)
+    export_headers = ZNTX_ROSTER_EXPORT_HEADERS if client.name == "中诺通讯" else ROSTER_EXPORT_HEADERS
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(export_headers)
+        for e in rows:
+            d = _roster_entry_to_dict(e)
+            writer.writerow([d.get(_CHINESE_ROSTER_HEADER_MAP[h], "") for h in export_headers])
+    return name
+
+
+SETTLEMENT_EXPORT_HEADERS = [
+    "序号",
+    "结算进度更新日期",
+    "客户",
+    "费用月份",
+    "追款月份",
+    "金额",
+    "内部确认考勤",
+    "客户确认",
+    "是否开票",
+    "开票日期",
+    "是否回款",
+    "预计回款时间",
+    "实际回款时间",
+    "回款天数",
+    "回款周期",
+    "回款性质",
+    "PO单",
+    "发票号",
+    "备注",
+]
+
+
+SETTLEMENT_HEADER_MAP = {
+    "序号": "serial_no",
+    "结算进度更新日期": "progress_updated_at",
+    "客户": "customer_name",
+    "费用月份": "fee_month",
+    "追款月份": "chase_month",
+    "金额": "amount",
+    "内部确认考勤": "internal_attendance_confirm",
+    "客户确认": "client_confirm",
+    "是否开票": "invoiced",
+    "开票日期": "invoice_date",
+    "是否回款": "paid",
+    "预计回款时间": "expected_payment_date",
+    "实际回款时间": "actual_payment_date",
+    "回款天数": "payment_days",
+    "回款周期": "payment_cycle",
+    "回款性质": "payment_nature",
+    "PO单": "po_no",
+    "发票号": "invoice_no",
+    "备注": "remarks",
+}
 
 
 ROSTER_FIELD_KEYS = frozenset(
@@ -881,6 +1121,7 @@ async def roster_delete_row(row_id: int, db: Session = Depends(get_db), user: st
 async def roster_import_csv(
     client_id: int,
     file: UploadFile = File(...),
+    confirm: str = Form(""),
     db: Session = Depends(get_db),
     user: str = Depends(authenticate),
 ):
@@ -896,9 +1137,13 @@ async def roster_import_csv(
     raw = await file.read()
     if len(raw) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="文件超过大小限制")
+    if str(confirm).strip().upper() != "CONFIRM":
+        raise HTTPException(status_code=400, detail="导入前请确认覆盖操作（confirm=CONFIRM）")
     text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
     # 按用户要求：导入前先清空当前客户花名册，再重建导入。
-    cleared_existing = db.query(RosterEntry).filter(RosterEntry.client_id == client_id).count()
+    existing_rows = db.query(RosterEntry).filter(RosterEntry.client_id == client_id).order_by(RosterEntry.id).all()
+    cleared_existing = len(existing_rows)
+    backup_file = _write_roster_backup_csv(c, existing_rows) if cleared_existing else ""
     if cleared_existing:
         db.query(RosterEntry).filter(RosterEntry.client_id == client_id).delete()
         db.commit()
@@ -937,7 +1182,8 @@ async def roster_import_csv(
         client_id=client_id,
         operator=user,
         action=(
-            f"花名册 CSV 导入前清空 {cleared_existing} 行，导入新增 {imported} 行"
+            f"花名册 CSV 导入前备份 {cleared_existing} 行到 {backup_file or '无备份'}，"
+            f"清空 {cleared_existing} 行，导入新增 {imported} 行"
             f"（文件内去重跳过 {skipped_duplicates} 行，空行跳过 {skipped_empty} 行）"
             f"{skip_brief}"
         ),
@@ -955,6 +1201,7 @@ async def roster_import_csv(
     db.commit()
     return {
         "cleared_existing": cleared_existing,
+        "backup_file": backup_file,
         "imported": imported,
         "skipped_duplicates": skipped_duplicates,
         "skipped_empty": skipped_empty,
@@ -985,6 +1232,181 @@ async def roster_export_csv(client_id: int, db: Session = Depends(get_db), user:
     response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
     response.headers["Content-Disposition"] = f'attachment; filename="{safe_name}_花名册_{int(time.time())}.csv"'
     return response
+
+
+@app.get("/api/delivery/settlement")
+async def settlement_list(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    rows = db.query(DeliverySettlementEntry).order_by(DeliverySettlementEntry.id).all()
+    return [_settlement_entry_to_dict(r) for r in rows]
+
+
+@app.post("/api/delivery/settlement")
+async def settlement_create_row(
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    data = _normalize_settlement_payload(body if isinstance(body, dict) else {})
+    _validate_settlement_payload(data)
+    client_id = _resolve_settlement_client_id(db, data.get("customer_name", ""), require_existing=True)
+    max_id_row = db.query(DeliverySettlementEntry).order_by(desc(DeliverySettlementEntry.id)).first()
+    if max_id_row and str(max_id_row.serial_no or "").isdigit():
+        data["serial_no"] = str(int(max_id_row.serial_no) + 1)
+    else:
+        data["serial_no"] = "1"
+    entry = DeliverySettlementEntry(client_id=client_id, **data)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    db.add(AuditLog(client_id=client_id or 0, operator=user, action=f"结算回款新增: {data.get('customer_name', '')}"))
+    db.commit()
+    return _settlement_entry_to_dict(entry)
+
+
+@app.put("/api/delivery/settlement/{row_id}")
+async def settlement_update_row(
+    row_id: int,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    entry = db.query(DeliverySettlementEntry).filter(DeliverySettlementEntry.id == row_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    data = _normalize_settlement_payload(body if isinstance(body, dict) else {})
+    _validate_settlement_payload(data)
+    entry.client_id = _resolve_settlement_client_id(db, data.get("customer_name", ""), require_existing=True)
+    for k, v in data.items():
+        if k == "serial_no":
+            continue
+        setattr(entry, k, v)
+    db.commit()
+    db.refresh(entry)
+    db.add(AuditLog(client_id=entry.client_id or 0, operator=user, action=f"结算回款修改行 id={row_id}"))
+    db.commit()
+    return _settlement_entry_to_dict(entry)
+
+
+@app.delete("/api/delivery/settlement/{row_id}")
+async def settlement_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    entry = db.query(DeliverySettlementEntry).filter(DeliverySettlementEntry.id == row_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    cid = entry.client_id or 0
+    db.delete(entry)
+    db.flush()
+    _resequence_settlement_serial_no_all(db)
+    db.commit()
+    db.add(AuditLog(client_id=cid, operator=user, action=f"结算回款删除行 id={row_id}"))
+    db.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/api/delivery/settlement/import")
+async def settlement_import_csv(
+    file: UploadFile = File(...),
+    confirm: str = Form(""),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    raw = await file.read()
+    if len(raw) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="文件超过大小限制")
+    if str(confirm).strip().upper() != "CONFIRM":
+        raise HTTPException(status_code=400, detail="导入前请确认覆盖操作（confirm=CONFIRM）")
+    text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
+    existing_rows = db.query(DeliverySettlementEntry).order_by(DeliverySettlementEntry.id).all()
+    cleared_existing = len(existing_rows)
+    backup_file = _write_settlement_backup_csv(existing_rows) if cleared_existing else ""
+    if cleared_existing:
+        db.query(DeliverySettlementEntry).delete()
+        db.commit()
+    reader = csv.DictReader(io.StringIO(text))
+    imported = 0
+    skipped_duplicates = 0
+    skipped_details: List[Dict[str, str]] = []
+    seen_keys: set = set()
+    for row_index, row in enumerate(reader, start=2):
+        mapped: Dict[str, str] = {}
+        for hk, fk in SETTLEMENT_HEADER_MAP.items():
+            mapped[fk] = str(row.get(hk, "") or "").strip()
+        mapped["serial_no"] = ""
+        if not any(mapped.values()):
+            continue
+        dedup_key = _settlement_dedup_key(mapped.get("customer_name", ""), mapped.get("fee_month", ""))
+        if dedup_key:
+            if dedup_key in seen_keys:
+                skipped_duplicates += 1
+                shown = mapped.get("serial_no", "").strip() or f"CSV第{row_index}行"
+                skipped_details.append(
+                    {
+                        "serial_no": shown,
+                        "reason": f"客户+费用月份重复（{mapped.get('customer_name', '')} / {mapped.get('fee_month', '')}）",
+                    }
+                )
+                continue
+            seen_keys.add(dedup_key)
+        _validate_settlement_payload(mapped)
+        client_id = _resolve_settlement_client_id(db, mapped.get("customer_name", ""), require_existing=False)
+        entry = DeliverySettlementEntry(client_id=client_id, **mapped)
+        db.add(entry)
+        imported += 1
+    db.flush()
+    _resequence_settlement_serial_no_all(db)
+    db.commit()
+    skip_total = skipped_duplicates
+    log = AuditLog(
+        client_id=0,
+        operator=user,
+        action=(
+            f"结算回款 CSV 导入前备份 {cleared_existing} 行到 {backup_file or '无备份'}，"
+            f"清空 {cleared_existing} 行，导入新增 {imported} 行（按客户+费用月份去重跳过 {skipped_duplicates} 行）"
+        ),
+    )
+    db.add(log)
+    if skipped_details:
+        detail_lines = [f"{item['serial_no']}：{item['reason']}" for item in skipped_details]
+        detail_log = AuditLog(
+            client_id=0,
+            operator=user,
+            action=f"结算回款导入跳过明细：\n" + "\n".join(detail_lines),
+        )
+        db.add(detail_log)
+    db.commit()
+    return {
+        "cleared_existing": cleared_existing,
+        "backup_file": backup_file,
+        "imported": imported,
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_total": skip_total,
+        "skipped_details": skipped_details,
+    }
+
+
+@app.get("/api/delivery/settlement/export")
+async def settlement_export_csv(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    rows = db.query(DeliverySettlementEntry).order_by(DeliverySettlementEntry.id).all()
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output)
+    writer.writerow(SETTLEMENT_EXPORT_HEADERS)
+    for e in rows:
+        d = _settlement_entry_to_dict(e)
+        writer.writerow([d.get(SETTLEMENT_HEADER_MAP[h], "") for h in SETTLEMENT_EXPORT_HEADERS])
+    response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
+    response.headers["Content-Disposition"] = f'attachment; filename="结算回款_{int(time.time())}.csv"'
+    return response
+
+
+@app.get("/api/delivery/settlement/logs")
+async def settlement_logs(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.action.like("结算回款%"))
+        .order_by(desc(AuditLog.created_at))
+        .all()
+    )
+    return logs
 
 
 V8_PORT = int(os.environ.get("CRM_V8_PORT", "8001"))
@@ -1131,6 +1553,55 @@ async def page_contacts_import(request: Request):
         title="导入与导出",
         subtitle="批量导入、导出与去重。",
         section_label="联系人",
+    )
+
+
+DELIVERY_MODULES = {
+    "requirements": "需求清单",
+    "pipeline": "管道数据",
+    "interviews": "员工访谈",
+    "turnover": "离职率分析",
+    "handbook": "交付手册",
+    "settlement": "结算回款",
+}
+
+
+def _delivery_module_title(module_key: str) -> str:
+    title = DELIVERY_MODULES.get(module_key)
+    if not title:
+        raise HTTPException(status_code=404, detail="交付模块不存在")
+    return title
+
+
+@app.get("/delivery/{module_key}", response_class=HTMLResponse)
+async def page_delivery_module_index(request: Request, module_key: str):
+    title = _delivery_module_title(module_key)
+    if module_key == "settlement":
+        return _page(
+            "pages/delivery_settlement.html",
+            request,
+            module_key=module_key,
+            module_title=title,
+        )
+    return _page(
+        "pages/delivery_index.html",
+        request,
+        module_key=module_key,
+        module_title=title,
+    )
+
+
+@app.get("/delivery/{module_key}/{client_id}", response_class=HTMLResponse)
+async def page_delivery_module_detail(request: Request, module_key: str, client_id: int):
+    title = _delivery_module_title(module_key)
+    if module_key == "settlement":
+        return RedirectResponse(url="/delivery/settlement", status_code=302)
+    return _page(
+        "pages/delivery_detail.html",
+        request,
+        module_key=module_key,
+        module_title=title,
+        client_id=client_id,
     )
 
 

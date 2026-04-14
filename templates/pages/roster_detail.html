@@ -160,7 +160,7 @@
                             v-model="form[f.key]"
                             @change="markTouched(f.key)"
                             :class="[
-                                'rounded px-2 py-1.5 w-full bg-white border',
+                                'w-full h-10 rounded border bg-white px-3 text-base leading-6 text-gray-800 appearance-none',
                                 getFieldError(f.key) ? 'border-red-400' : 'border-gray-300',
                             ]"
                         >
@@ -175,7 +175,7 @@
                             @input="markTouched(f.key)"
                             @change="markTouched(f.key)"
                             :class="[
-                                'rounded px-2 py-1.5 w-full border',
+                                'w-full h-10 rounded border bg-white px-3 text-base leading-6 text-gray-800',
                                 getFieldError(f.key) ? 'border-red-400' : 'border-gray-300',
                             ]"
                         />
@@ -571,8 +571,14 @@ createApp({
         const onImportFile = async (e) => {
             const f = e.target.files && e.target.files[0];
             if (!f) return;
+            const token = window.prompt('该操作会先备份并清空当前客户花名册，再导入新 CSV。\n请输入 CONFIRM 继续：', '');
+            if (token == null) {
+                e.target.value = '';
+                return;
+            }
             const fd = new FormData();
             fd.append('file', f);
+            fd.append('confirm', token);
             const r = await fetch(`/api/clients/${CLIENT_ID}/roster/import`, { method: 'POST', headers: authHeader(), body: fd });
             e.target.value = '';
             if (!r.ok) {
@@ -588,11 +594,12 @@ createApp({
             }
             const j = await r.json();
             const cleared = j.cleared_existing != null ? j.cleared_existing : 0;
+            const backupFile = j.backup_file || '';
             const imp = j.imported != null ? j.imported : 0;
             const skip = j.skipped_duplicates != null ? j.skipped_duplicates : 0;
             const skipTotal = j.skipped_total != null ? j.skipped_total : skip;
             const skipDetails = Array.isArray(j.skipped_details) ? j.skipped_details : [];
-            let msg = `已清空 ${cleared} 行，成功导入 ${imp} 行`;
+            let msg = `${backupFile ? `已备份到 ${backupFile}\n` : ''}已清空 ${cleared} 行，成功导入 ${imp} 行`;
             if (skipTotal > 0) {
                 msg += `\n共跳过 ${skipTotal} 行（其中联系方式重复 ${skip} 行）`;
                 const lines = skipDetails.map((item) => {

@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}{{ module_title }} · 交付 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="delivery-settlement-app" class="container mx-auto p-6 max-w-[1280px]">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+        <h1 class="text-2xl font-bold text-gray-900">结算回款</h1>
+        <div class="mt-4 flex justify-end gap-2">
+            <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openAdd">新增</button>
+            <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerImport">导入</button>
+            <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
+            <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportCsv">导出</button>
+            <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openLogs">日志</button>
+        </div>
+        <div class="mt-4 border border-gray-200 rounded-lg overflow-x-auto">
+            <table class="crm-table min-w-[1900px]">
+                <thead>
+                    <tr>
+                        <th class="crm-th">序号</th>
+                        <th class="crm-th">结算进度更新日期</th>
+                        <th class="crm-th">客户</th>
+                        <th class="crm-th">费用月份</th>
+                        <th class="crm-th">追款月份</th>
+                        <th class="crm-th">金额</th>
+                        <th class="crm-th">内部确认考勤</th>
+                        <th class="crm-th">客户确认</th>
+                        <th class="crm-th">是否开票</th>
+                        <th class="crm-th">开票日期</th>
+                        <th class="crm-th">是否回款</th>
+                        <th class="crm-th">预计回款时间</th>
+                        <th class="crm-th">实际回款时间</th>
+                        <th class="crm-th">回款天数</th>
+                        <th class="crm-th">回款周期</th>
+                        <th class="crm-th">回款性质</th>
+                        <th class="crm-th">PO单</th>
+                        <th class="crm-th">发票号</th>
+                        <th class="crm-th">备注</th>
+                        <th class="crm-th">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in rows" :key="row.id">
+                        <td class="crm-td">{{ row.serial_no }}</td>
+                        <td class="crm-td">{{ row.progress_updated_at }}</td>
+                        <td class="crm-td">{{ row.customer_name }}</td>
+                        <td class="crm-td">{{ row.fee_month }}</td>
+                        <td class="crm-td">{{ row.chase_month }}</td>
+                        <td class="crm-td">{{ row.amount }}</td>
+                        <td class="crm-td">{{ row.internal_attendance_confirm }}</td>
+                        <td class="crm-td">{{ row.client_confirm }}</td>
+                        <td class="crm-td">{{ row.invoiced }}</td>
+                        <td class="crm-td">{{ row.invoice_date }}</td>
+                        <td class="crm-td">{{ row.paid }}</td>
+                        <td class="crm-td">{{ row.expected_payment_date }}</td>
+                        <td class="crm-td">{{ row.actual_payment_date }}</td>
+                        <td class="crm-td">{{ row.payment_days }}</td>
+                        <td class="crm-td">{{ row.payment_cycle }}</td>
+                        <td class="crm-td">{{ row.payment_nature }}</td>
+                        <td class="crm-td">{{ row.po_no }}</td>
+                        <td class="crm-td">{{ row.invoice_no }}</td>
+                        <td class="crm-td">{{ row.remarks }}</td>
+                        <td class="crm-td whitespace-nowrap">
+                            <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
+                            <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
+                        </td>
+                    </tr>
+                    <tr v-if="!rows.length">
+                        <td colspan="20" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div v-if="showForm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">{{ editingId ? '修改结算回款' : '新增结算回款' }}</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false">&times;</button>
+            </div>
+            <div class="overflow-y-auto p-5">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <label v-for="f in fields" :key="f.key" class="flex flex-col gap-1">
+                        <span class="text-gray-600">{{ f.label }}<span v-if="f.required" class="text-red-500">*</span></span>
+                        <select v-if="f.type==='select'" v-model="form[f.key]" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-base leading-6 text-gray-800 appearance-none">
+                            <option value="">请选择</option>
+                            <option v-for="op in f.options" :key="op" :value="op">{{ op }}</option>
+                        </select>
+                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" :readonly="f.readonly" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-base leading-6 text-gray-800" />
+                    </label>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false">取消</button>
+                <button type="button" class="px-4 py-2 rounded-lg text-white" :class="hasErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'" :disabled="hasErrors" @click="saveForm">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showLogs" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="text-lg font-bold text-gray-900">结算回款日志</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showLogs=false">&times;</button>
+            </div>
+            <div class="overflow-y-auto p-5">
+                <div v-if="logsLoading" class="text-sm text-gray-500 py-8 text-center">日志加载中...</div>
+                <div v-else-if="!logs.length" class="text-sm text-gray-400 py-8 text-center">暂无日志记录</div>
+                <div v-else class="text-sm space-y-4">
+                    <div v-for="log in logs" :key="log.id" class="flex items-start">
+                        <div class="w-2.5 h-2.5 bg-gray-300 rounded-full mt-1.5 mr-3 shrink-0"></div>
+                        <div class="min-w-0">
+                            <p class="text-gray-400">{{ formatDate(log.created_at) }} - {{ log.operator || '-' }}</p>
+                            <p class="text-gray-700 break-words whitespace-pre-line">{{ log.action }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue;
+const FIELDS = [
+    { key: 'serial_no', label: '序号', readonly: true },
+    { key: 'progress_updated_at', label: '结算进度更新日期', type: 'date' },
+    { key: 'customer_name', label: '客户', type: 'select', required: true, options: [] },
+    { key: 'fee_month', label: '费用月份', required: true },
+    { key: 'chase_month', label: '追款月份' },
+    { key: 'amount', label: '金额', required: true },
+    { key: 'internal_attendance_confirm', label: '内部确认考勤', type: 'select', required: true, options: ['是', '否'] },
+    { key: 'client_confirm', label: '客户确认', type: 'select', required: true, options: ['是', '否'] },
+    { key: 'invoiced', label: '是否开票', type: 'select', required: true, options: ['是', '否'] },
+    { key: 'invoice_date', label: '开票日期', type: 'date' },
+    { key: 'paid', label: '是否回款', type: 'select', required: true, options: ['是', '否'] },
+    { key: 'expected_payment_date', label: '预计回款时间', type: 'date' },
+    { key: 'actual_payment_date', label: '实际回款时间', type: 'date' },
+    { key: 'payment_days', label: '回款天数' },
+    { key: 'payment_cycle', label: '回款周期', type: 'select', required: true, options: ['月度', '双月', '季度', '半年度'] },
+    { key: 'payment_nature', label: '回款性质', type: 'select', options: ['增量回款', '存量回款'] },
+    { key: 'po_no', label: 'PO单' },
+    { key: 'invoice_no', label: '发票号' },
+    { key: 'remarks', label: '备注' },
+];
+function emptyForm() {
+    const out = {};
+    FIELDS.forEach((f) => { out[f.key] = ''; });
+    return out;
+}
+createApp({
+    setup() {
+        const rows = ref([]);
+        const fileInput = ref(null);
+        const showLogs = ref(false);
+        const logsLoading = ref(false);
+        const logs = ref([]);
+        const showForm = ref(false);
+        const editingId = ref(null);
+        const form = reactive(emptyForm());
+        const fields = ref(FIELDS.map((f) => ({ ...f })));
+        const hasErrors = computed(() => {
+            const requiredKeys = ['customer_name', 'fee_month', 'amount', 'internal_attendance_confirm', 'client_confirm', 'invoiced', 'paid', 'payment_cycle'];
+            return requiredKeys.some((k) => !String(form[k] || '').trim());
+        });
+        const loadRows = async () => {
+            const r = await fetch('/api/delivery/settlement', { headers: window.crmAuthHeader() });
+            rows.value = r.ok ? await r.json() : [];
+        };
+        const triggerImport = () => {
+            if (fileInput.value) fileInput.value.click();
+        };
+        const onImportFile = async (e) => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            const token = window.prompt('该操作会先备份并清空现有结算回款数据，再导入新 CSV。\n请输入 CONFIRM 继续：', '');
+            if (token == null) {
+                e.target.value = '';
+                return;
+            }
+            const fd = new FormData();
+            fd.append('file', f);
+            fd.append('confirm', token);
+            const r = await fetch('/api/delivery/settlement/import', { method: 'POST', headers: window.crmAuthHeader(), body: fd });
+            e.target.value = '';
+            if (!r.ok) {
+                let msg = '导入失败';
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') msg = err.detail;
+                } catch (err) {}
+                alert(msg);
+                return;
+            }
+            const j = await r.json();
+            const cleared = j.cleared_existing != null ? j.cleared_existing : 0;
+            const backupFile = j.backup_file || '';
+            const imported = j.imported != null ? j.imported : 0;
+            const skipTotal = j.skipped_total != null ? j.skipped_total : 0;
+            const skipDup = j.skipped_duplicates != null ? j.skipped_duplicates : 0;
+            const skipDetails = Array.isArray(j.skipped_details) ? j.skipped_details : [];
+            let msg = `${backupFile ? `已备份到 ${backupFile}\n` : ''}已清空 ${cleared} 行，导入成功：${imported} 行`;
+            if (skipTotal > 0) {
+                msg += `\n共跳过 ${skipTotal} 行（客户+费用月份重复 ${skipDup} 行）`;
+                const lines = skipDetails.map((item) => `- ${item.serial_no || '-'}：${item.reason || '未知原因'}`);
+                if (lines.length) msg += `\n跳过明细：\n${lines.join('\n')}`;
+            }
+            alert(msg);
+            await loadRows();
+        };
+        const exportCsv = async () => {
+            const r = await fetch('/api/delivery/settlement/export', { headers: window.crmAuthHeader() });
+            if (!r.ok) {
+                alert('导出失败');
+                return;
+            }
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `结算回款_${Date.now()}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+        const openLogs = async () => {
+            showLogs.value = true;
+            logsLoading.value = true;
+            try {
+                const r = await fetch('/api/delivery/settlement/logs', { headers: window.crmAuthHeader() });
+                logs.value = r.ok ? await r.json() : [];
+            } finally {
+                logsLoading.value = false;
+            }
+        };
+        const formatDate = (ds) => {
+            if (!ds) return '-';
+            const t = new Date(ds);
+            return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
+        };
+        const loadCustomers = async () => {
+            const r = await fetch('/api/clients', { headers: window.crmAuthHeader() });
+            if (!r.ok) return;
+            const list = await r.json();
+            const names = list.map((x) => x.name).filter(Boolean);
+            const target = fields.value.find((f) => f.key === 'customer_name');
+            if (target) target.options = names;
+        };
+        const openAdd = () => {
+            editingId.value = null;
+            Object.assign(form, emptyForm());
+            form.serial_no = String(rows.value.length + 1);
+            showForm.value = true;
+        };
+        const openEdit = (row) => {
+            editingId.value = row.id;
+            FIELDS.forEach((f) => { form[f.key] = row[f.key] != null ? String(row[f.key]) : ''; });
+            showForm.value = true;
+        };
+        const saveForm = async () => {
+            const payload = {};
+            FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
+            const url = editingId.value ? `/api/delivery/settlement/${editingId.value}` : '/api/delivery/settlement';
+            const method = editingId.value ? 'PUT' : 'POST';
+            const r = await fetch(url, {
+                method,
+                headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!r.ok) {
+                let msg = '保存失败';
+                try {
+                    const e = await r.json();
+                    if (typeof e.detail === 'string') msg = e.detail;
+                } catch (err) {}
+                alert(msg);
+                return;
+            }
+            showForm.value = false;
+            await loadRows();
+        };
+        const removeRow = async (row) => {
+            if (!confirm('确定删除该条记录？')) return;
+            const r = await fetch(`/api/delivery/settlement/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
+            if (!r.ok) {
+                alert('删除失败');
+                return;
+            }
+            await loadRows();
+        };
+        onMounted(async () => {
+            await Promise.all([loadRows(), loadCustomers()]);
+        });
+        return {
+            rows, fields, fileInput, showLogs, logsLoading, logs,
+            showForm, editingId, form, hasErrors,
+            openAdd, openEdit, saveForm, removeRow,
+            triggerImport, onImportFile, exportCsv, openLogs, formatDate,
+        };
+    }
+}).mount('#delivery-settlement-app');
+</script>
+{% endblock %}

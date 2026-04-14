@@ -123,4 +123,34 @@
             </div>
         </div>
     </div>
+    <!-- 交付 -->
+    <div class="gh-nav-item{% if path.startswith('/delivery') %} nav-active{% endif %}">
+        <span class="nav-trigger cursor-default">交付
+            <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </span>
+        <div class="gh-mega">
+            <div class="gh-mega-panel p-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div>
+                        <div class="gh-mega-col-h">需求管理</div>
+                        <a class="gh-mega-link" href="/delivery/requirements">需求清单</a>
+                        <a class="gh-mega-link" href="/delivery/pipeline">管道数据</a>
+                    </div>
+                    <div>
+                        <div class="gh-mega-col-h">员工管理</div>
+                        <a class="gh-mega-link" href="/delivery/interviews">员工访谈</a>
+                        <a class="gh-mega-link" href="/delivery/turnover">离职率分析</a>
+                    </div>
+                    <div>
+                        <div class="gh-mega-col-h">经营管理</div>
+                        <a class="gh-mega-link" href="/delivery/handbook">交付手册</a>
+                        <a class="gh-mega-link" href="/delivery/settlement">结算回款</a>
+                    </div>
+                </div>
+                <div class="gh-mega-footer">
+                    <a href="/delivery/requirements" class="text-sm font-medium text-[#0969da] hover:underline">查看交付模块 →</a>
+                </div>
+            </div>
+        </div>
+    </div>
 </nav>

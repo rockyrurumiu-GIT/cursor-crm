@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ module_title }} · 交付 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="delivery-index-app">
+    <div class="container mx-auto p-6 max-w-[1280px] space-y-4">
+        <div class="flex justify-between items-center flex-wrap gap-2">
+            <div>
+                <a href="/customers/roster" class="text-sm text-blue-600 hover:underline">← 返回花名册客户列表</a>
+                <h1 class="mt-2 text-2xl font-bold text-gray-900">{{ moduleTitle }} · 客户列表</h1>
+            </div>
+        </div>
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <table class="crm-table">
+                <thead>
+                    <tr>
+                        <th class="crm-th">客户名称</th>
+                        <th class="crm-th">销售负责人</th>
+                        <th class="crm-th">开拓阶段</th>
+                        <th class="crm-th">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="c in clients" :key="c.id">
+                        <td class="crm-td crm-name-cell">{{ c.name }}</td>
+                        <td class="crm-td">{{ c.owner }}</td>
+                        <td class="crm-td">{{ c.phase }}</td>
+                        <td class="crm-td">
+                            <a :href="`/delivery/${moduleKey}/${c.id}`" class="text-blue-600 text-sm hover:underline">进入{{ moduleTitle }}</a>
+                        </td>
+                    </tr>
+                    <tr v-if="!clients.length">
+                        <td colspan="4" class="crm-td text-center text-gray-400 py-8">暂无客户数据</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endraw %}
+<script>
+window.__DELIVERY_MODULE_KEY__ = "{{ module_key }}";
+window.__DELIVERY_MODULE_TITLE__ = "{{ module_title }}";
+</script>
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+    setup() {
+        const clients = ref([]);
+        const moduleKey = window.__DELIVERY_MODULE_KEY__;
+        const moduleTitle = window.__DELIVERY_MODULE_TITLE__;
+        const loadClients = async () => {
+            const r = await fetch('/api/clients', { headers: window.crmAuthHeader() });
+            clients.value = r.ok ? await r.json() : [];
+        };
+        onMounted(loadClients);
+        return { clients, moduleKey, moduleTitle };
+    }
+}).mount('#delivery-index-app');
+</script>
+{% endblock %}
