@@ -799,6 +799,12 @@ async def roster_import_csv(
     db: Session = Depends(get_db),
     user: str = Depends(authenticate),
 ):
+    def _skip_serial_hint(merged_row: Dict[str, str], csv_line_no: int) -> str:
+        serial = (merged_row.get("serial_no") or "").strip()
+        if serial:
+            return serial
+        return f"CSV第{csv_line_no}行"
+
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -814,29 +820,61 @@ async def roster_import_csv(
 
     imported = 0
     skipped_duplicates = 0
+    skipped_empty = 0
+    skipped_details: List[Dict[str, str]] = []
     seen_contact_keys: set = set()
-    for mapped in _iter_roster_csv_data_rows(text):
+    for row_index, mapped in enumerate(_iter_roster_csv_data_rows(text), start=2):
         merged = _normalize_roster_payload(mapped)
         if not any(merged.values()):
+            skipped_empty += 1
+            skipped_details.append({"serial_no": _skip_serial_hint(merged, row_index), "reason": "空行或全部字段为空"})
             continue
         ck = _contact_dedup_key(merged.get("contact_info", ""))
         if ck:
             if ck in seen_contact_keys:
                 skipped_duplicates += 1
+                skipped_details.append({"serial_no": _skip_serial_hint(merged, row_index), "reason": "联系方式重复（文件内去重）"})
                 continue
             seen_contact_keys.add(ck)
         entry = RosterEntry(client_id=client_id, **merged)
         db.add(entry)
         imported += 1
     db.commit()
+    skip_total = skipped_duplicates + skipped_empty
+    skip_brief = ""
+    if skip_total:
+        preview = "；".join([f"{x['serial_no']}({x['reason']})" for x in skipped_details[:8]])
+        skip_brief = f"；跳过 {skip_total} 行：{preview}"
+        if len(skipped_details) > 8:
+            skip_brief += f"；其余 {len(skipped_details) - 8} 行见导入提示"
     log = AuditLog(
         client_id=client_id,
         operator=user,
-        action=f"花名册 CSV 导入前清空 {cleared_existing} 行，导入新增 {imported} 行（文件内去重跳过 {skipped_duplicates} 行）",
+        action=(
+            f"花名册 CSV 导入前清空 {cleared_existing} 行，导入新增 {imported} 行"
+            f"（文件内去重跳过 {skipped_duplicates} 行，空行跳过 {skipped_empty} 行）"
+            f"{skip_brief}"
+        ),
     )
     db.add(log)
+    if skipped_details:
+        detail_lines = [f"{item['serial_no']}：{item['reason']}" for item in skipped_details]
+        detail_text = "\n".join(detail_lines)
+        detail_log = AuditLog(
+            client_id=client_id,
+            operator=user,
+            action=f"花名册导入跳过明细：\n{detail_text}",
+        )
+        db.add(detail_log)
     db.commit()
-    return {"cleared_existing": cleared_existing, "imported": imported, "skipped_duplicates": skipped_duplicates}
+    return {
+        "cleared_existing": cleared_existing,
+        "imported": imported,
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_empty": skipped_empty,
+        "skipped_total": skip_total,
+        "skipped_details": skipped_details,
+    }
 
 
 @app.get("/api/clients/{client_id}/roster/export")
