@@ -8,7 +8,9 @@
     thead .roster-sticky-op {
         box-shadow: -8px 0 14px -6px rgba(73, 66, 58, 0.18);
     }
-    .roster-wrap.crm-h-scroll { padding-bottom: 22px; }
+    .roster-wrap.crm-h-scroll {
+        padding-bottom: 22px;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -66,7 +68,7 @@
         </div>
 
         <div class="rounded-xl border border-gray-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_24px_-4px_rgba(15,23,42,0.06)] overflow-hidden">
-            <div class="crm-h-scroll roster-wrap">
+            <div class="crm-h-scroll roster-wrap crm-table-scroll" style="--crm-table-scroll-max-height: calc(100vh - 280px);">
                 <table class="crm-table min-w-[2680px] text-sm text-gray-800">
                     <thead>
                         <tr>
@@ -98,7 +100,7 @@
                             <th class="crm-th min-w-[14rem]">{{ isZNTX ? '释放成功离职原因' : '离职或释放原因' }}</th>
                             <th v-if="isZNTX" class="crm-th min-w-[6rem] crm-currency-cell">补偿金</th>
                             <th class="crm-th min-w-[10rem] max-w-[15rem]">备注</th>
-                            <th class="crm-th sticky right-0 z-20 min-w-[5.5rem] roster-sticky-op">操作</th>
+                            <th class="crm-th sticky right-0 z-20 min-w-[5.5rem] roster-sticky-op crm-sticky-right-op">操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -131,7 +133,7 @@
                             <td class="crm-td px-3 py-3 min-w-[14rem] max-w-[18rem] text-gray-700 align-top leading-snug">{{ row.leave_reason }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.zntx_compensation_amount) }}</td>
                             <td class="crm-td px-3 py-3 max-w-[13rem] break-words text-gray-700 align-top leading-snug">{{ row.remarks }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap align-top sticky right-0 z-10 border-l border-gray-100 bg-white group-hover:bg-stone-50/90 roster-sticky-op">
+                            <td class="crm-td px-3 py-3 whitespace-nowrap align-top sticky right-0 z-10 border-l border-gray-100 bg-white group-hover:bg-stone-50/90 roster-sticky-op crm-sticky-right-op">
                                 <button type="button" class="text-blue-600 hover:text-blue-800 hover:underline text-xs mr-2" @click="openEdit(row)">修改</button>
                                 <button type="button" class="text-red-600 hover:text-red-700 hover:underline text-xs" @click="confirmDelete(row)">删除</button>
                             </td>
@@ -448,10 +450,11 @@ createApp({
             return tableFieldKeys.value.has(fieldKey);
         };
         const filteredRows = computed(() => {
+            const ci = (v) => String(v || '').trim().toLowerCase();
             return rows.value.filter((row) => {
                 if (filters.employmentStatus && String(row.employment_status || '') !== filters.employmentStatus) return false;
-                if (filters.workLocation && hasFieldData('work_location') && String(row.work_location || '') !== filters.workLocation) return false;
-                if (filters.businessLine && hasFieldData('business_line') && String(row.business_line || '') !== filters.businessLine) return false;
+                if (filters.workLocation && hasFieldData('work_location') && ci(row.work_location) !== ci(filters.workLocation)) return false;
+                if (filters.businessLine && hasFieldData('business_line') && ci(row.business_line) !== ci(filters.businessLine)) return false;
                 if (filters.entryDateBefore) {
                     const toDateKey = (v) => {
                         const s = String(v || '').trim();
@@ -490,10 +493,10 @@ createApp({
                     if (Number.isFinite(limit) && (!Number.isFinite(p) || !(p < limit))) return false;
                 }
                 if (filters.employeePlus1 && hasFieldData('employee_plus1')) {
-                    if (String(row.employee_plus1 || '') !== filters.employeePlus1) return false;
+                    if (ci(row.employee_plus1) !== ci(filters.employeePlus1)) return false;
                 }
                 if (filters.onboardingChannel && hasFieldData('zntx_onboarding_channel')) {
-                    if (String(row.zntx_onboarding_channel || '') !== filters.onboardingChannel) return false;
+                    if (ci(row.zntx_onboarding_channel) !== ci(filters.onboardingChannel)) return false;
                 }
                 return true;
             });

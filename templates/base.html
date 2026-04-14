@@ -100,6 +100,39 @@
             -webkit-overflow-scrolling: touch;
             scrollbar-width: thin;
         }
+        /* 通用：表格内容区滚动 + 表头固定 */
+        .crm-table-scroll {
+            max-height: var(--crm-table-scroll-max-height, calc(100vh - 260px));
+            overflow-x: auto;
+            overflow-y: auto;
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+        .crm-table-scroll .crm-table thead th.crm-th {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+        /* 通用：操作列固定在最右侧（表头/表体分层） */
+        .crm-sticky-right-op {
+            position: sticky;
+            right: 0;
+            background: #fff;
+            border-left: 1px solid #e5e7eb;
+            box-shadow: -8px 0 16px -10px rgba(15, 23, 42, 0.18);
+        }
+        .crm-table tbody .crm-sticky-right-op {
+            z-index: 8 !important;
+        }
+        .crm-table thead .crm-sticky-right-op {
+            top: 0;
+            right: 0;
+            z-index: 15 !important;
+            background: #e6e2db;
+        }
+        .crm-table tbody tr:hover .crm-sticky-right-op {
+            background: #fafaf9;
+        }
         /* 全局表格风格（暖灰表头）。新建表格优先复用这些 class */
         .crm-table {
             width: 100%;
