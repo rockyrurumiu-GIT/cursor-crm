@@ -14,6 +14,29 @@
             <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
             <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportCsv">导出</button>
             <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openLogs">日志</button>
+            <button type="button" class="crm-btn-rollback" @click="restoreLatestBackup">回滚</button>
+        </div>
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-6 gap-2">
+            <input v-model="filters.customer" type="text" placeholder="筛选客户" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800" />
+            <input v-model="filters.feeMonth" type="text" placeholder="筛选费用月份" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800" />
+            <select v-model="filters.invoiced" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+                <option value="">是否开票（全部）</option>
+                <option value="是">是</option>
+                <option value="否">否</option>
+            </select>
+            <select v-model="filters.paid" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+                <option value="">是否回款（全部）</option>
+                <option value="是">是</option>
+                <option value="否">否</option>
+            </select>
+            <select v-model="filters.paymentCycle" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+                <option value="">回款周期（全部）</option>
+                <option value="月度">月度</option>
+                <option value="双月">双月</option>
+                <option value="季度">季度</option>
+                <option value="半年度">半年度</option>
+            </select>
+            <button type="button" class="rounded border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50" @click="clearFilters">重置筛选</button>
         </div>
         <div class="mt-4 border border-gray-200 rounded-lg overflow-x-auto">
             <table class="crm-table min-w-[1900px]">
@@ -21,10 +44,10 @@
                     <tr>
                         <th class="crm-th">序号</th>
                         <th class="crm-th">结算进度更新日期</th>
-                        <th class="crm-th">客户</th>
-                        <th class="crm-th">费用月份</th>
-                        <th class="crm-th">追款月份</th>
-                        <th class="crm-th">金额</th>
+                        <th class="crm-th min-w-[6em] whitespace-nowrap">客户</th>
+                        <th class="crm-th min-w-[8rem] whitespace-nowrap">费用月份</th>
+                        <th class="crm-th min-w-[8rem] whitespace-nowrap">追款月份</th>
+                        <th class="crm-th crm-currency-cell">金额</th>
                         <th class="crm-th">内部确认考勤</th>
                         <th class="crm-th">客户确认</th>
                         <th class="crm-th">是否开票</th>
@@ -37,18 +60,18 @@
                         <th class="crm-th">回款性质</th>
                         <th class="crm-th">PO单</th>
                         <th class="crm-th">发票号</th>
-                        <th class="crm-th">备注</th>
+                        <th class="crm-th min-w-[6em] whitespace-nowrap">备注</th>
                         <th class="crm-th">操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in rows" :key="row.id">
+                    <tr v-for="row in filteredRows" :key="row.id">
                         <td class="crm-td">{{ row.serial_no }}</td>
                         <td class="crm-td">{{ row.progress_updated_at }}</td>
-                        <td class="crm-td">{{ row.customer_name }}</td>
-                        <td class="crm-td">{{ row.fee_month }}</td>
-                        <td class="crm-td">{{ row.chase_month }}</td>
-                        <td class="crm-td">{{ row.amount }}</td>
+                        <td class="crm-td whitespace-nowrap">{{ row.customer_name }}</td>
+                        <td class="crm-td whitespace-nowrap">{{ row.fee_month }}</td>
+                        <td class="crm-td whitespace-nowrap">{{ row.chase_month }}</td>
+                        <td class="crm-td crm-currency-cell">{{ displayAmountInteger(row.amount) }}</td>
                         <td class="crm-td">{{ row.internal_attendance_confirm }}</td>
                         <td class="crm-td">{{ row.client_confirm }}</td>
                         <td class="crm-td">{{ row.invoiced }}</td>
@@ -61,16 +84,32 @@
                         <td class="crm-td">{{ row.payment_nature }}</td>
                         <td class="crm-td">{{ row.po_no }}</td>
                         <td class="crm-td">{{ row.invoice_no }}</td>
-                        <td class="crm-td">{{ row.remarks }}</td>
+                        <td class="crm-td whitespace-nowrap">{{ row.remarks }}</td>
                         <td class="crm-td whitespace-nowrap">
                             <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
                         </td>
                     </tr>
-                    <tr v-if="!rows.length">
+                    <tr v-if="!filteredRows.length">
                         <td colspan="20" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
                     </tr>
                 </tbody>
+                <tfoot v-if="filteredRows.length">
+                    <tr class="crm-total-row">
+                        <td colspan="5" class="crm-td px-3 py-3 align-middle">
+                            <span class="crm-total-label">筛选合计</span>
+                        </td>
+                        <td class="crm-td px-3 py-3 crm-currency-cell">{{ totalAmountDisplay }}</td>
+                        <td colspan="14" class="crm-td"></td>
+                    </tr>
+                    <tr class="crm-total-row" v-if="rows.length !== filteredRows.length">
+                        <td colspan="5" class="crm-td px-3 py-3 align-middle">
+                            <span class="crm-total-label">全量合计</span>
+                        </td>
+                        <td class="crm-td px-3 py-3 crm-currency-cell">{{ totalAmountAllDisplay }}</td>
+                        <td colspan="14" class="crm-td"></td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
@@ -130,7 +169,7 @@ const { createApp, ref, reactive, computed, onMounted } = Vue;
 const FIELDS = [
     { key: 'serial_no', label: '序号', readonly: true },
     { key: 'progress_updated_at', label: '结算进度更新日期', type: 'date' },
-    { key: 'customer_name', label: '客户', type: 'select', required: true, options: [] },
+    { key: 'customer_name', label: '客户', required: true },
     { key: 'fee_month', label: '费用月份', required: true },
     { key: 'chase_month', label: '追款月份' },
     { key: 'amount', label: '金额', required: true },
@@ -156,6 +195,13 @@ function emptyForm() {
 createApp({
     setup() {
         const rows = ref([]);
+        const filters = reactive({
+            customer: '',
+            feeMonth: '',
+            invoiced: '',
+            paid: '',
+            paymentCycle: '',
+        });
         const fileInput = ref(null);
         const showLogs = ref(false);
         const logsLoading = ref(false);
@@ -167,6 +213,44 @@ createApp({
         const hasErrors = computed(() => {
             const requiredKeys = ['customer_name', 'fee_month', 'amount', 'internal_attendance_confirm', 'client_confirm', 'invoiced', 'paid', 'payment_cycle'];
             return requiredKeys.some((k) => !String(form[k] || '').trim());
+        });
+        const filteredRows = computed(() => {
+            return rows.value.filter((row) => {
+                if (filters.customer && !String(row.customer_name || '').includes(filters.customer)) return false;
+                if (filters.feeMonth && !String(row.fee_month || '').includes(filters.feeMonth)) return false;
+                if (filters.invoiced && String(row.invoiced || '') !== filters.invoiced) return false;
+                if (filters.paid && String(row.paid || '') !== filters.paid) return false;
+                if (filters.paymentCycle && String(row.payment_cycle || '') !== filters.paymentCycle) return false;
+                return true;
+            });
+        });
+        const parseAmount = (raw) => {
+            if (raw == null) return NaN;
+            const s = String(raw).replace(/[¥￥,\s\u00a0]/g, '').trim();
+            if (!s) return NaN;
+            const n = Number(s);
+            return Number.isFinite(n) ? n : NaN;
+        };
+        const displayAmountInteger = (raw) => {
+            const n = parseAmount(raw);
+            if (!Number.isFinite(n)) return String(raw || '');
+            return `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        };
+        const totalAmountDisplay = computed(() => {
+            let sum = 0;
+            for (const row of filteredRows.value) {
+                const n = parseAmount(row.amount);
+                if (Number.isFinite(n)) sum += n;
+            }
+            return `¥${sum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        });
+        const totalAmountAllDisplay = computed(() => {
+            let sum = 0;
+            for (const row of rows.value) {
+                const n = parseAmount(row.amount);
+                if (Number.isFinite(n)) sum += n;
+            }
+            return `¥${sum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         });
         const loadRows = async () => {
             const r = await fetch('/api/delivery/settlement', { headers: window.crmAuthHeader() });
@@ -206,7 +290,7 @@ createApp({
             const skipDetails = Array.isArray(j.skipped_details) ? j.skipped_details : [];
             let msg = `${backupFile ? `已备份到 ${backupFile}\n` : ''}已清空 ${cleared} 行，导入成功：${imported} 行`;
             if (skipTotal > 0) {
-                msg += `\n共跳过 ${skipTotal} 行（客户+费用月份重复 ${skipDup} 行）`;
+                msg += `\n共跳过 ${skipTotal} 行（客户+费用月份+金额+备注重复 ${skipDup} 行）`;
                 const lines = skipDetails.map((item) => `- ${item.serial_no || '-'}：${item.reason || '未知原因'}`);
                 if (lines.length) msg += `\n跳过明细：\n${lines.join('\n')}`;
             }
@@ -219,13 +303,9 @@ createApp({
                 alert('导出失败');
                 return;
             }
+            const disposition = r.headers.get('Content-Disposition') || '';
             const blob = await r.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `结算回款_${Date.now()}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
+            window.crmDownloadBlob(blob, disposition, `结算回款_${Date.now()}.csv`);
         };
         const openLogs = async () => {
             showLogs.value = true;
@@ -242,13 +322,32 @@ createApp({
             const t = new Date(ds);
             return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
         };
-        const loadCustomers = async () => {
-            const r = await fetch('/api/clients', { headers: window.crmAuthHeader() });
-            if (!r.ok) return;
-            const list = await r.json();
-            const names = list.map((x) => x.name).filter(Boolean);
-            const target = fields.value.find((f) => f.key === 'customer_name');
-            if (target) target.options = names;
+        const restoreLatestBackup = async () => {
+            const ok = window.confirm('将使用“最近一次结算回款备份”覆盖当前数据，是否继续？');
+            if (!ok) return;
+            const r = await fetch('/api/delivery/settlement/restore/latest', {
+                method: 'POST',
+                headers: window.crmAuthHeader(),
+            });
+            if (!r.ok) {
+                let msg = '回滚失败';
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') msg = err.detail;
+                } catch (e) {}
+                alert(msg);
+                return;
+            }
+            const j = await r.json();
+            alert(`已从备份 ${j.backup_file} 回滚，清空 ${j.cleared_existing || 0} 行，恢复 ${j.restored_rows || 0} 行`);
+            await loadRows();
+        };
+        const clearFilters = () => {
+            filters.customer = '';
+            filters.feeMonth = '';
+            filters.invoiced = '';
+            filters.paid = '';
+            filters.paymentCycle = '';
         };
         const openAdd = () => {
             editingId.value = null;
@@ -264,7 +363,7 @@ createApp({
         const saveForm = async () => {
             const payload = {};
             FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
-            const url = editingId.value ? `/api/delivery/settlement/${editingId.value}` : '/api/delivery/settlement';
+            const url = editingId.value ? `/api/delivery/settlement/row/${editingId.value}` : '/api/delivery/settlement';
             const method = editingId.value ? 'PUT' : 'POST';
             const r = await fetch(url, {
                 method,
@@ -285,7 +384,7 @@ createApp({
         };
         const removeRow = async (row) => {
             if (!confirm('确定删除该条记录？')) return;
-            const r = await fetch(`/api/delivery/settlement/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
+            const r = await fetch(`/api/delivery/settlement/row/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
             if (!r.ok) {
                 alert('删除失败');
                 return;
@@ -293,13 +392,14 @@ createApp({
             await loadRows();
         };
         onMounted(async () => {
-            await Promise.all([loadRows(), loadCustomers()]);
+            await loadRows();
         });
         return {
-            rows, fields, fileInput, showLogs, logsLoading, logs,
+            rows, filters, filteredRows, fields, fileInput, showLogs, logsLoading, logs,
+            totalAmountDisplay, totalAmountAllDisplay,
             showForm, editingId, form, hasErrors,
             openAdd, openEdit, saveForm, removeRow,
-            triggerImport, onImportFile, exportCsv, openLogs, formatDate,
+            triggerImport, onImportFile, exportCsv, restoreLatestBackup, openLogs, formatDate, clearFilters, displayAmountInteger,
         };
     }
 }).mount('#delivery-settlement-app');

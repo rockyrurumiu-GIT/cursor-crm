@@ -30,6 +30,38 @@
                 <button type="button" @click="triggerImport" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导入</button>
                 <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
                 <button type="button" @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导出</button>
+                <button type="button" @click="restoreLatestBackup" class="crm-btn-rollback">回滚</button>
+            </div>
+        </div>
+        <div class="mb-4 grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-2 text-sm">
+            <select v-if="hasFilterField('employmentStatus')" v-model="filters.employmentStatus" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+                <option value="">在职情况（全部）</option>
+                <option v-for="v in employmentStatusOptions" :key="`es-${v}`" :value="v">{{ v }}</option>
+            </select>
+            <select v-if="hasFilterField('workLocation')" v-model="filters.workLocation" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+                <option value="">工作地（全部）</option>
+                <option v-for="v in workLocationOptions" :key="`wl-${v}`" :value="v">{{ v }}</option>
+            </select>
+            <select v-if="hasFilterField('businessLine')" v-model="filters.businessLine" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+                <option value="">业务线（全部）</option>
+                <option v-for="v in businessLineOptions" :key="`bl-${v}`" :value="v">{{ v }}</option>
+            </select>
+            <div v-if="hasFilterField('entryDateBefore')" class="flex items-center rounded border border-gray-300 bg-white h-10">
+                <span class="px-2 text-xs text-gray-500 whitespace-nowrap">入职时间早于</span>
+                <input v-model="filters.entryDateBefore" type="date" class="w-full h-full px-2 text-sm text-gray-800 border-0 rounded-r focus:outline-none" />
+            </div>
+            <input v-if="hasFilterField('gmsBelow')" v-model="filters.gmsBelow" type="number" step="0.01" placeholder="GM$ 小于" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800" />
+            <input v-if="hasFilterField('gmPctBelow')" v-model="filters.gmPctBelow" type="number" step="0.01" placeholder="GM% 小于" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800" />
+            <select v-if="hasFilterField('employeePlus1')" v-model="filters.employeePlus1" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+                <option value="">员工+1（全部）</option>
+                <option v-for="v in employeePlus1Options" :key="`ep1-${v}`" :value="v">{{ v }}</option>
+            </select>
+            <div class="flex gap-2">
+                <select v-if="hasFilterField('onboardingChannel') && onboardingChannelOptions.length" v-model="filters.onboardingChannel" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+                    <option value="">入职渠道（全部）</option>
+                    <option v-for="v in onboardingChannelOptions" :key="`oc-${v}`" :value="v">{{ v }}</option>
+                </select>
+                <button type="button" class="shrink-0 rounded border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50" @click="clearFilters">重置</button>
             </div>
         </div>
 
@@ -49,11 +81,11 @@
                             <th class="crm-th min-w-[7rem]">业务线</th>
                             <th class="crm-th min-w-[7rem]">{{ isZNTX ? '入职时间' : '入职日期' }}</th>
                             <th class="crm-th min-w-[7rem]">转正时间</th>
-                            <th class="crm-th min-w-[7.5rem]">月报价(含税)</th>
-                            <th class="crm-th min-w-[7.5rem]">税前工资</th>
-                            <th class="crm-th min-w-[6rem]">薪资报价比</th>
-                            <th class="crm-th min-w-[6.5rem]">GM$</th>
-                            <th class="crm-th min-w-[5rem]">GM%</th>
+                            <th class="crm-th min-w-[7.5rem] crm-currency-cell">月报价(含税)</th>
+                            <th class="crm-th min-w-[7.5rem] crm-currency-cell">税前工资</th>
+                            <th class="crm-th min-w-[6rem] crm-percent-cell">薪资报价比</th>
+                            <th class="crm-th min-w-[6.5rem] crm-currency-cell">GM$</th>
+                            <th class="crm-th min-w-[5rem] crm-percent-cell">GM%</th>
                             <th class="crm-th min-w-[5.5rem]">员工+1</th>
                             <th v-if="isZNTX" class="crm-th min-w-[6rem]">入职渠道</th>
                             <th v-if="isZNTX" class="crm-th min-w-[5rem]">打卡</th>
@@ -64,13 +96,13 @@
                             <th class="crm-th min-w-[7rem]">{{ isZNTX ? '离职时间' : '公司离职日期' }}</th>
                             <th v-if="isZNTX" class="crm-th min-w-[7rem]">离职类型</th>
                             <th class="crm-th min-w-[14rem]">{{ isZNTX ? '释放成功离职原因' : '离职或释放原因' }}</th>
-                            <th v-if="isZNTX" class="crm-th min-w-[6rem]">补偿金</th>
+                            <th v-if="isZNTX" class="crm-th min-w-[6rem] crm-currency-cell">补偿金</th>
                             <th class="crm-th min-w-[10rem] max-w-[15rem]">备注</th>
                             <th class="crm-th sticky right-0 z-20 min-w-[5.5rem] roster-sticky-op">操作</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="row in rows" :key="row.id" class="group border-b border-gray-100/90 bg-white transition-colors duration-150 hover:bg-stone-50/80">
+                        <tr v-for="row in filteredRows" :key="row.id" class="group border-b border-gray-100/90 bg-white transition-colors duration-150 hover:bg-stone-50/80">
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top tabular-nums">{{ row.serial_no }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top">{{ row.employment_status }}</td>
                             <td class="crm-td crm-name-cell px-3 py-3 whitespace-nowrap align-top tracking-tight">{{ row.full_name }}</td>
@@ -82,11 +114,11 @@
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.business_line }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.entry_date }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.regularization_date }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayAmountInteger(row.monthly_quote_tax) }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayAmountInteger(row.pre_tax_salary) }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.salary_quote_ratio }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayAmountInteger(row.gms) }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.gm_pct }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.monthly_quote_tax) }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.pre_tax_salary) }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-percent-cell">{{ row.salary_quote_ratio }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.gms) }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-percent-cell">{{ row.gm_pct }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.employee_plus1 }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_onboarding_channel }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_attendance_checkin }}</td>
@@ -97,27 +129,27 @@
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.company_resign_date }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_separation_type }}</td>
                             <td class="crm-td px-3 py-3 min-w-[14rem] max-w-[18rem] text-gray-700 align-top leading-snug">{{ row.leave_reason }}</td>
-                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayAmountInteger(row.zntx_compensation_amount) }}</td>
+                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.zntx_compensation_amount) }}</td>
                             <td class="crm-td px-3 py-3 max-w-[13rem] break-words text-gray-700 align-top leading-snug">{{ row.remarks }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap align-top sticky right-0 z-10 border-l border-gray-100 bg-white group-hover:bg-stone-50/90 roster-sticky-op">
                                 <button type="button" class="text-blue-600 hover:text-blue-800 hover:underline text-xs mr-2" @click="openEdit(row)">修改</button>
                                 <button type="button" class="text-red-600 hover:text-red-700 hover:underline text-xs" @click="confirmDelete(row)">删除</button>
                             </td>
                         </tr>
-                        <tr v-if="!loading && !rows.length">
+                        <tr v-if="!loading && !filteredRows.length">
                             <td :colspan="isZNTX ? 29 : 23" class="px-6 py-12 text-center text-gray-400 text-sm">暂无数据，请点击「新增行」或「导入 CSV」</td>
                         </tr>
                     </tbody>
-                    <tfoot v-if="!loading && rows.length">
+                    <tfoot v-if="!loading && filteredRows.length">
                         <tr v-if="!isZNTX" class="text-sm font-medium">
                             <td colspan="10" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
                                 <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
                             </td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.quote }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.pre }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.salaryRatio }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.gms }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.gmPct }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.quote }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.pre }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.salaryRatio }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
                             <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                             <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                             <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
@@ -126,11 +158,11 @@
                             <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
                                 <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
                             </td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.quote }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.pre }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.salaryRatio }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.gms }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.gmPct }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.quote }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.pre }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.salaryRatio }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
                             <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                             <td colspan="7" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                             <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
@@ -361,6 +393,16 @@ createApp({
         const showDel = ref(false);
         const delRow = ref(null);
         const fileInput = ref(null);
+        const filters = reactive({
+            employmentStatus: '',
+            workLocation: '',
+            businessLine: '',
+            entryDateBefore: '',
+            gmsBelow: '',
+            gmPctBelow: '',
+            employeePlus1: '',
+            onboardingChannel: '',
+        });
         const showLogs = ref(false);
         const logsLoading = ref(false);
         const logs = ref([]);
@@ -372,11 +414,95 @@ createApp({
                 .replace(/[（）()]/g, '');
             return raw.includes('中诺通讯');
         });
+        const hasFieldData = (key) => rows.value.some((r) => String(r[key] || '').trim() !== '');
+        const uniqueOptions = (key) => {
+            const set = new Set();
+            rows.value.forEach((r) => {
+                const v = String(r[key] || '').trim();
+                if (v) set.add(v);
+            });
+            return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        };
+        const employmentStatusOptions = computed(() => uniqueOptions('employment_status'));
+        const workLocationOptions = computed(() => uniqueOptions('work_location'));
+        const businessLineOptions = computed(() => uniqueOptions('business_line'));
+        const employeePlus1Options = computed(() => uniqueOptions('employee_plus1'));
+        const onboardingChannelOptions = computed(() => uniqueOptions('zntx_onboarding_channel'));
+        const tableFieldKeys = computed(() => {
+            const fields = isZNTX.value ? ZNTX_FORM_FIELDS : STANDARD_FORM_FIELDS;
+            return new Set(fields.map((f) => f.key));
+        });
+        const FILTER_FIELD_MAP = {
+            employmentStatus: 'employment_status',
+            workLocation: 'work_location',
+            businessLine: 'business_line',
+            entryDateBefore: 'entry_date',
+            gmsBelow: 'gms',
+            gmPctBelow: 'gm_pct',
+            employeePlus1: 'employee_plus1',
+            onboardingChannel: 'zntx_onboarding_channel',
+        };
+        const hasFilterField = (filterKey) => {
+            const fieldKey = FILTER_FIELD_MAP[filterKey];
+            if (!fieldKey) return false;
+            return tableFieldKeys.value.has(fieldKey);
+        };
+        const filteredRows = computed(() => {
+            return rows.value.filter((row) => {
+                if (filters.employmentStatus && String(row.employment_status || '') !== filters.employmentStatus) return false;
+                if (filters.workLocation && hasFieldData('work_location') && String(row.work_location || '') !== filters.workLocation) return false;
+                if (filters.businessLine && hasFieldData('business_line') && String(row.business_line || '') !== filters.businessLine) return false;
+                if (filters.entryDateBefore) {
+                    const toDateKey = (v) => {
+                        const s = String(v || '').trim();
+                        if (!s) return null;
+                        const m = s.match(/(\d{4})\D?(\d{1,2})\D?(\d{1,2})/);
+                        if (!m) return null;
+                        const y = parseInt(m[1], 10);
+                        const mo = parseInt(m[2], 10);
+                        const d = parseInt(m[3], 10);
+                        if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+                        return y * 10000 + mo * 100 + d;
+                    };
+                    const rowKey = toDateKey(row.entry_date);
+                    const limitKey = toDateKey(filters.entryDateBefore);
+                    if (limitKey && rowKey && !(rowKey < limitKey)) return false;
+                    if (limitKey && !rowKey) return false;
+                }
+                if (String(filters.gmsBelow).trim() !== '') {
+                    const limit = parseFloat(String(filters.gmsBelow));
+                    const g = parseAmountCell(row.gms);
+                    if (Number.isFinite(limit) && (!Number.isFinite(g) || !(g < limit))) return false;
+                }
+                if (String(filters.gmPctBelow).trim() !== '') {
+                    const limit = parseFloat(String(filters.gmPctBelow));
+                    const p = (() => {
+                        const s0 = String(row.gm_pct || '').trim().replace('％', '%');
+                        if (!s0) return NaN;
+                        if (s0.includes('%')) {
+                            const n = parseFloat(s0.replace('%', '').trim());
+                            return Number.isFinite(n) ? n : NaN;
+                        }
+                        const n = parseFloat(s0);
+                        if (!Number.isFinite(n)) return NaN;
+                        return n <= 1 ? n * 100 : n;
+                    })();
+                    if (Number.isFinite(limit) && (!Number.isFinite(p) || !(p < limit))) return false;
+                }
+                if (filters.employeePlus1 && hasFieldData('employee_plus1')) {
+                    if (String(row.employee_plus1 || '') !== filters.employeePlus1) return false;
+                }
+                if (filters.onboardingChannel && hasFieldData('zntx_onboarding_channel')) {
+                    if (String(row.zntx_onboarding_channel || '') !== filters.onboardingChannel) return false;
+                }
+                return true;
+            });
+        });
         const rosterFooter = computed(() => {
             let sumQuote = 0;
             let sumPre = 0;
             let sumGm = 0;
-            for (const row of rows.value) {
+            for (const row of filteredRows.value) {
                 const q = parseAmountCell(row.monthly_quote_tax);
                 const p = parseAmountCell(row.pre_tax_salary);
                 const g = parseAmountCell(row.gms);
@@ -620,13 +746,9 @@ createApp({
                 alert('导出失败');
                 return;
             }
+            const disposition = r.headers.get('Content-Disposition') || '';
             const blob = await r.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `花名册_${CLIENT_ID}_${Date.now()}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
+            window.crmDownloadBlob(blob, disposition, `花名册_${CLIENT_ID}_${Date.now()}.csv`);
         };
         const loadLogs = async () => {
             logsLoading.value = true;
@@ -656,15 +778,47 @@ createApp({
             const t = new Date(ds);
             return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
         };
+        const restoreLatestBackup = async () => {
+            const ok = window.confirm('将使用“最近一次花名册备份”覆盖当前客户花名册数据，是否继续？');
+            if (!ok) return;
+            const r = await fetch(`/api/clients/${CLIENT_ID}/roster/restore/latest`, {
+                method: 'POST',
+                headers: authHeader(),
+            });
+            if (!r.ok) {
+                let msg = '回滚失败';
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') msg = err.detail;
+                } catch (e) {}
+                alert(msg);
+                return;
+            }
+            const j = await r.json();
+            alert(`已从备份 ${j.backup_file} 回滚，清空 ${j.cleared_existing || 0} 行，恢复 ${j.restored_rows || 0} 行`);
+            await loadRows();
+            await loadLogs();
+        };
+        const clearFilters = () => {
+            filters.employmentStatus = '';
+            filters.workLocation = '';
+            filters.businessLine = '';
+            filters.entryDateBefore = '';
+            filters.gmsBelow = '';
+            filters.gmPctBelow = '';
+            filters.employeePlus1 = '';
+            filters.onboardingChannel = '';
+        };
         onMounted(() => {
             loadBrief();
             loadRows();
         });
         return {
-            rows, brief, loading, showForm, editingId, form, formFields: activeFormFields,
+            rows, filteredRows, filters, employmentStatusOptions, workLocationOptions, businessLineOptions, employeePlus1Options, onboardingChannelOptions,
+            brief, loading, showForm, editingId, form, formFields: activeFormFields,
             showDel, fileInput, rosterFooter, isZNTX, showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors,
             openAdd, openEdit, saveForm, confirmDelete, doDelete,
-            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, isRequiredField, fieldInputType, markTouched, getFieldError,
+            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, fieldInputType, markTouched, getFieldError,
             displayAmountInteger,
         };
     },

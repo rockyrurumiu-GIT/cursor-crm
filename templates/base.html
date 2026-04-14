@@ -52,6 +52,39 @@
         }
         .nav-trigger:hover { background: rgba(255,255,255,0.06); }
         .gh-nav-item.nav-active > .nav-trigger { color: #fff; background: rgba(255,255,255,0.08); }
+        .crm-btn-rollback {
+            border-radius: 0.5rem;
+            border: 1px solid #fca5a5;
+            background: #ef4444;
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #ffffff;
+            transition: background-color 0.15s ease;
+        }
+        .crm-btn-rollback:hover { background: #dc2626; }
+        .crm-currency-cell {
+            text-align: right;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+        .crm-percent-cell {
+            text-align: right;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+        .crm-total-row td {
+            background: #f8fafc;
+            border-top: 1px solid #cbd5e1;
+            color: #1e293b;
+            font-weight: 500;
+        }
+        .crm-total-label {
+            font-size: 1.125rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            color: #0f172a;
+        }
         /* 主内容区：减轻双指横向滑动触发浏览器「返回上一页」 */
         #main-shell main {
             overscroll-behavior-x: contain;
@@ -76,7 +109,7 @@
         .crm-table th.crm-th {
             padding: 0.75rem 0.95rem;
             font-size: 0.75rem;
-            font-weight: 500;
+            font-weight: 700;
             letter-spacing: 0.04em;
             color: #2f2a24;
             background: #e6e2db;
@@ -84,6 +117,7 @@
             border-right: 1px solid #d8d1c8;
             white-space: nowrap;
             vertical-align: middle;
+            text-align: center;
         }
         .crm-table th.crm-th:last-child { border-right: none; }
         .crm-table td.crm-td {
@@ -138,6 +172,24 @@
             var b = localStorage.getItem('crm_b64');
             return b ? { 'Authorization': 'Basic ' + b } : {};
         };
+        window.crmFilenameFromDisposition = function (disposition) {
+            if (!disposition) { return ''; }
+            var utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+            if (utfMatch && utfMatch[1]) {
+                try { return decodeURIComponent(utfMatch[1]); } catch (e) {}
+            }
+            var asciiMatch = disposition.match(/filename="?([^";]+)"?/i);
+            if (asciiMatch && asciiMatch[1]) { return asciiMatch[1]; }
+            return '';
+        };
+        window.crmDownloadBlob = function (blob, disposition, fallbackName) {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = window.crmFilenameFromDisposition(disposition) || fallbackName || ('export_' + Date.now() + '.csv');
+            a.click();
+            URL.revokeObjectURL(url);
+        };
         window.crmExportCsv = async function (e) {
             if (e) { e.preventDefault(); }
             var b = localStorage.getItem('crm_b64');
@@ -145,13 +197,9 @@
             try {
                 var r = await fetch('/api/export/clients', { headers: { 'Authorization': 'Basic ' + b } });
                 if (!r.ok) { alert('导出失败'); return; }
+                var disposition = r.headers.get('Content-Disposition') || '';
                 var blob = await r.blob();
-                var url = URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = url;
-                a.download = 'clients_' + Date.now() + '.csv';
-                a.click();
-                URL.revokeObjectURL(url);
+                window.crmDownloadBlob(blob, disposition, 'clients_' + Date.now() + '.csv');
             } catch (err) { alert('导出失败'); }
         };
 

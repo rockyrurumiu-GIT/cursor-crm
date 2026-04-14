@@ -7,6 +7,7 @@ import csv
 import io
 import socket
 import unicodedata
+from urllib.parse import quote
 from datetime import datetime
 from typing import List, Optional, Any, Dict
 from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File, status, Body
@@ -323,7 +324,21 @@ def _normalize_settlement_payload(d: Dict[str, Any]) -> Dict[str, str]:
         if v is None:
             v = ""
         out[k] = str(v).strip()
+    out["amount"] = _normalize_settlement_amount(out.get("amount", ""))
     return out
+
+
+def _normalize_settlement_amount(raw: str) -> str:
+    """金额统一为两位小数字符串，便于结算场景展示。"""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    s = re.sub(r"[¥￥,\s\u00a0]", "", s)
+    try:
+        n = float(s)
+    except ValueError:
+        return ""
+    return f"{n:.2f}"
 
 
 def _resequence_settlement_serial_no(db: Session, client_id: int) -> None:
@@ -390,6 +405,12 @@ def _validate_settlement_payload(data: Dict[str, str]) -> None:
     payment_nature = str(data.get("payment_nature", "")).strip()
     if payment_nature and payment_nature not in ("增量回款", "存量回款"):
         raise HTTPException(status_code=400, detail="回款性质仅支持：增量回款、存量回款")
+    amount = str(data.get("amount", "")).strip()
+    if amount:
+        try:
+            float(amount)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="金额格式不正确")
 
 
 def _resolve_settlement_client_id(db: Session, customer_name: str, require_existing: bool) -> Optional[int]:
@@ -400,12 +421,14 @@ def _resolve_settlement_client_id(db: Session, customer_name: str, require_exist
     return c.id if c else None
 
 
-def _settlement_dedup_key(customer_name: str, fee_month: str) -> str:
+def _settlement_dedup_key(customer_name: str, fee_month: str, amount: str, remarks: str) -> str:
     cn = str(customer_name or "").strip()
     fm = str(fee_month or "").strip()
-    if not cn or not fm:
+    am = str(amount or "").strip()
+    rm = str(remarks or "").strip()
+    if not cn or not fm or not am:
         return ""
-    return f"{cn}||{fm}"
+    return f"{cn}||{fm}||{am}||{rm}"
 
 
 def _write_settlement_backup_csv(rows: List[DeliverySettlementEntry]) -> str:
@@ -424,7 +447,7 @@ def _write_settlement_backup_csv(rows: List[DeliverySettlementEntry]) -> str:
 def _write_roster_backup_csv(client: Client, rows: List[RosterEntry]) -> str:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_name = "".join(ch for ch in client.name if ch.isalnum() or ch in (" ", "-", "_")).strip() or f"client_{client.id}"
-    name = f"roster_backup_{safe_name}_{client.id}_{ts}.csv"
+    name = f"roster_backup_{safe_name}__cid{client.id}__{ts}.csv"
     path = os.path.join(BACKUP_DIR, name)
     export_headers = ZNTX_ROSTER_EXPORT_HEADERS if client.name == "中诺通讯" else ROSTER_EXPORT_HEADERS
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
@@ -434,6 +457,31 @@ def _write_roster_backup_csv(client: Client, rows: List[RosterEntry]) -> str:
             d = _roster_entry_to_dict(e)
             writer.writerow([d.get(_CHINESE_ROSTER_HEADER_MAP[h], "") for h in export_headers])
     return name
+
+
+def _ascii_filename_fallback(source: str, default_base: str = "export") -> str:
+    s = "".join(ch for ch in (source or "") if ch.isascii() and (ch.isalnum() or ch in (" ", "-", "_"))).strip()
+    return s or default_base
+
+
+def _set_csv_download_headers(response: StreamingResponse, chinese_filename: str, ascii_base: str) -> None:
+    safe_ascii = _ascii_filename_fallback(ascii_base, "export")
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="{safe_ascii}.csv"; '
+        f"filename*=UTF-8''{quote(chinese_filename)}"
+    )
+
+
+def _pick_latest_backup(prefix: str, client_id: Optional[int] = None) -> Optional[str]:
+    files = [f for f in os.listdir(BACKUP_DIR) if f.startswith(prefix) and f.endswith(".csv")]
+    if client_id is not None:
+        marker = f"__cid{client_id}__"
+        legacy_marker = f"_{client_id}_"
+        files = [f for f in files if (marker in f or legacy_marker in f)]
+    if not files:
+        return None
+    files.sort(key=lambda x: os.path.getmtime(os.path.join(BACKUP_DIR, x)), reverse=True)
+    return files[0]
 
 
 SETTLEMENT_EXPORT_HEADERS = [
@@ -1021,7 +1069,12 @@ async def export_clients(db: Session = Depends(get_db), user: str = Depends(auth
         writer.writerow([c.id, c.name, c.industry, c.owner, c.scale, c.phase, c.created_at.strftime("%Y-%m-%d")])
 
     response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
-    response.headers["Content-Disposition"] = f"attachment; filename=clients_{int(time.time())}.csv"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    _set_csv_download_headers(
+        response,
+        chinese_filename=f"客户列表_{ts}.csv",
+        ascii_base=f"clients_{ts}",
+    )
     return response
 
 
@@ -1228,10 +1281,51 @@ async def roster_export_csv(client_id: int, db: Session = Depends(get_db), user:
             fn = _CHINESE_ROSTER_HEADER_MAP[zh]
             line.append(d.get(fn, ""))
         writer.writerow(line)
-    safe_name = "".join(ch for ch in c.name if ch.isalnum() or ch in (" ", "-", "_")).strip() or "roster"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    chinese_name = f"{c.name}_花名册_{ts}.csv"
     response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
-    response.headers["Content-Disposition"] = f'attachment; filename="{safe_name}_花名册_{int(time.time())}.csv"'
+    _set_csv_download_headers(
+        response,
+        chinese_filename=chinese_name,
+        ascii_base=f"client_{client_id}_roster_{ts}",
+    )
     return response
+
+
+@app.post("/api/clients/{client_id}/roster/restore/latest")
+async def roster_restore_latest_backup(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    latest = _pick_latest_backup("roster_backup_", client_id=client_id)
+    if not latest:
+        raise HTTPException(status_code=404, detail="未找到该客户花名册备份文件")
+    backup_path = os.path.join(BACKUP_DIR, latest)
+    with open(backup_path, "r", encoding="utf-8-sig", newline="") as f:
+        text = f.read()
+    text = _strip_excel_sep_directive(text)
+    cleared_existing = db.query(RosterEntry).filter(RosterEntry.client_id == client_id).count()
+    if cleared_existing:
+        db.query(RosterEntry).filter(RosterEntry.client_id == client_id).delete()
+        db.commit()
+    restored_rows = 0
+    for mapped in _iter_roster_csv_data_rows(text):
+        merged = _normalize_roster_payload(mapped)
+        if not any(merged.values()):
+            continue
+        db.add(RosterEntry(client_id=client_id, **merged))
+        restored_rows += 1
+    _resequence_roster_serial_no(db, client_id)
+    db.commit()
+    db.add(
+        AuditLog(
+            client_id=client_id,
+            operator=user,
+            action=f"花名册从备份恢复：{latest}，清空 {cleared_existing} 行，恢复 {restored_rows} 行",
+        )
+    )
+    db.commit()
+    return {"backup_file": latest, "cleared_existing": cleared_existing, "restored_rows": restored_rows}
 
 
 @app.get("/api/delivery/settlement")
@@ -1248,7 +1342,7 @@ async def settlement_create_row(
 ):
     data = _normalize_settlement_payload(body if isinstance(body, dict) else {})
     _validate_settlement_payload(data)
-    client_id = _resolve_settlement_client_id(db, data.get("customer_name", ""), require_existing=True)
+    client_id = _resolve_settlement_client_id(db, data.get("customer_name", ""), require_existing=False)
     max_id_row = db.query(DeliverySettlementEntry).order_by(desc(DeliverySettlementEntry.id)).first()
     if max_id_row and str(max_id_row.serial_no or "").isdigit():
         data["serial_no"] = str(int(max_id_row.serial_no) + 1)
@@ -1263,7 +1357,7 @@ async def settlement_create_row(
     return _settlement_entry_to_dict(entry)
 
 
-@app.put("/api/delivery/settlement/{row_id}")
+@app.put("/api/delivery/settlement/row/{row_id}")
 async def settlement_update_row(
     row_id: int,
     body: Dict[str, Any] = Body(default={}),
@@ -1275,7 +1369,7 @@ async def settlement_update_row(
         raise HTTPException(status_code=404, detail="记录不存在")
     data = _normalize_settlement_payload(body if isinstance(body, dict) else {})
     _validate_settlement_payload(data)
-    entry.client_id = _resolve_settlement_client_id(db, data.get("customer_name", ""), require_existing=True)
+    entry.client_id = _resolve_settlement_client_id(db, data.get("customer_name", ""), require_existing=False)
     for k, v in data.items():
         if k == "serial_no":
             continue
@@ -1287,7 +1381,7 @@ async def settlement_update_row(
     return _settlement_entry_to_dict(entry)
 
 
-@app.delete("/api/delivery/settlement/{row_id}")
+@app.delete("/api/delivery/settlement/row/{row_id}")
 async def settlement_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
     entry = db.query(DeliverySettlementEntry).filter(DeliverySettlementEntry.id == row_id).first()
     if not entry:
@@ -1333,7 +1427,12 @@ async def settlement_import_csv(
         mapped["serial_no"] = ""
         if not any(mapped.values()):
             continue
-        dedup_key = _settlement_dedup_key(mapped.get("customer_name", ""), mapped.get("fee_month", ""))
+        dedup_key = _settlement_dedup_key(
+            mapped.get("customer_name", ""),
+            mapped.get("fee_month", ""),
+            mapped.get("amount", ""),
+            mapped.get("remarks", ""),
+        )
         if dedup_key:
             if dedup_key in seen_keys:
                 skipped_duplicates += 1
@@ -1341,7 +1440,10 @@ async def settlement_import_csv(
                 skipped_details.append(
                     {
                         "serial_no": shown,
-                        "reason": f"客户+费用月份重复（{mapped.get('customer_name', '')} / {mapped.get('fee_month', '')}）",
+                        "reason": (
+                            "客户+费用月份+金额+备注重复"
+                            f"（{mapped.get('customer_name', '')} / {mapped.get('fee_month', '')} / {mapped.get('amount', '')} / {mapped.get('remarks', '')}）"
+                        ),
                     }
                 )
                 continue
@@ -1360,7 +1462,7 @@ async def settlement_import_csv(
         operator=user,
         action=(
             f"结算回款 CSV 导入前备份 {cleared_existing} 行到 {backup_file or '无备份'}，"
-            f"清空 {cleared_existing} 行，导入新增 {imported} 行（按客户+费用月份去重跳过 {skipped_duplicates} 行）"
+            f"清空 {cleared_existing} 行，导入新增 {imported} 行（按客户+费用月份+金额+备注去重跳过 {skipped_duplicates} 行）"
         ),
     )
     db.add(log)
@@ -1394,7 +1496,13 @@ async def settlement_export_csv(db: Session = Depends(get_db), user: str = Depen
         d = _settlement_entry_to_dict(e)
         writer.writerow([d.get(SETTLEMENT_HEADER_MAP[h], "") for h in SETTLEMENT_EXPORT_HEADERS])
     response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
-    response.headers["Content-Disposition"] = f'attachment; filename="结算回款_{int(time.time())}.csv"'
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"结算回款_{ts}.csv"
+    _set_csv_download_headers(
+        response,
+        chinese_filename=filename,
+        ascii_base=f"settlement_{ts}",
+    )
     return response
 
 
@@ -1407,6 +1515,48 @@ async def settlement_logs(db: Session = Depends(get_db), user: str = Depends(aut
         .all()
     )
     return logs
+
+
+@app.post("/api/delivery/settlement/restore/latest")
+async def settlement_restore_latest_backup(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    latest = _pick_latest_backup("settlement_backup_")
+    if not latest:
+        raise HTTPException(status_code=404, detail="未找到结算回款备份文件")
+    backup_path = os.path.join(BACKUP_DIR, latest)
+
+    with open(backup_path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+
+    cleared_existing = db.query(DeliverySettlementEntry).count()
+    if cleared_existing:
+        db.query(DeliverySettlementEntry).delete()
+        db.commit()
+
+    restored_rows = 0
+    for row in rows:
+        mapped: Dict[str, str] = {}
+        for hk, fk in SETTLEMENT_HEADER_MAP.items():
+            mapped[fk] = str(row.get(hk, "") or "").strip()
+        if not any(mapped.values()):
+            continue
+        _validate_settlement_payload(mapped)
+        client_id = _resolve_settlement_client_id(db, mapped.get("customer_name", ""), require_existing=False)
+        entry = DeliverySettlementEntry(client_id=client_id, **mapped)
+        db.add(entry)
+        restored_rows += 1
+    db.flush()
+    _resequence_settlement_serial_no_all(db)
+    db.commit()
+    db.add(
+        AuditLog(
+            client_id=0,
+            operator=user,
+            action=f"结算回款从备份恢复：{latest}，清空 {cleared_existing} 行，恢复 {restored_rows} 行",
+        )
+    )
+    db.commit()
+    return {"backup_file": latest, "cleared_existing": cleared_existing, "restored_rows": restored_rows}
 
 
 V8_PORT = int(os.environ.get("CRM_V8_PORT", "8001"))
