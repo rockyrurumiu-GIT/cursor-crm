@@ -19,25 +19,25 @@
         </div>
 
         <div class="bg-white rounded-lg shadow overflow-hidden">
-            <table class="w-full text-left">
-                <thead class="bg-gray-50">
+            <table class="crm-table">
+                <thead>
                     <tr>
-                        <th class="p-4">客户名称</th>
-                        <th class="p-4">销售负责人</th>
-                        <th class="p-4">外包规模</th>
-                        <th class="p-4">开拓阶段</th>
-                        <th class="p-4">操作</th>
+                        <th class="crm-th">客户名称</th>
+                        <th class="crm-th">销售负责人</th>
+                        <th class="crm-th">外包规模</th>
+                        <th class="crm-th">开拓阶段</th>
+                        <th class="crm-th">操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="c in clients" :key="c.id" class="border-t hover:bg-gray-50">
-                        <td class="p-4 font-medium">{{ c.name }}</td>
-                        <td class="p-4">{{ c.owner }}</td>
-                        <td class="p-4">{{ c.scale }}</td>
-                        <td class="p-4">
+                    <tr v-for="c in clients" :key="c.id">
+                        <td class="crm-td crm-name-cell">{{ c.name }}</td>
+                        <td class="crm-td">{{ c.owner }}</td>
+                        <td class="crm-td">{{ c.scale }}</td>
+                        <td class="crm-td">
                             <span :class="phaseColor(c.phase)" class="px-2 py-1 rounded text-xs">{{ c.phase }}</span>
                         </td>
-                        <td class="p-4 space-x-3">
+                        <td class="crm-td space-x-3">
                             <button type="button" @click="openDetail(c)" class="text-blue-600 text-sm">详情/记录</button>
                             <button type="button" @click="confirmDelete(c)" class="text-red-600 text-sm">删除</button>
                         </td>

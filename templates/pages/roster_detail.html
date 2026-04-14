@@ -1,0 +1,442 @@
+{% extends "base.html" %}
+{% block title %}花名册详情 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    /* tbody 固定「操作」列 */
+    .roster-sticky-op { box-shadow: -8px 0 24px -12px rgba(15, 23, 42, 0.08); }
+    thead .roster-sticky-op {
+        box-shadow: -8px 0 14px -6px rgba(73, 66, 58, 0.18);
+    }
+    .roster-wrap.crm-h-scroll { padding-bottom: 22px; }
+</style>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="roster-detail-app">
+    <div class="max-w-[100vw] mx-auto px-3 py-6 md:px-6">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+            <div>
+                <a href="/customers/roster" class="text-sm text-blue-600 hover:underline">← 返回花名册客户列表</a>
+                <h1 class="mt-2 text-xl md:text-2xl font-bold text-gray-900">
+                    {{ brief.name || '加载中…' }}
+                    <span class="text-gray-400 font-normal text-base">· 花名册</span>
+                </h1>
+                <p class="text-sm text-gray-500 mt-1" v-if="brief.owner">负责人 {{ brief.owner }}</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button" @click="openAdd" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增行</button>
+                <button type="button" @click="triggerImport" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导入 CSV</button>
+                <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
+                <button type="button" @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导出 CSV</button>
+            </div>
+        </div>
+
+        <div class="rounded-xl border border-gray-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_24px_-4px_rgba(15,23,42,0.06)] overflow-hidden">
+            <div class="crm-h-scroll roster-wrap">
+                <table class="crm-table min-w-[2680px] text-sm text-gray-800">
+                    <thead>
+                        <tr>
+                            <th class="crm-th min-w-[3.25rem]">序号</th>
+                            <th class="crm-th min-w-[4.5rem]">在职情况</th>
+                            <th class="crm-th min-w-[5.5rem]">姓名</th>
+                            <th v-if="isZNTX" class="crm-th min-w-[6rem]">中诺工号</th>
+                            <th class="crm-th min-w-[8rem]">联系方式</th>
+                            <th class="crm-th min-w-[5rem]">客户</th>
+                            <th class="crm-th min-w-[4.5rem]">工作地</th>
+                            <th class="crm-th min-w-[10rem]">岗位</th>
+                            <th class="crm-th min-w-[7rem]">业务线</th>
+                            <th class="crm-th min-w-[7rem]">{{ isZNTX ? '入职时间' : '入职日期' }}</th>
+                            <th class="crm-th min-w-[7rem]">转正时间</th>
+                            <th class="crm-th min-w-[7.5rem]">月报价(含税)</th>
+                            <th class="crm-th min-w-[7.5rem]">税前工资</th>
+                            <th class="crm-th min-w-[6rem]">薪资报价比</th>
+                            <th class="crm-th min-w-[6.5rem]">GM$</th>
+                            <th class="crm-th min-w-[5rem]">GM%</th>
+                            <th class="crm-th min-w-[5.5rem]">员工+1</th>
+                            <th v-if="isZNTX" class="crm-th min-w-[6rem]">入职渠道</th>
+                            <th v-if="isZNTX" class="crm-th min-w-[5rem]">打卡</th>
+                            <th v-if="isZNTX" class="crm-th min-w-[5rem]">补卡</th>
+                            <th class="crm-th min-w-[5.5rem]">员工+2</th>
+                            <th class="crm-th min-w-[4.5rem]">接口</th>
+                            <th class="crm-th min-w-[7rem]">{{ isZNTX ? '项目释放时间' : '项目释放日期' }}</th>
+                            <th class="crm-th min-w-[7rem]">{{ isZNTX ? '离职时间' : '公司离职日期' }}</th>
+                            <th v-if="isZNTX" class="crm-th min-w-[7rem]">离职类型</th>
+                            <th class="crm-th min-w-[14rem]">{{ isZNTX ? '释放成功离职原因' : '离职或释放原因' }}</th>
+                            <th v-if="isZNTX" class="crm-th min-w-[6rem]">补偿金</th>
+                            <th class="crm-th min-w-[10rem] max-w-[15rem]">备注</th>
+                            <th class="crm-th sticky right-0 z-20 min-w-[5.5rem] roster-sticky-op">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="row in rows" :key="row.id" class="group border-b border-gray-100/90 bg-white transition-colors duration-150 hover:bg-stone-50/80">
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top tabular-nums">{{ row.serial_no }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top">{{ row.employment_status }}</td>
+                            <td class="crm-td crm-name-cell px-3 py-3 whitespace-nowrap align-top tracking-tight">{{ row.full_name }}</td>
+                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.zntx_staff_no }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.contact_info }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.customer_name }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.work_location }}</td>
+                            <td class="crm-td px-3 py-3 text-gray-700 align-top leading-snug">{{ row.position_title }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.business_line }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.entry_date }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.regularization_date }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayAmountInteger(row.monthly_quote_tax) }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayAmountInteger(row.pre_tax_salary) }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.salary_quote_ratio }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayAmountInteger(row.gms) }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.gm_pct }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.employee_plus1 }}</td>
+                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_onboarding_channel }}</td>
+                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_attendance_checkin }}</td>
+                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_attendance_makeup }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.employee_plus2 }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.interface_contact }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.project_release_date }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.company_resign_date }}</td>
+                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_separation_type }}</td>
+                            <td class="crm-td px-3 py-3 min-w-[14rem] max-w-[18rem] text-gray-700 align-top leading-snug">{{ row.leave_reason }}</td>
+                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayAmountInteger(row.zntx_compensation_amount) }}</td>
+                            <td class="crm-td px-3 py-3 max-w-[13rem] break-words text-gray-700 align-top leading-snug">{{ row.remarks }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap align-top sticky right-0 z-10 border-l border-gray-100 bg-white group-hover:bg-stone-50/90 roster-sticky-op">
+                                <button type="button" class="text-blue-600 hover:text-blue-800 hover:underline text-xs mr-2" @click="openEdit(row)">修改</button>
+                                <button type="button" class="text-red-600 hover:text-red-700 hover:underline text-xs" @click="confirmDelete(row)">删除</button>
+                            </td>
+                        </tr>
+                        <tr v-if="!loading && !rows.length">
+                            <td :colspan="isZNTX ? 29 : 23" class="px-6 py-12 text-center text-gray-400 text-sm">暂无数据，请点击「新增行」或「导入 CSV」</td>
+                        </tr>
+                    </tbody>
+                    <tfoot v-if="!loading && rows.length">
+                        <tr v-if="!isZNTX" class="text-sm font-medium">
+                            <td colspan="10" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
+                            </td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.quote }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.pre }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.salaryRatio }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.gms }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.gmPct }}</td>
+                            <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                            <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                            <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                        </tr>
+                        <tr v-else class="text-sm font-medium">
+                            <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
+                            </td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.quote }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.pre }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.salaryRatio }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.gms }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200">{{ rosterFooter.gmPct }}</td>
+                            <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                            <td colspan="7" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                            <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/编辑 -->
+    <div v-if="showForm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">{{ editingId ? '修改行' : '新增行' }}</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false">&times;</button>
+            </div>
+            <div class="overflow-y-auto p-5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <label v-for="f in formFields" :key="f.key" class="flex flex-col gap-1">
+                        <span class="text-gray-600">{{ f.label }}</span>
+                        <input v-model="form[f.key]" type="text" class="border border-gray-300 rounded px-2 py-1.5 w-full" />
+                    </label>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false">取消</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="saveForm">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除确认 -->
+    <div v-if="showDel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full text-center">
+            <p class="text-gray-800 mb-4">确定删除该条花名册记录？</p>
+            <div class="flex gap-2 justify-center">
+                <button type="button" class="flex-1 py-2 rounded-lg border" @click="showDel=false">取消</button>
+                <button type="button" class="flex-1 py-2 rounded-lg bg-red-600 text-white" @click="doDelete">删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+<script>
+window.__ROSTER_CLIENT_ID__ = {{ client_id }};
+</script>
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted, reactive, computed } = Vue;
+const CLIENT_ID = window.__ROSTER_CLIENT_ID__;
+const STANDARD_FORM_FIELDS = [
+    { key: 'serial_no', label: '序号' },
+    { key: 'employment_status', label: '在职情况' },
+    { key: 'full_name', label: '姓名' },
+    { key: 'contact_info', label: '联系方式' },
+    { key: 'customer_name', label: '客户' },
+    { key: 'work_location', label: '工作地' },
+    { key: 'position_title', label: '岗位' },
+    { key: 'business_line', label: '业务线' },
+    { key: 'entry_date', label: '入职日期' },
+    { key: 'regularization_date', label: '转正时间' },
+    { key: 'monthly_quote_tax', label: '月报价(含税)' },
+    { key: 'pre_tax_salary', label: '税前工资' },
+    { key: 'salary_quote_ratio', label: '薪资报价比' },
+    { key: 'gms', label: 'GM$' },
+    { key: 'gm_pct', label: 'GM%' },
+    { key: 'employee_plus1', label: '员工+1' },
+    { key: 'employee_plus2', label: '员工+2' },
+    { key: 'interface_contact', label: '接口' },
+    { key: 'project_release_date', label: '项目释放日期' },
+    { key: 'company_resign_date', label: '公司离职日期' },
+    { key: 'leave_reason', label: '离职或释放原因' },
+    { key: 'remarks', label: '备注' },
+];
+const ZNTX_FORM_FIELDS = [
+    { key: 'serial_no', label: '序号' },
+    { key: 'employment_status', label: '在职情况' },
+    { key: 'full_name', label: '姓名' },
+    { key: 'zntx_staff_no', label: '中诺工号' },
+    { key: 'contact_info', label: '联系方式' },
+    { key: 'customer_name', label: '客户' },
+    { key: 'work_location', label: '工作地' },
+    { key: 'position_title', label: '岗位' },
+    { key: 'business_line', label: '业务线' },
+    { key: 'entry_date', label: '入职时间' },
+    { key: 'regularization_date', label: '转正时间' },
+    { key: 'monthly_quote_tax', label: '月报价(含税)' },
+    { key: 'pre_tax_salary', label: '税前工资' },
+    { key: 'salary_quote_ratio', label: '薪资报价比' },
+    { key: 'gms', label: 'GM$' },
+    { key: 'gm_pct', label: 'GM%' },
+    { key: 'employee_plus1', label: '员工+1' },
+    { key: 'zntx_onboarding_channel', label: '入职渠道' },
+    { key: 'zntx_attendance_checkin', label: '打卡' },
+    { key: 'zntx_attendance_makeup', label: '补卡' },
+    { key: 'employee_plus2', label: '员工+2' },
+    { key: 'interface_contact', label: '接口' },
+    { key: 'project_release_date', label: '项目释放时间' },
+    { key: 'company_resign_date', label: '离职时间' },
+    { key: 'zntx_separation_type', label: '离职类型' },
+    { key: 'leave_reason', label: '释放成功离职原因' },
+    { key: 'zntx_compensation_amount', label: '补偿金' },
+    { key: 'remarks', label: '备注' },
+];
+const FORM_FIELDS = [
+    ...STANDARD_FORM_FIELDS,
+    { key: 'zntx_staff_no', label: '中诺工号' },
+    { key: 'zntx_onboarding_channel', label: '入职渠道' },
+    { key: 'zntx_attendance_checkin', label: '打卡' },
+    { key: 'zntx_attendance_makeup', label: '补卡' },
+    { key: 'zntx_separation_type', label: '离职类型' },
+    { key: 'zntx_compensation_amount', label: '补偿金' },
+];
+function emptyForm() {
+    const o = {};
+    FORM_FIELDS.forEach((f) => { o[f.key] = ''; });
+    return o;
+}
+/** 从单元格文本解析金额（¥、千分位、空格等） */
+function parseAmountCell(str) {
+    if (str == null || str === '') return NaN;
+    const s = String(str).replace(/[¥￥,\s\u00a0]/g, '').trim();
+    if (s === '') return NaN;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : NaN;
+}
+/** 合计金额：四舍五入到元，不显示小数 */
+function formatYuanInteger(n) {
+    if (!Number.isFinite(n)) return '—';
+    const r = Math.round(n);
+    return '¥' + r.toLocaleString('zh-CN', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
+}
+/** 表格单元格：可解析为数字时四舍五入到个位元展示，否则保留原文 */
+function displayAmountInteger(str) {
+    if (str == null || String(str).trim() === '') return '';
+    const n = parseAmountCell(str);
+    if (!Number.isFinite(n)) return String(str);
+    return formatYuanInteger(n);
+}
+/** 比率转百分比展示，与行内「79.55%」形式一致 */
+function formatRatioAsPercent(ratio) {
+    if (!Number.isFinite(ratio)) return '—';
+    return (ratio * 100).toFixed(2) + '%';
+}
+createApp({
+    setup() {
+        const rows = ref([]);
+        const brief = ref({ name: '', owner: '' });
+        const loading = ref(true);
+        const showForm = ref(false);
+        const editingId = ref(null);
+        const form = reactive(emptyForm());
+        const showDel = ref(false);
+        const delRow = ref(null);
+        const fileInput = ref(null);
+        const authHeader = () => window.crmAuthHeader();
+        const isZNTX = computed(() => {
+            const raw = String(brief.value?.name || '')
+                .replace(/\s+/g, '')
+                .replace(/[（）()]/g, '');
+            return raw.includes('中诺通讯');
+        });
+        const rosterFooter = computed(() => {
+            let sumQuote = 0;
+            let sumPre = 0;
+            let sumGm = 0;
+            for (const row of rows.value) {
+                const q = parseAmountCell(row.monthly_quote_tax);
+                const p = parseAmountCell(row.pre_tax_salary);
+                const g = parseAmountCell(row.gms);
+                if (Number.isFinite(q)) sumQuote += q;
+                if (Number.isFinite(p)) sumPre += p;
+                if (Number.isFinite(g)) sumGm += g;
+            }
+            const rq = Math.round(sumQuote);
+            const rp = Math.round(sumPre);
+            const rg = Math.round(sumGm);
+            const salaryRatio = rq > 0 ? rp / rq : NaN;
+            const gmRatio = rq > 0 ? rg / rq : NaN;
+            return {
+                quote: formatYuanInteger(sumQuote),
+                pre: formatYuanInteger(sumPre),
+                salaryRatio: formatRatioAsPercent(salaryRatio),
+                gms: formatYuanInteger(sumGm),
+                gmPct: formatRatioAsPercent(gmRatio),
+            };
+        });
+        const activeFormFields = computed(() => (isZNTX.value ? ZNTX_FORM_FIELDS : STANDARD_FORM_FIELDS));
+        const loadBrief = () => {
+            fetch(`/api/clients/${CLIENT_ID}/brief`, { headers: authHeader() })
+                .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
+                .then((d) => { brief.value = d; })
+                .catch(() => { brief.value = { name: '客户不存在', owner: '' }; });
+        };
+        const loadRows = () => {
+            loading.value = true;
+            fetch(`/api/clients/${CLIENT_ID}/roster`, { headers: authHeader() })
+                .then((r) => r.json())
+                .then((d) => { rows.value = Array.isArray(d) ? d : []; })
+                .finally(() => { loading.value = false; });
+        };
+        const openAdd = () => {
+            editingId.value = null;
+            Object.assign(form, emptyForm());
+            showForm.value = true;
+        };
+        const openEdit = (row) => {
+            editingId.value = row.id;
+            FORM_FIELDS.forEach((f) => { form[f.key] = row[f.key] != null ? String(row[f.key]) : ''; });
+            showForm.value = true;
+        };
+        const saveForm = async () => {
+            const payload = {};
+            FORM_FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
+            const url = editingId.value
+                ? `/api/roster/${editingId.value}`
+                : `/api/clients/${CLIENT_ID}/roster`;
+            const method = editingId.value ? 'PUT' : 'POST';
+            const r = await fetch(url, {
+                method,
+                headers: { ...authHeader(), 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!r.ok) {
+                let msg = '保存失败';
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') {
+                        msg = err.detail;
+                    } else if (Array.isArray(err.detail) && err.detail[0]?.msg) {
+                        msg = err.detail.map((x) => x.msg).join('；');
+                    }
+                } catch (e) { /* ignore */ }
+                alert(msg);
+                return;
+            }
+            showForm.value = false;
+            loadRows();
+        };
+        const confirmDelete = (row) => {
+            delRow.value = row;
+            showDel.value = true;
+        };
+        const doDelete = async () => {
+            if (!delRow.value) return;
+            const r = await fetch(`/api/roster/${delRow.value.id}`, { method: 'DELETE', headers: authHeader() });
+            showDel.value = false;
+            delRow.value = null;
+            if (r.ok) loadRows();
+            else alert('删除失败');
+        };
+        const triggerImport = () => {
+            if (fileInput.value) fileInput.value.click();
+        };
+        const onImportFile = async (e) => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            const fd = new FormData();
+            fd.append('file', f);
+            const r = await fetch(`/api/clients/${CLIENT_ID}/roster/import`, { method: 'POST', headers: authHeader(), body: fd });
+            e.target.value = '';
+            if (!r.ok) {
+                let msg = '导入失败，请检查 CSV 编码与表头';
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string' && err.detail.trim()) {
+                        msg = `导入失败：${err.detail}`;
+                    }
+                } catch (e2) { /* ignore */ }
+                alert(msg);
+                return;
+            }
+            const j = await r.json();
+            const cleared = j.cleared_existing != null ? j.cleared_existing : 0;
+            const imp = j.imported != null ? j.imported : 0;
+            const skip = j.skipped_duplicates != null ? j.skipped_duplicates : 0;
+            alert(`已清空 ${cleared} 行，成功导入 ${imp} 行` + (skip ? `（文件内重复跳过 ${skip} 行）` : ''));
+            loadRows();
+        };
+        const exportCsv = async () => {
+            const r = await fetch(`/api/clients/${CLIENT_ID}/roster/export`, { headers: authHeader() });
+            if (!r.ok) {
+                alert('导出失败');
+                return;
+            }
+            const blob = await r.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `花名册_${CLIENT_ID}_${Date.now()}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+        onMounted(() => {
+            loadBrief();
+            loadRows();
+        });
+        return {
+            rows, brief, loading, showForm, editingId, form, formFields: activeFormFields,
+            showDel, fileInput, rosterFooter, isZNTX,
+            openAdd, openEdit, saveForm, confirmDelete, doDelete,
+            triggerImport, onImportFile, exportCsv,
+            displayAmountInteger,
+        };
+    },
+}).mount('#roster-detail-app');
+</script>
+{% endblock %}

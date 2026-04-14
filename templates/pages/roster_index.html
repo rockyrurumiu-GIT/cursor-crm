@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}花名册 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="roster-index-app">
+    <div class="max-w-[1100px] mx-auto px-4 py-8 md:py-10">
+        <div class="mb-8">
+            <p class="text-sm text-gray-500 mb-1">客户管理</p>
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">花名册</h1>
+            <p class="mt-2 text-gray-600 max-w-2xl">选择客户进入该客户下的员工花名册；表头与业务模板一致，数据按客户独立保存。</p>
+        </div>
+
+        <div v-if="loading" class="rounded-xl border border-gray-200 bg-white p-12 text-center text-gray-500">加载中…</div>
+        <div v-else-if="!clients.length" class="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center text-gray-500">
+            暂无客户，请先在 <a href="/customers/new" class="text-blue-600 hover:underline">新增客户</a> 中创建。
+        </div>
+        <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <a
+                v-for="c in clients"
+                :key="c.id"
+                :href="'/customers/roster/' + c.id"
+                class="group flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md"
+            >
+                <div class="flex items-start justify-between gap-2">
+                    <h2 class="text-lg font-semibold text-gray-900 group-hover:text-blue-700">{{ c.name }}</h2>
+                    <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">{{ c.phase }}</span>
+                </div>
+                <p class="mt-1 text-sm text-gray-500">负责人：{{ c.owner }}</p>
+                <div class="mt-4 flex items-center text-sm font-medium text-blue-600">
+                    进入花名册
+                    <svg class="ml-1 h-4 w-4 transition group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </div>
+            </a>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+    setup() {
+        const clients = ref([]);
+        const loading = ref(true);
+        const authHeader = () => window.crmAuthHeader();
+        onMounted(() => {
+            fetch('/api/clients', { headers: authHeader() })
+                .then((r) => r.json())
+                .then((d) => { clients.value = d || []; })
+                .finally(() => { loading.value = false; });
+        });
+        return { clients, loading };
+    },
+}).mount('#roster-index-app');
+</script>
+{% endblock %}

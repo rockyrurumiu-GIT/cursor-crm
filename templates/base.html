@@ -52,6 +52,57 @@
         }
         .nav-trigger:hover { background: rgba(255,255,255,0.06); }
         .gh-nav-item.nav-active > .nav-trigger { color: #fff; background: rgba(255,255,255,0.08); }
+        /* 主内容区：减轻双指横向滑动触发浏览器「返回上一页」 */
+        #main-shell main {
+            overscroll-behavior-x: contain;
+        }
+        /* 显式横向滚动容器：底部留白避免水平滚动条遮挡末行；阻断横向 scroll chaining */
+        .crm-h-scroll {
+            overflow-x: auto;
+            overscroll-behavior-x: contain;
+            overscroll-behavior-y: auto;
+            scrollbar-gutter: stable;
+            padding-bottom: 14px;
+            box-sizing: border-box;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+        /* 全局表格风格（暖灰表头）。新建表格优先复用这些 class */
+        .crm-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        .crm-table th.crm-th {
+            padding: 0.75rem 0.95rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            color: #2f2a24;
+            background: #e6e2db;
+            border-bottom: 1px solid #d2cbc1;
+            border-right: 1px solid #d8d1c8;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+        .crm-table th.crm-th:last-child { border-right: none; }
+        .crm-table td.crm-td {
+            padding: 0.75rem 0.75rem;
+            font-size: 0.875rem;
+            color: #374151;
+            border-top: 1px solid #f1f5f9;
+            vertical-align: top;
+            background: #fff;
+        }
+        .crm-table td.crm-td.crm-name-cell {
+            color: #1d4ed8;
+            font-weight: 600;
+        }
+        .crm-table tbody tr:hover td.crm-td { background: #fafaf9; }
+        .crm-table tfoot td.crm-td {
+            background: #f8fafc;
+            border-top: 1px solid #e2e8f0;
+        }
     </style>
 </head>
 <body class="bg-[#f6f8fa] text-gray-800">
