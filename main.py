@@ -343,6 +343,83 @@ def _assert_roster_contact_unique(
             )
 
 
+def _resequence_roster_serial_no(db: Session, client_id: int) -> bool:
+    """按当前行顺序重排序号为 1..N，避免删除后出现断号。"""
+    rows = db.query(RosterEntry).filter(RosterEntry.client_id == client_id).order_by(RosterEntry.id).all()
+    changed = False
+    for idx, row in enumerate(rows, start=1):
+        expected = str(idx)
+        if (row.serial_no or "").strip() != expected:
+            row.serial_no = expected
+            changed = True
+    return changed
+
+
+def _resequence_all_rosters_once() -> None:
+    """服务启动时一次性修复历史断号，避免长期遗留。"""
+    db = SessionLocal()
+    try:
+        client_ids = [cid for (cid,) in db.query(RosterEntry.client_id).distinct().all() if cid is not None]
+        changed_any = False
+        for cid in client_ids:
+            if _resequence_roster_serial_no(db, cid):
+                changed_any = True
+        if changed_any:
+            db.commit()
+    finally:
+        db.close()
+
+
+def _validate_roster_business_fields(data: Dict[str, str]) -> None:
+    contact = str(data.get("contact_info", "")).strip()
+    if contact and not re.fullmatch(r"\d{11}", contact):
+        raise HTTPException(status_code=400, detail="联系方式必须为11位数字")
+
+    for k, label in (("monthly_quote_tax", "月报价(含税)"), ("pre_tax_salary", "税前工资")):
+        v = str(data.get(k, "")).strip()
+        if v and not re.fullmatch(r"\d{4,6}", v):
+            raise HTTPException(status_code=400, detail=f"{label}必须为4-6位数字")
+
+    gm_pct = str(data.get("gm_pct", "")).strip()
+    if gm_pct and not re.fullmatch(r"(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%", gm_pct):
+        raise HTTPException(status_code=400, detail="GM%必须为百分比格式（如 12% 或 12.5%）")
+
+
+ROSTER_CREATE_REQUIRED_FIELDS = (
+    "employment_status",
+    "full_name",
+    "contact_info",
+    "customer_name",
+    "work_location",
+    "position_title",
+    "business_line",
+    "entry_date",
+    "monthly_quote_tax",
+    "pre_tax_salary",
+    "gms",
+    "gm_pct",
+)
+
+
+ROSTER_REQUIRED_LABELS = {
+    "employment_status": "在职情况",
+    "full_name": "姓名",
+    "contact_info": "联系方式",
+    "customer_name": "客户",
+    "work_location": "工作地",
+    "position_title": "岗位",
+    "business_line": "业务线",
+    "entry_date": "入职时间",
+    "monthly_quote_tax": "月报价(含税)",
+    "pre_tax_salary": "税前工资",
+    "gms": "GM$",
+    "gm_pct": "GM%",
+}
+
+
+_resequence_all_rosters_once()
+
+
 def _strip_csv_header_noise(s: str) -> str:
     """去掉 BOM、零宽字符、不间断空格等，避免 Excel 导出列名与代码不一致。"""
     t = unicodedata.normalize("NFKC", str(s))
@@ -736,6 +813,11 @@ async def roster_create_row(
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
     data = _normalize_roster_payload(body if isinstance(body, dict) else {})
+    missing = [k for k in ROSTER_CREATE_REQUIRED_FIELDS if not str(data.get(k, "")).strip()]
+    if missing:
+        labels = [ROSTER_REQUIRED_LABELS.get(k, k) for k in missing]
+        raise HTTPException(status_code=400, detail=f"新增失败，以下必填项未填写：{'、'.join(labels)}")
+    _validate_roster_business_fields(data)
     _assert_roster_contact_unique(db, client_id, data.get("contact_info", ""))
     entry = RosterEntry(client_id=client_id, **data)
     db.add(entry)
@@ -762,6 +844,7 @@ async def roster_update_row(
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
     data = _normalize_roster_payload(body if isinstance(body, dict) else {})
+    _validate_roster_business_fields(data)
     _assert_roster_contact_unique(
         db,
         entry.client_id,
@@ -785,6 +868,8 @@ async def roster_delete_row(row_id: int, db: Session = Depends(get_db), user: st
         raise HTTPException(status_code=404, detail="记录不存在")
     cid = entry.client_id
     db.delete(entry)
+    db.flush()
+    _resequence_roster_serial_no(db, cid)
     db.commit()
     log = AuditLog(client_id=cid, operator=user, action=f"花名册删除行 id={row_id}")
     db.add(log)
@@ -839,6 +924,7 @@ async def roster_import_csv(
         entry = RosterEntry(client_id=client_id, **merged)
         db.add(entry)
         imported += 1
+    _resequence_roster_serial_no(db, client_id)
     db.commit()
     skip_total = skipped_duplicates + skipped_empty
     skip_brief = ""

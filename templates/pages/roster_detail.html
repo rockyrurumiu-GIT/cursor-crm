@@ -151,14 +151,47 @@
             <div class="overflow-y-auto p-5">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <label v-for="f in formFields" :key="f.key" class="flex flex-col gap-1">
-                        <span class="text-gray-600">{{ f.label }}</span>
-                        <input v-model="form[f.key]" type="text" class="border border-gray-300 rounded px-2 py-1.5 w-full" />
+                        <span class="text-gray-600">
+                            {{ f.label }}
+                            <span v-if="isRequiredField(f.key)" class="text-red-500">*</span>
+                        </span>
+                        <select
+                            v-if="f.key === 'employment_status'"
+                            v-model="form[f.key]"
+                            @change="markTouched(f.key)"
+                            :class="[
+                                'rounded px-2 py-1.5 w-full bg-white border',
+                                getFieldError(f.key) ? 'border-red-400' : 'border-gray-300',
+                            ]"
+                        >
+                            <option value="">请选择</option>
+                            <option value="在职">在职</option>
+                            <option value="离职">离职</option>
+                        </select>
+                        <input
+                            v-else
+                            v-model="form[f.key]"
+                            :type="fieldInputType(f.key)"
+                            @input="markTouched(f.key)"
+                            @change="markTouched(f.key)"
+                            :class="[
+                                'rounded px-2 py-1.5 w-full border',
+                                getFieldError(f.key) ? 'border-red-400' : 'border-gray-300',
+                            ]"
+                        />
+                        <span v-if="getFieldError(f.key)" class="text-xs text-red-500">{{ getFieldError(f.key) }}</span>
                     </label>
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
                 <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false">取消</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="saveForm">保存</button>
+                <button
+                    type="button"
+                    class="px-4 py-2 rounded-lg text-white"
+                    :class="hasBlockingErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
+                    :disabled="hasBlockingErrors"
+                    @click="saveForm"
+                >保存</button>
             </div>
         </div>
     </div>
@@ -272,6 +305,20 @@ const FORM_FIELDS = [
     { key: 'zntx_separation_type', label: '离职类型' },
     { key: 'zntx_compensation_amount', label: '补偿金' },
 ];
+const REQUIRED_FIELD_KEYS = new Set([
+    'employment_status',
+    'full_name',
+    'contact_info',
+    'customer_name',
+    'work_location',
+    'position_title',
+    'business_line',
+    'entry_date',
+    'monthly_quote_tax',
+    'pre_tax_salary',
+    'gms',
+    'gm_pct',
+]);
 function emptyForm() {
     const o = {};
     FORM_FIELDS.forEach((f) => { o[f.key] = ''; });
@@ -317,6 +364,7 @@ createApp({
         const showLogs = ref(false);
         const logsLoading = ref(false);
         const logs = ref([]);
+        const touchedFields = reactive({});
         const authHeader = () => window.crmAuthHeader();
         const isZNTX = computed(() => {
             const raw = String(brief.value?.name || '')
@@ -350,6 +398,94 @@ createApp({
             };
         });
         const activeFormFields = computed(() => (isZNTX.value ? ZNTX_FORM_FIELDS : STANDARD_FORM_FIELDS));
+        const requiredFieldLabelMap = computed(() => {
+            const map = {};
+            activeFormFields.value.forEach((f) => { map[f.key] = f.label; });
+            return map;
+        });
+        const missingRequiredFields = computed(() => {
+            const missing = [];
+            REQUIRED_FIELD_KEYS.forEach((k) => {
+                const v = form[k];
+                if (v == null || String(v).trim() === '') {
+                    missing.push(k);
+                }
+            });
+            return missing;
+        });
+        const hasFormatErrors = computed(() => {
+            const contact = String(form.contact_info || '').trim();
+            if (contact && !/^\d{11}$/.test(contact)) return true;
+            const quote = String(form.monthly_quote_tax || '').trim();
+            if (quote && !/^\d{4,6}$/.test(quote)) return true;
+            const preSalary = String(form.pre_tax_salary || '').trim();
+            if (preSalary && !/^\d{4,6}$/.test(preSalary)) return true;
+            const gmPct = String(form.gm_pct || '').trim();
+            if (gmPct && !/^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%$/.test(gmPct)) return true;
+            return false;
+        });
+        const hasBlockingErrors = computed(() => {
+            if (!editingId.value && missingRequiredFields.value.length) {
+                return true;
+            }
+            return hasFormatErrors.value;
+        });
+        const isRequiredField = (key) => REQUIRED_FIELD_KEYS.has(key);
+        const clearTouched = () => {
+            FORM_FIELDS.forEach((f) => { touchedFields[f.key] = false; });
+        };
+        const markTouched = (key) => { touchedFields[key] = true; };
+        const getFieldError = (key) => {
+            const v = String(form[key] || '').trim();
+            if (!touchedFields[key]) return '';
+            if (!editingId.value && isRequiredField(key) && !v) {
+                return '该字段为必填';
+            }
+            if (key === 'contact_info' && v && !/^\d{11}$/.test(v)) {
+                return '联系方式必须为11位数字';
+            }
+            if (key === 'monthly_quote_tax' && v && !/^\d{4,6}$/.test(v)) {
+                return '月报价(含税)必须为4-6位数字';
+            }
+            if (key === 'pre_tax_salary' && v && !/^\d{4,6}$/.test(v)) {
+                return '税前工资必须为4-6位数字';
+            }
+            if (key === 'gm_pct' && v && !/^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%$/.test(v)) {
+                return 'GM%必须为百分比格式（如 12% 或 12.5%）';
+            }
+            return '';
+        };
+        const fieldInputType = (key) => {
+            if (key === 'entry_date' || key === 'regularization_date' || key === 'project_release_date' || key === 'company_resign_date') {
+                return 'date';
+            }
+            return 'text';
+        };
+        const validateBusinessFields = () => {
+            const contact = String(form.contact_info || '').trim();
+            if (contact && !/^\d{11}$/.test(contact)) {
+                return '联系方式必须为11位数字';
+            }
+            const quote = String(form.monthly_quote_tax || '').trim();
+            if (quote && !/^\d{4,6}$/.test(quote)) {
+                return '月报价(含税)必须为4-6位数字';
+            }
+            const preSalary = String(form.pre_tax_salary || '').trim();
+            if (preSalary && !/^\d{4,6}$/.test(preSalary)) {
+                return '税前工资必须为4-6位数字';
+            }
+            const gmPct = String(form.gm_pct || '').trim();
+            if (gmPct && !/^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%$/.test(gmPct)) {
+                return 'GM%必须为百分比格式（如 12% 或 12.5%）';
+            }
+            return '';
+        };
+        const nextSerialNo = () => {
+            if (!rows.value.length) return '1';
+            const lastSerial = String(rows.value[rows.value.length - 1]?.serial_no ?? '').trim();
+            const n = parseInt(lastSerial, 10);
+            return Number.isFinite(n) ? String(n + 1) : '';
+        };
         const loadBrief = () => {
             fetch(`/api/clients/${CLIENT_ID}/brief`, { headers: authHeader() })
                 .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
@@ -366,14 +502,30 @@ createApp({
         const openAdd = () => {
             editingId.value = null;
             Object.assign(form, emptyForm());
+            clearTouched();
+            const nextNo = nextSerialNo();
+            if (nextNo) {
+                form.serial_no = nextNo;
+            }
             showForm.value = true;
         };
         const openEdit = (row) => {
             editingId.value = row.id;
             FORM_FIELDS.forEach((f) => { form[f.key] = row[f.key] != null ? String(row[f.key]) : ''; });
+            clearTouched();
             showForm.value = true;
         };
         const saveForm = async () => {
+            if (!editingId.value && missingRequiredFields.value.length) {
+                const missingLabels = missingRequiredFields.value.map((k) => requiredFieldLabelMap.value[k] || k);
+                alert(`请先完整填写必填项：${missingLabels.join('、')}`);
+                return;
+            }
+            const bizError = validateBusinessFields();
+            if (bizError) {
+                alert(bizError);
+                return;
+            }
             const payload = {};
             FORM_FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
             const url = editingId.value
@@ -503,9 +655,9 @@ createApp({
         });
         return {
             rows, brief, loading, showForm, editingId, form, formFields: activeFormFields,
-            showDel, fileInput, rosterFooter, isZNTX, showLogs, logsLoading, logs,
+            showDel, fileInput, rosterFooter, isZNTX, showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors,
             openAdd, openEdit, saveForm, confirmDelete, doDelete,
-            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate,
+            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, isRequiredField, fieldInputType, markTouched, getFieldError,
             displayAmountInteger,
         };
     },
