@@ -8,7 +8,7 @@ import io
 import socket
 import unicodedata
 from urllib.parse import quote
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional, Any, Dict
 from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File, status, Body
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse, RedirectResponse
@@ -175,6 +175,17 @@ class DeliveryPipelineEntry(Base):
     status_note = Column(String, default="")
     serial_no = Column(String, default="")
     created_at = Column(DateTime, default=datetime.now)
+
+
+class DeliveryPipelineInsightDemand(Base):
+    __tablename__ = "delivery_pipeline_insight_demands"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    period = Column(String, default="")
+    position = Column(String, default="")
+    region = Column(String, default="")
+    demand_qty = Column(String, default="")
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
@@ -447,6 +458,15 @@ def _resequence_pipeline_serial_no(db: Session, client_id: int) -> None:
     )
     for idx, row in enumerate(rows, start=1):
         row.serial_no = str(idx)
+
+
+def _normalize_pipeline_insight_demand_payload(d: Dict[str, Any]) -> Dict[str, str]:
+    return {
+        "period": str(d.get("period", "") or "").strip(),
+        "position": str(d.get("position", "") or "").strip(),
+        "region": str(d.get("region", "") or "").strip(),
+        "demand_qty": str(d.get("demand_qty", "") or "").strip(),
+    }
 
 
 def _resequence_settlement_serial_no_all(db: Session) -> None:
@@ -1755,18 +1775,310 @@ async def roster_logs_all(db: Session = Depends(get_db), user: str = Depends(aut
     return logs
 
 
-@app.get("/api/clients/{client_id}/delivery/pipeline")
-async def pipeline_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+def _parse_loose_date(raw: str) -> Optional[Any]:
+    s = str(raw or "").strip()
+    if not s:
+        return None
+    # 保留年月日数字，兼容 2026-04-16 / 2026/4/16 / 2026年4月16日 等常见格式。
+    m = re.search(r"(\d{4})\D+(\d{1,2})\D+(\d{1,2})", s)
+    if not m:
+        return None
+    y = int(m.group(1))
+    mo = int(m.group(2))
+    d = int(m.group(3))
+    try:
+        return datetime(y, mo, d).date()
+    except Exception:
+        return None
+
+
+def _week_label_from_date(d: Any) -> str:
+    # 口径：周一到周日；例如 3/30-4/5 记作 4m1w（按该周周四所在月份归属）
+    monday_start = d - timedelta(days=d.weekday())
+    week_anchor = monday_start + timedelta(days=3)  # Thursday anchor
+    target_month = int(week_anchor.month)
+    target_year = int(week_anchor.year)
+    first_day = datetime(target_year, target_month, 1).date()
+    cursor = first_day - timedelta(days=first_day.weekday())
+    while int((cursor + timedelta(days=3)).month) != target_month:
+        cursor += timedelta(days=7)
+    week_no = ((monday_start - cursor).days // 7) + 1
+    return f"{target_month}m{week_no}w"
+
+
+def _period_sort_key(period: str) -> tuple:
+    s = str(period or "").strip()
+    if not s:
+        return (999, 999, "")
+    m1 = re.match(r"^\s*(\d{1,2})\s*m\s*(\d{1,2})\s*w\s*$", s, re.IGNORECASE)
+    if m1:
+        return (int(m1.group(1)), int(m1.group(2)), s)
+    # 兼容类似 4w3 的历史写法：按 4月第3周 解释
+    m2 = re.match(r"^\s*(\d{1,2})\s*w\s*(\d{1,2})\s*$", s, re.IGNORECASE)
+    if m2:
+        return (int(m2.group(1)), int(m2.group(2)), s)
+    return (999, 999, s)
+
+
+def _extract_period_month(period: str) -> Optional[int]:
+    s = str(period or "").strip()
+    m1 = re.match(r"^\s*(\d{1,2})\s*m", s, re.IGNORECASE)
+    if m1:
+        return int(m1.group(1))
+    m2 = re.match(r"^\s*(\d{1,2})\s*w", s, re.IGNORECASE)
+    if m2:
+        return int(m2.group(1))
+    m3 = re.search(r"(\d{1,2})\s*月", s)
+    if m3:
+        return int(m3.group(1))
+    return None
+
+
+@app.get("/api/clients/{client_id}/delivery/pipeline/insight")
+async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
+    demand_rows = (
+        db.query(DeliveryPipelineInsightDemand)
+        .filter(DeliveryPipelineInsightDemand.client_id == client_id)
+        .all()
+    )
+    demand_map = {
+        (
+            str(item.period or "").strip(),
+            str(item.position or "").strip(),
+            str(item.region or "").strip(),
+        ): str(item.demand_qty or "").strip()
+        for item in demand_rows
+    }
     rows = (
         db.query(DeliveryPipelineEntry)
         .filter(DeliveryPipelineEntry.client_id == client_id)
         .order_by(DeliveryPipelineEntry.id)
         .all()
     )
-    return [_pipeline_entry_to_dict(r) for r in rows]
+    today = datetime.now().date()
+    grouped: Dict[tuple, Dict[str, Any]] = {}
+    inner_fail_counts: Dict[tuple, int] = {}
+    anomalies: List[Dict[str, str]] = []
+    for e in rows:
+        period = str(e.date or "").strip()
+        position = str(e.position or "").strip()
+        region = str(e.region or "").strip()
+        if not period or not position:
+            continue
+        key = (period, position, region)
+        if key not in grouped:
+            grouped[key] = {
+                "时间": period,
+                "岗位": position,
+                "需求数量": "",
+                "地点": region,
+                "推送简历量": 0,
+                "内筛通过": 0,
+                "重复": 0,
+                "待客户筛选": 0,
+                "客筛通过": 0,
+                "放弃面试": 0,
+                "待面试": 0,
+                "已面试": 0,
+                "面试通过": 0,
+                "本周offer人数": 0,
+                "弃offer/谈薪失败": 0,
+                "在途人数/待入职": 0,
+                "月度在途流失(包含前序)": 0,
+                "本周入职人数": 0,
+                "本月入职人数": 0,
+            }
+            inner_fail_counts[key] = 0
+        item = grouped[key]
+        item["推送简历量"] += 1
+        resume_screening = str(e.resume_screening or "").strip()
+        interviewed = str(e.interviewed or "").strip()
+        interview_time = str(e.interview_time or "").strip()
+        result = str(e.result or "").strip()
+        got_offer = str(e.got_offer or "").strip()
+        onboarded = str(e.onboarded or "").strip()
+        onboarding_date = _parse_loose_date(str(e.onboarding_time or "").strip())
+
+        if resume_screening == "友商重复":
+            item["重复"] += 1
+        if resume_screening in ("内筛不通过", "友商重复"):
+            inner_fail_counts[key] = int(inner_fail_counts.get(key, 0)) + 1
+        if resume_screening == "待反馈":
+            item["待客户筛选"] += 1
+        if resume_screening == "通过":
+            item["客筛通过"] += 1
+        if interviewed == "放弃":
+            item["放弃面试"] += 1
+        if interviewed == "约面":
+            item["待面试"] += 1
+        if interviewed == "是" and interview_time:
+            item["已面试"] += 1
+        if interviewed == "是" and not interview_time:
+            anomalies.append(
+                {
+                    "row_id": int(e.id),
+                    "姓名": str(e.full_name or "").strip() or "-",
+                    "问题": "是否面试=是，但面试时间为空",
+                    "时间": period,
+                    "岗位": position,
+                    "地点": region,
+                }
+            )
+        if result == "通过":
+            item["面试通过"] += 1
+            if interviewed != "是":
+                anomalies.append(
+                    {
+                        "row_id": int(e.id),
+                        "姓名": str(e.full_name or "").strip() or "-",
+                        "问题": "面试结果=通过，但是否面试不为“是”",
+                        "时间": period,
+                        "岗位": position,
+                        "地点": region,
+                    }
+                )
+        if got_offer in ("是", "否") and result != "通过":
+            anomalies.append(
+                {
+                    "row_id": int(e.id),
+                    "姓名": str(e.full_name or "").strip() or "-",
+                    "问题": "是否接offer已填写，但面试结果不为“通过”",
+                    "时间": period,
+                    "岗位": position,
+                    "地点": region,
+                }
+            )
+        if got_offer == "是":
+            item["本周offer人数"] += 1
+        if got_offer == "否":
+            item["弃offer/谈薪失败"] += 1
+        if onboarded == "放弃入职":
+            item["月度在途流失(包含前序)"] += 1
+        if "待入职" in onboarded and onboarding_date and onboarding_date > today:
+            item["在途人数/待入职"] += 1
+        elif "待入职" in onboarded and onboarding_date and onboarding_date <= today:
+            anomalies.append(
+                {
+                    "row_id": int(e.id),
+                    "姓名": str(e.full_name or "").strip() or "-",
+                    "问题": "状态为待入职，但入职时间未晚于今天",
+                    "时间": period,
+                    "岗位": position,
+                    "地点": region,
+                }
+            )
+        elif "待入职" in onboarded and not onboarding_date:
+            m_wait = re.search(r"(\d{1,2})\s*月\s*待入职", onboarded)
+            if m_wait and int(m_wait.group(1)) >= int(today.month):
+                item["在途人数/待入职"] += 1
+            elif m_wait:
+                anomalies.append(
+                    {
+                        "row_id": int(e.id),
+                        "姓名": str(e.full_name or "").strip() or "-",
+                        "问题": "状态为待入职，但待入职月份早于当前月份",
+                        "时间": period,
+                        "岗位": position,
+                        "地点": region,
+                    }
+                )
+        if "已入职" in onboarded and not onboarding_date:
+            anomalies.append(
+                {
+                    "row_id": int(e.id),
+                    "姓名": str(e.full_name or "").strip() or "-",
+                    "问题": "状态为已入职，但入职时间为空或无法解析",
+                    "时间": period,
+                    "岗位": position,
+                    "地点": region,
+                }
+            )
+        if onboarding_date and _week_label_from_date(onboarding_date) == period:
+            item["本周入职人数"] += 1
+        period_month = _extract_period_month(period)
+        if period_month is not None:
+            if re.search(rf"{int(period_month)}\s*月\s*已入职", onboarded):
+                item["本月入职人数"] += 1
+
+    out = list(grouped.values())
+    for item in out:
+        key = (item["时间"], item["岗位"], item["地点"])
+        inner_fail = int(inner_fail_counts.get(key, 0))
+        item["内筛通过"] = max(0, int(item["推送简历量"]) - inner_fail)
+        item["需求数量"] = demand_map.get(key, "")
+    out.sort(
+        key=lambda x: (
+            _period_sort_key(str(x.get("时间", ""))),
+            str(x.get("岗位", "")),
+            str(x.get("地点", "")),
+        ),
+        reverse=True,
+    )
+    return {"rows": out, "anomalies": anomalies}
+
+
+@app.put("/api/clients/{client_id}/delivery/pipeline/insight-demand")
+async def pipeline_insight_update_demand(
+    client_id: int,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    data = _normalize_pipeline_insight_demand_payload(body if isinstance(body, dict) else {})
+    period = data["period"]
+    position = data["position"]
+    region = data["region"]
+    if not period or not position:
+        raise HTTPException(status_code=400, detail="时间和岗位不能为空")
+    entry = (
+        db.query(DeliveryPipelineInsightDemand)
+        .filter(DeliveryPipelineInsightDemand.client_id == client_id)
+        .filter(DeliveryPipelineInsightDemand.period == period)
+        .filter(DeliveryPipelineInsightDemand.position == position)
+        .filter(DeliveryPipelineInsightDemand.region == region)
+        .first()
+    )
+    demand_qty = data["demand_qty"]
+    if entry:
+        if demand_qty:
+            entry.demand_qty = demand_qty
+        else:
+            db.delete(entry)
+    elif demand_qty:
+        db.add(
+            DeliveryPipelineInsightDemand(
+                client_id=client_id,
+                period=period,
+                position=position,
+                region=region,
+                demand_qty=demand_qty,
+            )
+        )
+    db.commit()
+    return {"status": "ok", "demand_qty": demand_qty}
+
+
+@app.get("/api/clients/{client_id}/delivery/pipeline")
+async def pipeline_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    rows = db.query(DeliveryPipelineEntry).filter(DeliveryPipelineEntry.client_id == client_id).all()
+    row_dicts = [_pipeline_entry_to_dict(r) for r in rows]
+    row_dicts.sort(
+        key=lambda x: (
+            _period_sort_key(str(x.get("date", ""))),
+            int(x.get("id", 0) or 0),
+        ),
+        reverse=True,
+    )
+    return row_dicts
 
 
 @app.post("/api/clients/{client_id}/delivery/pipeline")
@@ -2485,6 +2797,11 @@ async def page_delivery_module_detail(request: Request, module_key: str, client_
         module_title=title,
         client_id=client_id,
     )
+
+
+@app.get("/delivery/pipeline/{client_id}/insight", response_class=HTMLResponse)
+async def page_delivery_pipeline_insight(request: Request, client_id: int):
+    return _page("pages/delivery_pipeline_insight.html", request, client_id=client_id)
 
 
 @app.get("/tools/calc", response_class=HTMLResponse)

@@ -71,6 +71,7 @@
         <div v-if="moduleKey === 'pipeline'" class="mt-5 space-y-3">
             <div class="flex justify-end gap-2">
                 <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openPipelineAdd">新增</button>
+                <a :href="`/delivery/pipeline/${clientId}/insight`" class="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">数据透析</a>
                 <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerPipelineImport">导入</button>
                 <input ref="pipelineFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onPipelineImportFile" />
                 <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportPipelineCsv">导出</button>
@@ -88,7 +89,7 @@
                     </svg>
                 </button>
             </div>
-            <h2 class="text-sm font-semibold text-gray-700">简历raw data</h2>
+            <h2 class="text-sm font-semibold text-gray-700">简历raw data（共 {{ pipelineRows.length }} 条）</h2>
             <div ref="pipelineScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
             <table class="crm-table pipeline-table min-w-[2400px]">
                 <thead>
@@ -234,7 +235,8 @@
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
                 <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showPipelineForm=false">取消</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="savePipelineForm">保存</button>
+                <button v-if="returnToInsight" type="button" class="px-4 py-2 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100" @click="savePipelineForm(true)">保存并返回透析</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="savePipelineForm(false)">保存</button>
             </div>
         </div>
     </div>
@@ -381,19 +383,38 @@ function displayDateSlash(raw) {
     if (!m) return s;
     return `${m[1]}/${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
 }
-
+function parsePeriodForSort(raw) {
+    const s = String(raw || '').trim().toLowerCase();
+    let m = s.match(/^(\d{1,2})\s*m\s*(\d{1,2})\s*w$/);
+    if (m) return { month: parseInt(m[1], 10), week: parseInt(m[2], 10) };
+    m = s.match(/^(\d{1,2})\s*w\s*(\d{1,2})$/);
+    if (m) return { month: parseInt(m[1], 10), week: parseInt(m[2], 10) };
+    return { month: -1, week: -1 };
+}
 createApp({
     setup() {
         const moduleKey = window.__DELIVERY_MODULE_KEY__;
         const moduleTitle = window.__DELIVERY_MODULE_TITLE__;
         const clientId = window.__DELIVERY_CLIENT_ID__;
         const clientName = ref(`客户#${clientId}`);
+        const returnToInsight = ref(false);
         const pipelineRows = ref([]);
         const pipelineScrollWrap = ref(null);
         const pipelineFileInput = ref(null);
         const showPipelineForm = ref(false);
         const pipelineEditingId = ref(null);
         const pipelineForm = reactive(emptyPipelineForm());
+        const openPipelineEditByQuery = () => {
+            const params = new URLSearchParams(window.location.search);
+            const editIdRaw = params.get('edit_row_id');
+            returnToInsight.value = params.get('return_to_insight') === '1';
+            if (!editIdRaw) return;
+            const editId = parseInt(editIdRaw, 10);
+            if (!Number.isFinite(editId)) return;
+            const target = pipelineRows.value.find((x) => Number(x.id) === editId);
+            if (!target) return;
+            openPipelineEdit(target);
+        };
         const showPipelineLogs = ref(false);
         const pipelineLogsLoading = ref(false);
         const pipelineLogs = ref([]);
@@ -416,7 +437,14 @@ createApp({
         const loadPipelineRows = async () => {
             if (moduleKey !== 'pipeline') return;
             const r = await fetch(`/api/clients/${clientId}/delivery/pipeline`, { headers: window.crmAuthHeader() });
-            pipelineRows.value = r.ok ? await r.json() : [];
+            const list = r.ok ? await r.json() : [];
+            pipelineRows.value = Array.isArray(list) ? list.slice().sort((a, b) => {
+                const pa = parsePeriodForSort(a.date);
+                const pb = parsePeriodForSort(b.date);
+                if (pb.month !== pa.month) return pb.month - pa.month;
+                if (pb.week !== pa.week) return pb.week - pa.week;
+                return Number(b.id || 0) - Number(a.id || 0);
+            }) : [];
         };
         const openPipelineAdd = () => {
             pipelineEditingId.value = null;
@@ -434,7 +462,7 @@ createApp({
             });
             showPipelineForm.value = true;
         };
-        const savePipelineForm = async () => {
+        const savePipelineForm = async (goInsightAfterSave = false) => {
             const payload = {};
             PIPELINE_FIELDS.forEach((f) => { payload[f.key] = pipelineForm[f.key]; });
             const url = pipelineEditingId.value
@@ -448,6 +476,10 @@ createApp({
             });
             if (!r.ok) {
                 alert('保存失败');
+                return;
+            }
+            if (goInsightAfterSave && returnToInsight.value) {
+                window.location.href = `/delivery/pipeline/${clientId}/insight`;
                 return;
             }
             showPipelineForm.value = false;
@@ -621,11 +653,14 @@ createApp({
             await loadBrief();
             await loadSettlementRows();
             await loadPipelineRows();
+            if (moduleKey === 'pipeline') {
+                openPipelineEditByQuery();
+            }
         });
         return {
-            moduleKey, moduleTitle, clientName,
+            moduleKey, moduleTitle, clientId, clientName,
             pipelineRows, pipelineFields: PIPELINE_FIELDS, pipelineFileInput, pipelineScrollWrap,
-            showPipelineForm, pipelineEditingId, pipelineForm,
+            showPipelineForm, pipelineEditingId, pipelineForm, returnToInsight,
             showPipelineLogs, pipelineLogsLoading, pipelineLogs,
             settlementRows, settlementFields: SETTLEMENT_FIELDS,
             showForm, editingId, form,

@@ -1,0 +1,365 @@
+{% extends "base.html" %}
+{% block title %}管道数据透析 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    .insight-table-wrap {
+        overflow-y: auto;
+        overflow-x: hidden;
+        max-height: calc(100vh - 260px);
+    }
+    .insight-table {
+        width: 100%;
+        table-layout: fixed;
+        font-size: 12px;
+    }
+    .insight-table .crm-th {
+        white-space: normal;
+        line-height: 1.3;
+        padding: 10px 6px;
+        min-width: 0;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        overflow: hidden;
+        vertical-align: middle;
+        height: 62px;
+        font-size: 11px;
+    }
+    .insight-table .crm-td {
+        padding: 8px 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .insight-table th:nth-child(1), .insight-table td:nth-child(1) { width: 52px; max-width: 52px; }
+    .insight-table th:nth-child(2), .insight-table td:nth-child(2) { width: 132px; max-width: 132px; }
+    .insight-table th:nth-child(3), .insight-table td:nth-child(3) { width: 72px; max-width: 72px; }
+    .insight-table th:nth-child(4), .insight-table td:nth-child(4) { width: 58px; max-width: 58px; }
+    .insight-table th:nth-child(5), .insight-table td:nth-child(5) { width: 58px; max-width: 58px; }
+    .insight-table th:nth-child(6), .insight-table td:nth-child(6) { width: 58px; max-width: 58px; }
+    .insight-table th:nth-child(7), .insight-table td:nth-child(7) { width: 46px; max-width: 46px; }
+    .insight-table th:nth-child(8), .insight-table td:nth-child(8) { width: 58px; max-width: 58px; }
+    .insight-table th:nth-child(9), .insight-table td:nth-child(9) { width: 58px; max-width: 58px; }
+    .insight-table th:nth-child(10), .insight-table td:nth-child(10) { width: 58px; max-width: 58px; }
+    .insight-table th:nth-child(11), .insight-table td:nth-child(11) { width: 52px; max-width: 52px; }
+    .insight-table th:nth-child(12), .insight-table td:nth-child(12) { width: 52px; max-width: 52px; }
+    .insight-table th:nth-child(13), .insight-table td:nth-child(13) { width: 56px; max-width: 56px; }
+    .insight-table th:nth-child(14), .insight-table td:nth-child(14) { width: 64px; max-width: 64px; }
+    .insight-table th:nth-child(15), .insight-table td:nth-child(15) { width: 66px; max-width: 66px; }
+    .insight-table th:nth-child(16), .insight-table td:nth-child(16) { width: 66px; max-width: 66px; }
+    .insight-table th:nth-child(17), .insight-table td:nth-child(17) { width: 72px; max-width: 72px; }
+    .insight-table th:nth-child(18), .insight-table td:nth-child(18) { width: 62px; max-width: 62px; }
+    .insight-table th:nth-child(19), .insight-table td:nth-child(19) { width: 62px; max-width: 62px; }
+    .insight-table td:nth-child(2) {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        word-break: break-word;
+    }
+    .insight-demand-input {
+        width: 100%;
+        min-width: 0;
+    }
+</style>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="pipeline-insight-app" class="container mx-auto p-6 max-w-[1400px]">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+                <a :href="`/delivery/pipeline/${clientId}`" class="text-sm text-blue-600 hover:underline">← 返回管道数据</a>
+                <h1 class="text-2xl font-bold text-gray-900 mt-2">{{ clientName }} · 管道数据透析</h1>
+                <p class="text-sm text-gray-500 mt-1">实时口径（基准日：今天） · 共 {{ displayRows.length }} / {{ rows.length }} 条分组</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+                    <input type="checkbox" v-model="onlyAnomalyRows" class="rounded border-gray-300" />
+                    仅看异常岗位
+                </label>
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportInsightCsv">导出透析 CSV</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="loadInsight">刷新实时数据</button>
+                <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800" title="回到顶部" aria-label="回到顶部" @click="scrollToTop">↑</button>
+            </div>
+        </div>
+
+        <div v-if="loading" class="rounded-lg border border-gray-200 p-10 text-center text-gray-500">加载中...</div>
+        <div v-if="!loading && anomalies.length" class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p class="text-sm font-semibold text-amber-800">逻辑异常提示（{{ anomalies.length }} 条）</p>
+            <p class="mt-1 text-xs text-amber-700">建议处理流程：点击“去修正” -> 修改原始记录 -> 返回本页点击“刷新实时数据”。</p>
+            <div class="mt-2 max-h-40 overflow-y-auto text-sm text-amber-900 space-y-1">
+                <div v-for="(item, idx) in anomalies" :key="idx" class="flex items-center justify-between gap-2">
+                    <p>{{ item['姓名'] }}：{{ item['问题'] }}（{{ item['时间'] }} / {{ item['岗位'] }} / {{ item['地点'] }}）</p>
+                    <a
+                        :href="`/delivery/pipeline/${clientId}?edit_row_id=${item['row_id']}&return_to_insight=1`"
+                        class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
+                    >去修正</a>
+                </div>
+            </div>
+        </div>
+        <div v-if="!loading" ref="insightScrollWrap" class="insight-table-wrap border border-gray-200 rounded-lg">
+            <table class="crm-table insight-table">
+                <thead>
+                    <tr>
+                        <th class="crm-th">时间</th>
+                        <th class="crm-th">岗位</th>
+                        <th class="crm-th">需求数量</th>
+                        <th class="crm-th">地点</th>
+                        <th class="crm-th">推送<br>简历量</th>
+                        <th class="crm-th">内筛<br>通过</th>
+                        <th class="crm-th">重复</th>
+                        <th class="crm-th">待客户<br>筛选</th>
+                        <th class="crm-th">客筛<br>通过</th>
+                        <th class="crm-th">放弃<br>面试</th>
+                        <th class="crm-th">待面试</th>
+                        <th class="crm-th">已面试</th>
+                        <th class="crm-th">面试<br>通过</th>
+                        <th class="crm-th">offer数</th>
+                        <th class="crm-th">弃offer/<br>谈薪失败</th>
+                        <th class="crm-th">在途数</th>
+                        <th class="crm-th">在途流失</th>
+                        <th class="crm-th">周入职数</th>
+                        <th class="crm-th">月入职数</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in displayRows" :key="rowKey(row)">
+                        <td v-if="row._showTime" class="crm-td" :rowspan="row._timeRowspan">{{ row['时间'] }}</td>
+                        <td class="crm-td">{{ row['岗位'] }}</td>
+                        <td class="crm-td">
+                            <input
+                                v-model="manualDemand[rowKey(row)]"
+                                @input="queueSaveManualDemand(row)"
+                                :disabled="!!savingDemandKeys[rowKey(row)]"
+                                type="text"
+                                class="insight-demand-input h-8 border border-gray-300 rounded px-1"
+                                placeholder="手填"
+                            />
+                        </td>
+                        <td class="crm-td">{{ row['地点'] }}</td>
+                        <td class="crm-td">{{ row['推送简历量'] }}</td>
+                        <td class="crm-td">{{ row['内筛通过'] }}</td>
+                        <td class="crm-td">{{ row['重复'] }}</td>
+                        <td class="crm-td">{{ row['待客户筛选'] }}</td>
+                        <td class="crm-td">{{ row['客筛通过'] }}</td>
+                        <td class="crm-td">{{ row['放弃面试'] }}</td>
+                        <td class="crm-td">{{ row['待面试'] }}</td>
+                        <td class="crm-td">{{ row['已面试'] }}</td>
+                        <td class="crm-td">{{ row['面试通过'] }}</td>
+                        <td class="crm-td">{{ row['本周offer人数'] }}</td>
+                        <td class="crm-td">{{ row['弃offer/谈薪失败'] }}</td>
+                        <td class="crm-td">{{ row['在途人数/待入职'] }}</td>
+                        <td class="crm-td">{{ row['月度在途流失(包含前序)'] }}</td>
+                        <td class="crm-td">{{ row['本周入职人数'] }}</td>
+                        <td class="crm-td">{{ row['本月入职人数'] }}</td>
+                    </tr>
+                    <tr v-if="!displayRows.length">
+                        <td colspan="19" class="crm-td text-center text-gray-400 py-8">暂无透析数据</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endraw %}
+<script>
+window.__PIPELINE_INSIGHT_CLIENT_ID__ = {{ client_id }};
+</script>
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, reactive, onMounted, computed } = Vue;
+function parsePeriodForSort(raw) {
+    const s = String(raw || '').trim().toLowerCase();
+    let m = s.match(/^(\d{1,2})\s*m\s*(\d{1,2})\s*w$/);
+    if (m) return { month: parseInt(m[1], 10), week: parseInt(m[2], 10) };
+    m = s.match(/^(\d{1,2})\s*w\s*(\d{1,2})$/);
+    if (m) return { month: parseInt(m[1], 10), week: parseInt(m[2], 10) };
+    return { month: -1, week: -1 };
+}
+
+createApp({
+    setup() {
+        const clientId = window.__PIPELINE_INSIGHT_CLIENT_ID__;
+        const clientName = ref(`客户#${clientId}`);
+        const rows = ref([]);
+        const anomalies = ref([]);
+        const loading = ref(false);
+        const onlyAnomalyRows = ref(false);
+        const insightScrollWrap = ref(null);
+        const manualDemand = reactive({});
+        const savingDemandKeys = reactive({});
+        const saveTimers = {};
+        const authHeader = () => window.crmAuthHeader();
+        const rowKey = (row) => `${row['时间'] || ''}|${row['岗位'] || ''}|${row['地点'] || ''}`;
+        const setManualDemandValue = (key, value) => {
+            if (value) {
+                manualDemand[key] = value;
+            } else {
+                delete manualDemand[key];
+            }
+        };
+        const anomalyRowKeySet = computed(() => {
+            const set = new Set();
+            (anomalies.value || []).forEach((item) => {
+                set.add(`${item['时间'] || ''}|${item['岗位'] || ''}|${item['地点'] || ''}`);
+            });
+            return set;
+        });
+        const displayRows = computed(() => {
+            const base = onlyAnomalyRows.value
+                ? rows.value.filter((row) => anomalyRowKeySet.value.has(rowKey(row)))
+                : rows.value.slice();
+            let currentTime = '';
+            let groupStart = -1;
+            for (let i = 0; i < base.length; i += 1) {
+                const t = String(base[i]['时间'] || '');
+                base[i]._showTime = false;
+                base[i]._timeRowspan = 1;
+                if (t !== currentTime) {
+                    if (groupStart >= 0) base[groupStart]._timeRowspan = i - groupStart;
+                    currentTime = t;
+                    groupStart = i;
+                    base[i]._showTime = true;
+                }
+            }
+            if (groupStart >= 0) base[groupStart]._timeRowspan = base.length - groupStart;
+            return base;
+        });
+
+        const loadBrief = async () => {
+            const r = await fetch(`/api/clients/${clientId}/brief`, { headers: authHeader() });
+            if (r.ok) {
+                const d = await r.json();
+                clientName.value = d.name || clientName.value;
+            }
+        };
+
+        const loadInsight = async () => {
+            loading.value = true;
+            try {
+                const r = await fetch(`/api/clients/${clientId}/delivery/pipeline/insight`, { headers: authHeader() });
+                if (!r.ok) {
+                    alert('加载透析数据失败');
+                    rows.value = [];
+                    return;
+                }
+                const d = await r.json();
+                const rawRows = Array.isArray(d?.rows) ? d.rows : [];
+                rows.value = rawRows.slice().sort((a, b) => {
+                    const pa = parsePeriodForSort(a['时间']);
+                    const pb = parsePeriodForSort(b['时间']);
+                    if (pb.month !== pa.month) return pb.month - pa.month;
+                    if (pb.week !== pa.week) return pb.week - pa.week;
+                    const posCmp = String(a['岗位'] || '').localeCompare(String(b['岗位'] || ''), 'zh-CN');
+                    if (posCmp !== 0) return posCmp;
+                    return String(a['地点'] || '').localeCompare(String(b['地点'] || ''), 'zh-CN');
+                });
+                Object.keys(manualDemand).forEach((key) => delete manualDemand[key]);
+                rawRows.forEach((row) => {
+                    setManualDemandValue(rowKey(row), String(row['需求数量'] || '').trim());
+                });
+                anomalies.value = Array.isArray(d?.anomalies) ? d.anomalies : [];
+            } finally {
+                loading.value = false;
+            }
+        };
+        const saveManualDemand = async (row) => {
+            const key = rowKey(row);
+            savingDemandKeys[key] = true;
+            try {
+                const r = await fetch(`/api/clients/${clientId}/delivery/pipeline/insight-demand`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...authHeader(),
+                    },
+                    body: JSON.stringify({
+                        period: row['时间'] || '',
+                        position: row['岗位'] || '',
+                        region: row['地点'] || '',
+                        demand_qty: manualDemand[key] || '',
+                    }),
+                });
+                if (!r.ok) {
+                    throw new Error('save failed');
+                }
+                const d = await r.json();
+                setManualDemandValue(key, String(d?.demand_qty || '').trim());
+            } catch (err) {
+                alert('保存需求数量失败');
+            } finally {
+                delete savingDemandKeys[key];
+            }
+        };
+        const queueSaveManualDemand = (row) => {
+            const key = rowKey(row);
+            if (saveTimers[key]) {
+                clearTimeout(saveTimers[key]);
+            }
+            saveTimers[key] = window.setTimeout(() => {
+                delete saveTimers[key];
+                saveManualDemand(row);
+            }, 500);
+        };
+        const exportInsightCsv = () => {
+            const headers = [
+                { label: '时间', key: '时间' },
+                { label: '岗位', key: '岗位' },
+                { label: '需求数量', key: '需求数量' },
+                { label: '地点', key: '地点' },
+                { label: '推送简历量', key: '推送简历量' },
+                { label: '内筛通过', key: '内筛通过' },
+                { label: '重复', key: '重复' },
+                { label: '待客户筛选', key: '待客户筛选' },
+                { label: '客筛通过', key: '客筛通过' },
+                { label: '放弃面试', key: '放弃面试' },
+                { label: '待面试', key: '待面试' },
+                { label: '已面试', key: '已面试' },
+                { label: '面试通过', key: '面试通过' },
+                { label: 'offer数', key: '本周offer人数' },
+                { label: '弃offer/谈薪失败', key: '弃offer/谈薪失败' },
+                { label: '在途数', key: '在途人数/待入职' },
+                { label: '在途流失', key: '月度在途流失(包含前序)' },
+                { label: '周入职数', key: '本周入职人数' },
+                { label: '月入职数', key: '本月入职人数' },
+            ];
+            const escapeCsv = (v) => {
+                const s = String(v == null ? '' : v);
+                if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+                    return `"${s.replace(/"/g, '""')}"`;
+                }
+                return s;
+            };
+            const lines = [headers.map((h) => h.label).join(',')];
+            displayRows.value.forEach((row) => {
+                const key = rowKey(row);
+                const demand = manualDemand[key] || '';
+                const values = headers.map((h) => (h.key === '需求数量' ? demand : (row[h.key] ?? '')));
+                lines.push(values.map(escapeCsv).join(','));
+            });
+            const bom = '\ufeff';
+            const blob = new Blob([bom + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            window.crmDownloadBlob(blob, '', `管道数据透析_${Date.now()}.csv`);
+        };
+        const scrollToTop = () => {
+            if (insightScrollWrap.value && typeof insightScrollWrap.value.scrollTo === 'function') {
+                insightScrollWrap.value.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        onMounted(async () => {
+            await loadBrief();
+            await loadInsight();
+        });
+
+        return {
+            clientId, clientName, rows, anomalies, loading, manualDemand, savingDemandKeys,
+            onlyAnomalyRows, displayRows, rowKey, loadInsight, exportInsightCsv, insightScrollWrap, scrollToTop, queueSaveManualDemand,
+        };
+    },
+}).mount('#pipeline-insight-app');
+</script>
+{% endblock %}
