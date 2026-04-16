@@ -11,6 +11,48 @@
     .roster-wrap.crm-h-scroll {
         padding-bottom: 22px;
     }
+    .roster-filter-row {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 6px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 2px;
+    }
+    .roster-filter-item {
+        flex: 0 0 auto;
+    }
+    .roster-filter-control {
+        height: 36px;
+        min-width: 104px;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.1;
+    }
+    .roster-filter-date {
+        height: 36px;
+        min-width: 150px;
+        border-radius: 6px;
+    }
+    .roster-filter-date-label {
+        padding: 0 6px;
+        font-size: 11px;
+        color: #6b7280;
+        white-space: nowrap;
+    }
+    .roster-filter-date-input {
+        font-size: 12px;
+    }
+    .roster-filter-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .roster-filter-reset {
+        height: 36px;
+        font-size: 12px;
+        white-space: nowrap;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -35,35 +77,39 @@
                 <button type="button" @click="restoreLatestBackup" class="crm-btn-rollback">回滚</button>
             </div>
         </div>
-        <div class="mb-4 grid grid-cols-1 md:grid-cols-4 xl:grid-cols-8 gap-2 text-sm">
-            <select v-if="hasFilterField('employmentStatus')" v-model="filters.employmentStatus" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+        <div class="mb-4 roster-filter-row text-sm">
+            <select v-if="hasFilterField('employmentStatus')" v-model="filters.employmentStatus" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
                 <option value="">在职情况（全部）</option>
                 <option v-for="v in employmentStatusOptions" :key="`es-${v}`" :value="v">{{ v }}</option>
             </select>
-            <select v-if="hasFilterField('workLocation')" v-model="filters.workLocation" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+            <select v-if="hasFilterField('workLocation')" v-model="filters.workLocation" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
                 <option value="">工作地（全部）</option>
                 <option v-for="v in workLocationOptions" :key="`wl-${v}`" :value="v">{{ v }}</option>
             </select>
-            <select v-if="hasFilterField('businessLine')" v-model="filters.businessLine" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+            <select v-if="hasFilterField('businessLine')" v-model="filters.businessLine" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
                 <option value="">业务线（全部）</option>
                 <option v-for="v in businessLineOptions" :key="`bl-${v}`" :value="v">{{ v }}</option>
             </select>
-            <div v-if="hasFilterField('entryDateBefore')" class="flex items-center rounded border border-gray-300 bg-white h-10">
-                <span class="px-2 text-xs text-gray-500 whitespace-nowrap">入职时间早于</span>
-                <input v-model="filters.entryDateBefore" type="date" class="w-full h-full px-2 text-sm text-gray-800 border-0 rounded-r focus:outline-none" />
+            <div v-if="hasFilterField('entryDateBefore')" class="roster-filter-item roster-filter-date flex items-center border border-gray-300 bg-white">
+                <span class="roster-filter-date-label">入职时间早于</span>
+                <input v-model="filters.entryDateBefore" type="date" class="w-full h-full px-1 text-gray-800 border-0 rounded-r focus:outline-none roster-filter-date-input" />
             </div>
-            <input v-if="hasFilterField('gmsBelow')" v-model="filters.gmsBelow" type="number" step="0.01" placeholder="GM$ 小于" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800" />
-            <input v-if="hasFilterField('gmPctBelow')" v-model="filters.gmPctBelow" type="number" step="0.01" placeholder="GM% 小于" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800" />
-            <select v-if="hasFilterField('employeePlus1')" v-model="filters.employeePlus1" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+            <div v-if="hasFilterField('entryDateAfter')" class="roster-filter-item roster-filter-date flex items-center border border-gray-300 bg-white">
+                <span class="roster-filter-date-label">入职时间晚于</span>
+                <input v-model="filters.entryDateAfter" type="date" class="w-full h-full px-1 text-gray-800 border-0 rounded-r focus:outline-none roster-filter-date-input" />
+            </div>
+            <input v-if="hasFilterField('gmsBelow')" v-model="filters.gmsBelow" type="number" step="0.01" placeholder="GM$ 小于" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800" />
+            <input v-if="hasFilterField('gmPctBelow')" v-model="filters.gmPctBelow" type="number" step="0.01" placeholder="GM% 小于" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800" />
+            <select v-if="hasFilterField('employeePlus1')" v-model="filters.employeePlus1" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
                 <option value="">员工+1（全部）</option>
                 <option v-for="v in employeePlus1Options" :key="`ep1-${v}`" :value="v">{{ v }}</option>
             </select>
-            <div class="flex gap-2">
-                <select v-if="hasFilterField('onboardingChannel') && onboardingChannelOptions.length" v-model="filters.onboardingChannel" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+            <div class="roster-filter-item roster-filter-actions">
+                <select v-if="hasFilterField('onboardingChannel') && onboardingChannelOptions.length" v-model="filters.onboardingChannel" class="roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
                     <option value="">入职渠道（全部）</option>
                     <option v-for="v in onboardingChannelOptions" :key="`oc-${v}`" :value="v">{{ v }}</option>
                 </select>
-                <button type="button" class="shrink-0 rounded border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50" @click="clearFilters">重置</button>
+                <button type="button" class="roster-filter-reset shrink-0 rounded border border-gray-300 bg-white px-2 text-gray-700 hover:bg-gray-50" @click="clearFilters">重置</button>
             </div>
         </div>
 
@@ -143,32 +189,68 @@
                         </tr>
                     </tbody>
                     <tfoot v-if="!loading && filteredRows.length">
-                        <tr v-if="!isZNTX" class="text-sm font-medium">
-                            <td colspan="10" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
-                                <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
-                            </td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.quote }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.pre }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.salaryRatio }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
-                            <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                            <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                            <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
-                        </tr>
-                        <tr v-else class="text-sm font-medium">
-                            <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
-                                <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
-                            </td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.quote }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.pre }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.salaryRatio }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
-                            <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                            <td colspan="7" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                            <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
-                        </tr>
+                        <template v-if="!isZNTX">
+                            <tr class="text-sm font-medium">
+                                <td colspan="10" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
+                                        <span class="text-xs font-medium text-slate-500">共 {{ filteredRows.length }} 条</span>
+                                    </div>
+                                </td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.quote }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.pre }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.salaryRatio }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
+                                <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                            </tr>
+                            <tr class="text-sm font-medium">
+                                <td colspan="10" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                    <span class="text-lg font-bold tracking-wide text-slate-900">均值</span>
+                                </td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgQuote }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgPre }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgSalaryRatio }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgGms }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgGmPct }}</td>
+                                <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                            </tr>
+                        </template>
+                        <template v-else>
+                            <tr class="text-sm font-medium">
+                                <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
+                                        <span class="text-xs font-medium text-slate-500">共 {{ filteredRows.length }} 条</span>
+                                    </div>
+                                </td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.quote }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.pre }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.salaryRatio }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
+                                <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td colspan="7" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                            </tr>
+                            <tr class="text-sm font-medium">
+                                <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                    <span class="text-lg font-bold tracking-wide text-slate-900">均值</span>
+                                </td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgQuote }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgPre }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgSalaryRatio }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgGms }}</td>
+                                <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgGmPct }}</td>
+                                <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td colspan="7" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                            </tr>
+                        </template>
                     </tfoot>
                 </table>
             </div>
@@ -400,6 +482,7 @@ createApp({
             workLocation: '',
             businessLine: '',
             entryDateBefore: '',
+            entryDateAfter: '',
             gmsBelow: '',
             gmPctBelow: '',
             employeePlus1: '',
@@ -439,6 +522,7 @@ createApp({
             workLocation: 'work_location',
             businessLine: 'business_line',
             entryDateBefore: 'entry_date',
+            entryDateAfter: 'entry_date',
             gmsBelow: 'gms',
             gmPctBelow: 'gm_pct',
             employeePlus1: 'employee_plus1',
@@ -470,6 +554,23 @@ createApp({
                     const rowKey = toDateKey(row.entry_date);
                     const limitKey = toDateKey(filters.entryDateBefore);
                     if (limitKey && rowKey && !(rowKey < limitKey)) return false;
+                    if (limitKey && !rowKey) return false;
+                }
+                if (filters.entryDateAfter) {
+                    const toDateKey = (v) => {
+                        const s = String(v || '').trim();
+                        if (!s) return null;
+                        const m = s.match(/(\d{4})\D?(\d{1,2})\D?(\d{1,2})/);
+                        if (!m) return null;
+                        const y = parseInt(m[1], 10);
+                        const mo = parseInt(m[2], 10);
+                        const d = parseInt(m[3], 10);
+                        if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+                        return y * 10000 + mo * 100 + d;
+                    };
+                    const rowKey = toDateKey(row.entry_date);
+                    const limitKey = toDateKey(filters.entryDateAfter);
+                    if (limitKey && rowKey && !(rowKey > limitKey)) return false;
                     if (limitKey && !rowKey) return false;
                 }
                 if (String(filters.gmsBelow).trim() !== '') {
@@ -505,25 +606,47 @@ createApp({
             let sumQuote = 0;
             let sumPre = 0;
             let sumGm = 0;
+            let countQuote = 0;
+            let countPre = 0;
+            let countGm = 0;
             for (const row of filteredRows.value) {
                 const q = parseAmountCell(row.monthly_quote_tax);
                 const p = parseAmountCell(row.pre_tax_salary);
                 const g = parseAmountCell(row.gms);
-                if (Number.isFinite(q)) sumQuote += q;
-                if (Number.isFinite(p)) sumPre += p;
-                if (Number.isFinite(g)) sumGm += g;
+                if (Number.isFinite(q)) {
+                    sumQuote += q;
+                    countQuote += 1;
+                }
+                if (Number.isFinite(p)) {
+                    sumPre += p;
+                    countPre += 1;
+                }
+                if (Number.isFinite(g)) {
+                    sumGm += g;
+                    countGm += 1;
+                }
             }
             const rq = Math.round(sumQuote);
             const rp = Math.round(sumPre);
             const rg = Math.round(sumGm);
             const salaryRatio = rq > 0 ? rp / rq : NaN;
             const gmRatio = rq > 0 ? rg / rq : NaN;
+            const avgQuote = countQuote > 0 ? sumQuote / countQuote : NaN;
+            const avgPre = countPre > 0 ? sumPre / countPre : NaN;
+            const avgGm = countGm > 0 ? sumGm / countGm : NaN;
+            const avgSalaryRatio = Number.isFinite(avgQuote) && avgQuote > 0 ? avgPre / avgQuote : NaN;
+            const avgGmRatio = Number.isFinite(avgQuote) && avgQuote > 0 ? avgGm / avgQuote : NaN;
             return {
                 quote: formatYuanInteger(sumQuote),
                 pre: formatYuanInteger(sumPre),
                 salaryRatio: formatRatioAsPercent(salaryRatio),
                 gms: formatYuanInteger(sumGm),
                 gmPct: formatRatioAsPercent(gmRatio),
+                avgQuote: formatYuanInteger(avgQuote),
+                avgPre: formatYuanInteger(avgPre),
+                avgSalaryRatio: formatRatioAsPercent(avgSalaryRatio),
+                avgGms: formatYuanInteger(avgGm),
+                avgGmPct: formatRatioAsPercent(avgGmRatio),
             };
         });
         const activeFormFields = computed(() => (isZNTX.value ? ZNTX_FORM_FIELDS : STANDARD_FORM_FIELDS));
@@ -807,6 +930,7 @@ createApp({
             filters.workLocation = '';
             filters.businessLine = '';
             filters.entryDateBefore = '';
+            filters.entryDateAfter = '';
             filters.gmsBelow = '';
             filters.gmPctBelow = '';
             filters.employeePlus1 = '';
