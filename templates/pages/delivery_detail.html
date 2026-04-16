@@ -110,8 +110,8 @@
                 </thead>
                 <tbody>
                     <tr v-for="row in pipelineRows" :key="row.id">
-                        <td class="crm-td">{{ row.resume_time }}</td>
-                        <td class="crm-td">{{ row.date }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.resume_time) }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.date) }}</td>
                         <td class="crm-td">{{ row.position }}</td>
                         <td class="crm-td">{{ row.full_name }}</td>
                         <td class="crm-td">{{ row.domain }}</td>
@@ -122,11 +122,11 @@
                         <td class="crm-td">{{ row.recruiter }}</td>
                         <td class="crm-td">{{ row.resume_screening }}</td>
                         <td class="crm-td">{{ row.interviewed }}</td>
-                        <td class="crm-td">{{ row.interview_time }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.interview_time) }}</td>
                         <td class="crm-td">{{ row.interviewer }}</td>
                         <td class="crm-td">{{ row.result }}</td>
                         <td class="crm-td">{{ row.got_offer }}</td>
-                        <td class="crm-td">{{ row.onboarding_time }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.onboarding_time) }}</td>
                         <td class="crm-td">{{ row.onboarded }}</td>
                         <td class="crm-td">{{ row.status_note }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
@@ -174,7 +174,7 @@
                 <tbody>
                     <tr v-for="row in settlementRows" :key="row.id">
                         <td class="crm-td">{{ row.serial_no }}</td>
-                        <td class="crm-td">{{ row.progress_updated_at }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.progress_updated_at) }}</td>
                         <td class="crm-td">{{ row.customer_name }}</td>
                         <td class="crm-td">{{ row.fee_month }}</td>
                         <td class="crm-td">{{ row.chase_month }}</td>
@@ -182,10 +182,10 @@
                         <td class="crm-td">{{ row.internal_attendance_confirm }}</td>
                         <td class="crm-td">{{ row.client_confirm }}</td>
                         <td class="crm-td">{{ row.invoiced }}</td>
-                        <td class="crm-td">{{ row.invoice_date }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.invoice_date) }}</td>
                         <td class="crm-td">{{ row.paid }}</td>
-                        <td class="crm-td">{{ row.expected_payment_date }}</td>
-                        <td class="crm-td">{{ row.actual_payment_date }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.expected_payment_date) }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.actual_payment_date) }}</td>
                         <td class="crm-td">{{ row.payment_days }}</td>
                         <td class="crm-td">{{ row.payment_cycle }}</td>
                         <td class="crm-td">{{ row.payment_nature }}</td>
@@ -217,7 +217,11 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                     <label v-for="f in pipelineFields" :key="f.key" class="flex flex-col gap-1">
                         <span class="text-gray-600">{{ f.label }}</span>
-                        <input v-model="pipelineForm[f.key]" :type="f.type || 'text'" class="border border-gray-300 rounded px-2 py-1.5 w-full" />
+                        <div v-if="f.type === 'date'" class="relative">
+                            <input v-model="pipelineForm[f.key]" type="date" class="border border-gray-300 rounded px-2 py-1.5 pr-14 w-full" />
+                            <button v-if="pipelineForm[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearPipelineDateField(f.key)">清空</button>
+                        </div>
+                        <input v-else v-model="pipelineForm[f.key]" :type="f.type || 'text'" class="border border-gray-300 rounded px-2 py-1.5 w-full" />
                     </label>
                 </div>
             </div>
@@ -260,7 +264,11 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                     <label v-for="f in settlementFields" :key="f.key" class="flex flex-col gap-1">
                         <span class="text-gray-600">{{ f.label }}</span>
-                        <input v-model="form[f.key]" :type="f.type || 'text'" class="border border-gray-300 rounded px-2 py-1.5 w-full" />
+                        <div v-if="f.type === 'date'" class="relative">
+                            <input v-model="form[f.key]" type="date" class="border border-gray-300 rounded px-2 py-1.5 pr-14 w-full" />
+                            <button v-if="form[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearSettlementDateField(f.key)">清空</button>
+                        </div>
+                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" class="border border-gray-300 rounded px-2 py-1.5 w-full" />
                     </label>
                 </div>
             </div>
@@ -324,6 +332,12 @@ const SETTLEMENT_FIELDS = [
     { key: 'invoice_no', label: '发票号' },
     { key: 'remarks', label: '备注' },
 ];
+const PIPELINE_DATE_FIELD_KEYS = new Set(
+    PIPELINE_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
+);
+const SETTLEMENT_DATE_FIELD_KEYS = new Set(
+    SETTLEMENT_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
+);
 
 function emptySettlementForm() {
     const f = {};
@@ -334,6 +348,31 @@ function emptyPipelineForm() {
     const f = {};
     PIPELINE_FIELDS.forEach((x) => { f[x.key] = ''; });
     return f;
+}
+function todayInputDate() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+function normalizeDateForInput(raw, fallbackTodayIfEmpty = false) {
+    const s = String(raw || '').trim();
+    if (!s) return fallbackTodayIfEmpty ? todayInputDate() : '';
+    const m = s.match(/^(\d{4})\D?(\d{1,2})\D?(\d{1,2})$/);
+    if (!m) return s;
+    const y = m[1];
+    const mo = String(parseInt(m[2], 10)).padStart(2, '0');
+    const d = String(parseInt(m[3], 10)).padStart(2, '0');
+    if (mo === 'NaN' || d === 'NaN') return s;
+    return `${y}-${mo}-${d}`;
+}
+function displayDateSlash(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const m = s.match(/^(\d{4})\D?(\d{1,2})\D?(\d{1,2})$/);
+    if (!m) return s;
+    return `${m[1]}/${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
 }
 
 createApp({
@@ -380,7 +419,12 @@ createApp({
         };
         const openPipelineEdit = (row) => {
             pipelineEditingId.value = row.id;
-            PIPELINE_FIELDS.forEach((f) => { pipelineForm[f.key] = row[f.key] != null ? String(row[f.key]) : ''; });
+            PIPELINE_FIELDS.forEach((f) => {
+                const raw = row[f.key] != null ? String(row[f.key]) : '';
+                pipelineForm[f.key] = PIPELINE_DATE_FIELD_KEYS.has(f.key)
+                    ? normalizeDateForInput(raw, false)
+                    : raw;
+            });
             showPipelineForm.value = true;
         };
         const savePipelineForm = async () => {
@@ -515,6 +559,12 @@ createApp({
             }
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
+        const clearPipelineDateField = (key) => {
+            pipelineForm[key] = '';
+        };
+        const clearSettlementDateField = (key) => {
+            form[key] = '';
+        };
         const openAdd = () => {
             editingId.value = null;
             Object.assign(form, emptySettlementForm());
@@ -524,7 +574,12 @@ createApp({
         };
         const openEdit = (row) => {
             editingId.value = row.id;
-            SETTLEMENT_FIELDS.forEach((f) => { form[f.key] = row[f.key] != null ? String(row[f.key]) : ''; });
+            SETTLEMENT_FIELDS.forEach((f) => {
+                const raw = row[f.key] != null ? String(row[f.key]) : '';
+                form[f.key] = SETTLEMENT_DATE_FIELD_KEYS.has(f.key)
+                    ? normalizeDateForInput(raw, false)
+                    : raw;
+            });
             showForm.value = true;
         };
         const saveForm = async () => {
@@ -569,7 +624,7 @@ createApp({
             showForm, editingId, form,
             openPipelineAdd, openPipelineEdit, savePipelineForm, removePipelineRow,
             triggerPipelineImport, onPipelineImportFile, exportPipelineCsv, openPipelineLogs, restorePipelineLatestBackup, formatDate,
-            scrollToTop,
+            scrollToTop, clearPipelineDateField, clearSettlementDateField, displayDateSlash,
             openAdd, openEdit, saveForm, removeRow,
         };
     }

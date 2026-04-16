@@ -2,6 +2,63 @@
 {% block title %}{{ module_title }} · 交付 · ITO CRM V8{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    .settlement-filter-row {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 6px;
+        overflow: hidden;
+        padding-bottom: 2px;
+    }
+    .settlement-filter-item {
+        flex: 0 0 auto;
+        height: 36px;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.1;
+    }
+    .settlement-filter-text {
+        width: 110px;
+        min-width: 110px;
+    }
+    .settlement-filter-select {
+        min-width: 150px;
+    }
+    .settlement-filter-reset {
+        width: 56px;
+        min-width: 56px;
+        padding-left: 0;
+        padding-right: 0;
+        text-align: center;
+    }
+    .settlement-filter-date {
+        width: 190px;
+        min-width: 190px;
+        display: flex;
+        align-items: center;
+        border: 1px solid #d1d5db;
+        background: #fff;
+        padding: 0 6px;
+        color: #1f2937;
+    }
+    .settlement-filter-date-label {
+        margin-right: 6px;
+        white-space: nowrap;
+        font-size: 11px;
+        color: #6b7280;
+    }
+    .settlement-filter-date-input {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        font-size: 12px;
+        color: #1f2937;
+        outline: none;
+        text-align: right;
+    }
+</style>
 {% endblock %}
 {% block content %}
 {% raw %}
@@ -9,34 +66,50 @@
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
         <h1 class="text-2xl font-bold text-gray-900">结算回款</h1>
         <div class="mt-4 flex justify-end gap-2">
-            <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openAdd">新增</button>
+            <button type="button" class="inline-flex h-10 w-[92px] items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openAdd">新增</button>
+            <button
+                type="button"
+                class="inline-flex h-10 w-[92px] flex-col items-center justify-center rounded-lg border border-amber-400 bg-amber-50 px-2 text-[11px] font-semibold leading-tight text-amber-700 hover:bg-amber-100"
+                @click="fillPaymentDaysByDates"
+            >
+                <span>回款天数</span>
+                <span>统计</span>
+            </button>
             <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerImport">导入</button>
             <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
             <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportCsv">导出</button>
             <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openLogs">日志</button>
             <button type="button" class="crm-btn-rollback" @click="restoreLatestBackup">回滚</button>
         </div>
-        <div class="mt-4 grid grid-cols-1 md:grid-cols-6 gap-2">
-            <input v-model="filters.customer" type="text" placeholder="筛选客户" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800" />
-            <input v-model="filters.feeMonth" type="text" placeholder="筛选费用月份" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800" />
-            <select v-model="filters.invoiced" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+        <div class="mt-4 settlement-filter-row">
+            <input v-model="filters.customer" type="text" placeholder="筛选客户" class="settlement-filter-item settlement-filter-text border border-gray-300 bg-white px-3 text-gray-800" />
+            <input v-model="filters.feeMonth" type="text" placeholder="筛选费用月份" class="settlement-filter-item settlement-filter-text border border-gray-300 bg-white px-3 text-gray-800" />
+            <select v-model="filters.invoiced" class="settlement-filter-item settlement-filter-select border border-gray-300 bg-white px-3 text-gray-800">
                 <option value="">是否开票（全部）</option>
                 <option value="是">是</option>
                 <option value="否">否</option>
             </select>
-            <select v-model="filters.paid" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+            <select v-model="filters.paid" class="settlement-filter-item settlement-filter-select border border-gray-300 bg-white px-3 text-gray-800">
                 <option value="">是否回款（全部）</option>
                 <option value="是">是</option>
                 <option value="否">否</option>
             </select>
-            <select v-model="filters.paymentCycle" class="w-full h-9 rounded border border-gray-300 bg-white px-3 text-sm text-gray-800">
+            <select v-model="filters.paymentCycle" class="settlement-filter-item settlement-filter-select border border-gray-300 bg-white px-3 text-gray-800">
                 <option value="">回款周期（全部）</option>
                 <option value="月度">月度</option>
                 <option value="双月">双月</option>
                 <option value="季度">季度</option>
                 <option value="半年度">半年度</option>
             </select>
-            <button type="button" class="rounded border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50" @click="clearFilters">重置筛选</button>
+            <div class="settlement-filter-item settlement-filter-date">
+                <span class="settlement-filter-date-label">预计回款起点</span>
+                <input v-model="filters.expectedPaymentStart" type="date" class="settlement-filter-date-input" title="预计回款时间起点" />
+            </div>
+            <div class="settlement-filter-item settlement-filter-date">
+                <span class="settlement-filter-date-label">预计回款终点</span>
+                <input v-model="filters.expectedPaymentEnd" type="date" class="settlement-filter-date-input" title="预计回款时间终点" />
+            </div>
+            <button type="button" class="settlement-filter-item settlement-filter-reset rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50" @click="clearFilters">重置</button>
         </div>
         <div class="mt-4 border border-gray-200 rounded-lg crm-table-scroll" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
             <table class="crm-table settlement-table min-w-[1900px]">
@@ -67,7 +140,7 @@
                 <tbody>
                     <tr v-for="row in filteredRows" :key="row.id">
                         <td class="crm-td">{{ row.serial_no }}</td>
-                        <td class="crm-td">{{ row.progress_updated_at }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.progress_updated_at) }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.customer_name }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.fee_month }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.chase_month }}</td>
@@ -75,10 +148,10 @@
                         <td class="crm-td">{{ row.internal_attendance_confirm }}</td>
                         <td class="crm-td">{{ row.client_confirm }}</td>
                         <td class="crm-td">{{ row.invoiced }}</td>
-                        <td class="crm-td">{{ row.invoice_date }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.invoice_date) }}</td>
                         <td class="crm-td">{{ row.paid }}</td>
-                        <td class="crm-td">{{ row.expected_payment_date }}</td>
-                        <td class="crm-td">{{ row.actual_payment_date }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.expected_payment_date) }}</td>
+                        <td class="crm-td">{{ displayDateSlash(row.actual_payment_date) }}</td>
                         <td class="crm-td">{{ row.payment_days }}</td>
                         <td class="crm-td">{{ row.payment_cycle }}</td>
                         <td class="crm-td">{{ row.payment_nature }}</td>
@@ -124,11 +197,15 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                     <label v-for="f in fields" :key="f.key" class="flex flex-col gap-1">
                         <span class="text-gray-600">{{ f.label }}<span v-if="f.required" class="text-red-500">*</span></span>
-                        <select v-if="f.type==='select'" v-model="form[f.key]" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-base leading-6 text-gray-800 appearance-none">
+                        <select v-if="f.type==='select'" v-model="form[f.key]" @change="onSettlementFieldChange(f.key)" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-base leading-6 text-gray-800 appearance-none">
                             <option value="">请选择</option>
                             <option v-for="op in f.options" :key="op" :value="op">{{ op }}</option>
                         </select>
-                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" :readonly="f.readonly" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-base leading-6 text-gray-800" />
+                        <div v-else-if="f.type === 'date'" class="relative">
+                            <input v-model="form[f.key]" type="date" :readonly="f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="w-full h-10 rounded border border-gray-300 bg-white px-3 pr-14 text-base leading-6 text-gray-800" />
+                            <button v-if="form[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearDateField(f.key)">清空</button>
+                        </div>
+                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" :readonly="f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-base leading-6 text-gray-800" />
                     </label>
                 </div>
             </div>
@@ -187,10 +264,106 @@ const FIELDS = [
     { key: 'invoice_no', label: '发票号' },
     { key: 'remarks', label: '备注' },
 ];
+const DATE_FIELD_KEYS = new Set(
+    FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
+);
 function emptyForm() {
     const out = {};
     FIELDS.forEach((f) => { out[f.key] = ''; });
     return out;
+}
+function todayInputDate() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+function normalizeDateForInput(raw, fallbackTodayIfEmpty = false) {
+    const s = String(raw || '').trim();
+    if (!s) return fallbackTodayIfEmpty ? todayInputDate() : '';
+    const m = s.match(/^(\d{4})\D?(\d{1,2})\D?(\d{1,2})$/);
+    if (!m) return s;
+    const y = m[1];
+    const mo = String(parseInt(m[2], 10)).padStart(2, '0');
+    const d = String(parseInt(m[3], 10)).padStart(2, '0');
+    if (mo === 'NaN' || d === 'NaN') return s;
+    return `${y}-${mo}-${d}`;
+}
+function displayDateSlash(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return '';
+    const m = s.match(/^(\d{4})\D?(\d{1,2})\D?(\d{1,2})$/);
+    if (!m) return s;
+    return `${m[1]}/${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
+}
+function dateKey(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+    const m = s.match(/^(\d{4})\D?(\d{1,2})\D?(\d{1,2})$/);
+    if (!m) return null;
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    const d = parseInt(m[3], 10);
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+    return y * 10000 + mo * 100 + d;
+}
+function endOfNextMonth(raw) {
+    const s = normalizeDateForInput(raw, false);
+    if (!s) return '';
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    if (!Number.isFinite(y) || !Number.isFinite(mo)) return '';
+    const lastDay = new Date(y, mo + 1, 0);
+    const outY = lastDay.getFullYear();
+    const outM = String(lastDay.getMonth() + 1).padStart(2, '0');
+    const outD = String(lastDay.getDate()).padStart(2, '0');
+    return `${outY}-${outM}-${outD}`;
+}
+function addDays(raw, dayOffset) {
+    const s = normalizeDateForInput(raw, false);
+    if (!s) return '';
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    const d = parseInt(m[3], 10);
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d) || !Number.isFinite(dayOffset)) return '';
+    const date = new Date(y, mo - 1, d + dayOffset);
+    const outY = date.getFullYear();
+    const outM = String(date.getMonth() + 1).padStart(2, '0');
+    const outD = String(date.getDate()).padStart(2, '0');
+    return `${outY}-${outM}-${outD}`;
+}
+function endOfCurrentMonth(raw) {
+    const s = normalizeDateForInput(raw, false);
+    if (!s) return '';
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    if (!Number.isFinite(y) || !Number.isFinite(mo)) return '';
+    const lastDay = new Date(y, mo, 0);
+    const outY = lastDay.getFullYear();
+    const outM = String(lastDay.getMonth() + 1).padStart(2, '0');
+    const outD = String(lastDay.getDate()).padStart(2, '0');
+    return `${outY}-${outM}-${outD}`;
+}
+function endOfMonthAfterOffset(raw, monthOffset) {
+    const s = normalizeDateForInput(raw, false);
+    if (!s) return '';
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '';
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(monthOffset)) return '';
+    const lastDay = new Date(y, mo - 1 + monthOffset + 1, 0);
+    const outY = lastDay.getFullYear();
+    const outM = String(lastDay.getMonth() + 1).padStart(2, '0');
+    const outD = String(lastDay.getDate()).padStart(2, '0');
+    return `${outY}-${outM}-${outD}`;
 }
 createApp({
     setup() {
@@ -201,6 +374,8 @@ createApp({
             invoiced: '',
             paid: '',
             paymentCycle: '',
+            expectedPaymentStart: '',
+            expectedPaymentEnd: '',
         });
         const fileInput = ref(null);
         const showLogs = ref(false);
@@ -210,6 +385,14 @@ createApp({
         const editingId = ref(null);
         const form = reactive(emptyForm());
         const fields = ref(FIELDS.map((f) => ({ ...f })));
+        const customerNameText = computed(() => String(form.customer_name || '').trim());
+        const isZhongNuoCustomer = computed(() => customerNameText.value.includes('中诺'));
+        const isHuaqinCustomer = computed(() => customerNameText.value.includes('华勤'));
+        const isKpitCustomer = computed(() => customerNameText.value.toUpperCase().includes('KPIT'));
+        const isEnvisionCustomer = computed(() => customerNameText.value.includes('远景智能'));
+        const isYuanshuCustomer = computed(() => customerNameText.value.includes('元枢'));
+        const isWeiwodeCustomer = computed(() => customerNameText.value.includes('帷幄'));
+        const isNissanCustomer = computed(() => customerNameText.value.includes('日产'));
         const hasErrors = computed(() => {
             const requiredKeys = ['customer_name', 'fee_month', 'amount', 'internal_attendance_confirm', 'client_confirm', 'invoiced', 'paid', 'payment_cycle'];
             return requiredKeys.some((k) => !String(form[k] || '').trim());
@@ -222,6 +405,16 @@ createApp({
                 if (filters.invoiced && String(row.invoiced || '') !== filters.invoiced) return false;
                 if (filters.paid && String(row.paid || '') !== filters.paid) return false;
                 if (filters.paymentCycle && ci(row.payment_cycle) !== ci(filters.paymentCycle)) return false;
+                if (filters.expectedPaymentStart) {
+                    const rowDate = dateKey(row.expected_payment_date);
+                    const startDate = dateKey(filters.expectedPaymentStart);
+                    if (startDate && (!rowDate || rowDate < startDate)) return false;
+                }
+                if (filters.expectedPaymentEnd) {
+                    const rowDate = dateKey(row.expected_payment_date);
+                    const endDate = dateKey(filters.expectedPaymentEnd);
+                    if (endDate && (!rowDate || rowDate > endDate)) return false;
+                }
                 return true;
             });
         });
@@ -231,6 +424,25 @@ createApp({
             if (!s) return NaN;
             const n = Number(s);
             return Number.isFinite(n) ? n : NaN;
+        };
+        const parseDateParts = (raw) => {
+            const s = String(raw || '').trim();
+            if (!s) return null;
+            const m = s.match(/^(\d{4})\D?(\d{1,2})\D?(\d{1,2})$/);
+            if (!m) return null;
+            const y = parseInt(m[1], 10);
+            const mo = parseInt(m[2], 10);
+            const d = parseInt(m[3], 10);
+            if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+            return { y, mo, d };
+        };
+        const calcDateDiffDays = (startRaw, endRaw) => {
+            const start = parseDateParts(startRaw);
+            const end = parseDateParts(endRaw);
+            if (!start || !end) return null;
+            const startTs = Date.UTC(start.y, start.mo - 1, start.d);
+            const endTs = Date.UTC(end.y, end.mo - 1, end.d);
+            return Math.round((endTs - startTs) / 86400000);
         };
         const displayAmountInteger = (raw) => {
             const n = parseAmount(raw);
@@ -349,6 +561,96 @@ createApp({
             filters.invoiced = '';
             filters.paid = '';
             filters.paymentCycle = '';
+            filters.expectedPaymentStart = '';
+            filters.expectedPaymentEnd = '';
+        };
+        const clearDateField = (key) => {
+            form[key] = '';
+        };
+        const updateExpectedPaymentDateByRule = () => {
+            if (editingId.value) return;
+            const invoiceDate = String(form.invoice_date || '').trim();
+            if (!invoiceDate) {
+                form.expected_payment_date = '';
+                return;
+            }
+            if (isZhongNuoCustomer.value) {
+                const expectedDate = endOfNextMonth(invoiceDate);
+                if (expectedDate) form.expected_payment_date = expectedDate;
+                return;
+            }
+            if (isHuaqinCustomer.value) {
+                const expectedDate = endOfMonthAfterOffset(invoiceDate, 2);
+                if (expectedDate) form.expected_payment_date = expectedDate;
+                return;
+            }
+            if (isKpitCustomer.value) {
+                const expectedDate = addDays(invoiceDate, 90);
+                if (expectedDate) form.expected_payment_date = expectedDate;
+                return;
+            }
+            if (isEnvisionCustomer.value) {
+                const expectedDate = endOfMonthAfterOffset(invoiceDate, 3);
+                if (expectedDate) form.expected_payment_date = expectedDate;
+                return;
+            }
+            if (isYuanshuCustomer.value) {
+                const expectedDate = endOfCurrentMonth(invoiceDate);
+                if (expectedDate) form.expected_payment_date = expectedDate;
+                return;
+            }
+            if (isWeiwodeCustomer.value) {
+                const expectedDate = addDays(invoiceDate, 30);
+                if (expectedDate) form.expected_payment_date = expectedDate;
+                return;
+            }
+            if (isNissanCustomer.value) {
+                const expectedDate = addDays(invoiceDate, 60);
+                if (expectedDate) form.expected_payment_date = expectedDate;
+                return;
+            }
+        };
+        const onSettlementFieldChange = (key) => {
+            if (key === 'customer_name' || key === 'invoice_date') {
+                updateExpectedPaymentDateByRule();
+            }
+        };
+        const fillPaymentDaysByDates = async () => {
+            const candidates = rows.value.filter((row) => {
+                const daysEmpty = String(row.payment_days || '').trim() === '';
+                const hasActual = String(row.actual_payment_date || '').trim() !== '';
+                return daysEmpty && hasActual;
+            });
+            if (!candidates.length) {
+                alert('没有需要统计的条目（回款天数为空且实际回款时间有值）');
+                return;
+            }
+            const ok = window.confirm(`将为 ${candidates.length} 条记录自动计算并填写回款天数，是否继续？`);
+            if (!ok) return;
+            let updated = 0;
+            let skipped = 0;
+            let failed = 0;
+            for (const row of candidates) {
+                const diff = calcDateDiffDays(row.invoice_date, row.actual_payment_date);
+                if (!Number.isFinite(diff)) {
+                    skipped += 1;
+                    continue;
+                }
+                const payload = {};
+                FIELDS.forEach((f) => {
+                    payload[f.key] = row[f.key] != null ? String(row[f.key]) : '';
+                });
+                payload.payment_days = String(diff);
+                const r = await fetch(`/api/delivery/settlement/row/${row.id}`, {
+                    method: 'PUT',
+                    headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (r.ok) updated += 1;
+                else failed += 1;
+            }
+            await loadRows();
+            alert(`回款天数统计完成：更新 ${updated} 条，跳过 ${skipped} 条，失败 ${failed} 条`);
         };
         const openAdd = () => {
             editingId.value = null;
@@ -358,7 +660,12 @@ createApp({
         };
         const openEdit = (row) => {
             editingId.value = row.id;
-            FIELDS.forEach((f) => { form[f.key] = row[f.key] != null ? String(row[f.key]) : ''; });
+            FIELDS.forEach((f) => {
+                const raw = row[f.key] != null ? String(row[f.key]) : '';
+                form[f.key] = DATE_FIELD_KEYS.has(f.key)
+                    ? normalizeDateForInput(raw, false)
+                    : raw;
+            });
             showForm.value = true;
         };
         const saveForm = async () => {
@@ -400,7 +707,7 @@ createApp({
             totalAmountDisplay, totalAmountAllDisplay,
             showForm, editingId, form, hasErrors,
             openAdd, openEdit, saveForm, removeRow,
-            triggerImport, onImportFile, exportCsv, restoreLatestBackup, openLogs, formatDate, clearFilters, displayAmountInteger,
+            triggerImport, onImportFile, exportCsv, restoreLatestBackup, openLogs, formatDate, clearFilters, clearDateField, fillPaymentDaysByDates, onSettlementFieldChange, displayAmountInteger, displayDateSlash,
         };
     }
 }).mount('#delivery-settlement-app');

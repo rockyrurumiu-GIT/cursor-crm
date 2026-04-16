@@ -160,8 +160,8 @@
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.work_location }}</td>
                             <td class="crm-td px-3 py-3 text-gray-700 align-top leading-snug">{{ row.position_title }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.business_line }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.entry_date }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.regularization_date }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.entry_date) }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.regularization_date) }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.monthly_quote_tax) }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.pre_tax_salary) }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-percent-cell">{{ row.salary_quote_ratio }}</td>
@@ -173,8 +173,8 @@
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_attendance_makeup }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.employee_plus2 }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.interface_contact }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.project_release_date }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.company_resign_date }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.project_release_date) }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.company_resign_date) }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_separation_type }}</td>
                             <td class="crm-td px-3 py-3 min-w-[14rem] max-w-[18rem] text-gray-700 align-top leading-snug">{{ row.leave_reason }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.zntx_compensation_amount) }}</td>
@@ -284,10 +284,28 @@
                             <option value="在职">在职</option>
                             <option value="离职">离职</option>
                         </select>
+                        <div v-else-if="fieldInputType(f.key) === 'date'" class="relative">
+                            <input
+                                v-model="form[f.key]"
+                                type="date"
+                                @input="markTouched(f.key)"
+                                @change="markTouched(f.key)"
+                                :class="[
+                                    'w-full h-10 rounded border bg-white px-3 pr-14 text-base leading-6 text-gray-800',
+                                    getFieldError(f.key) ? 'border-red-400' : 'border-gray-300',
+                                ]"
+                            />
+                            <button
+                                v-if="form[f.key]"
+                                type="button"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700"
+                                @click="clearDateField(f.key)"
+                            >清空</button>
+                        </div>
                         <input
                             v-else
                             v-model="form[f.key]"
-                            :type="fieldInputType(f.key)"
+                            type="text"
                             @input="markTouched(f.key)"
                             @change="markTouched(f.key)"
                             :class="[
@@ -435,6 +453,12 @@ const REQUIRED_FIELD_KEYS = new Set([
     'gms',
     'gm_pct',
 ]);
+const DATE_FIELD_KEYS = new Set([
+    'entry_date',
+    'regularization_date',
+    'project_release_date',
+    'company_resign_date',
+]);
 function emptyForm() {
     const o = {};
     FORM_FIELDS.forEach((f) => { o[f.key] = ''; });
@@ -448,6 +472,13 @@ function parseAmountCell(str) {
     const n = parseFloat(s);
     return Number.isFinite(n) ? n : NaN;
 }
+function normalizeAmountText(str) {
+    return String(str || '').replace(/[¥￥,\s\u00a0]/g, '').trim();
+}
+function isValidSalaryAmountInput(raw) {
+    const normalized = normalizeAmountText(raw);
+    return /^\d{4,6}$/.test(normalized);
+}
 /** 合计金额：四舍五入到元，不显示小数 */
 function formatYuanInteger(n) {
     if (!Number.isFinite(n)) return '—';
@@ -460,6 +491,47 @@ function displayAmountInteger(str) {
     const n = parseAmountCell(str);
     if (!Number.isFinite(n)) return String(str);
     return formatYuanInteger(n);
+}
+function displayRosterDate(str) {
+    const s = String(str || '').trim();
+    if (!s) return '';
+    const m = s.match(/^(\d{4})\D(\d{1,2})\D(\d{1,2})$/);
+    if (!m) return s;
+    const y = m[1];
+    const moNum = parseInt(m[2], 10);
+    const dNum = parseInt(m[3], 10);
+    if (!Number.isFinite(moNum) || !Number.isFinite(dNum)) return s;
+    const mo = String(moNum).padStart(2, '0');
+    const d = String(dNum).padStart(2, '0');
+    return `${y}/${mo}/${d}`;
+}
+function todayInputDate() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+function normalizeDateForInput(raw, fallbackTodayIfEmpty = false) {
+    const s = String(raw || '').trim();
+    if (!s) return fallbackTodayIfEmpty ? todayInputDate() : '';
+    const m = s.match(/^(\d{4})\D?(\d{1,2})\D?(\d{1,2})$/);
+    if (!m) return s;
+    const y = m[1];
+    const mo = String(parseInt(m[2], 10)).padStart(2, '0');
+    const d = String(parseInt(m[3], 10)).padStart(2, '0');
+    if (mo === 'NaN' || d === 'NaN') return s;
+    return `${y}-${mo}-${d}`;
+}
+function isValidGmPctInput(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return true;
+    const normalized = s.replace('％', '%');
+    if (normalized.includes('%')) {
+        return /^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%$/.test(normalized);
+    }
+    const n = parseFloat(normalized);
+    return Number.isFinite(n) && n >= 0 && n <= 100;
 }
 /** 比率转百分比展示，与行内「79.55%」形式一致 */
 function formatRatioAsPercent(ratio) {
@@ -669,11 +741,11 @@ createApp({
             const contact = String(form.contact_info || '').trim();
             if (contact && !/^\d{11}$/.test(contact)) return true;
             const quote = String(form.monthly_quote_tax || '').trim();
-            if (quote && !/^\d{4,6}$/.test(quote)) return true;
+            if (quote && !isValidSalaryAmountInput(quote)) return true;
             const preSalary = String(form.pre_tax_salary || '').trim();
-            if (preSalary && !/^\d{4,6}$/.test(preSalary)) return true;
+            if (preSalary && !isValidSalaryAmountInput(preSalary)) return true;
             const gmPct = String(form.gm_pct || '').trim();
-            if (gmPct && !/^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%$/.test(gmPct)) return true;
+            if (gmPct && !isValidGmPctInput(gmPct)) return true;
             return false;
         });
         const hasBlockingErrors = computed(() => {
@@ -696,14 +768,14 @@ createApp({
             if (key === 'contact_info' && v && !/^\d{11}$/.test(v)) {
                 return '联系方式必须为11位数字';
             }
-            if (key === 'monthly_quote_tax' && v && !/^\d{4,6}$/.test(v)) {
-                return '月报价(含税)必须为4-6位数字';
+            if (key === 'monthly_quote_tax' && v && !isValidSalaryAmountInput(v)) {
+                return '月报价(含税)必须为4-6位数字（可带逗号）';
             }
-            if (key === 'pre_tax_salary' && v && !/^\d{4,6}$/.test(v)) {
-                return '税前工资必须为4-6位数字';
+            if (key === 'pre_tax_salary' && v && !isValidSalaryAmountInput(v)) {
+                return '税前工资必须为4-6位数字（可带逗号）';
             }
-            if (key === 'gm_pct' && v && !/^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%$/.test(v)) {
-                return 'GM%必须为百分比格式（如 12% 或 12.5%）';
+            if (key === 'gm_pct' && v && !isValidGmPctInput(v)) {
+                return 'GM%需为0-100（如 12、12.5、12% 或 12.5%）';
             }
             return '';
         };
@@ -713,22 +785,26 @@ createApp({
             }
             return 'text';
         };
+        const clearDateField = (key) => {
+            form[key] = '';
+            markTouched(key);
+        };
         const validateBusinessFields = () => {
             const contact = String(form.contact_info || '').trim();
             if (contact && !/^\d{11}$/.test(contact)) {
                 return '联系方式必须为11位数字';
             }
             const quote = String(form.monthly_quote_tax || '').trim();
-            if (quote && !/^\d{4,6}$/.test(quote)) {
-                return '月报价(含税)必须为4-6位数字';
+            if (quote && !isValidSalaryAmountInput(quote)) {
+                return '月报价(含税)必须为4-6位数字（可带逗号）';
             }
             const preSalary = String(form.pre_tax_salary || '').trim();
-            if (preSalary && !/^\d{4,6}$/.test(preSalary)) {
-                return '税前工资必须为4-6位数字';
+            if (preSalary && !isValidSalaryAmountInput(preSalary)) {
+                return '税前工资必须为4-6位数字（可带逗号）';
             }
             const gmPct = String(form.gm_pct || '').trim();
-            if (gmPct && !/^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%$/.test(gmPct)) {
-                return 'GM%必须为百分比格式（如 12% 或 12.5%）';
+            if (gmPct && !isValidGmPctInput(gmPct)) {
+                return 'GM%需为0-100（如 12、12.5、12% 或 12.5%）';
             }
             return '';
         };
@@ -763,7 +839,12 @@ createApp({
         };
         const openEdit = (row) => {
             editingId.value = row.id;
-            FORM_FIELDS.forEach((f) => { form[f.key] = row[f.key] != null ? String(row[f.key]) : ''; });
+            FORM_FIELDS.forEach((f) => {
+                const raw = row[f.key] != null ? String(row[f.key]) : '';
+                form[f.key] = DATE_FIELD_KEYS.has(f.key)
+                    ? normalizeDateForInput(raw, false)
+                    : raw;
+            });
             clearTouched();
             showForm.value = true;
         };
@@ -780,6 +861,10 @@ createApp({
             }
             const payload = {};
             FORM_FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
+            // 提交前规范化金额文本，兼容用户输入千分位/货币符号
+            payload.monthly_quote_tax = normalizeAmountText(payload.monthly_quote_tax);
+            payload.pre_tax_salary = normalizeAmountText(payload.pre_tax_salary);
+            payload.gms = normalizeAmountText(payload.gms);
             const url = editingId.value
                 ? `/api/roster/${editingId.value}`
                 : `/api/clients/${CLIENT_ID}/roster`;
@@ -946,7 +1031,7 @@ createApp({
             showDel, fileInput, rosterFooter, isZNTX, showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors,
             openAdd, openEdit, saveForm, confirmDelete, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, fieldInputType, markTouched, getFieldError,
-            displayAmountInteger,
+            clearDateField, displayAmountInteger, displayRosterDate,
         };
     },
 }).mount('#roster-detail-app');

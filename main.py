@@ -150,6 +150,33 @@ class DeliverySettlementEntry(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class DeliveryPipelineEntry(Base):
+    __tablename__ = "delivery_pipeline_entries"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    resume_time = Column(String, default="")
+    date = Column(String, default="")
+    position = Column(String, default="")
+    full_name = Column(String, default="")
+    domain = Column(String, default="")
+    years_experience = Column(String, default="")
+    region = Column(String, default="")
+    phone = Column(String, default="")
+    education = Column(String, default="")
+    recruiter = Column(String, default="")
+    resume_screening = Column(String, default="")
+    interviewed = Column(String, default="")
+    interview_time = Column(String, default="")
+    interviewer = Column(String, default="")
+    result = Column(String, default="")
+    got_offer = Column(String, default="")
+    onboarding_time = Column(String, default="")
+    onboarded = Column(String, default="")
+    status_note = Column(String, default="")
+    serial_no = Column(String, default="")
+    created_at = Column(DateTime, default=datetime.now)
+
+
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base.metadata.create_all(bind=engine)
@@ -296,6 +323,65 @@ def _settlement_entry_to_dict(e: DeliverySettlementEntry) -> Dict[str, str]:
     }
 
 
+def _pipeline_entry_to_dict(e: DeliveryPipelineEntry) -> Dict[str, str]:
+    return {
+        "id": e.id,
+        "client_id": e.client_id,
+        "resume_time": e.resume_time or "",
+        "date": e.date or "",
+        "position": e.position or "",
+        "full_name": e.full_name or "",
+        "domain": e.domain or "",
+        "years_experience": e.years_experience or "",
+        "region": e.region or "",
+        "phone": e.phone or "",
+        "education": e.education or "",
+        "recruiter": e.recruiter or "",
+        "resume_screening": e.resume_screening or "",
+        "interviewed": e.interviewed or "",
+        "interview_time": e.interview_time or "",
+        "interviewer": e.interviewer or "",
+        "result": e.result or "",
+        "got_offer": e.got_offer or "",
+        "onboarding_time": e.onboarding_time or "",
+        "onboarded": e.onboarded or "",
+        "status_note": e.status_note or "",
+        "serial_no": e.serial_no or "",
+    }
+
+
+def _normalize_pipeline_payload(d: Dict[str, Any]) -> Dict[str, str]:
+    keys = [
+        "resume_time",
+        "date",
+        "position",
+        "full_name",
+        "domain",
+        "years_experience",
+        "region",
+        "phone",
+        "education",
+        "recruiter",
+        "resume_screening",
+        "interviewed",
+        "interview_time",
+        "interviewer",
+        "result",
+        "got_offer",
+        "onboarding_time",
+        "onboarded",
+        "status_note",
+        "serial_no",
+    ]
+    out: Dict[str, str] = {}
+    for k in keys:
+        v = d.get(k, "")
+        if v is None:
+            v = ""
+        out[k] = str(v).strip()
+    return out
+
+
 def _normalize_settlement_payload(d: Dict[str, Any]) -> Dict[str, str]:
     keys = [
         "serial_no",
@@ -346,6 +432,17 @@ def _resequence_settlement_serial_no(db: Session, client_id: int) -> None:
         db.query(DeliverySettlementEntry)
         .filter(DeliverySettlementEntry.client_id == client_id)
         .order_by(DeliverySettlementEntry.id)
+        .all()
+    )
+    for idx, row in enumerate(rows, start=1):
+        row.serial_no = str(idx)
+
+
+def _resequence_pipeline_serial_no(db: Session, client_id: int) -> None:
+    rows = (
+        db.query(DeliveryPipelineEntry)
+        .filter(DeliveryPipelineEntry.client_id == client_id)
+        .order_by(DeliveryPipelineEntry.id)
         .all()
     )
     for idx, row in enumerate(rows, start=1):
@@ -456,6 +553,68 @@ def _write_roster_backup_csv(client: Client, rows: List[RosterEntry]) -> str:
         for e in rows:
             d = _roster_entry_to_dict(e)
             writer.writerow([d.get(_CHINESE_ROSTER_HEADER_MAP[h], "") for h in export_headers])
+    return name
+
+
+PIPELINE_EXPORT_HEADERS = [
+    "简历时间",
+    "日期",
+    "岗位",
+    "姓名",
+    "领域",
+    "年限",
+    "地域",
+    "电话",
+    "学历",
+    "招聘",
+    "简历筛选",
+    "是否面试",
+    "面试时间",
+    "面试官",
+    "结果",
+    "是否拿offer",
+    "入职时间",
+    "是否入职",
+    "情况",
+    "序号",
+]
+
+
+PIPELINE_HEADER_MAP = {
+    "简历时间": "resume_time",
+    "日期": "date",
+    "岗位": "position",
+    "姓名": "full_name",
+    "领域": "domain",
+    "年限": "years_experience",
+    "地域": "region",
+    "电话": "phone",
+    "学历": "education",
+    "招聘": "recruiter",
+    "简历筛选": "resume_screening",
+    "是否面试": "interviewed",
+    "面试时间": "interview_time",
+    "面试官": "interviewer",
+    "结果": "result",
+    "是否拿offer": "got_offer",
+    "入职时间": "onboarding_time",
+    "是否入职": "onboarded",
+    "情况": "status_note",
+    "序号": "serial_no",
+}
+
+
+def _write_pipeline_backup_csv(client: Client, rows: List[DeliveryPipelineEntry]) -> str:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = "".join(ch for ch in client.name if ch.isalnum() or ch in (" ", "-", "_")).strip() or f"client_{client.id}"
+    name = f"pipeline_backup_{safe_name}__cid{client.id}__{ts}.csv"
+    path = os.path.join(BACKUP_DIR, name)
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(PIPELINE_EXPORT_HEADERS)
+        for e in rows:
+            d = _pipeline_entry_to_dict(e)
+            writer.writerow([d.get(PIPELINE_HEADER_MAP[h], "") for h in PIPELINE_EXPORT_HEADERS])
     return name
 
 
@@ -659,18 +818,24 @@ def _resequence_all_rosters_once() -> None:
 
 
 def _validate_roster_business_fields(data: Dict[str, str]) -> None:
+    def _normalize_amount_text(v: str) -> str:
+        return re.sub(r"[¥￥,\s\u00a0]", "", str(v or "").strip())
+
     contact = str(data.get("contact_info", "")).strip()
     if contact and not re.fullmatch(r"\d{11}", contact):
         raise HTTPException(status_code=400, detail="联系方式必须为11位数字")
 
     for k, label in (("monthly_quote_tax", "月报价(含税)"), ("pre_tax_salary", "税前工资")):
-        v = str(data.get(k, "")).strip()
+        v = _normalize_amount_text(data.get(k, ""))
         if v and not re.fullmatch(r"\d{4,6}", v):
-            raise HTTPException(status_code=400, detail=f"{label}必须为4-6位数字")
+            raise HTTPException(status_code=400, detail=f"{label}必须为4-6位数字（可带逗号）")
 
     gm_pct = str(data.get("gm_pct", "")).strip()
-    if gm_pct and not re.fullmatch(r"(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%", gm_pct):
-        raise HTTPException(status_code=400, detail="GM%必须为百分比格式（如 12% 或 12.5%）")
+    gm_pct_norm = gm_pct.replace("％", "%")
+    gm_pct_with_symbol_ok = re.fullmatch(r"(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)%", gm_pct_norm)
+    gm_pct_plain_ok = re.fullmatch(r"(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)", gm_pct_norm)
+    if gm_pct and not (gm_pct_with_symbol_ok or gm_pct_plain_ok):
+        raise HTTPException(status_code=400, detail="GM%需为0-100（如 12、12.5、12% 或 12.5%）")
 
 
 ROSTER_CREATE_REQUIRED_FIELDS = (
@@ -1322,6 +1487,306 @@ async def roster_restore_latest_backup(client_id: int, db: Session = Depends(get
             client_id=client_id,
             operator=user,
             action=f"花名册从备份恢复：{latest}，清空 {cleared_existing} 行，恢复 {restored_rows} 行",
+        )
+    )
+    db.commit()
+    return {"backup_file": latest, "cleared_existing": cleared_existing, "restored_rows": restored_rows}
+
+
+@app.get("/api/clients/{client_id}/delivery/pipeline")
+async def pipeline_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    rows = (
+        db.query(DeliveryPipelineEntry)
+        .filter(DeliveryPipelineEntry.client_id == client_id)
+        .order_by(DeliveryPipelineEntry.id)
+        .all()
+    )
+    return [_pipeline_entry_to_dict(r) for r in rows]
+
+
+@app.post("/api/clients/{client_id}/delivery/pipeline")
+async def pipeline_create_row(
+    client_id: int,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    data = _normalize_pipeline_payload(body if isinstance(body, dict) else {})
+    max_row = (
+        db.query(DeliveryPipelineEntry)
+        .filter(DeliveryPipelineEntry.client_id == client_id)
+        .order_by(desc(DeliveryPipelineEntry.id))
+        .first()
+    )
+    if max_row and str(max_row.serial_no or "").isdigit():
+        data["serial_no"] = str(int(max_row.serial_no) + 1)
+    else:
+        data["serial_no"] = "1"
+    entry = DeliveryPipelineEntry(client_id=client_id, **data)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    db.add(AuditLog(client_id=client_id, operator=user, action=f"管道数据新增行 id={entry.id}"))
+    db.commit()
+    return _pipeline_entry_to_dict(entry)
+
+
+@app.put("/api/delivery/pipeline/row/{row_id}")
+async def pipeline_update_row(
+    row_id: int,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    entry = db.query(DeliveryPipelineEntry).filter(DeliveryPipelineEntry.id == row_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    data = _normalize_pipeline_payload(body if isinstance(body, dict) else {})
+    for k, v in data.items():
+        if k == "serial_no":
+            continue
+        setattr(entry, k, v)
+    db.commit()
+    db.refresh(entry)
+    db.add(AuditLog(client_id=entry.client_id, operator=user, action=f"管道数据修改行 id={row_id}"))
+    db.commit()
+    return _pipeline_entry_to_dict(entry)
+
+
+@app.delete("/api/delivery/pipeline/row/{row_id}")
+async def pipeline_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    entry = db.query(DeliveryPipelineEntry).filter(DeliveryPipelineEntry.id == row_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    cid = entry.client_id
+    db.delete(entry)
+    db.flush()
+    _resequence_pipeline_serial_no(db, cid)
+    db.commit()
+    db.add(AuditLog(client_id=cid, operator=user, action=f"管道数据删除行 id={row_id}"))
+    db.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/api/clients/{client_id}/delivery/pipeline/import")
+async def pipeline_import_csv(
+    client_id: int,
+    file: UploadFile = File(...),
+    confirm: str = Form(""),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    raw = await file.read()
+    if len(raw) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="文件超过大小限制")
+    if str(confirm).strip().upper() != "CONFIRM":
+        raise HTTPException(status_code=400, detail="导入前请确认覆盖操作（confirm=CONFIRM）")
+    text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV 缺少表头，无法导入")
+
+    def _norm_header(h: str) -> str:
+        return str(h or "").replace("\ufeff", "").replace(" ", "").replace("\u3000", "").strip().lower()
+
+    header_alias = {
+        "姓名": "full_name",
+        "候选人": "full_name",
+        "候选人姓名": "full_name",
+        "工作地": "region",
+        "地区": "region",
+        "城市": "region",
+        "手机号": "phone",
+        "联系电话": "phone",
+        "工作年限": "years_experience",
+        "经验年限": "years_experience",
+        "筛选结果": "resume_screening",
+        "简历筛选结果": "resume_screening",
+        "是否拿offer": "got_offer",
+        "是否接offer": "got_offer",
+        "是否拿到offer": "got_offer",
+        "拿offer": "got_offer",
+        "状态": "status_note",
+        "备注": "status_note",
+    }
+    norm_map = {_norm_header(hk): fk for hk, fk in PIPELINE_HEADER_MAP.items()}
+    for alias_hk, fk in header_alias.items():
+        norm_map[_norm_header(alias_hk)] = fk
+
+    matched_columns = {}
+    for original_h in reader.fieldnames:
+        fk = norm_map.get(_norm_header(original_h))
+        if fk and fk not in matched_columns:
+            matched_columns[fk] = original_h
+
+    matched_non_serial = [k for k in matched_columns.keys() if k != "serial_no"]
+    if not matched_non_serial:
+        raise HTTPException(
+            status_code=400,
+            detail=f"CSV 表头未匹配到管道数据字段（仅匹配到序号或未匹配）。检测到表头: {', '.join([str(h or '') for h in reader.fieldnames])}",
+        )
+
+    pending_rows: List[Dict[str, str]] = []
+    total_rows = 0
+    skipped_empty_rows = 0
+    skipped_empty_row_numbers: List[int] = []
+    for row in reader:
+        total_rows += 1
+        csv_line_no = total_rows + 1  # +1 for header line
+        mapped = {fk: "" for fk in PIPELINE_HEADER_MAP.values()}
+        for fk, original_h in matched_columns.items():
+            mapped[fk] = str(row.get(original_h, "") or "").strip()
+        mapped["serial_no"] = ""
+        if not any(mapped.get(k, "") for k in matched_non_serial):
+            skipped_empty_rows += 1
+            if len(skipped_empty_row_numbers) < 20:
+                skipped_empty_row_numbers.append(csv_line_no)
+            continue
+
+        pending_rows.append(mapped)
+
+    existing_rows = (
+        db.query(DeliveryPipelineEntry)
+        .filter(DeliveryPipelineEntry.client_id == client_id)
+        .order_by(DeliveryPipelineEntry.id)
+        .all()
+    )
+    cleared_existing = len(existing_rows)
+    backup_file = _write_pipeline_backup_csv(c, existing_rows) if cleared_existing else ""
+    if cleared_existing:
+        db.query(DeliveryPipelineEntry).filter(DeliveryPipelineEntry.client_id == client_id).delete()
+        db.commit()
+
+    imported = 0
+    for mapped in pending_rows:
+        entry = DeliveryPipelineEntry(client_id=client_id, **mapped)
+        db.add(entry)
+        imported += 1
+    _resequence_pipeline_serial_no(db, client_id)
+    db.commit()
+    db.add(
+        AuditLog(
+            client_id=client_id,
+            operator=user,
+            action=(
+                f"管道数据 CSV 导入前备份 {cleared_existing} 行到 {backup_file or '无备份'}，"
+                f"清空 {cleared_existing} 行，CSV 总行数 {total_rows}，"
+                f"空行跳过 {skipped_empty_rows}，导入新增 {imported} 行"
+            ),
+        )
+    )
+    db.commit()
+    return {
+        "cleared_existing": cleared_existing,
+        "backup_file": backup_file,
+        "imported": imported,
+        "total_rows": total_rows,
+        "skipped_empty_rows": skipped_empty_rows,
+        "skipped_rows": skipped_empty_rows,
+        "skipped_empty_row_numbers_preview": skipped_empty_row_numbers,
+        "skipped_empty_row_numbers_truncated": skipped_empty_rows > len(skipped_empty_row_numbers),
+        "matched_columns_count": len(matched_non_serial),
+        "matched_columns": sorted(matched_non_serial),
+    }
+
+
+@app.post("/api/delivery/pipeline/import")
+async def pipeline_import_csv_global(
+    client_id: int = Form(...),
+    file: UploadFile = File(...),
+    confirm: str = Form(""),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    return await pipeline_import_csv(
+        client_id=client_id,
+        file=file,
+        confirm=confirm,
+        db=db,
+        user=user,
+    )
+
+
+@app.get("/api/clients/{client_id}/delivery/pipeline/export")
+async def pipeline_export_csv(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    rows = (
+        db.query(DeliveryPipelineEntry)
+        .filter(DeliveryPipelineEntry.client_id == client_id)
+        .order_by(DeliveryPipelineEntry.id)
+        .all()
+    )
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output)
+    writer.writerow(PIPELINE_EXPORT_HEADERS)
+    for e in rows:
+        d = _pipeline_entry_to_dict(e)
+        writer.writerow([d.get(PIPELINE_HEADER_MAP[h], "") for h in PIPELINE_EXPORT_HEADERS])
+    response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    _set_csv_download_headers(
+        response,
+        chinese_filename=f"{c.name}_管道数据_{ts}.csv",
+        ascii_base=f"client_{client_id}_pipeline_{ts}",
+    )
+    return response
+
+
+@app.get("/api/clients/{client_id}/delivery/pipeline/logs")
+async def pipeline_logs(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.client_id == client_id)
+        .filter(AuditLog.action.like("管道数据%"))
+        .order_by(desc(AuditLog.created_at))
+        .all()
+    )
+    return logs
+
+
+@app.post("/api/clients/{client_id}/delivery/pipeline/restore/latest")
+async def pipeline_restore_latest_backup(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    latest = _pick_latest_backup("pipeline_backup_", client_id=client_id)
+    if not latest:
+        raise HTTPException(status_code=404, detail="未找到该客户管道数据备份文件")
+    backup_path = os.path.join(BACKUP_DIR, latest)
+    with open(backup_path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    cleared_existing = db.query(DeliveryPipelineEntry).filter(DeliveryPipelineEntry.client_id == client_id).count()
+    if cleared_existing:
+        db.query(DeliveryPipelineEntry).filter(DeliveryPipelineEntry.client_id == client_id).delete()
+        db.commit()
+    restored_rows = 0
+    for row in rows:
+        mapped = {fk: str(row.get(hk, "") or "").strip() for hk, fk in PIPELINE_HEADER_MAP.items()}
+        mapped["serial_no"] = ""
+        if not any(mapped.values()):
+            continue
+        db.add(DeliveryPipelineEntry(client_id=client_id, **mapped))
+        restored_rows += 1
+    _resequence_pipeline_serial_no(db, client_id)
+    db.commit()
+    db.add(
+        AuditLog(
+            client_id=client_id,
+            operator=user,
+            action=f"管道数据从备份恢复：{latest}，清空 {cleared_existing} 行，恢复 {restored_rows} 行",
         )
     )
     db.commit()
