@@ -10,7 +10,24 @@
         <div class="mb-8">
             <p class="text-sm text-gray-500 mb-1">客户管理</p>
             <h1 class="text-2xl md:text-3xl font-bold text-gray-900 tracking-tight">花名册</h1>
-            <p class="mt-2 text-gray-600 max-w-2xl">选择客户进入该客户下的员工花名册；表头与业务模板一致，数据按客户独立保存。</p>
+            <p class="mt-2 text-gray-600 max-w-2xl">先选择查看范围：可进入整体花名册，也可按客户查看各业务花名册。</p>
+        </div>
+
+        <div class="mb-4">
+            <a
+                href="/customers/roster/0"
+                class="group flex flex-col rounded-xl border border-blue-200 bg-blue-50/60 p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md"
+            >
+                <div class="flex items-start justify-between gap-2">
+                    <h2 class="text-lg font-semibold text-blue-900 group-hover:text-blue-700">整体花名册</h2>
+                    <span class="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">全部客户</span>
+                </div>
+                <p class="mt-1 text-sm text-blue-700">跨客户统一查看、筛选、导入导出与回滚。</p>
+                <div class="mt-4 flex items-center text-sm font-medium text-blue-600">
+                    进入整体花名册
+                    <svg class="ml-1 h-4 w-4 transition group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                </div>
+            </a>
         </div>
 
         <div v-if="loading" class="rounded-xl border border-gray-200 bg-white p-12 text-center text-gray-500">加载中…</div>
@@ -30,7 +47,7 @@
                 </div>
                 <p class="mt-1 text-sm text-gray-500">负责人：{{ c.owner }}</p>
                 <div class="mt-4 flex items-center text-sm font-medium text-blue-600">
-                    进入花名册
+                    进入客户花名册
                     <svg class="ml-1 h-4 w-4 transition group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                 </div>
             </a>

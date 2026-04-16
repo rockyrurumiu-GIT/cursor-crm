@@ -3,6 +3,9 @@
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
+    .delivery-table-wrap.crm-table-scroll {
+        padding-bottom: 22px;
+    }
     .pipeline-table th,
     .pipeline-table td {
         white-space: nowrap;
@@ -53,6 +56,10 @@
         word-break: break-word;
     }
     .pipeline-table th:nth-child(20), .pipeline-table td:nth-child(20) { min-width: 6rem; } /* 操作 */
+    .pipeline-table tbody tr:last-child td,
+    .settlement-table tbody tr:last-child td {
+        border-bottom: 1px solid #d1d5db;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -82,7 +89,7 @@
                 </button>
             </div>
             <h2 class="text-sm font-semibold text-gray-700">简历raw data</h2>
-            <div ref="pipelineScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
+            <div ref="pipelineScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
             <table class="crm-table pipeline-table min-w-[2400px]">
                 <thead>
                     <tr>
@@ -145,7 +152,7 @@
             <div class="flex justify-end">
                 <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openAdd">新增</button>
             </div>
-            <div class="border border-gray-200 rounded-lg crm-table-scroll" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
+            <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
                 <table class="crm-table settlement-table min-w-[1900px]">
                 <thead>
                     <tr>

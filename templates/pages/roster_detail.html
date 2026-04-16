@@ -14,9 +14,8 @@
     .roster-filter-row {
         display: flex;
         flex-wrap: nowrap;
-        gap: 6px;
-        overflow-x: auto;
-        overflow-y: hidden;
+        gap: 4px;
+        overflow: hidden;
         padding-bottom: 2px;
     }
     .roster-filter-item {
@@ -24,14 +23,18 @@
     }
     .roster-filter-control {
         height: 36px;
-        min-width: 104px;
+        min-width: 80px;
         border-radius: 6px;
         font-size: 12px;
         line-height: 1.1;
     }
+    .roster-filter-number {
+        min-width: 96px;
+        width: 96px;
+    }
     .roster-filter-date {
         height: 36px;
-        min-width: 150px;
+        min-width: 132px;
         border-radius: 6px;
     }
     .roster-filter-date-label {
@@ -52,6 +55,8 @@
         height: 36px;
         font-size: 12px;
         white-space: nowrap;
+        padding-left: 8px;
+        padding-right: 8px;
     }
 </style>
 {% endblock %}
@@ -61,12 +66,13 @@
     <div class="max-w-[100vw] mx-auto px-3 py-6 md:px-6">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
             <div>
-                <a href="/customers/roster" class="text-sm text-blue-600 hover:underline">← 返回花名册客户列表</a>
+                <a href="/customers" class="text-sm text-blue-600 hover:underline">← 返回客户列表</a>
                 <h1 class="mt-2 text-xl md:text-2xl font-bold text-gray-900">
                     {{ brief.name || '加载中…' }}
                     <span class="text-gray-400 font-normal text-base">· 花名册</span>
                 </h1>
                 <p class="text-sm text-gray-500 mt-1" v-if="brief.owner">负责人 {{ brief.owner }}</p>
+                <p class="text-sm text-gray-500 mt-1">总条目 {{ rows.length }} 条<span v-if="filteredRows.length !== rows.length">（筛选后 {{ filteredRows.length }} 条）</span></p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <button type="button" @click="openAdd" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增行</button>
@@ -86,9 +92,9 @@
                 <option value="">工作地（全部）</option>
                 <option v-for="v in workLocationOptions" :key="`wl-${v}`" :value="v">{{ v }}</option>
             </select>
-            <select v-if="hasFilterField('businessLine')" v-model="filters.businessLine" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
-                <option value="">业务线（全部）</option>
-                <option v-for="v in businessLineOptions" :key="`bl-${v}`" :value="v">{{ v }}</option>
+            <select v-if="hasFilterField('customerName')" v-model="filters.customerName" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
+                <option value="">客户（全部）</option>
+                <option v-for="v in customerNameOptions" :key="`cn-${v}`" :value="v">{{ v }}</option>
             </select>
             <div v-if="hasFilterField('entryDateBefore')" class="roster-filter-item roster-filter-date flex items-center border border-gray-300 bg-white">
                 <span class="roster-filter-date-label">入职时间早于</span>
@@ -98,17 +104,15 @@
                 <span class="roster-filter-date-label">入职时间晚于</span>
                 <input v-model="filters.entryDateAfter" type="date" class="w-full h-full px-1 text-gray-800 border-0 rounded-r focus:outline-none roster-filter-date-input" />
             </div>
-            <input v-if="hasFilterField('gmsBelow')" v-model="filters.gmsBelow" type="number" step="0.01" placeholder="GM$ 小于" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800" />
-            <input v-if="hasFilterField('gmPctBelow')" v-model="filters.gmPctBelow" type="number" step="0.01" placeholder="GM% 小于" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800" />
-            <select v-if="hasFilterField('employeePlus1')" v-model="filters.employeePlus1" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
-                <option value="">员工+1（全部）</option>
-                <option v-for="v in employeePlus1Options" :key="`ep1-${v}`" :value="v">{{ v }}</option>
+            <input v-if="hasFilterField('gmsBelow')" v-model="filters.gmsBelow" type="number" step="0.01" placeholder="GM$ 小于" class="roster-filter-item roster-filter-control roster-filter-number border border-gray-300 bg-white px-2 text-gray-800" />
+            <input v-if="hasFilterField('gmPctBelow')" v-model="filters.gmPctBelow" type="number" step="0.01" placeholder="GM% 小于" class="roster-filter-item roster-filter-control roster-filter-number border border-gray-300 bg-white px-2 text-gray-800" />
+            <input v-if="hasFilterField('preTaxSalaryAbove')" v-model="filters.preTaxSalaryAbove" type="number" step="1" placeholder="税前工资大于" class="roster-filter-item roster-filter-control roster-filter-number border border-gray-300 bg-white px-2 text-gray-800" />
+            <input v-if="hasFilterField('preTaxSalaryBelow')" v-model="filters.preTaxSalaryBelow" type="number" step="1" placeholder="税前工资小于" class="roster-filter-item roster-filter-control roster-filter-number border border-gray-300 bg-white px-2 text-gray-800" />
+            <select v-if="hasFilterField('positionTitle')" v-model="filters.positionTitle" class="roster-filter-item roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
+                <option value="">岗位（全部）</option>
+                <option v-for="v in positionTitleOptions" :key="`pt-${v}`" :value="v">{{ v }}</option>
             </select>
             <div class="roster-filter-item roster-filter-actions">
-                <select v-if="hasFilterField('onboardingChannel') && onboardingChannelOptions.length" v-model="filters.onboardingChannel" class="roster-filter-control border border-gray-300 bg-white px-2 text-gray-800">
-                    <option value="">入职渠道（全部）</option>
-                    <option v-for="v in onboardingChannelOptions" :key="`oc-${v}`" :value="v">{{ v }}</option>
-                </select>
                 <button type="button" class="roster-filter-reset shrink-0 rounded border border-gray-300 bg-white px-2 text-gray-700 hover:bg-gray-50" @click="clearFilters">重置</button>
             </div>
         </div>
@@ -121,7 +125,7 @@
                             <th class="crm-th min-w-[3.25rem]">序号</th>
                             <th class="crm-th min-w-[4.5rem]">在职情况</th>
                             <th class="crm-th min-w-[5.5rem]">姓名</th>
-                            <th v-if="isZNTX" class="crm-th min-w-[6rem]">中诺工号</th>
+                            <th v-if="isZNTX" class="crm-th min-w-[6rem]">工号</th>
                             <th class="crm-th min-w-[8rem]">联系方式</th>
                             <th class="crm-th min-w-[5rem]">客户</th>
                             <th class="crm-th min-w-[4.5rem]">工作地</th>
@@ -150,8 +154,8 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="row in filteredRows" :key="row.id" class="group border-b border-gray-100/90 bg-white transition-colors duration-150 hover:bg-stone-50/80">
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top tabular-nums">{{ row.serial_no }}</td>
+                        <tr v-for="(row, idx) in filteredRows" :key="row.id" class="group border-b border-gray-100/90 bg-white transition-colors duration-150 hover:bg-stone-50/80">
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top tabular-nums">{{ IS_GLOBAL_ROSTER ? (idx + 1) : row.serial_no }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top">{{ row.employment_status }}</td>
                             <td class="crm-td crm-name-cell px-3 py-3 whitespace-nowrap align-top tracking-tight">{{ row.full_name }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.zntx_staff_no }}</td>
@@ -376,6 +380,7 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 <script>
 const { createApp, ref, onMounted, reactive, computed } = Vue;
 const CLIENT_ID = window.__ROSTER_CLIENT_ID__;
+const IS_GLOBAL_ROSTER = !CLIENT_ID || Number(CLIENT_ID) === 0;
 const STANDARD_FORM_FIELDS = [
     { key: 'serial_no', label: '序号' },
     { key: 'employment_status', label: '在职情况' },
@@ -404,7 +409,7 @@ const ZNTX_FORM_FIELDS = [
     { key: 'serial_no', label: '序号' },
     { key: 'employment_status', label: '在职情况' },
     { key: 'full_name', label: '姓名' },
-    { key: 'zntx_staff_no', label: '中诺工号' },
+    { key: 'zntx_staff_no', label: '工号' },
     { key: 'contact_info', label: '联系方式' },
     { key: 'customer_name', label: '客户' },
     { key: 'work_location', label: '工作地' },
@@ -432,7 +437,7 @@ const ZNTX_FORM_FIELDS = [
 ];
 const FORM_FIELDS = [
     ...STANDARD_FORM_FIELDS,
-    { key: 'zntx_staff_no', label: '中诺工号' },
+    { key: 'zntx_staff_no', label: '工号' },
     { key: 'zntx_onboarding_channel', label: '入职渠道' },
     { key: 'zntx_attendance_checkin', label: '打卡' },
     { key: 'zntx_attendance_makeup', label: '补卡' },
@@ -552,13 +557,14 @@ createApp({
         const filters = reactive({
             employmentStatus: '',
             workLocation: '',
-            businessLine: '',
+            customerName: '',
             entryDateBefore: '',
             entryDateAfter: '',
             gmsBelow: '',
             gmPctBelow: '',
-            employeePlus1: '',
-            onboardingChannel: '',
+            positionTitle: '',
+            preTaxSalaryAbove: '',
+            preTaxSalaryBelow: '',
         });
         const showLogs = ref(false);
         const logsLoading = ref(false);
@@ -566,6 +572,7 @@ createApp({
         const touchedFields = reactive({});
         const authHeader = () => window.crmAuthHeader();
         const isZNTX = computed(() => {
+            if (IS_GLOBAL_ROSTER) return true;
             const raw = String(brief.value?.name || '')
                 .replace(/\s+/g, '')
                 .replace(/[（）()]/g, '');
@@ -582,9 +589,8 @@ createApp({
         };
         const employmentStatusOptions = computed(() => uniqueOptions('employment_status'));
         const workLocationOptions = computed(() => uniqueOptions('work_location'));
-        const businessLineOptions = computed(() => uniqueOptions('business_line'));
-        const employeePlus1Options = computed(() => uniqueOptions('employee_plus1'));
-        const onboardingChannelOptions = computed(() => uniqueOptions('zntx_onboarding_channel'));
+        const customerNameOptions = computed(() => uniqueOptions('customer_name'));
+        const positionTitleOptions = computed(() => uniqueOptions('position_title'));
         const tableFieldKeys = computed(() => {
             const fields = isZNTX.value ? ZNTX_FORM_FIELDS : STANDARD_FORM_FIELDS;
             return new Set(fields.map((f) => f.key));
@@ -592,13 +598,14 @@ createApp({
         const FILTER_FIELD_MAP = {
             employmentStatus: 'employment_status',
             workLocation: 'work_location',
-            businessLine: 'business_line',
+            customerName: 'customer_name',
             entryDateBefore: 'entry_date',
             entryDateAfter: 'entry_date',
             gmsBelow: 'gms',
             gmPctBelow: 'gm_pct',
-            employeePlus1: 'employee_plus1',
-            onboardingChannel: 'zntx_onboarding_channel',
+            positionTitle: 'position_title',
+            preTaxSalaryAbove: 'pre_tax_salary',
+            preTaxSalaryBelow: 'pre_tax_salary',
         };
         const hasFilterField = (filterKey) => {
             const fieldKey = FILTER_FIELD_MAP[filterKey];
@@ -610,7 +617,7 @@ createApp({
             return rows.value.filter((row) => {
                 if (filters.employmentStatus && String(row.employment_status || '') !== filters.employmentStatus) return false;
                 if (filters.workLocation && hasFieldData('work_location') && ci(row.work_location) !== ci(filters.workLocation)) return false;
-                if (filters.businessLine && hasFieldData('business_line') && ci(row.business_line) !== ci(filters.businessLine)) return false;
+                if (filters.customerName && hasFieldData('customer_name') && ci(row.customer_name) !== ci(filters.customerName)) return false;
                 if (filters.entryDateBefore) {
                     const toDateKey = (v) => {
                         const s = String(v || '').trim();
@@ -665,11 +672,18 @@ createApp({
                     })();
                     if (Number.isFinite(limit) && (!Number.isFinite(p) || !(p < limit))) return false;
                 }
-                if (filters.employeePlus1 && hasFieldData('employee_plus1')) {
-                    if (ci(row.employee_plus1) !== ci(filters.employeePlus1)) return false;
+                if (String(filters.preTaxSalaryAbove).trim() !== '') {
+                    const limit = parseFloat(String(filters.preTaxSalaryAbove));
+                    const preSalary = parseAmountCell(row.pre_tax_salary);
+                    if (Number.isFinite(limit) && (!Number.isFinite(preSalary) || !(preSalary > limit))) return false;
                 }
-                if (filters.onboardingChannel && hasFieldData('zntx_onboarding_channel')) {
-                    if (ci(row.zntx_onboarding_channel) !== ci(filters.onboardingChannel)) return false;
+                if (String(filters.preTaxSalaryBelow).trim() !== '') {
+                    const limit = parseFloat(String(filters.preTaxSalaryBelow));
+                    const preSalary = parseAmountCell(row.pre_tax_salary);
+                    if (Number.isFinite(limit) && (!Number.isFinite(preSalary) || !(preSalary < limit))) return false;
+                }
+                if (filters.positionTitle && hasFieldData('position_title')) {
+                    if (ci(row.position_title) !== ci(filters.positionTitle)) return false;
                 }
                 return true;
             });
@@ -815,6 +829,10 @@ createApp({
             return Number.isFinite(n) ? String(n + 1) : '';
         };
         const loadBrief = () => {
+            if (IS_GLOBAL_ROSTER) {
+                brief.value = { name: '整体客户', owner: '' };
+                return;
+            }
             fetch(`/api/clients/${CLIENT_ID}/brief`, { headers: authHeader() })
                 .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
                 .then((d) => { brief.value = d; })
@@ -822,7 +840,8 @@ createApp({
         };
         const loadRows = () => {
             loading.value = true;
-            fetch(`/api/clients/${CLIENT_ID}/roster`, { headers: authHeader() })
+            const url = IS_GLOBAL_ROSTER ? '/api/roster' : `/api/clients/${CLIENT_ID}/roster`;
+            fetch(url, { headers: authHeader() })
                 .then((r) => r.json())
                 .then((d) => { rows.value = Array.isArray(d) ? d : []; })
                 .finally(() => { loading.value = false; });
@@ -867,7 +886,7 @@ createApp({
             payload.gms = normalizeAmountText(payload.gms);
             const url = editingId.value
                 ? `/api/roster/${editingId.value}`
-                : `/api/clients/${CLIENT_ID}/roster`;
+                : (IS_GLOBAL_ROSTER ? '/api/roster' : `/api/clients/${CLIENT_ID}/roster`);
             const method = editingId.value ? 'PUT' : 'POST';
             const r = await fetch(url, {
                 method,
@@ -908,7 +927,8 @@ createApp({
         const onImportFile = async (e) => {
             const f = e.target.files && e.target.files[0];
             if (!f) return;
-            const token = window.prompt('该操作会先备份并清空当前客户花名册，再导入新 CSV。\n请输入 CONFIRM 继续：', '');
+            const scopeLabel = IS_GLOBAL_ROSTER ? '整体花名册' : '当前客户花名册';
+            const token = window.prompt(`该操作会先备份并清空${scopeLabel}，再导入新 CSV。\n请输入 CONFIRM 继续：`, '');
             if (token == null) {
                 e.target.value = '';
                 return;
@@ -916,7 +936,8 @@ createApp({
             const fd = new FormData();
             fd.append('file', f);
             fd.append('confirm', token);
-            const r = await fetch(`/api/clients/${CLIENT_ID}/roster/import`, { method: 'POST', headers: authHeader(), body: fd });
+            const importUrl = IS_GLOBAL_ROSTER ? '/api/roster/import' : `/api/clients/${CLIENT_ID}/roster/import`;
+            const r = await fetch(importUrl, { method: 'POST', headers: authHeader(), body: fd });
             e.target.value = '';
             if (!r.ok) {
                 let msg = '导入失败，请检查 CSV 编码与表头';
@@ -952,24 +973,27 @@ createApp({
             loadRows();
         };
         const exportCsv = async () => {
-            const r = await fetch(`/api/clients/${CLIENT_ID}/roster/export`, { headers: authHeader() });
+            const exportUrl = IS_GLOBAL_ROSTER ? '/api/roster/export' : `/api/clients/${CLIENT_ID}/roster/export`;
+            const r = await fetch(exportUrl, { headers: authHeader() });
             if (!r.ok) {
                 alert('导出失败');
                 return;
             }
             const disposition = r.headers.get('Content-Disposition') || '';
             const blob = await r.blob();
-            window.crmDownloadBlob(blob, disposition, `花名册_${CLIENT_ID}_${Date.now()}.csv`);
+            const fallbackName = IS_GLOBAL_ROSTER ? `整体花名册_${Date.now()}.csv` : `花名册_${CLIENT_ID}_${Date.now()}.csv`;
+            window.crmDownloadBlob(blob, disposition, fallbackName);
         };
         const loadLogs = async () => {
             logsLoading.value = true;
             try {
-                const r = await fetch(`/api/clients/${CLIENT_ID}/details`, { headers: authHeader() });
+                const logsUrl = IS_GLOBAL_ROSTER ? '/api/roster/logs' : `/api/clients/${CLIENT_ID}/details`;
+                const r = await fetch(logsUrl, { headers: authHeader() });
                 if (!r.ok) {
                     throw new Error('load logs failed');
                 }
                 const d = await r.json();
-                logs.value = Array.isArray(d.logs) ? d.logs : [];
+                logs.value = IS_GLOBAL_ROSTER ? (Array.isArray(d) ? d : []) : (Array.isArray(d.logs) ? d.logs : []);
             } catch (e) {
                 logs.value = [];
                 alert('日志加载失败');
@@ -990,9 +1014,11 @@ createApp({
             return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
         };
         const restoreLatestBackup = async () => {
-            const ok = window.confirm('将使用“最近一次花名册备份”覆盖当前客户花名册数据，是否继续？');
+            const scopeLabel = IS_GLOBAL_ROSTER ? '整体花名册' : '当前客户花名册';
+            const ok = window.confirm(`将使用“最近一次花名册备份”覆盖${scopeLabel}数据，是否继续？`);
             if (!ok) return;
-            const r = await fetch(`/api/clients/${CLIENT_ID}/roster/restore/latest`, {
+            const restoreUrl = IS_GLOBAL_ROSTER ? '/api/roster/restore/latest' : `/api/clients/${CLIENT_ID}/roster/restore/latest`;
+            const r = await fetch(restoreUrl, {
                 method: 'POST',
                 headers: authHeader(),
             });
@@ -1013,22 +1039,24 @@ createApp({
         const clearFilters = () => {
             filters.employmentStatus = '';
             filters.workLocation = '';
-            filters.businessLine = '';
+            filters.customerName = '';
             filters.entryDateBefore = '';
             filters.entryDateAfter = '';
             filters.gmsBelow = '';
             filters.gmPctBelow = '';
-            filters.employeePlus1 = '';
-            filters.onboardingChannel = '';
+            filters.positionTitle = '';
+            filters.preTaxSalaryAbove = '';
+            filters.preTaxSalaryBelow = '';
         };
         onMounted(() => {
             loadBrief();
             loadRows();
         });
         return {
-            rows, filteredRows, filters, employmentStatusOptions, workLocationOptions, businessLineOptions, employeePlus1Options, onboardingChannelOptions,
+            rows, filteredRows, filters, employmentStatusOptions, workLocationOptions, customerNameOptions, positionTitleOptions,
             brief, loading, showForm, editingId, form, formFields: activeFormFields,
             showDel, fileInput, rosterFooter, isZNTX, showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors,
+            IS_GLOBAL_ROSTER,
             openAdd, openEdit, saveForm, confirmDelete, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, fieldInputType, markTouched, getFieldError,
             clearDateField, displayAmountInteger, displayRosterDate,

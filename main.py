@@ -556,6 +556,19 @@ def _write_roster_backup_csv(client: Client, rows: List[RosterEntry]) -> str:
     return name
 
 
+def _write_roster_backup_csv_all(rows: List[RosterEntry]) -> str:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    name = f"roster_backup_all__{ts}.csv"
+    path = os.path.join(BACKUP_DIR, name)
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(ROSTER_EXPORT_HEADERS)
+        for e in rows:
+            d = _roster_entry_to_dict(e)
+            writer.writerow([d.get(_CHINESE_ROSTER_HEADER_MAP[h], "") for h in ROSTER_EXPORT_HEADERS])
+    return name
+
+
 PIPELINE_EXPORT_HEADERS = [
     "简历时间",
     "日期",
@@ -751,6 +764,7 @@ _CHINESE_ROSTER_HEADER_MAP = {
     "项目释放时间": "project_release_date",
     "公司离职日期": "company_resign_date",
     "离职时间": "company_resign_date",
+    "工号": "zntx_staff_no",
     "中诺工号": "zntx_staff_no",
     "中河工号": "zntx_staff_no",  # 兼容旧误写
     "离职类型": "zntx_separation_type",
@@ -802,6 +816,17 @@ def _resequence_roster_serial_no(db: Session, client_id: int) -> bool:
     return changed
 
 
+def _resequence_roster_serial_no_global(db: Session) -> bool:
+    rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
+    changed = False
+    for idx, row in enumerate(rows, start=1):
+        expected = str(idx)
+        if (row.serial_no or "").strip() != expected:
+            row.serial_no = expected
+            changed = True
+    return changed
+
+
 def _resequence_all_rosters_once() -> None:
     """服务启动时一次性修复历史断号，避免长期遗留。"""
     db = SessionLocal()
@@ -836,6 +861,22 @@ def _validate_roster_business_fields(data: Dict[str, str]) -> None:
     gm_pct_plain_ok = re.fullmatch(r"(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)", gm_pct_norm)
     if gm_pct and not (gm_pct_with_symbol_ok or gm_pct_plain_ok):
         raise HTTPException(status_code=400, detail="GM%需为0-100（如 12、12.5、12% 或 12.5%）")
+
+
+def _assert_roster_contact_unique_global(
+    db: Session,
+    contact_info: str,
+    exclude_row_id: Optional[int] = None,
+) -> None:
+    ck = _contact_dedup_key(contact_info)
+    if not ck:
+        return
+    q = db.query(RosterEntry)
+    if exclude_row_id is not None:
+        q = q.filter(RosterEntry.id != exclude_row_id)
+    for e in q.all():
+        if _contact_dedup_key(e.contact_info) == ck:
+            raise HTTPException(status_code=409, detail="该联系方式在整体花名册中已存在，请勿重复")
 
 
 ROSTER_CREATE_REQUIRED_FIELDS = (
@@ -1028,6 +1069,7 @@ ROSTER_EXPORT_HEADERS = [
     "序号",
     "在职情况",
     "姓名",
+    "工号",
     "联系方式",
     "客户",
     "工作地",
@@ -1053,7 +1095,7 @@ ZNTX_ROSTER_EXPORT_HEADERS = [
     "序号",
     "在职情况",
     "姓名",
-    "中诺工号",
+    "工号",
     "联系方式",
     "客户",
     "工作地",
@@ -1145,26 +1187,69 @@ async def create_client(
     return client
 
 
+@app.get("/api/clients/{client_id}")
+async def get_client(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    return client
+
+
 @app.put("/api/clients/{client_id}")
 async def update_client(
     client_id: int,
     name: str = Form(...),
+    industry: str = Form(...),
+    owner: str = Form(...),
+    scale: str = Form(...),
     phase: str = Form(...),
+    description: str = Form(...),
     remarks: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     user: str = Depends(authenticate),
 ):
     client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    duplicate = db.query(Client).filter(Client.name == name, Client.id != client_id).first()
+    if duplicate:
+        raise HTTPException(status_code=400, detail="客户名称已存在")
+
+    old_name = client.name or ""
     updates = []
+    if old_name != name:
+        updates.append(f"客户名称从[{old_name}]变更为[{name}]")
+    if client.industry != industry:
+        updates.append(f"行业从[{client.industry}]变更为[{industry}]")
+    if client.owner != owner:
+        updates.append(f"销售负责人从[{client.owner}]变更为[{owner}]")
+    if client.scale != scale:
+        updates.append(f"外包规模从[{client.scale}]变更为[{scale}]")
     if client.phase != phase:
         updates.append(f"阶段从[{client.phase}]变更为[{phase}]")
-    if remarks and client.remarks != remarks:
+    if client.description != description:
+        updates.append("更新了客户描述")
+    if (client.remarks or "") != (remarks or ""):
         updates.append("更新了备注信息")
 
     client.name = name
+    client.industry = industry
+    client.owner = owner
+    client.scale = scale
     client.phase = phase
-    if remarks:
-        client.remarks = remarks
+    client.description = description
+    client.remarks = remarks or ""
+
+    old_folder = f"{old_name}_{client_id}"
+    new_folder = f"{name}_{client_id}"
+    src_path = os.path.join(UPLOAD_DIR, old_folder)
+    dst_path = os.path.join(UPLOAD_DIR, new_folder)
+    if old_folder != new_folder and os.path.exists(src_path) and not os.path.exists(dst_path):
+        shutil.move(src_path, dst_path)
+        visits = db.query(VisitRecord).filter(VisitRecord.client_id == client_id).all()
+        for visit in visits:
+            if visit.attachment and visit.attachment.startswith(f"{old_folder}/"):
+                visit.attachment = visit.attachment.replace(f"{old_folder}/", f"{new_folder}/", 1)
 
     if updates:
         log = AuditLog(client_id=client_id, operator=user, action="; ".join(updates))
@@ -1251,6 +1336,38 @@ async def get_client_brief(client_id: int, db: Session = Depends(get_db), user: 
     return {"id": c.id, "name": c.name, "owner": c.owner or "", "phase": c.phase or ""}
 
 
+@app.get("/api/roster")
+async def roster_list_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    if _resequence_roster_serial_no_global(db):
+        db.commit()
+    rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
+    return [_roster_entry_to_dict(r) for r in rows]
+
+
+@app.post("/api/roster")
+async def roster_create_row_all(
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    data = _normalize_roster_payload(body if isinstance(body, dict) else {})
+    missing = [k for k in ROSTER_CREATE_REQUIRED_FIELDS if not str(data.get(k, "")).strip()]
+    if missing:
+        labels = [ROSTER_REQUIRED_LABELS.get(k, k) for k in missing]
+        raise HTTPException(status_code=400, detail=f"新增失败，以下必填项未填写：{'、'.join(labels)}")
+    _validate_roster_business_fields(data)
+    _assert_roster_contact_unique_global(db, data.get("contact_info", ""))
+    customer_name = str(data.get("customer_name", "")).strip()
+    matched_client = db.query(Client).filter(Client.name == customer_name).first() if customer_name else None
+    entry = RosterEntry(client_id=(matched_client.id if matched_client else 0), **data)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    db.add(AuditLog(client_id=0, operator=user, action=f"整体花名册新增一行: {data.get('full_name') or ('#' + str(entry.id))}"))
+    db.commit()
+    return _roster_entry_to_dict(entry)
+
+
 @app.get("/api/clients/{client_id}/roster")
 async def roster_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
     c = db.query(Client).filter(Client.id == client_id).first()
@@ -1303,12 +1420,10 @@ async def roster_update_row(
         raise HTTPException(status_code=404, detail="记录不存在")
     data = _normalize_roster_payload(body if isinstance(body, dict) else {})
     _validate_roster_business_fields(data)
-    _assert_roster_contact_unique(
-        db,
-        entry.client_id,
-        data.get("contact_info", ""),
-        exclude_row_id=row_id,
-    )
+    _assert_roster_contact_unique_global(db, data.get("contact_info", ""), exclude_row_id=row_id)
+    customer_name = str(data.get("customer_name", "")).strip()
+    matched_client = db.query(Client).filter(Client.name == customer_name).first() if customer_name else None
+    entry.client_id = matched_client.id if matched_client else 0
     for k, v in data.items():
         setattr(entry, k, v)
     db.commit()
@@ -1324,15 +1439,96 @@ async def roster_delete_row(row_id: int, db: Session = Depends(get_db), user: st
     entry = db.query(RosterEntry).filter(RosterEntry.id == row_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
-    cid = entry.client_id
     db.delete(entry)
     db.flush()
-    _resequence_roster_serial_no(db, cid)
+    _resequence_roster_serial_no_global(db)
     db.commit()
-    log = AuditLog(client_id=cid, operator=user, action=f"花名册删除行 id={row_id}")
+    log = AuditLog(client_id=0, operator=user, action=f"整体花名册删除行 id={row_id}")
     db.add(log)
     db.commit()
     return {"status": "deleted"}
+
+
+@app.post("/api/roster/import")
+async def roster_import_csv_all(
+    file: UploadFile = File(...),
+    confirm: str = Form(""),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    def _skip_serial_hint(merged_row: Dict[str, str], csv_line_no: int) -> str:
+        serial = (merged_row.get("serial_no") or "").strip()
+        if serial:
+            return serial
+        return f"CSV第{csv_line_no}行"
+
+    raw = await file.read()
+    if len(raw) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="文件超过大小限制")
+    if str(confirm).strip().upper() != "CONFIRM":
+        raise HTTPException(status_code=400, detail="导入前请确认覆盖操作（confirm=CONFIRM）")
+    text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
+    existing_rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
+    cleared_existing = len(existing_rows)
+    backup_file = _write_roster_backup_csv_all(existing_rows) if cleared_existing else ""
+    if cleared_existing:
+        db.query(RosterEntry).delete()
+        db.commit()
+
+    imported = 0
+    skipped_duplicates = 0
+    skipped_empty = 0
+    skipped_details: List[Dict[str, str]] = []
+    seen_contact_keys: set = set()
+    client_name_map = {str(c.name or "").strip(): c.id for c in db.query(Client).all()}
+    for row_index, mapped in enumerate(_iter_roster_csv_data_rows(text), start=2):
+        merged = _normalize_roster_payload(mapped)
+        if not any(merged.values()):
+            skipped_empty += 1
+            skipped_details.append({"serial_no": _skip_serial_hint(merged, row_index), "reason": "空行或全部字段为空"})
+            continue
+        ck = _contact_dedup_key(merged.get("contact_info", ""))
+        if ck:
+            if ck in seen_contact_keys:
+                skipped_duplicates += 1
+                skipped_details.append({"serial_no": _skip_serial_hint(merged, row_index), "reason": "联系方式重复（文件内去重）"})
+                continue
+            seen_contact_keys.add(ck)
+        customer_name = str(merged.get("customer_name", "")).strip()
+        mapped_client_id = client_name_map.get(customer_name, 0)
+        db.add(RosterEntry(client_id=mapped_client_id, **merged))
+        imported += 1
+    _resequence_roster_serial_no_global(db)
+    db.commit()
+    skip_total = skipped_duplicates + skipped_empty
+    skip_brief = ""
+    if skip_total:
+        preview = "；".join([f"{x['serial_no']}({x['reason']})" for x in skipped_details[:8]])
+        skip_brief = f"；跳过 {skip_total} 行：{preview}"
+        if len(skipped_details) > 8:
+            skip_brief += f"；其余 {len(skipped_details) - 8} 行见导入提示"
+    db.add(
+        AuditLog(
+            client_id=0,
+            operator=user,
+            action=(
+                f"整体花名册 CSV 导入前备份 {cleared_existing} 行到 {backup_file or '无备份'}，"
+                f"清空 {cleared_existing} 行，导入新增 {imported} 行"
+                f"（文件内去重跳过 {skipped_duplicates} 行，空行跳过 {skipped_empty} 行）"
+                f"{skip_brief}"
+            ),
+        )
+    )
+    db.commit()
+    return {
+        "cleared_existing": cleared_existing,
+        "backup_file": backup_file,
+        "imported": imported,
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_empty": skipped_empty,
+        "skipped_total": skip_total,
+        "skipped_details": skipped_details,
+    }
 
 
 @app.post("/api/clients/{client_id}/roster/import")
@@ -1428,6 +1624,30 @@ async def roster_import_csv(
     }
 
 
+@app.get("/api/roster/export")
+async def roster_export_csv_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output)
+    writer.writerow(ROSTER_EXPORT_HEADERS)
+    for e in rows:
+        d = _roster_entry_to_dict(e)
+        line = []
+        for zh in ROSTER_EXPORT_HEADERS:
+            fn = _CHINESE_ROSTER_HEADER_MAP[zh]
+            line.append(d.get(fn, ""))
+        writer.writerow(line)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
+    _set_csv_download_headers(
+        response,
+        chinese_filename=f"整体花名册_{ts}.csv",
+        ascii_base=f"roster_all_{ts}",
+    )
+    return response
+
+
 @app.get("/api/clients/{client_id}/roster/export")
 async def roster_export_csv(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
     c = db.query(Client).filter(Client.id == client_id).first()
@@ -1455,6 +1675,42 @@ async def roster_export_csv(client_id: int, db: Session = Depends(get_db), user:
         ascii_base=f"client_{client_id}_roster_{ts}",
     )
     return response
+
+
+@app.post("/api/roster/restore/latest")
+async def roster_restore_latest_backup_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    latest = _pick_latest_backup("roster_backup_all__")
+    if not latest:
+        raise HTTPException(status_code=404, detail="未找到整体花名册备份文件")
+    backup_path = os.path.join(BACKUP_DIR, latest)
+    with open(backup_path, "r", encoding="utf-8-sig", newline="") as f:
+        text = f.read()
+    text = _strip_excel_sep_directive(text)
+    cleared_existing = db.query(RosterEntry).count()
+    if cleared_existing:
+        db.query(RosterEntry).delete()
+        db.commit()
+    restored_rows = 0
+    client_name_map = {str(c.name or "").strip(): c.id for c in db.query(Client).all()}
+    for mapped in _iter_roster_csv_data_rows(text):
+        merged = _normalize_roster_payload(mapped)
+        if not any(merged.values()):
+            continue
+        customer_name = str(merged.get("customer_name", "")).strip()
+        mapped_client_id = client_name_map.get(customer_name, 0)
+        db.add(RosterEntry(client_id=mapped_client_id, **merged))
+        restored_rows += 1
+    _resequence_roster_serial_no_global(db)
+    db.commit()
+    db.add(
+        AuditLog(
+            client_id=0,
+            operator=user,
+            action=f"整体花名册从备份恢复：{latest}，清空 {cleared_existing} 行，恢复 {restored_rows} 行",
+        )
+    )
+    db.commit()
+    return {"backup_file": latest, "cleared_existing": cleared_existing, "restored_rows": restored_rows}
 
 
 @app.post("/api/clients/{client_id}/roster/restore/latest")
@@ -1491,6 +1747,12 @@ async def roster_restore_latest_backup(client_id: int, db: Session = Depends(get
     )
     db.commit()
     return {"backup_file": latest, "cleared_existing": cleared_existing, "restored_rows": restored_rows}
+
+
+@app.get("/api/roster/logs")
+async def roster_logs_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    logs = db.query(AuditLog).filter(AuditLog.action.like("%花名册%")).order_by(desc(AuditLog.created_at)).limit(300).all()
+    return logs
 
 
 @app.get("/api/clients/{client_id}/delivery/pipeline")
@@ -2060,6 +2322,11 @@ async def page_customers(request: Request):
 @app.get("/customers/new", response_class=HTMLResponse)
 async def page_customers_new(request: Request):
     return _page("pages/customers_new.html", request)
+
+
+@app.get("/customers/{client_id}/edit", response_class=HTMLResponse)
+async def page_customers_edit(request: Request, client_id: int):
+    return _page("pages/customers_new.html", request, client_id=client_id)
 
 
 @app.get("/customers/roster", response_class=HTMLResponse)

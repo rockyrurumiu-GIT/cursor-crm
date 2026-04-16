@@ -39,6 +39,7 @@
                         </td>
                         <td class="crm-td space-x-3">
                             <button type="button" @click="openDetail(c)" class="text-blue-600 text-sm">详情/记录</button>
+                            <a :href="`/customers/${c.id}/edit`" class="text-amber-600 text-sm">修改</a>
                             <button type="button" @click="confirmDelete(c)" class="text-red-600 text-sm">删除</button>
                         </td>
                     </tr>
@@ -189,7 +190,11 @@ createApp({
         const updateClient = (c) => {
             const fd = new FormData();
             fd.append('name', c.name);
+            fd.append('industry', c.industry || '');
+            fd.append('owner', c.owner || '');
+            fd.append('scale', c.scale || '');
             fd.append('phase', c.phase);
+            fd.append('description', c.description || '');
             fd.append('remarks', c.remarks || '');
             fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: authHeader(), body: fd }).then(() => {
                 alert('保存成功');
