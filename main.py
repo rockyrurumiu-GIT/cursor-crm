@@ -1904,7 +1904,8 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
 
         if resume_screening == "友商重复":
             item["重复"] += 1
-        if resume_screening in ("内筛不通过", "友商重复"):
+        # 口径调整：内筛不通过仅统计“简历筛选=内筛不通过”，不包含“友商重复”。
+        if resume_screening == "内筛不通过":
             inner_fail_counts[key] = int(inner_fail_counts.get(key, 0)) + 1
         if resume_screening == "待反馈":
             item["待客户筛选"] += 1

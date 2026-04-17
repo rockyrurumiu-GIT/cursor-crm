@@ -60,6 +60,59 @@
     .settlement-table tbody tr:last-child td {
         border-bottom: 1px solid #d1d5db;
     }
+    .pipeline-filter-control {
+        height: 2.25rem;
+        min-height: 2.25rem;
+        line-height: 1.25rem;
+        padding-top: 0.375rem;
+        padding-bottom: 0.375rem;
+    }
+    .pipeline-filter-row {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: flex-end;
+        gap: 0.5rem;
+        overflow-x: visible;
+        overflow-y: visible;
+        padding-bottom: 2px;
+    }
+    .pipeline-filter-item {
+        flex: 0 0 auto;
+    }
+    .pipeline-filter-dropdown {
+        position: relative;
+    }
+    .pipeline-filter-dropdown-panel {
+        position: absolute;
+        left: 0;
+        top: calc(100% + 4px);
+        z-index: 40;
+        width: 12rem;
+        max-height: 14rem;
+        overflow-y: auto;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        background: #fff;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+        padding: 0.25rem 0;
+    }
+    .pipeline-filter-dropdown-empty {
+        padding: 0.45rem 0.6rem;
+        font-size: 12px;
+        color: #9ca3af;
+    }
+    .pipeline-filter-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.35rem 0.6rem;
+        font-size: 12px;
+        color: #374151;
+        cursor: pointer;
+    }
+    .pipeline-filter-dropdown-item:hover {
+        background: #f9fafb;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -89,7 +142,94 @@
                     </svg>
                 </button>
             </div>
-            <h2 class="text-sm font-semibold text-gray-700">简历raw data（共 {{ pipelineRows.length }} 条）</h2>
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <div class="pipeline-filter-row">
+                    <label class="pipeline-filter-item flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">日期</span>
+                        <select v-model="pipelineFilter.date" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[6.4rem]">
+                            <option value="">全部</option>
+                            <option v-for="d in pipelineDateOptions" :key="d" :value="d">{{ displayDateSlash(d) }}</option>
+                        </select>
+                    </label>
+                    <label class="pipeline-filter-item flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">岗位（模糊）</span>
+                        <input v-model.trim="pipelineFilter.position" type="text" placeholder="包含即匹配" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[7.2rem]" />
+                    </label>
+                    <label class="pipeline-filter-item flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">地域</span>
+                        <select v-model="pipelineFilter.region" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[5.8rem]">
+                            <option value="">全部</option>
+                            <option v-for="v in pipelineSelectOptions.region" :key="v" :value="v">{{ v }}</option>
+                        </select>
+                    </label>
+                    <label class="pipeline-filter-item flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">招聘</span>
+                        <select v-model="pipelineFilter.recruiter" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[5.8rem]">
+                            <option value="">全部</option>
+                            <option v-for="v in pipelineSelectOptions.recruiter" :key="v" :value="v">{{ v }}</option>
+                        </select>
+                    </label>
+                    <label ref="resumeScreeningFilterRef" class="pipeline-filter-item pipeline-filter-dropdown flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">简历筛选</span>
+                        <button
+                            type="button"
+                            class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[7.2rem] text-left flex items-center justify-between"
+                            @click="toggleResumeScreeningDropdown"
+                        >
+                            <span class="truncate">{{ resumeScreeningSummary }}</span>
+                            <span class="text-gray-400 ml-2">{{ resumeScreeningDropdownOpen ? '▴' : '▾' }}</span>
+                        </button>
+                        <div v-if="resumeScreeningDropdownOpen" class="pipeline-filter-dropdown-panel">
+                            <label v-for="v in pipelineSelectOptions.resume_screening" :key="v" class="pipeline-filter-dropdown-item">
+                                <input
+                                    type="checkbox"
+                                    :checked="pipelineFilter.resume_screening.includes(v)"
+                                    @change="toggleResumeScreeningOption(v)"
+                                />
+                                <span class="truncate">{{ v }}</span>
+                            </label>
+                            <div v-if="!pipelineSelectOptions.resume_screening.length" class="pipeline-filter-dropdown-empty">暂无可选项</div>
+                            <button
+                                type="button"
+                                class="w-full text-left px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                                @click="clearResumeScreeningOption"
+                            >清空</button>
+                        </div>
+                    </label>
+                    <label class="pipeline-filter-item flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">是否面试</span>
+                        <select v-model="pipelineFilter.interviewed" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[6.0rem]">
+                            <option value="">全部</option>
+                            <option v-for="v in pipelineSelectOptions.interviewed" :key="v" :value="v">{{ v }}</option>
+                        </select>
+                    </label>
+                    <label class="pipeline-filter-item flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">结果</span>
+                        <select v-model="pipelineFilter.result" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[5.8rem]">
+                            <option value="">全部</option>
+                            <option v-for="v in pipelineSelectOptions.result" :key="v" :value="v">{{ v }}</option>
+                        </select>
+                    </label>
+                    <label class="pipeline-filter-item flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">是否拿offer</span>
+                        <select v-model="pipelineFilter.got_offer" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[6.4rem]">
+                            <option value="">全部</option>
+                            <option v-for="v in pipelineSelectOptions.got_offer" :key="v" :value="v">{{ v }}</option>
+                        </select>
+                    </label>
+                    <label class="pipeline-filter-item flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">是否入职（模糊）</span>
+                        <input v-model.trim="pipelineFilter.onboarded" type="text" placeholder="包含即匹配" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[7.2rem]" />
+                    </label>
+                    <button type="button" class="pipeline-filter-item pipeline-filter-control rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 hover:bg-gray-50" @click="resetPipelineFilter">清除筛选</button>
+                </div>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+                <h2 class="text-sm font-semibold text-gray-700">简历raw data（共 {{ pipelineRows.length }} 条）</h2>
+                <p class="text-sm font-semibold text-gray-700">
+                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredPipelineRows.length }}</span> 条
+                </p>
+            </div>
             <div ref="pipelineScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
             <table class="crm-table pipeline-table min-w-[2400px]">
                 <thead>
@@ -117,7 +257,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in pipelineRows" :key="row.id">
+                    <tr v-for="row in filteredPipelineRows" :key="row.id">
                         <td class="crm-td">{{ displayDateSlash(row.resume_time) }}</td>
                         <td class="crm-td">{{ displayDateSlash(row.date) }}</td>
                         <td class="crm-td">{{ row.position }}</td>
@@ -142,7 +282,7 @@
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removePipelineRow(row)">删除</button>
                         </td>
                     </tr>
-                    <tr v-if="!pipelineRows.length">
+                    <tr v-if="!filteredPipelineRows.length">
                         <td colspan="20" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
                     </tr>
                 </tbody>
@@ -297,7 +437,7 @@ window.__DELIVERY_CLIENT_ID__ = {{ client_id }};
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, reactive, onMounted } = Vue;
+const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount } = Vue;
 const PIPELINE_FIELDS = [
     { key: 'resume_time', label: '简历时间', type: 'date' },
     { key: 'date', label: '日期', type: 'date' },
@@ -391,6 +531,32 @@ function parsePeriodForSort(raw) {
     if (m) return { month: parseInt(m[1], 10), week: parseInt(m[2], 10) };
     return { month: -1, week: -1 };
 }
+function pipelineUniqueSorted(rows, field) {
+    const set = new Set();
+    (rows || []).forEach((row) => {
+        const v = String(row[field] != null ? row[field] : '').trim();
+        if (v) set.add(v);
+    });
+    return [...set].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+}
+function pipelineFuzzyMatch(haystack, needle) {
+    const n = String(needle || '').trim();
+    if (!n) return true;
+    return String(haystack || '').toLowerCase().includes(n.toLowerCase());
+}
+function emptyPipelineFilter() {
+    return {
+        date: '',
+        position: '',
+        region: '',
+        recruiter: '',
+        resume_screening: [],
+        interviewed: '',
+        result: '',
+        got_offer: '',
+        onboarded: '',
+    };
+}
 createApp({
     setup() {
         const moduleKey = window.__DELIVERY_MODULE_KEY__;
@@ -399,6 +565,78 @@ createApp({
         const clientName = ref(`客户#${clientId}`);
         const returnToInsight = ref(false);
         const pipelineRows = ref([]);
+        const pipelineFilter = reactive(emptyPipelineFilter());
+        const resumeScreeningDropdownOpen = ref(false);
+        const resumeScreeningFilterRef = ref(null);
+        const resumeScreeningSummary = computed(() => {
+            const selected = Array.isArray(pipelineFilter.resume_screening) ? pipelineFilter.resume_screening : [];
+            if (!selected.length) return '全部';
+            if (selected.length === 1) return selected[0];
+            return `已选${selected.length}项`;
+        });
+        const toggleResumeScreeningDropdown = () => {
+            resumeScreeningDropdownOpen.value = !resumeScreeningDropdownOpen.value;
+        };
+        const toggleResumeScreeningOption = (value) => {
+            const selected = Array.isArray(pipelineFilter.resume_screening) ? pipelineFilter.resume_screening : [];
+            const idx = selected.indexOf(value);
+            if (idx >= 0) {
+                selected.splice(idx, 1);
+            } else {
+                selected.push(value);
+            }
+        };
+        const clearResumeScreeningOption = () => {
+            pipelineFilter.resume_screening = [];
+        };
+        const handleDocumentClick = (event) => {
+            if (!resumeScreeningDropdownOpen.value) return;
+            const root = resumeScreeningFilterRef.value;
+            if (root && !root.contains(event.target)) {
+                resumeScreeningDropdownOpen.value = false;
+            }
+        };
+        const pipelineDateOptions = computed(() => {
+            const set = new Set();
+            pipelineRows.value.forEach((row) => {
+                const n = normalizeDateForInput(row.date != null ? String(row.date) : '', false);
+                if (n) set.add(n);
+            });
+            return [...set].sort((a, b) => b.localeCompare(a));
+        });
+        const pipelineSelectOptions = computed(() => ({
+            region: pipelineUniqueSorted(pipelineRows.value, 'region'),
+            recruiter: pipelineUniqueSorted(pipelineRows.value, 'recruiter'),
+            resume_screening: pipelineUniqueSorted(pipelineRows.value, 'resume_screening'),
+            interviewed: pipelineUniqueSorted(pipelineRows.value, 'interviewed'),
+            result: pipelineUniqueSorted(pipelineRows.value, 'result'),
+            got_offer: pipelineUniqueSorted(pipelineRows.value, 'got_offer'),
+        }));
+        const filteredPipelineRows = computed(() => {
+            const f = pipelineFilter;
+            return pipelineRows.value.filter((row) => {
+                if (f.date) {
+                    const n = normalizeDateForInput(row.date != null ? String(row.date) : '', false);
+                    if (n !== f.date) return false;
+                }
+                if (!pipelineFuzzyMatch(row.position, f.position)) return false;
+                if (f.region && String(row.region || '').trim() !== f.region) return false;
+                if (f.recruiter && String(row.recruiter || '').trim() !== f.recruiter) return false;
+                if (Array.isArray(f.resume_screening) && f.resume_screening.length) {
+                    const screeningValue = String(row.resume_screening || '').trim();
+                    if (!f.resume_screening.includes(screeningValue)) return false;
+                }
+                if (f.interviewed && String(row.interviewed || '').trim() !== f.interviewed) return false;
+                if (f.result && String(row.result || '').trim() !== f.result) return false;
+                if (f.got_offer && String(row.got_offer || '').trim() !== f.got_offer) return false;
+                if (!pipelineFuzzyMatch(row.onboarded, f.onboarded)) return false;
+                return true;
+            });
+        });
+        const resetPipelineFilter = () => {
+            Object.assign(pipelineFilter, emptyPipelineFilter());
+            resumeScreeningDropdownOpen.value = false;
+        };
         const pipelineScrollWrap = ref(null);
         const pipelineFileInput = ref(null);
         const showPipelineForm = ref(false);
@@ -650,6 +888,7 @@ createApp({
             await loadSettlementRows();
         };
         onMounted(async () => {
+            document.addEventListener('click', handleDocumentClick);
             await loadBrief();
             await loadSettlementRows();
             await loadPipelineRows();
@@ -657,9 +896,15 @@ createApp({
                 openPipelineEditByQuery();
             }
         });
+        onBeforeUnmount(() => {
+            document.removeEventListener('click', handleDocumentClick);
+        });
         return {
             moduleKey, moduleTitle, clientId, clientName,
-            pipelineRows, pipelineFields: PIPELINE_FIELDS, pipelineFileInput, pipelineScrollWrap,
+            pipelineRows, pipelineFilter, pipelineDateOptions, pipelineSelectOptions, filteredPipelineRows, resetPipelineFilter,
+            resumeScreeningDropdownOpen, resumeScreeningFilterRef, resumeScreeningSummary,
+            toggleResumeScreeningDropdown, toggleResumeScreeningOption, clearResumeScreeningOption,
+            pipelineFields: PIPELINE_FIELDS, pipelineFileInput, pipelineScrollWrap,
             showPipelineForm, pipelineEditingId, pipelineForm, returnToInsight,
             showPipelineLogs, pipelineLogsLoading, pipelineLogs,
             settlementRows, settlementFields: SETTLEMENT_FIELDS,

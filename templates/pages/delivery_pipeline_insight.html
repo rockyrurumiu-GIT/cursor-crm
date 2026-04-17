@@ -3,10 +3,9 @@
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
-    .insight-table-wrap {
-        overflow-y: auto;
-        overflow-x: hidden;
-        max-height: calc(100vh - 260px);
+    /* 与 base 中 .crm-table-scroll 配合：纵向滚动时表头固定（勿用 overflow-x:hidden，会破坏 sticky） */
+    .insight-table-wrap.crm-table-scroll {
+        max-height: var(--crm-table-scroll-max-height, calc(100vh - 260px));
     }
     .insight-table {
         width: 100%;
@@ -24,6 +23,11 @@
         vertical-align: middle;
         height: 62px;
         font-size: 11px;
+    }
+    /* 透析表头：sticky 叠在数据行之上，并加底影 */
+    .crm-table-scroll .insight-table thead th.crm-th {
+        z-index: 12;
+        box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08);
     }
     .insight-table .crm-td {
         padding: 8px 6px;
@@ -59,6 +63,18 @@
     .insight-demand-input {
         width: 100%;
         min-width: 0;
+    }
+    .insight-table tr.insight-summary-row .crm-td {
+        background: #e6e2db;
+        color: #2f2a24;
+        font-weight: 700;
+        border-top: 2px solid #d2cbc1;
+        border-bottom: 1px solid #d2cbc1;
+        padding-top: 9px;
+        padding-bottom: 9px;
+    }
+    .insight-table tbody tr.insight-summary-row:hover .crm-td {
+        background: #e6e2db;
     }
 </style>
 {% endblock %}
@@ -97,7 +113,12 @@
                 </div>
             </div>
         </div>
-        <div v-if="!loading" ref="insightScrollWrap" class="insight-table-wrap border border-gray-200 rounded-lg">
+        <div
+            v-if="!loading"
+            ref="insightScrollWrap"
+            class="crm-table-scroll insight-table-wrap border border-gray-200 rounded-lg"
+            style="--crm-table-scroll-max-height: calc(100vh - 260px);"
+        >
             <table class="crm-table insight-table">
                 <thead>
                     <tr>
@@ -123,10 +144,15 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in displayRows" :key="rowKey(row)">
-                        <td v-if="row._showTime" class="crm-td" :rowspan="row._timeRowspan">{{ row['时间'] }}</td>
-                        <td class="crm-td">{{ row['岗位'] }}</td>
-                        <td class="crm-td">
+                    <tr
+                        v-for="row in renderedRows"
+                        :key="row._renderKey || rowKey(row)"
+                        :class="{ 'insight-summary-row': row._isSummary }"
+                    >
+                        <td v-if="row._isSummary" class="crm-td" colspan="2">合计</td>
+                        <td v-else-if="row._showTime" class="crm-td" :rowspan="row._timeRowspan">{{ row['时间'] }}</td>
+                        <td v-if="!row._isSummary" class="crm-td">{{ row['岗位'] }}</td>
+                        <td class="crm-td" v-if="!row._isSummary">
                             <input
                                 v-model="manualDemand[rowKey(row)]"
                                 @input="queueSaveManualDemand(row)"
@@ -136,6 +162,7 @@
                                 placeholder="手填"
                             />
                         </td>
+                        <td class="crm-td" v-else></td>
                         <td class="crm-td">{{ row['地点'] }}</td>
                         <td class="crm-td">{{ row['推送简历量'] }}</td>
                         <td class="crm-td">{{ row['内筛通过'] }}</td>
@@ -210,21 +237,49 @@ createApp({
             const base = onlyAnomalyRows.value
                 ? rows.value.filter((row) => anomalyRowKeySet.value.has(rowKey(row)))
                 : rows.value.slice();
-            let currentTime = '';
-            let groupStart = -1;
-            for (let i = 0; i < base.length; i += 1) {
-                const t = String(base[i]['时间'] || '');
-                base[i]._showTime = false;
-                base[i]._timeRowspan = 1;
-                if (t !== currentTime) {
-                    if (groupStart >= 0) base[groupStart]._timeRowspan = i - groupStart;
-                    currentTime = t;
-                    groupStart = i;
-                    base[i]._showTime = true;
-                }
-            }
-            if (groupStart >= 0) base[groupStart]._timeRowspan = base.length - groupStart;
             return base;
+        });
+        const sumFieldKeys = [
+            '推送简历量', '内筛通过', '重复', '待客户筛选', '客筛通过',
+            '放弃面试', '待面试', '已面试', '面试通过', '本周offer人数',
+            '弃offer/谈薪失败', '在途人数/待入职', '月度在途流失(包含前序)', '本周入职人数', '本月入职人数',
+        ];
+        const toInt = (v) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? Math.trunc(n) : 0;
+        };
+        const renderedRows = computed(() => {
+            const result = [];
+            const groupedByTime = new Map();
+            displayRows.value.forEach((row) => {
+                const t = String(row['时间'] || '');
+                if (!groupedByTime.has(t)) groupedByTime.set(t, []);
+                groupedByTime.get(t).push(row);
+            });
+            groupedByTime.forEach((groupRows) => {
+                groupRows.forEach((row, idx) => {
+                    row._isSummary = false;
+                    row._showTime = idx === 0;
+                    row._timeRowspan = idx === 0 ? groupRows.length : 1;
+                    row._renderKey = `data|${rowKey(row)}`;
+                    result.push(row);
+                });
+                const summary = {
+                    _isSummary: true,
+                    _showTime: false,
+                    _timeRowspan: 1,
+                    _renderKey: `sum|${groupRows[0] ? rowKey(groupRows[0]) : Date.now()}`,
+                    '时间': groupRows[0] ? (groupRows[0]['时间'] || '') : '',
+                    '岗位': '合计',
+                    '需求数量': '',
+                    '地点': '',
+                };
+                sumFieldKeys.forEach((k) => {
+                    summary[k] = groupRows.reduce((acc, r) => acc + toInt(r[k]), 0);
+                });
+                result.push(summary);
+            });
+            return result;
         });
 
         const loadBrief = async () => {
@@ -357,7 +412,7 @@ createApp({
 
         return {
             clientId, clientName, rows, anomalies, loading, manualDemand, savingDemandKeys,
-            onlyAnomalyRows, displayRows, rowKey, loadInsight, exportInsightCsv, insightScrollWrap, scrollToTop, queueSaveManualDemand,
+            onlyAnomalyRows, displayRows, renderedRows, rowKey, loadInsight, exportInsightCsv, insightScrollWrap, scrollToTop, queueSaveManualDemand,
         };
     },
 }).mount('#pipeline-insight-app');
