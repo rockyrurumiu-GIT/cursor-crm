@@ -45,7 +45,7 @@
     .pipeline-table th:nth-child(12), .pipeline-table td:nth-child(12) { min-width: 6rem; }  /* 是否面试 */
     .pipeline-table th:nth-child(13), .pipeline-table td:nth-child(13) { min-width: 7rem; }  /* 面试时间 */
     .pipeline-table th:nth-child(14), .pipeline-table td:nth-child(14) { min-width: 6rem; }  /* 面试官 */
-    .pipeline-table th:nth-child(15), .pipeline-table td:nth-child(15) { min-width: 6rem; } /* 结果 */
+    .pipeline-table th:nth-child(15), .pipeline-table td:nth-child(15) { min-width: 6rem; } /* 面试结果 */
     .pipeline-table th:nth-child(16), .pipeline-table td:nth-child(16) { min-width: 8rem; } /* 是否拿offer */
     .pipeline-table th:nth-child(17), .pipeline-table td:nth-child(17) { min-width: 8rem; } /* 入职时间 */
     .pipeline-table th:nth-child(18), .pipeline-table td:nth-child(18) { min-width: 7rem; } /* 是否入职 */
@@ -122,7 +122,12 @@
         <a :href="`/delivery/${moduleKey}`" class="text-sm text-blue-600 hover:underline">← 返回{{ moduleTitle }}客户列表</a>
         <h1 class="text-2xl font-bold text-gray-900 mt-3">{{ clientName }} · {{ moduleTitle }}</h1>
         <div v-if="moduleKey === 'pipeline'" class="mt-5 space-y-3">
-            <div class="flex justify-end gap-2">
+            <div class="flex items-end justify-between gap-3 flex-wrap">
+                <label class="flex flex-col gap-1 text-xs">
+                    <span class="text-gray-600">姓名（模糊）</span>
+                    <input v-model.trim="pipelineFilter.full_name" type="text" placeholder="输入姓名关键词" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[10rem]" />
+                </label>
+                <div class="flex justify-end gap-2">
                 <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openPipelineAdd">新增</button>
                 <a :href="`/delivery/pipeline/${clientId}/insight`" class="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">数据透析</a>
                 <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerPipelineImport">导入</button>
@@ -141,6 +146,7 @@
                         <path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" />
                     </svg>
                 </button>
+                </div>
             </div>
             <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
                 <div class="pipeline-filter-row">
@@ -204,7 +210,7 @@
                         </select>
                     </label>
                     <label class="pipeline-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">结果</span>
+                        <span class="text-gray-600">面试结果</span>
                         <select v-model="pipelineFilter.result" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[5.8rem]">
                             <option value="">全部</option>
                             <option v-for="v in pipelineSelectOptions.result" :key="v" :value="v">{{ v }}</option>
@@ -248,7 +254,7 @@
                         <th class="crm-th">是否面试</th>
                         <th class="crm-th">面试时间</th>
                         <th class="crm-th">面试官</th>
-                        <th class="crm-th">结果</th>
+                        <th class="crm-th">面试结果</th>
                         <th class="crm-th">是否拿offer</th>
                         <th class="crm-th">入职时间</th>
                         <th class="crm-th">是否入职</th>
@@ -287,6 +293,19 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
+        </div>
+        <div v-else-if="moduleKey === 'interviews'" class="mt-5 space-y-3">
+            <div class="flex justify-end gap-2">
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="interviewFeatureTodo('新增行')">新增行</button>
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="interviewFeatureTodo('日志')">日志</button>
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerInterviewImport">导入</button>
+                <input ref="interviewFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onInterviewImportFile" />
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="interviewFeatureTodo('导出')">导出</button>
+                <button type="button" class="crm-btn-rollback" @click="interviewFeatureTodo('回滚')">回滚</button>
+            </div>
+            <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-sm text-gray-500">
+                员工访谈页面功能入口已创建：新增行、日志、导入、导出、回滚。
             </div>
         </div>
         <div v-else-if="moduleKey === 'settlement'" class="mt-5 space-y-3">
@@ -453,7 +472,7 @@ const PIPELINE_FIELDS = [
     { key: 'interviewed', label: '是否面试' },
     { key: 'interview_time', label: '面试时间', type: 'date' },
     { key: 'interviewer', label: '面试官' },
-    { key: 'result', label: '结果' },
+    { key: 'result', label: '面试结果' },
     { key: 'got_offer', label: '是否拿offer' },
     { key: 'onboarding_time', label: '入职时间', type: 'date' },
     { key: 'onboarded', label: '是否入职' },
@@ -548,6 +567,7 @@ function emptyPipelineFilter() {
     return {
         date: '',
         position: '',
+        full_name: '',
         region: '',
         recruiter: '',
         resume_screening: [],
@@ -566,6 +586,7 @@ createApp({
         const returnToInsight = ref(false);
         const pipelineRows = ref([]);
         const pipelineFilter = reactive(emptyPipelineFilter());
+        const interviewFileInput = ref(null);
         const resumeScreeningDropdownOpen = ref(false);
         const resumeScreeningFilterRef = ref(null);
         const resumeScreeningSummary = computed(() => {
@@ -620,6 +641,7 @@ createApp({
                     if (n !== f.date) return false;
                 }
                 if (!pipelineFuzzyMatch(row.position, f.position)) return false;
+                if (!pipelineFuzzyMatch(row.full_name, f.full_name)) return false;
                 if (f.region && String(row.region || '').trim() !== f.region) return false;
                 if (f.recruiter && String(row.recruiter || '').trim() !== f.recruiter) return false;
                 if (Array.isArray(f.resume_screening) && f.resume_screening.length) {
@@ -734,6 +756,18 @@ createApp({
         };
         const triggerPipelineImport = () => {
             if (pipelineFileInput.value) pipelineFileInput.value.click();
+        };
+        const interviewFeatureTodo = (featureName) => {
+            alert(`员工访谈「${featureName}」功能已创建入口，下一步可接入实际数据逻辑。`);
+        };
+        const triggerInterviewImport = () => {
+            if (interviewFileInput.value) interviewFileInput.value.click();
+        };
+        const onInterviewImportFile = async (e) => {
+            const f = e.target.files && e.target.files[0];
+            e.target.value = '';
+            if (!f) return;
+            interviewFeatureTodo(`导入（已选择 ${f.name}）`);
         };
         const onPipelineImportFile = async (e) => {
             const f = e.target.files && e.target.files[0];
@@ -904,12 +938,13 @@ createApp({
             pipelineRows, pipelineFilter, pipelineDateOptions, pipelineSelectOptions, filteredPipelineRows, resetPipelineFilter,
             resumeScreeningDropdownOpen, resumeScreeningFilterRef, resumeScreeningSummary,
             toggleResumeScreeningDropdown, toggleResumeScreeningOption, clearResumeScreeningOption,
-            pipelineFields: PIPELINE_FIELDS, pipelineFileInput, pipelineScrollWrap,
+            pipelineFields: PIPELINE_FIELDS, pipelineFileInput, interviewFileInput, pipelineScrollWrap,
             showPipelineForm, pipelineEditingId, pipelineForm, returnToInsight,
             showPipelineLogs, pipelineLogsLoading, pipelineLogs,
             settlementRows, settlementFields: SETTLEMENT_FIELDS,
             showForm, editingId, form,
             openPipelineAdd, openPipelineEdit, savePipelineForm, removePipelineRow,
+            interviewFeatureTodo, triggerInterviewImport, onInterviewImportFile,
             triggerPipelineImport, onPipelineImportFile, exportPipelineCsv, openPipelineLogs, restorePipelineLatestBackup, formatDate,
             scrollToTop, clearPipelineDateField, clearSettlementDateField, displayDateSlash,
             openAdd, openEdit, saveForm, removeRow,

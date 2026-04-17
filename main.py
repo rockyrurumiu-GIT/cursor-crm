@@ -604,7 +604,7 @@ PIPELINE_EXPORT_HEADERS = [
     "是否面试",
     "面试时间",
     "面试官",
-    "结果",
+    "面试结果",
     "是否拿offer",
     "入职时间",
     "是否入职",
@@ -629,6 +629,7 @@ PIPELINE_HEADER_MAP = {
     "面试时间": "interview_time",
     "面试官": "interviewer",
     "结果": "result",
+    "面试结果": "result",
     "是否拿offer": "got_offer",
     "入职时间": "onboarding_time",
     "是否入职": "onboarded",
@@ -1803,7 +1804,7 @@ def _week_label_from_date(d: Any) -> str:
     while int((cursor + timedelta(days=3)).month) != target_month:
         cursor += timedelta(days=7)
     week_no = ((monday_start - cursor).days // 7) + 1
-    return f"{target_month}m{week_no}w"
+    return f"{target_month}w{week_no}"
 
 
 def _period_sort_key(period: str) -> tuple:
@@ -1834,6 +1835,20 @@ def _extract_period_month(period: str) -> Optional[int]:
     return None
 
 
+def _normalize_period_label(period: str) -> str:
+    """统一周期标签为 XwY，兼容 4W3 / 4w3 / 4m3w 等写法。"""
+    s = str(period or "").strip()
+    if not s:
+        return ""
+    m1 = re.match(r"^\s*(\d{1,2})\s*m\s*(\d{1,2})\s*w\s*$", s, re.IGNORECASE)
+    if m1:
+        return f"{int(m1.group(1))}w{int(m1.group(2))}"
+    m2 = re.match(r"^\s*(\d{1,2})\s*w\s*(\d{1,2})\s*$", s, re.IGNORECASE)
+    if m2:
+        return f"{int(m2.group(1))}w{int(m2.group(2))}"
+    return s
+
+
 @app.get("/api/clients/{client_id}/delivery/pipeline/insight")
 async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
     c = db.query(Client).filter(Client.id == client_id).first()
@@ -1861,9 +1876,12 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
     today = datetime.now().date()
     grouped: Dict[tuple, Dict[str, Any]] = {}
     inner_fail_counts: Dict[tuple, int] = {}
+    weekly_onboard_counts: Dict[tuple, int] = {}
+    weekly_in_transit_counts: Dict[tuple, int] = {}
+    weekly_in_transit_loss_counts: Dict[tuple, int] = {}
     anomalies: List[Dict[str, str]] = []
     for e in rows:
-        period = str(e.date or "").strip()
+        period = _normalize_period_label(str(e.date or "").strip())
         position = str(e.position or "").strip()
         region = str(e.region or "").strip()
         if not period or not position:
@@ -1957,10 +1975,22 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
         if got_offer == "否":
             item["弃offer/谈薪失败"] += 1
         if onboarded == "放弃入职":
-            item["月度在途流失(包含前序)"] += 1
-        if "待入职" in onboarded and onboarding_date and onboarding_date > today:
-            item["在途人数/待入职"] += 1
-        elif "待入职" in onboarded and onboarding_date and onboarding_date <= today:
+            if onboarding_date:
+                loss_week = _week_label_from_date(onboarding_date)
+                loss_key = (loss_week, position, region)
+                weekly_in_transit_loss_counts[loss_key] = int(weekly_in_transit_loss_counts.get(loss_key, 0)) + 1
+            else:
+                anomalies.append(
+                    {
+                        "row_id": int(e.id),
+                        "姓名": str(e.full_name or "").strip() or "-",
+                        "问题": "状态为放弃入职，但入职时间为空或无法解析",
+                        "时间": period,
+                        "岗位": position,
+                        "地点": region,
+                    }
+                )
+        if "待入职" in onboarded and onboarding_date and onboarding_date <= today:
             anomalies.append(
                 {
                     "row_id": int(e.id),
@@ -1973,9 +2003,7 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             )
         elif "待入职" in onboarded and not onboarding_date:
             m_wait = re.search(r"(\d{1,2})\s*月\s*待入职", onboarded)
-            if m_wait and int(m_wait.group(1)) >= int(today.month):
-                item["在途人数/待入职"] += 1
-            elif m_wait:
+            if m_wait:
                 anomalies.append(
                     {
                         "row_id": int(e.id),
@@ -1986,6 +2014,11 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
                         "地点": region,
                     }
                 )
+        is_waiting_text = bool(re.fullmatch(r"\s*\d{1,2}\s*月\s*待入职\s*", onboarded))
+        if is_waiting_text and onboarding_date and onboarding_date > today:
+            waiting_week = _week_label_from_date(onboarding_date)
+            waiting_key = (waiting_week, position, region)
+            weekly_in_transit_counts[waiting_key] = int(weekly_in_transit_counts.get(waiting_key, 0)) + 1
         if "已入职" in onboarded and not onboarding_date:
             anomalies.append(
                 {
@@ -1997,18 +2030,66 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
                     "地点": region,
                 }
             )
-        if onboarding_date and _week_label_from_date(onboarding_date) == period:
-            item["本周入职人数"] += 1
+        if onboarding_date and ("已入职" in onboarded):
+            onboard_week = _week_label_from_date(onboarding_date)
+            onboard_key = (onboard_week, position, region)
+            weekly_onboard_counts[onboard_key] = int(weekly_onboard_counts.get(onboard_key, 0)) + 1
         period_month = _extract_period_month(period)
         if period_month is not None:
             if re.search(rf"{int(period_month)}\s*月\s*已入职", onboarded):
                 item["本月入职人数"] += 1
+
+    supplemental_keys: Dict[tuple, bool] = {}
+    for k, cnt in weekly_onboard_counts.items():
+        if cnt > 0:
+            supplemental_keys[k] = True
+    for k, cnt in weekly_in_transit_counts.items():
+        if cnt > 0:
+            supplemental_keys[k] = True
+    for k, cnt in weekly_in_transit_loss_counts.items():
+        if cnt > 0:
+            supplemental_keys[k] = True
+
+    # 若“周+岗位+地点”有入职/在途/在途流失统计但该周无推荐分组行，则补一条该岗位明细行承载统计。
+    for (onboard_week, onboard_pos, onboard_region) in supplemental_keys.keys():
+        synthetic_key = (onboard_week, onboard_pos, onboard_region)
+        if synthetic_key in grouped:
+            continue
+        grouped[synthetic_key] = {
+            "时间": onboard_week,
+            "岗位": onboard_pos,
+            "需求数量": "",
+            "地点": onboard_region,
+            "推送简历量": 0,
+            "内筛通过": 0,
+            "重复": 0,
+            "待客户筛选": 0,
+            "客筛通过": 0,
+            "放弃面试": 0,
+            "待面试": 0,
+            "已面试": 0,
+            "面试通过": 0,
+            "本周offer人数": 0,
+            "弃offer/谈薪失败": 0,
+            "在途人数/待入职": 0,
+            "月度在途流失(包含前序)": 0,
+            "本周入职人数": 0,
+            "本月入职人数": 0,
+        }
+        inner_fail_counts[synthetic_key] = 0
 
     out = list(grouped.values())
     for item in out:
         key = (item["时间"], item["岗位"], item["地点"])
         inner_fail = int(inner_fail_counts.get(key, 0))
         item["内筛通过"] = max(0, int(item["推送简历量"]) - inner_fail)
+        period_norm = _normalize_period_label(str(item.get("时间", "") or "").strip())
+        pos = str(item.get("岗位", "") or "").strip()
+        region = str(item.get("地点", "") or "").strip()
+        onboard_key = (period_norm, pos, region)
+        item["本周入职人数"] = int(weekly_onboard_counts.get(onboard_key, 0))
+        item["在途人数/待入职"] = int(weekly_in_transit_counts.get(onboard_key, 0))
+        item["月度在途流失(包含前序)"] = int(weekly_in_transit_loss_counts.get(onboard_key, 0))
         item["需求数量"] = demand_map.get(key, "")
     out.sort(
         key=lambda x: (
@@ -2192,6 +2273,7 @@ async def pipeline_import_csv(
         "拿offer": "got_offer",
         "状态": "status_note",
         "备注": "status_note",
+        "面试结果": "result",
     }
     norm_map = {_norm_header(hk): fk for hk, fk in PIPELINE_HEADER_MAP.items()}
     for alias_hk, fk in header_alias.items():
@@ -2349,7 +2431,11 @@ async def pipeline_restore_latest_backup(client_id: int, db: Session = Depends(g
         db.commit()
     restored_rows = 0
     for row in rows:
-        mapped = {fk: str(row.get(hk, "") or "").strip() for hk, fk in PIPELINE_HEADER_MAP.items()}
+        mapped = {fk: "" for fk in set(PIPELINE_HEADER_MAP.values())}
+        for hk, fk in PIPELINE_HEADER_MAP.items():
+            cell = str(row.get(hk, "") or "").strip()
+            if cell:
+                mapped[fk] = cell
         mapped["serial_no"] = ""
         if not any(mapped.values()):
             continue

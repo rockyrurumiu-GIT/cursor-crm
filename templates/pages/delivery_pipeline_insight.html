@@ -76,6 +76,18 @@
     .insight-table tbody tr.insight-summary-row:hover .crm-td {
         background: #e6e2db;
     }
+    .insight-table tr.insight-month-summary-row .crm-td {
+        background: #d9d4cc;
+        color: #1f2937;
+        font-weight: 700;
+        border-top: 2px solid #bfb8ad;
+        border-bottom: 1px solid #bfb8ad;
+        padding-top: 9px;
+        padding-bottom: 9px;
+    }
+    .insight-table tbody tr.insight-month-summary-row:hover .crm-td {
+        background: #d9d4cc;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -140,19 +152,18 @@
                         <th class="crm-th">在途数</th>
                         <th class="crm-th">在途流失</th>
                         <th class="crm-th">周入职数</th>
-                        <th class="crm-th">月入职数</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr
                         v-for="row in renderedRows"
                         :key="row._renderKey || rowKey(row)"
-                        :class="{ 'insight-summary-row': row._isSummary }"
+                        :class="{ 'insight-summary-row': row._isSummary, 'insight-month-summary-row': row._isMonthSummary }"
                     >
-                        <td v-if="row._isSummary" class="crm-td" colspan="2">合计</td>
+                        <td v-if="row._isSummary || row._isMonthSummary" class="crm-td" colspan="2">{{ row._isMonthSummary ? '月合计' : '合计' }}</td>
                         <td v-else-if="row._showTime" class="crm-td" :rowspan="row._timeRowspan">{{ row['时间'] }}</td>
-                        <td v-if="!row._isSummary" class="crm-td">{{ row['岗位'] }}</td>
-                        <td class="crm-td" v-if="!row._isSummary">
+                        <td v-if="!row._isSummary && !row._isMonthSummary" class="crm-td">{{ row['岗位'] }}</td>
+                        <td class="crm-td" v-if="!row._isSummary && !row._isMonthSummary">
                             <input
                                 v-model="manualDemand[rowKey(row)]"
                                 @input="queueSaveManualDemand(row)"
@@ -178,10 +189,9 @@
                         <td class="crm-td">{{ row['在途人数/待入职'] }}</td>
                         <td class="crm-td">{{ row['月度在途流失(包含前序)'] }}</td>
                         <td class="crm-td">{{ row['本周入职人数'] }}</td>
-                        <td class="crm-td">{{ row['本月入职人数'] }}</td>
                     </tr>
                     <tr v-if="!displayRows.length">
-                        <td colspan="19" class="crm-td text-center text-gray-400 py-8">暂无透析数据</td>
+                        <td colspan="18" class="crm-td text-center text-gray-400 py-8">暂无透析数据</td>
                     </tr>
                 </tbody>
             </table>
@@ -242,11 +252,15 @@ createApp({
         const sumFieldKeys = [
             '推送简历量', '内筛通过', '重复', '待客户筛选', '客筛通过',
             '放弃面试', '待面试', '已面试', '面试通过', '本周offer人数',
-            '弃offer/谈薪失败', '在途人数/待入职', '月度在途流失(包含前序)', '本周入职人数', '本月入职人数',
+            '弃offer/谈薪失败', '在途人数/待入职', '月度在途流失(包含前序)', '本周入职人数',
         ];
         const toInt = (v) => {
             const n = Number(v);
             return Number.isFinite(n) ? Math.trunc(n) : 0;
+        };
+        const periodMonth = (period) => {
+            const p = parsePeriodForSort(period);
+            return Number.isFinite(p.month) ? p.month : -1;
         };
         const renderedRows = computed(() => {
             const result = [];
@@ -256,9 +270,24 @@ createApp({
                 if (!groupedByTime.has(t)) groupedByTime.set(t, []);
                 groupedByTime.get(t).push(row);
             });
-            groupedByTime.forEach((groupRows) => {
+            const timeGroups = [...groupedByTime.entries()];
+            const monthTotals = {};
+            timeGroups.forEach(([timeLabel, groupRows]) => {
+                const m = periodMonth(timeLabel);
+                if (m < 0) return;
+                if (!monthTotals[m]) {
+                    monthTotals[m] = {};
+                    sumFieldKeys.forEach((k) => { monthTotals[m][k] = 0; });
+                }
+                sumFieldKeys.forEach((k) => {
+                    monthTotals[m][k] += groupRows.reduce((acc, r) => acc + toInt(r[k]), 0);
+                });
+            });
+            const emittedMonthSummary = new Set();
+            timeGroups.forEach(([timeLabel, groupRows], groupIdx) => {
                 groupRows.forEach((row, idx) => {
                     row._isSummary = false;
+                    row._isMonthSummary = false;
                     row._showTime = idx === 0;
                     row._timeRowspan = idx === 0 ? groupRows.length : 1;
                     row._renderKey = `data|${rowKey(row)}`;
@@ -266,9 +295,10 @@ createApp({
                 });
                 const summary = {
                     _isSummary: true,
+                    _isMonthSummary: false,
                     _showTime: false,
                     _timeRowspan: 1,
-                    _renderKey: `sum|${groupRows[0] ? rowKey(groupRows[0]) : Date.now()}`,
+                    _renderKey: `sum|${timeLabel}`,
                     '时间': groupRows[0] ? (groupRows[0]['时间'] || '') : '',
                     '岗位': '合计',
                     '需求数量': '',
@@ -278,6 +308,26 @@ createApp({
                     summary[k] = groupRows.reduce((acc, r) => acc + toInt(r[k]), 0);
                 });
                 result.push(summary);
+
+                const currentMonth = periodMonth(timeLabel);
+                if (currentMonth >= 0 && !emittedMonthSummary.has(currentMonth)) {
+                    const monthSummary = {
+                        _isSummary: false,
+                        _isMonthSummary: true,
+                        _showTime: false,
+                        _timeRowspan: 1,
+                        _renderKey: `month-sum|${currentMonth}|${groupIdx}`,
+                        '时间': `${currentMonth}月`,
+                        '岗位': '月合计',
+                        '需求数量': '',
+                        '地点': '',
+                    };
+                    sumFieldKeys.forEach((k) => {
+                        monthSummary[k] = (monthTotals[currentMonth] && monthTotals[currentMonth][k]) || 0;
+                    });
+                    result.push(monthSummary);
+                    emittedMonthSummary.add(currentMonth);
+                }
             });
             return result;
         });
@@ -377,7 +427,6 @@ createApp({
                 { label: '在途数', key: '在途人数/待入职' },
                 { label: '在途流失', key: '月度在途流失(包含前序)' },
                 { label: '周入职数', key: '本周入职人数' },
-                { label: '月入职数', key: '本月入职人数' },
             ];
             const escapeCsv = (v) => {
                 const s = String(v == null ? '' : v);
