@@ -9,7 +9,7 @@ import socket
 import unicodedata
 from urllib.parse import quote
 from datetime import datetime, timedelta
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Tuple
 from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File, status, Body
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
@@ -188,9 +188,69 @@ class DeliveryPipelineInsightDemand(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+class DeliveryInterviewEntry(Base):
+    """员工访谈 — CSV 导出表头与客户模板一致（不含入职时间）；旧列仍兼容备份/导入。"""
+    __tablename__ = "delivery_interview_entries"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    serial_no = Column(String, default="")
+    full_name = Column(String, default="")
+    employment_status = Column(String, default="")
+    contact = Column(String, default="")
+    project_name = Column(String, default="")
+    position = Column(String, default="")
+    employee_q1 = Column(String, default="")
+    satisfaction = Column(String, default="")
+    onboarding_time = Column(String, default="")
+    interview_date = Column(String, default="")
+    days_since_onboarding = Column(String, default="")
+    interview_content = Column(Text, default="")
+    delivery_judgment = Column(String, default="")
+    employee_requests = Column(Text, default="")
+    delivery_todos = Column(Text, default="")
+    work_location = Column(String, default="")
+    hometown = Column(String, default="")
+    followup_1d = Column(String, default="")
+    followup_7d = Column(String, default="")
+    followup_30d = Column(String, default="")
+    followup_90d = Column(String, default="")
+    created_at = Column(DateTime, default=datetime.now)
+
+
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base.metadata.create_all(bind=engine)
+
+
+def _ensure_interview_schema_compat():
+    """旧库仅有早期员工访谈列时，补齐中诺模板字段，避免查询失败。"""
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(delivery_interview_entries)").fetchall()}
+        except Exception:
+            return
+        add_cols = {
+            "employment_status": "TEXT DEFAULT ''",
+            "contact": "TEXT DEFAULT ''",
+            "project_name": "TEXT DEFAULT ''",
+            "employee_q1": "TEXT DEFAULT ''",
+            "satisfaction": "TEXT DEFAULT ''",
+            "onboarding_time": "TEXT DEFAULT ''",
+            "days_since_onboarding": "TEXT DEFAULT ''",
+            "interview_content": "TEXT DEFAULT ''",
+            "delivery_judgment": "TEXT DEFAULT ''",
+            "employee_requests": "TEXT DEFAULT ''",
+            "delivery_todos": "TEXT DEFAULT ''",
+            "work_location": "TEXT DEFAULT ''",
+            "hometown": "TEXT DEFAULT ''",
+            "followup_1d": "TEXT DEFAULT ''",
+            "followup_7d": "TEXT DEFAULT ''",
+            "followup_30d": "TEXT DEFAULT ''",
+            "followup_90d": "TEXT DEFAULT ''",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE delivery_interview_entries ADD COLUMN {col} {ddl}")
 
 
 def _ensure_roster_schema_compat():
@@ -211,6 +271,7 @@ def _ensure_roster_schema_compat():
 
 
 _ensure_roster_schema_compat()
+_ensure_interview_schema_compat()
 
 # --- 3. 后端核心逻辑 ---
 app = FastAPI(title="ITO CRM Ultimate")
@@ -393,6 +454,62 @@ def _normalize_pipeline_payload(d: Dict[str, Any]) -> Dict[str, str]:
     return out
 
 
+def _interview_entry_to_dict(e: DeliveryInterviewEntry) -> Dict[str, str]:
+    return {
+        "id": e.id,
+        "client_id": e.client_id,
+        "serial_no": e.serial_no or "",
+        "full_name": e.full_name or "",
+        "employment_status": e.employment_status or "",
+        "contact": e.contact or "",
+        "project_name": e.project_name or "",
+        "position": e.position or "",
+        "employee_q1": e.employee_q1 or "",
+        "onboarding_time": e.onboarding_time or "",
+        "interview_date": e.interview_date or "",
+        "satisfaction": e.satisfaction or "",
+        "delivery_judgment": e.delivery_judgment or "",
+        "employee_requests": e.employee_requests or "",
+        "delivery_todos": e.delivery_todos or "",
+        "work_location": e.work_location or "",
+        "hometown": e.hometown or "",
+        "followup_1d": e.followup_1d or "",
+        "followup_7d": e.followup_7d or "",
+        "followup_30d": e.followup_30d or "",
+        "followup_90d": e.followup_90d or "",
+    }
+
+
+def _normalize_interview_payload(d: Dict[str, Any]) -> Dict[str, str]:
+    keys = [
+        "full_name",
+        "employment_status",
+        "contact",
+        "project_name",
+        "position",
+        "employee_q1",
+        "onboarding_time",
+        "interview_date",
+        "satisfaction",
+        "delivery_judgment",
+        "employee_requests",
+        "delivery_todos",
+        "work_location",
+        "hometown",
+        "followup_1d",
+        "followup_7d",
+        "followup_30d",
+        "followup_90d",
+    ]
+    out: Dict[str, str] = {}
+    for k in keys:
+        v = d.get(k, "")
+        if v is None:
+            v = ""
+        out[k] = str(v).strip()
+    return out
+
+
 def _normalize_settlement_payload(d: Dict[str, Any]) -> Dict[str, str]:
     keys = [
         "serial_no",
@@ -454,6 +571,17 @@ def _resequence_pipeline_serial_no(db: Session, client_id: int) -> None:
         db.query(DeliveryPipelineEntry)
         .filter(DeliveryPipelineEntry.client_id == client_id)
         .order_by(DeliveryPipelineEntry.id)
+        .all()
+    )
+    for idx, row in enumerate(rows, start=1):
+        row.serial_no = str(idx)
+
+
+def _resequence_interview_serial_no(db: Session, client_id: int) -> None:
+    rows = (
+        db.query(DeliveryInterviewEntry)
+        .filter(DeliveryInterviewEntry.client_id == client_id)
+        .order_by(DeliveryInterviewEntry.id)
         .all()
     )
     for idx, row in enumerate(rows, start=1):
@@ -652,6 +780,90 @@ def _write_pipeline_backup_csv(client: Client, rows: List[DeliveryPipelineEntry]
     return name
 
 
+INTERVIEW_EXPORT_HEADERS = [
+    "序号",
+    "员工姓名",
+    "在职/离职",
+    "联系方式",
+    "所属项目",
+    "岗位",
+    "员工加1",
+    "入职时间",
+    "访谈日期",
+    "满意度",
+    "交付判断",
+    "员工诉求",
+    "交付待办事项",
+    "工作地",
+    "老家",
+    "1 D",
+    "7 D",
+    "30 D",
+    "90 D",
+]
+
+
+INTERVIEW_HEADER_MAP = {
+    "序号": "serial_no",
+    "员工姓名": "full_name",
+    "在职/离职": "employment_status",
+    "联系方式": "contact",
+    "所属项目": "project_name",
+    "岗位": "position",
+    "员工加1": "employee_q1",
+    "员工+1": "employee_q1",
+    "员工＋1": "employee_q1",
+    "员工➕1": "employee_q1",
+    "员工加Q1": "employee_q1",
+    "员工ID": "employee_q1",
+    "入职时间": "onboarding_time",
+    "访谈日期": "interview_date",
+    "满意度": "satisfaction",
+    "入职天数": "days_since_onboarding",
+    "访谈内容及情况": "interview_content",
+    "交付判断": "delivery_judgment",
+    "员工诉求": "employee_requests",
+    "交付待办事项": "delivery_todos",
+    "工作地": "work_location",
+    "老家": "hometown",
+    "1 D": "followup_1d",
+    "7 D": "followup_7d",
+    "30 D": "followup_30d",
+    "90 D": "followup_90d",
+}
+
+
+def _interview_display_serial_pairs(rows: List[DeliveryInterviewEntry]) -> List[Tuple[int, DeliveryInterviewEntry]]:
+    """按 id 升序；同一「员工姓名」共用同一序号（首次出现递增，重名复用）。姓名为空时归为同一组。"""
+    sorted_rows = sorted(rows, key=lambda e: e.id or 0)
+    name_to_sn: Dict[str, int] = {}
+    next_sn = 1
+    out: List[Tuple[int, DeliveryInterviewEntry]] = []
+    for e in sorted_rows:
+        name = str(e.full_name or "").strip()
+        key = name if name else "__empty__"
+        if key not in name_to_sn:
+            name_to_sn[key] = next_sn
+            next_sn += 1
+        out.append((name_to_sn[key], e))
+    return out
+
+
+def _write_interview_backup_csv(client: Client, rows: List[DeliveryInterviewEntry]) -> str:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = "".join(ch for ch in client.name if ch.isalnum() or ch in (" ", "-", "_")).strip() or f"client_{client.id}"
+    name = f"interview_backup_{safe_name}__cid{client.id}__{ts}.csv"
+    path = os.path.join(BACKUP_DIR, name)
+    with open(path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.writer(f)
+        writer.writerow(INTERVIEW_EXPORT_HEADERS)
+        for sn, e in _interview_display_serial_pairs(rows):
+            d = _interview_entry_to_dict(e)
+            cells = [str(sn)] + [d.get(INTERVIEW_HEADER_MAP[h], "") for h in INTERVIEW_EXPORT_HEADERS[1:]]
+            writer.writerow(cells)
+    return name
+
+
 def _ascii_filename_fallback(source: str, default_base: str = "export") -> str:
     s = "".join(ch for ch in (source or "") if ch.isascii() and (ch.isalnum() or ch in (" ", "-", "_"))).strip()
     return s or default_base
@@ -796,6 +1008,32 @@ _CHINESE_ROSTER_HEADER_MAP = {
 }
 
 
+# 花名册「客户」：单元格中含左侧关键字即视为右侧 clients.name（须与客户管理中全称完全一致；左侧越长越优先匹配）
+ROSTER_CUSTOMER_ALIAS_RULES: Tuple[Tuple[str, str], ...] = (
+    ("远景智能", "远景智能"),
+    ("中诺", "中诺通讯"),
+    ("华勤", "华勤科技"),
+    ("帷幄", "帷幄科技"),
+    ("日产", "日产中国"),
+)
+
+
+def _resolve_roster_customer_client(db: Session, raw: str) -> Tuple[Optional[Client], str]:
+    """将简称/分子公司与 clients 表匹配；返回 (Client 或 None, 建议写入花名册的客户名字符串)。"""
+    s = str(raw or "").strip()
+    if not s:
+        return None, ""
+    exact = db.query(Client).filter(Client.name == s).first()
+    if exact:
+        return exact, s
+    for kw, canonical in ROSTER_CUSTOMER_ALIAS_RULES:
+        if kw in s:
+            c = db.query(Client).filter(Client.name == canonical).first()
+            if c:
+                return c, canonical
+    return None, s
+
+
 def _contact_dedup_key(raw: Optional[str]) -> str:
     """联系方式去重键：仅保留数字，忽略空格、横线等格式差异；不以姓名为依据。"""
     if not raw:
@@ -837,15 +1075,14 @@ def _resequence_roster_serial_no(db: Session, client_id: int) -> bool:
     return changed
 
 
-def _resequence_roster_serial_no_global(db: Session) -> bool:
-    rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
-    changed = False
-    for idx, row in enumerate(rows, start=1):
-        expected = str(idx)
-        if (row.serial_no or "").strip() != expected:
-            row.serial_no = expected
-            changed = True
-    return changed
+def _resequence_roster_serial_no_all_clients(db: Session) -> bool:
+    """对每个 client_id（含未匹配客户时的 0）分别将序号重排为 1..N；不在全库范围内混排。"""
+    ids = [cid for (cid,) in db.query(RosterEntry.client_id).distinct().all() if cid is not None]
+    changed_any = False
+    for cid in ids:
+        if _resequence_roster_serial_no(db, int(cid)):
+            changed_any = True
+    return changed_any
 
 
 def _resequence_all_rosters_once() -> None:
@@ -1132,14 +1369,8 @@ ZNTX_ROSTER_EXPORT_HEADERS = [
     "员工+1",
     "入职渠道",
     "打卡",
-    "补卡",
     "员工+2",
     "接口",
-    "项目释放时间",
-    "离职时间",
-    "离职类型",
-    "释放成功离职原因",
-    "补偿金",
     "备注",
 ]
 
@@ -1359,8 +1590,6 @@ async def get_client_brief(client_id: int, db: Session = Depends(get_db), user: 
 
 @app.get("/api/roster")
 async def roster_list_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
-    if _resequence_roster_serial_no_global(db):
-        db.commit()
     rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
     return [_roster_entry_to_dict(r) for r in rows]
 
@@ -1378,9 +1607,10 @@ async def roster_create_row_all(
         raise HTTPException(status_code=400, detail=f"新增失败，以下必填项未填写：{'、'.join(labels)}")
     _validate_roster_business_fields(data)
     _assert_roster_contact_unique_global(db, data.get("contact_info", ""))
-    customer_name = str(data.get("customer_name", "")).strip()
-    matched_client = db.query(Client).filter(Client.name == customer_name).first() if customer_name else None
-    entry = RosterEntry(client_id=(matched_client.id if matched_client else 0), **data)
+    mc, normalized_cn = _resolve_roster_customer_client(db, data.get("customer_name", ""))
+    if mc:
+        data["customer_name"] = normalized_cn
+    entry = RosterEntry(client_id=(mc.id if mc else 0), **data)
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -1415,6 +1645,9 @@ async def roster_create_row(
         raise HTTPException(status_code=400, detail=f"新增失败，以下必填项未填写：{'、'.join(labels)}")
     _validate_roster_business_fields(data)
     _assert_roster_contact_unique(db, client_id, data.get("contact_info", ""))
+    mc, normalized_cn = _resolve_roster_customer_client(db, data.get("customer_name", ""))
+    if mc:
+        data["customer_name"] = normalized_cn
     entry = RosterEntry(client_id=client_id, **data)
     db.add(entry)
     db.commit()
@@ -1441,10 +1674,11 @@ async def roster_update_row(
         raise HTTPException(status_code=404, detail="记录不存在")
     data = _normalize_roster_payload(body if isinstance(body, dict) else {})
     _validate_roster_business_fields(data)
-    _assert_roster_contact_unique_global(db, data.get("contact_info", ""), exclude_row_id=row_id)
-    customer_name = str(data.get("customer_name", "")).strip()
-    matched_client = db.query(Client).filter(Client.name == customer_name).first() if customer_name else None
-    entry.client_id = matched_client.id if matched_client else 0
+    mc, normalized_cn = _resolve_roster_customer_client(db, data.get("customer_name", ""))
+    if mc:
+        entry.client_id = mc.id
+        data["customer_name"] = normalized_cn
+    # 未匹配到客户时保留原 client_id，避免「客户」简称与库中全称不一致时被置为 0，从当前客户花名册中消失
     for k, v in data.items():
         setattr(entry, k, v)
     db.commit()
@@ -1460,9 +1694,10 @@ async def roster_delete_row(row_id: int, db: Session = Depends(get_db), user: st
     entry = db.query(RosterEntry).filter(RosterEntry.id == row_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
+    cid = int(entry.client_id) if entry.client_id is not None else 0
     db.delete(entry)
     db.flush()
-    _resequence_roster_serial_no_global(db)
+    _resequence_roster_serial_no(db, cid)
     db.commit()
     log = AuditLog(client_id=0, operator=user, action=f"整体花名册删除行 id={row_id}")
     db.add(log)
@@ -1501,7 +1736,6 @@ async def roster_import_csv_all(
     skipped_empty = 0
     skipped_details: List[Dict[str, str]] = []
     seen_contact_keys: set = set()
-    client_name_map = {str(c.name or "").strip(): c.id for c in db.query(Client).all()}
     for row_index, mapped in enumerate(_iter_roster_csv_data_rows(text), start=2):
         merged = _normalize_roster_payload(mapped)
         if not any(merged.values()):
@@ -1515,11 +1749,13 @@ async def roster_import_csv_all(
                 skipped_details.append({"serial_no": _skip_serial_hint(merged, row_index), "reason": "联系方式重复（文件内去重）"})
                 continue
             seen_contact_keys.add(ck)
-        customer_name = str(merged.get("customer_name", "")).strip()
-        mapped_client_id = client_name_map.get(customer_name, 0)
+        mc, normalized_cn = _resolve_roster_customer_client(db, merged.get("customer_name", ""))
+        if mc:
+            merged["customer_name"] = normalized_cn
+        mapped_client_id = mc.id if mc else 0
         db.add(RosterEntry(client_id=mapped_client_id, **merged))
         imported += 1
-    _resequence_roster_serial_no_global(db)
+    _resequence_roster_serial_no_all_clients(db)
     db.commit()
     skip_total = skipped_duplicates + skipped_empty
     skip_brief = ""
@@ -1712,16 +1948,17 @@ async def roster_restore_latest_backup_all(db: Session = Depends(get_db), user: 
         db.query(RosterEntry).delete()
         db.commit()
     restored_rows = 0
-    client_name_map = {str(c.name or "").strip(): c.id for c in db.query(Client).all()}
     for mapped in _iter_roster_csv_data_rows(text):
         merged = _normalize_roster_payload(mapped)
         if not any(merged.values()):
             continue
-        customer_name = str(merged.get("customer_name", "")).strip()
-        mapped_client_id = client_name_map.get(customer_name, 0)
+        mc, normalized_cn = _resolve_roster_customer_client(db, merged.get("customer_name", ""))
+        if mc:
+            merged["customer_name"] = normalized_cn
+        mapped_client_id = mc.id if mc else 0
         db.add(RosterEntry(client_id=mapped_client_id, **merged))
         restored_rows += 1
-    _resequence_roster_serial_no_global(db)
+    _resequence_roster_serial_no_all_clients(db)
     db.commit()
     db.add(
         AuditLog(
@@ -2448,6 +2685,336 @@ async def pipeline_restore_latest_backup(client_id: int, db: Session = Depends(g
             client_id=client_id,
             operator=user,
             action=f"管道数据从备份恢复：{latest}，清空 {cleared_existing} 行，恢复 {restored_rows} 行",
+        )
+    )
+    db.commit()
+    return {"backup_file": latest, "cleared_existing": cleared_existing, "restored_rows": restored_rows}
+
+
+@app.get("/api/clients/{client_id}/delivery/interviews")
+async def interview_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    rows = (
+        db.query(DeliveryInterviewEntry)
+        .filter(DeliveryInterviewEntry.client_id == client_id)
+        .order_by(DeliveryInterviewEntry.id)
+        .all()
+    )
+    return [_interview_entry_to_dict(r) for r in rows]
+
+
+@app.post("/api/clients/{client_id}/delivery/interviews")
+async def interview_create_row(
+    client_id: int,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    data = _normalize_interview_payload(body if isinstance(body, dict) else {})
+    max_row = (
+        db.query(DeliveryInterviewEntry)
+        .filter(DeliveryInterviewEntry.client_id == client_id)
+        .order_by(desc(DeliveryInterviewEntry.id))
+        .first()
+    )
+    if max_row and str(max_row.serial_no or "").isdigit():
+        data["serial_no"] = str(int(max_row.serial_no) + 1)
+    else:
+        data["serial_no"] = "1"
+    entry = DeliveryInterviewEntry(client_id=client_id, **data)
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    db.add(AuditLog(client_id=client_id, operator=user, action=f"员工访谈新增行 id={entry.id}"))
+    db.commit()
+    return _interview_entry_to_dict(entry)
+
+
+@app.put("/api/delivery/interviews/row/{row_id}")
+async def interview_update_row(
+    row_id: int,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    entry = db.query(DeliveryInterviewEntry).filter(DeliveryInterviewEntry.id == row_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    data = _normalize_interview_payload(body if isinstance(body, dict) else {})
+    for k, v in data.items():
+        if k == "serial_no":
+            continue
+        setattr(entry, k, v)
+    db.commit()
+    db.refresh(entry)
+    db.add(AuditLog(client_id=entry.client_id, operator=user, action=f"员工访谈修改行 id={row_id}"))
+    db.commit()
+    return _interview_entry_to_dict(entry)
+
+
+@app.delete("/api/delivery/interviews/row/{row_id}")
+async def interview_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    entry = db.query(DeliveryInterviewEntry).filter(DeliveryInterviewEntry.id == row_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    cid = entry.client_id
+    db.delete(entry)
+    db.flush()
+    _resequence_interview_serial_no(db, cid)
+    db.commit()
+    db.add(AuditLog(client_id=cid, operator=user, action=f"员工访谈删除行 id={row_id}"))
+    db.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/api/clients/{client_id}/delivery/interviews/import")
+async def interview_import_csv(
+    client_id: int,
+    file: UploadFile = File(...),
+    confirm: str = Form(""),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    raw = await file.read()
+    if len(raw) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="文件超过大小限制")
+    if str(confirm).strip().upper() != "CONFIRM":
+        raise HTTPException(status_code=400, detail="导入前请确认覆盖操作（confirm=CONFIRM）")
+    text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV 缺少表头，无法导入")
+
+    def _norm_header(h: str) -> str:
+        s = str(h or "").replace("\ufeff", "").replace(" ", "").replace("\u3000", "")
+        for plus_ch in ("\uff0b", "\u2795", "\u229e", "\u208a"):
+            s = s.replace(plus_ch, "+")
+        return s.strip().lower()
+
+    header_alias = {
+        "姓名": "full_name",
+        "被访谈人": "full_name",
+        "候选人": "full_name",
+        "面谈日期": "interview_date",
+        "访谈时间": "interview_date",
+        "日期": "interview_date",
+        "时间": "interview_date",
+        "业务部门": "project_name",
+        "项目组": "project_name",
+        "项目": "project_name",
+        "分部": "project_name",
+        "工种": "position",
+        "职务": "position",
+        "手机号": "contact",
+        "电话": "contact",
+        "手机": "contact",
+        "司龄天数": "days_since_onboarding",
+        "入职日": "onboarding_time",
+        "访谈内容": "interview_content",
+        "谈话内容": "interview_content",
+        "面谈记录": "interview_content",
+        "内容": "interview_content",
+        "记录": "interview_content",
+        "摘要": "interview_content",
+        "状态": "employment_status",
+        "籍贯": "hometown",
+        "地点": "work_location",
+        "城市": "work_location",
+        "改进措施": "delivery_todos",
+        "待办事项": "delivery_todos",
+        "1d": "followup_1d",
+        "7d": "followup_7d",
+        "30d": "followup_30d",
+        "90d": "followup_90d",
+    }
+    norm_map: Dict[str, str] = {}
+    for hk, fk in INTERVIEW_HEADER_MAP.items():
+        norm_map[_norm_header(hk)] = fk
+    for alias_hk, fk in header_alias.items():
+        norm_map[_norm_header(alias_hk)] = fk
+
+    matched_columns: Dict[str, str] = {}
+    for original_h in reader.fieldnames:
+        fk = norm_map.get(_norm_header(original_h))
+        if fk and fk not in matched_columns:
+            matched_columns[fk] = original_h
+
+    matched_non_serial = [k for k in matched_columns.keys() if k != "serial_no"]
+    if not matched_non_serial:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "CSV 表头未匹配到员工访谈字段（仅匹配到序号或未匹配）。检测到表头: "
+                + ", ".join([str(h or "") for h in reader.fieldnames])
+            ),
+        )
+
+    interview_fk_set = set(INTERVIEW_HEADER_MAP.values())
+
+    pending_rows: List[Dict[str, str]] = []
+    total_rows = 0
+    skipped_empty_rows = 0
+    skipped_empty_row_numbers: List[int] = []
+    for row in reader:
+        total_rows += 1
+        csv_line_no = total_rows + 1
+        mapped = {fk: "" for fk in interview_fk_set}
+        for fk, original_h in matched_columns.items():
+            mapped[fk] = str(row.get(original_h, "") or "").strip()
+        mapped["serial_no"] = ""
+        if not any(mapped.get(k, "") for k in matched_non_serial):
+            skipped_empty_rows += 1
+            if len(skipped_empty_row_numbers) < 20:
+                skipped_empty_row_numbers.append(csv_line_no)
+            continue
+        pending_rows.append(mapped)
+
+    existing_rows = (
+        db.query(DeliveryInterviewEntry)
+        .filter(DeliveryInterviewEntry.client_id == client_id)
+        .order_by(DeliveryInterviewEntry.id)
+        .all()
+    )
+    cleared_existing = len(existing_rows)
+    backup_file = _write_interview_backup_csv(c, existing_rows) if cleared_existing else ""
+    if cleared_existing:
+        db.query(DeliveryInterviewEntry).filter(DeliveryInterviewEntry.client_id == client_id).delete()
+        db.commit()
+
+    imported = 0
+    for mapped in pending_rows:
+        entry = DeliveryInterviewEntry(client_id=client_id, **mapped)
+        db.add(entry)
+        imported += 1
+    _resequence_interview_serial_no(db, client_id)
+    db.commit()
+    db.add(
+        AuditLog(
+            client_id=client_id,
+            operator=user,
+            action=(
+                f"员工访谈 CSV 导入前备份 {cleared_existing} 行到 {backup_file or '无备份'}，"
+                f"清空 {cleared_existing} 行，CSV 总行数 {total_rows}，"
+                f"空行跳过 {skipped_empty_rows}，导入新增 {imported} 行"
+            ),
+        )
+    )
+    db.commit()
+    return {
+        "cleared_existing": cleared_existing,
+        "backup_file": backup_file,
+        "imported": imported,
+        "total_rows": total_rows,
+        "skipped_empty_rows": skipped_empty_rows,
+        "skipped_rows": skipped_empty_rows,
+        "skipped_empty_row_numbers_preview": skipped_empty_row_numbers,
+        "skipped_empty_row_numbers_truncated": skipped_empty_rows > len(skipped_empty_row_numbers),
+        "matched_columns_count": len(matched_non_serial),
+        "matched_columns": sorted(matched_non_serial),
+    }
+
+
+@app.post("/api/delivery/interviews/import")
+async def interview_import_csv_global(
+    client_id: int = Form(...),
+    file: UploadFile = File(...),
+    confirm: str = Form(""),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    return await interview_import_csv(
+        client_id=client_id,
+        file=file,
+        confirm=confirm,
+        db=db,
+        user=user,
+    )
+
+
+@app.get("/api/clients/{client_id}/delivery/interviews/export")
+async def interview_export_csv(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    rows = (
+        db.query(DeliveryInterviewEntry)
+        .filter(DeliveryInterviewEntry.client_id == client_id)
+        .order_by(DeliveryInterviewEntry.id)
+        .all()
+    )
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output)
+    writer.writerow(INTERVIEW_EXPORT_HEADERS)
+    for sn, e in _interview_display_serial_pairs(rows):
+        d = _interview_entry_to_dict(e)
+        cells = [str(sn)] + [d.get(INTERVIEW_HEADER_MAP[h], "") for h in INTERVIEW_EXPORT_HEADERS[1:]]
+        writer.writerow(cells)
+    response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    _set_csv_download_headers(
+        response,
+        chinese_filename=f"{c.name}_员工访谈_{ts}.csv",
+        ascii_base=f"client_{client_id}_interviews_{ts}",
+    )
+    return response
+
+
+@app.get("/api/clients/{client_id}/delivery/interviews/logs")
+async def interview_logs(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.client_id == client_id)
+        .filter(AuditLog.action.like("员工访谈%"))
+        .order_by(desc(AuditLog.created_at))
+        .all()
+    )
+    return logs
+
+
+@app.post("/api/clients/{client_id}/delivery/interviews/restore/latest")
+async def interview_restore_latest_backup(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    latest = _pick_latest_backup("interview_backup_", client_id=client_id)
+    if not latest:
+        raise HTTPException(status_code=404, detail="未找到该客户员工访谈备份文件")
+    backup_path = os.path.join(BACKUP_DIR, latest)
+    with open(backup_path, "r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    cleared_existing = db.query(DeliveryInterviewEntry).filter(DeliveryInterviewEntry.client_id == client_id).count()
+    if cleared_existing:
+        db.query(DeliveryInterviewEntry).filter(DeliveryInterviewEntry.client_id == client_id).delete()
+        db.commit()
+    restored_rows = 0
+    for row in rows:
+        mapped = {fk: "" for fk in set(INTERVIEW_HEADER_MAP.values())}
+        for hk, fk in INTERVIEW_HEADER_MAP.items():
+            cell = str(row.get(hk, "") or "").strip()
+            if cell:
+                mapped[fk] = cell
+        mapped["serial_no"] = ""
+        if not any(mapped.values()):
+            continue
+        db.add(DeliveryInterviewEntry(client_id=client_id, **mapped))
+        restored_rows += 1
+    _resequence_interview_serial_no(db, client_id)
+    db.commit()
+    db.add(
+        AuditLog(
+            client_id=client_id,
+            operator=user,
+            action=f"员工访谈从备份恢复：{latest}，清空 {cleared_existing} 行，恢复 {restored_rows} 行",
         )
     )
     db.commit()

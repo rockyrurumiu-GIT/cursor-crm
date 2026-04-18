@@ -60,6 +60,61 @@
     .settlement-table tbody tr:last-child td {
         border-bottom: 1px solid #d1d5db;
     }
+    /* 员工访谈：列宽随内容；长文本列限定宽度、竖向完整展示 */
+    .crm-table.interview-table {
+        table-layout: auto;
+        width: max-content;
+        max-width: none;
+    }
+    .crm-table.interview-table .crm-td.interview-col-tight,
+    .crm-table.interview-table .crm-th.interview-col-tight {
+        white-space: nowrap;
+        width: auto;
+    }
+    /* 联系方式：数据列 11 位数字宽；表头单独放宽避免「联系方式」被挤 */
+    .crm-table.interview-table .crm-th.interview-col-contact {
+        white-space: nowrap !important;
+        vertical-align: middle;
+    }
+    .crm-table.interview-table .crm-td.interview-col-contact {
+        width: 11ch;
+        min-width: 11ch;
+        max-width: 11ch;
+        box-sizing: border-box;
+        white-space: nowrap !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: top;
+    }
+    /* 岗位：约 10 个汉字宽度，可换行但不撑破整表 */
+    .crm-table.interview-table .crm-td.interview-col-position,
+    .crm-table.interview-table .crm-th.interview-col-position {
+        width: 10em;
+        min-width: 10em;
+        max-width: 10em;
+        box-sizing: border-box;
+        white-space: normal !important;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        vertical-align: top;
+    }
+    /* 交付判断 / 员工诉求 / 交付待办：加宽列、自然换行、不截断（不使用 line-clamp） */
+    .crm-table.interview-table .crm-td.interview-col-text-wide {
+        width: 30rem;
+        min-width: 24rem;
+        max-width: 34rem;
+        box-sizing: border-box;
+        white-space: normal !important;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        line-height: 1.35;
+        vertical-align: top;
+    }
+    .crm-table.interview-table .crm-th.interview-col-text-wide {
+        max-width: 34rem;
+        white-space: nowrap !important;
+        vertical-align: middle;
+    }
     .pipeline-filter-control {
         height: 2.25rem;
         min-height: 2.25rem;
@@ -297,15 +352,70 @@
         </div>
         <div v-else-if="moduleKey === 'interviews'" class="mt-5 space-y-3">
             <div class="flex justify-end gap-2">
-                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="interviewFeatureTodo('新增行')">新增行</button>
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="interviewFeatureTodo('日志')">日志</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openInterviewAdd">新增行</button>
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openInterviewLogs">日志</button>
                 <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerInterviewImport">导入</button>
                 <input ref="interviewFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onInterviewImportFile" />
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="interviewFeatureTodo('导出')">导出</button>
-                <button type="button" class="crm-btn-rollback" @click="interviewFeatureTodo('回滚')">回滚</button>
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportInterviewCsv">导出</button>
+                <button type="button" class="crm-btn-rollback" @click="restoreInterviewLatestBackup">回滚</button>
             </div>
-            <div class="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-10 text-center text-sm text-gray-500">
-                员工访谈页面功能入口已创建：新增行、日志、导入、导出、回滚。
+            <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
+                <table class="crm-table interview-table">
+                <thead>
+                    <tr>
+                        <th class="crm-th interview-col-tight">序号</th>
+                        <th class="crm-th interview-col-tight">员工姓名</th>
+                        <th class="crm-th interview-col-tight">在职/离职</th>
+                        <th class="crm-th interview-col-contact">联系方式</th>
+                        <th class="crm-th interview-col-tight">所属项目</th>
+                        <th class="crm-th interview-col-position">岗位</th>
+                        <th class="crm-th interview-col-tight">员工加1</th>
+                        <th class="crm-th interview-col-tight">入职时间</th>
+                        <th class="crm-th interview-col-tight">访谈日期</th>
+                        <th class="crm-th interview-col-tight">满意度</th>
+                        <th class="crm-th interview-col-text-wide">交付判断</th>
+                        <th class="crm-th interview-col-text-wide">员工诉求</th>
+                        <th class="crm-th interview-col-text-wide">交付待办事项</th>
+                        <th class="crm-th interview-col-tight">工作地</th>
+                        <th class="crm-th interview-col-tight">老家</th>
+                        <th class="crm-th interview-col-tight">1 D</th>
+                        <th class="crm-th interview-col-tight">7 D</th>
+                        <th class="crm-th interview-col-tight">30 D</th>
+                        <th class="crm-th interview-col-tight">90 D</th>
+                        <th class="crm-th crm-sticky-right-op">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in interviewDisplayRows" :key="row.id">
+                        <td class="crm-td interview-col-tight">{{ row.displaySerial }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.full_name }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.employment_status }}</td>
+                        <td class="crm-td interview-col-contact">{{ row.contact }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.project_name }}</td>
+                        <td class="crm-td interview-col-position">{{ row.position }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.employee_q1 }}</td>
+                        <td class="crm-td interview-col-tight">{{ displayDateSlash(row.onboarding_time) }}</td>
+                        <td class="crm-td interview-col-tight">{{ displayDateSlash(row.interview_date) }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.satisfaction }}</td>
+                        <td class="crm-td interview-col-text-wide">{{ row.delivery_judgment }}</td>
+                        <td class="crm-td interview-col-text-wide">{{ row.employee_requests }}</td>
+                        <td class="crm-td interview-col-text-wide">{{ row.delivery_todos }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.work_location }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.hometown }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.followup_1d }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.followup_7d }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.followup_30d }}</td>
+                        <td class="crm-td interview-col-tight">{{ row.followup_90d }}</td>
+                        <td class="crm-td whitespace-nowrap crm-sticky-right-op">
+                            <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openInterviewEdit(row)">修改</button>
+                            <button type="button" class="text-red-600 text-xs hover:underline" @click="removeInterviewRow(row)">删除</button>
+                        </td>
+                    </tr>
+                    <tr v-if="!interviewDisplayRows.length">
+                        <td colspan="20" class="crm-td text-center text-gray-400 py-8">暂无数据，可新增行或导入 CSV（表头需与导出模板一致）</td>
+                    </tr>
+                </tbody>
+            </table>
             </div>
         </div>
         <div v-else-if="moduleKey === 'settlement'" class="mt-5 space-y-3">
@@ -422,6 +532,54 @@
         </div>
     </div>
 
+    <div v-if="showInterviewForm && moduleKey === 'interviews'" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">{{ interviewEditingId ? '修改员工访谈' : '新增员工访谈' }}</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showInterviewForm=false">&times;</button>
+            </div>
+            <div class="overflow-y-auto p-5">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                    <label v-for="f in interviewFields" :key="f.key" class="flex flex-col gap-1" :class="f.type === 'textarea' ? 'md:col-span-3' : ''">
+                        <span class="text-gray-600">{{ f.label }}</span>
+                        <div v-if="f.type === 'date'" class="relative">
+                            <input v-model="interviewForm[f.key]" type="date" class="border border-gray-300 rounded px-2 py-1.5 pr-14 w-full" />
+                            <button v-if="interviewForm[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearInterviewDateField(f.key)">清空</button>
+                        </div>
+                        <textarea v-else-if="f.type === 'textarea'" v-model="interviewForm[f.key]" rows="4" class="border border-gray-300 rounded px-2 py-1.5 w-full"></textarea>
+                        <input v-else v-model="interviewForm[f.key]" :type="f.type || 'text'" class="border border-gray-300 rounded px-2 py-1.5 w-full" />
+                    </label>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showInterviewForm=false">取消</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="saveInterviewForm">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showInterviewLogs && moduleKey === 'interviews'" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="text-lg font-bold text-gray-900">员工访谈日志</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showInterviewLogs=false">&times;</button>
+            </div>
+            <div class="overflow-y-auto p-5">
+                <div v-if="interviewLogsLoading" class="text-sm text-gray-500 py-8 text-center">日志加载中...</div>
+                <div v-else-if="!interviewLogs.length" class="text-sm text-gray-400 py-8 text-center">暂无日志记录</div>
+                <div v-else class="text-sm space-y-4">
+                    <div v-for="log in interviewLogs" :key="log.id" class="flex items-start">
+                        <div class="w-2.5 h-2.5 bg-gray-300 rounded-full mt-1.5 mr-3 shrink-0"></div>
+                        <div class="min-w-0">
+                            <p class="text-gray-400">{{ formatDate(log.created_at) }} - {{ log.operator || '-' }}</p>
+                            <p class="text-gray-700 break-words whitespace-pre-line">{{ log.action }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div v-if="showForm && moduleKey === 'settlement'" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
@@ -479,6 +637,26 @@ const PIPELINE_FIELDS = [
     { key: 'status_note', label: '情况' },
     { key: 'serial_no', label: '序号' },
 ];
+const INTERVIEW_FIELDS = [
+    { key: 'full_name', label: '员工姓名' },
+    { key: 'employment_status', label: '在职/离职' },
+    { key: 'contact', label: '联系方式' },
+    { key: 'project_name', label: '所属项目' },
+    { key: 'position', label: '岗位' },
+    { key: 'employee_q1', label: '员工加1' },
+    { key: 'onboarding_time', label: '入职时间', type: 'date' },
+    { key: 'interview_date', label: '访谈日期', type: 'date' },
+    { key: 'satisfaction', label: '满意度' },
+    { key: 'delivery_judgment', label: '交付判断' },
+    { key: 'employee_requests', label: '员工诉求', type: 'textarea' },
+    { key: 'delivery_todos', label: '交付待办事项', type: 'textarea' },
+    { key: 'work_location', label: '工作地' },
+    { key: 'hometown', label: '老家' },
+    { key: 'followup_1d', label: '1 D' },
+    { key: 'followup_7d', label: '7 D' },
+    { key: 'followup_30d', label: '30 D' },
+    { key: 'followup_90d', label: '90 D' },
+];
 const SETTLEMENT_FIELDS = [
     { key: 'serial_no', label: '序号' },
     { key: 'progress_updated_at', label: '结算进度更新时间', type: 'date' },
@@ -506,6 +684,9 @@ const PIPELINE_DATE_FIELD_KEYS = new Set(
 const SETTLEMENT_DATE_FIELD_KEYS = new Set(
     SETTLEMENT_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
 );
+const INTERVIEW_DATE_FIELD_KEYS = new Set(
+    INTERVIEW_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
+);
 
 function emptySettlementForm() {
     const f = {};
@@ -515,6 +696,11 @@ function emptySettlementForm() {
 function emptyPipelineForm() {
     const f = {};
     PIPELINE_FIELDS.forEach((x) => { f[x.key] = ''; });
+    return f;
+}
+function emptyInterviewForm() {
+    const f = {};
+    INTERVIEW_FIELDS.forEach((x) => { f[x.key] = ''; });
     return f;
 }
 function todayInputDate() {
@@ -587,6 +773,32 @@ createApp({
         const pipelineRows = ref([]);
         const pipelineFilter = reactive(emptyPipelineFilter());
         const interviewFileInput = ref(null);
+        const interviewRows = ref([]);
+        const showInterviewForm = ref(false);
+        const interviewEditingId = ref(null);
+        const interviewForm = reactive(emptyInterviewForm());
+        const showInterviewLogs = ref(false);
+        const interviewLogsLoading = ref(false);
+        const interviewLogs = ref([]);
+        const interviewDisplayRows = computed(() => {
+            const raw = Array.isArray(interviewRows.value) ? [...interviewRows.value] : [];
+            raw.sort((a, b) => Number(a.id || 0) - Number(b.id || 0));
+            const nameToSn = new Map();
+            let next = 1;
+            return raw.map((row) => {
+                const name = String(row.full_name || '').trim();
+                const key = name || '__empty__';
+                let sn;
+                if (nameToSn.has(key)) {
+                    sn = nameToSn.get(key);
+                } else {
+                    sn = next;
+                    nameToSn.set(key, next);
+                    next += 1;
+                }
+                return { ...row, displaySerial: sn };
+            });
+        });
         const resumeScreeningDropdownOpen = ref(false);
         const resumeScreeningFilterRef = ref(null);
         const resumeScreeningSummary = computed(() => {
@@ -706,6 +918,58 @@ createApp({
                 return Number(b.id || 0) - Number(a.id || 0);
             }) : [];
         };
+        const loadInterviewRows = async () => {
+            if (moduleKey !== 'interviews') return;
+            const r = await fetch(`/api/clients/${clientId}/delivery/interviews`, { headers: window.crmAuthHeader() });
+            const list = r.ok ? await r.json() : [];
+            interviewRows.value = Array.isArray(list) ? list : [];
+        };
+        const openInterviewAdd = () => {
+            interviewEditingId.value = null;
+            Object.assign(interviewForm, emptyInterviewForm());
+            showInterviewForm.value = true;
+        };
+        const openInterviewEdit = (row) => {
+            interviewEditingId.value = row.id;
+            INTERVIEW_FIELDS.forEach((f) => {
+                const raw = row[f.key] != null ? String(row[f.key]) : '';
+                interviewForm[f.key] = INTERVIEW_DATE_FIELD_KEYS.has(f.key)
+                    ? normalizeDateForInput(raw, false)
+                    : raw;
+            });
+            showInterviewForm.value = true;
+        };
+        const saveInterviewForm = async () => {
+            const payload = {};
+            INTERVIEW_FIELDS.forEach((f) => { payload[f.key] = interviewForm[f.key]; });
+            const url = interviewEditingId.value
+                ? `/api/delivery/interviews/row/${interviewEditingId.value}`
+                : `/api/clients/${clientId}/delivery/interviews`;
+            const method = interviewEditingId.value ? 'PUT' : 'POST';
+            const r = await fetch(url, {
+                method,
+                headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!r.ok) {
+                alert('保存失败');
+                return;
+            }
+            showInterviewForm.value = false;
+            await loadInterviewRows();
+        };
+        const removeInterviewRow = async (row) => {
+            if (!confirm('确定删除该条记录？')) return;
+            const r = await fetch(`/api/delivery/interviews/row/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
+            if (!r.ok) {
+                alert('删除失败');
+                return;
+            }
+            await loadInterviewRows();
+        };
+        const clearInterviewDateField = (key) => {
+            interviewForm[key] = '';
+        };
         const openPipelineAdd = () => {
             pipelineEditingId.value = null;
             Object.assign(pipelineForm, emptyPipelineForm());
@@ -757,17 +1021,106 @@ createApp({
         const triggerPipelineImport = () => {
             if (pipelineFileInput.value) pipelineFileInput.value.click();
         };
-        const interviewFeatureTodo = (featureName) => {
-            alert(`员工访谈「${featureName}」功能已创建入口，下一步可接入实际数据逻辑。`);
-        };
         const triggerInterviewImport = () => {
             if (interviewFileInput.value) interviewFileInput.value.click();
         };
         const onInterviewImportFile = async (e) => {
             const f = e.target.files && e.target.files[0];
-            e.target.value = '';
             if (!f) return;
-            interviewFeatureTodo(`导入（已选择 ${f.name}）`);
+            const token = window.prompt('该操作会先备份并清空当前客户员工访谈数据，再导入新 CSV。\n请输入 CONFIRM 继续：', '');
+            if (token == null) {
+                e.target.value = '';
+                return;
+            }
+            const fd = new FormData();
+            fd.append('file', f);
+            fd.append('confirm', token);
+            const r = await fetch(`/api/clients/${clientId}/delivery/interviews/import`, {
+                method: 'POST',
+                headers: window.crmAuthHeader(),
+                body: fd,
+            });
+            e.target.value = '';
+            if (!r.ok) {
+                let msg = `导入失败（HTTP ${r.status}）`;
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') {
+                        msg = err.detail;
+                    } else if (Array.isArray(err.detail)) {
+                        msg = err.detail.map((x) => (x && x.msg) || JSON.stringify(x)).join('；') || msg;
+                    } else if (err.detail != null) {
+                        msg = String(err.detail);
+                    }
+                } catch (err2) {
+                    if (r.status === 404) {
+                        msg = '接口不存在（404）。请确认已重启 CRM 服务并更新到包含「员工访谈导入」的版本。';
+                    }
+                }
+                alert(msg);
+                return;
+            }
+            const j = await r.json();
+            const lines = [
+                '导入完成',
+                j.backup_file ? `备份文件：${j.backup_file}` : '备份文件：无（原数据为空）',
+                `清空旧数据：${j.cleared_existing || 0} 行`,
+                `CSV 总行数：${j.total_rows || 0} 行`,
+                `导入成功：${j.imported || 0} 行`,
+                `跳过空行：${j.skipped_empty_rows || 0} 行`,
+            ];
+            if (j.matched_columns_count) {
+                lines.push(`匹配字段数：${j.matched_columns_count} 列`);
+            }
+            if (Array.isArray(j.skipped_empty_row_numbers_preview) && j.skipped_empty_row_numbers_preview.length) {
+                lines.push(`跳过行号（预览）：${j.skipped_empty_row_numbers_preview.join('、')}`);
+                if (j.skipped_empty_row_numbers_truncated) {
+                    lines.push('（仅展示前20条跳过行号）');
+                }
+            }
+            alert(lines.join('\n'));
+            await loadInterviewRows();
+        };
+        const exportInterviewCsv = async () => {
+            const r = await fetch(`/api/clients/${clientId}/delivery/interviews/export`, { headers: window.crmAuthHeader() });
+            if (!r.ok) {
+                alert('导出失败');
+                return;
+            }
+            const disposition = r.headers.get('Content-Disposition') || '';
+            const blob = await r.blob();
+            window.crmDownloadBlob(blob, disposition, `员工访谈_${Date.now()}.csv`);
+        };
+        const openInterviewLogs = async () => {
+            showInterviewLogs.value = true;
+            interviewLogsLoading.value = true;
+            try {
+                const r = await fetch(`/api/clients/${clientId}/delivery/interviews/logs`, { headers: window.crmAuthHeader() });
+                interviewLogs.value = r.ok ? await r.json() : [];
+            } finally {
+                interviewLogsLoading.value = false;
+            }
+        };
+        const restoreInterviewLatestBackup = async () => {
+            const ok = window.confirm('将使用「最近一次员工访谈备份」覆盖当前客户数据，是否继续？');
+            if (!ok) return;
+            const r = await fetch(`/api/clients/${clientId}/delivery/interviews/restore/latest`, {
+                method: 'POST',
+                headers: window.crmAuthHeader(),
+            });
+            if (!r.ok) {
+                let msg = '回滚失败';
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') msg = err.detail;
+                } catch (e2) {}
+                alert(msg);
+                return;
+            }
+            const j = await r.json();
+            alert(`已从备份 ${j.backup_file} 回滚，清空 ${j.cleared_existing || 0} 行，恢复 ${j.restored_rows || 0} 行`);
+            await loadInterviewRows();
+            await openInterviewLogs();
         };
         const onPipelineImportFile = async (e) => {
             const f = e.target.files && e.target.files[0];
@@ -926,6 +1279,7 @@ createApp({
             await loadBrief();
             await loadSettlementRows();
             await loadPipelineRows();
+            await loadInterviewRows();
             if (moduleKey === 'pipeline') {
                 openPipelineEditByQuery();
             }
@@ -944,7 +1298,12 @@ createApp({
             settlementRows, settlementFields: SETTLEMENT_FIELDS,
             showForm, editingId, form,
             openPipelineAdd, openPipelineEdit, savePipelineForm, removePipelineRow,
-            interviewFeatureTodo, triggerInterviewImport, onInterviewImportFile,
+            interviewRows, interviewDisplayRows, interviewFields: INTERVIEW_FIELDS,
+            showInterviewForm, interviewEditingId, interviewForm,
+            showInterviewLogs, interviewLogsLoading, interviewLogs,
+            openInterviewAdd, openInterviewEdit, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
+            triggerInterviewImport, onInterviewImportFile,
+            exportInterviewCsv, openInterviewLogs, restoreInterviewLatestBackup,
             triggerPipelineImport, onPipelineImportFile, exportPipelineCsv, openPipelineLogs, restorePipelineLatestBackup, formatDate,
             scrollToTop, clearPipelineDateField, clearSettlementDateField, displayDateSlash,
             openAdd, openEdit, saveForm, removeRow,

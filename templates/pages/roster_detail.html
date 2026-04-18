@@ -58,6 +58,18 @@
         padding-left: 8px;
         padding-right: 8px;
     }
+    /* 中诺：岗位列宽约 15 个汉字 */
+    .crm-table .crm-th.roster-col-position-zntx,
+    .crm-table .crm-td.roster-col-position-zntx {
+        width: 15em;
+        min-width: 15em;
+        max-width: 15em;
+        box-sizing: border-box;
+        white-space: normal !important;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        vertical-align: top;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -119,7 +131,7 @@
 
         <div class="rounded-xl border border-gray-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_24px_-4px_rgba(15,23,42,0.06)] overflow-hidden">
             <div class="crm-h-scroll roster-wrap crm-table-scroll" style="--crm-table-scroll-max-height: calc(100vh - 280px);">
-                <table class="crm-table min-w-[2680px] text-sm text-gray-800">
+                <table class="crm-table min-w-[2280px] text-sm text-gray-800">
                     <thead>
                         <tr>
                             <th class="crm-th min-w-[3.25rem]">序号</th>
@@ -129,7 +141,7 @@
                             <th class="crm-th min-w-[8rem]">联系方式</th>
                             <th class="crm-th min-w-[5rem]">客户</th>
                             <th class="crm-th min-w-[4.5rem]">工作地</th>
-                            <th class="crm-th min-w-[10rem]">岗位</th>
+                            <th class="crm-th" :class="isZNTX ? 'roster-col-position-zntx' : 'min-w-[10rem]'">岗位</th>
                             <th class="crm-th min-w-[7rem]">业务线</th>
                             <th class="crm-th min-w-[7rem]">{{ isZNTX ? '入职时间' : '入职日期' }}</th>
                             <th class="crm-th min-w-[7rem]">转正时间</th>
@@ -141,14 +153,11 @@
                             <th class="crm-th min-w-[5.5rem]">员工+1</th>
                             <th v-if="isZNTX" class="crm-th min-w-[6rem]">入职渠道</th>
                             <th v-if="isZNTX" class="crm-th min-w-[5rem]">打卡</th>
-                            <th v-if="isZNTX" class="crm-th min-w-[5rem]">补卡</th>
                             <th class="crm-th min-w-[5.5rem]">员工+2</th>
                             <th class="crm-th min-w-[4.5rem]">接口</th>
-                            <th class="crm-th min-w-[7rem]">{{ isZNTX ? '项目释放时间' : '项目释放日期' }}</th>
-                            <th class="crm-th min-w-[7rem]">{{ isZNTX ? '离职时间' : '公司离职日期' }}</th>
-                            <th v-if="isZNTX" class="crm-th min-w-[7rem]">离职类型</th>
-                            <th class="crm-th min-w-[14rem]">{{ isZNTX ? '释放成功离职原因' : '离职或释放原因' }}</th>
-                            <th v-if="isZNTX" class="crm-th min-w-[6rem] crm-currency-cell">补偿金</th>
+                            <th v-if="showStdReleaseLeaveCols" class="crm-th min-w-[7rem]">项目释放日期</th>
+                            <th v-if="showStdReleaseLeaveCols" class="crm-th min-w-[7rem]">公司离职日期</th>
+                            <th v-if="showStdReleaseLeaveCols" class="crm-th min-w-[14rem]">离职或释放原因</th>
                             <th class="crm-th min-w-[10rem] max-w-[15rem]">备注</th>
                             <th class="crm-th sticky right-0 z-20 min-w-[5.5rem] roster-sticky-op crm-sticky-right-op">操作</th>
                         </tr>
@@ -162,7 +171,7 @@
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.contact_info }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.customer_name }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.work_location }}</td>
-                            <td class="crm-td px-3 py-3 text-gray-700 align-top leading-snug">{{ row.position_title }}</td>
+                            <td class="crm-td px-3 py-3 text-gray-700 align-top leading-snug" :class="{ 'roster-col-position-zntx': isZNTX }">{{ row.position_title }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.business_line }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.entry_date) }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.regularization_date) }}</td>
@@ -174,14 +183,11 @@
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.employee_plus1 }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_onboarding_channel }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_attendance_checkin }}</td>
-                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_attendance_makeup }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.employee_plus2 }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.interface_contact }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.project_release_date) }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.company_resign_date) }}</td>
-                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_separation_type }}</td>
-                            <td class="crm-td px-3 py-3 min-w-[14rem] max-w-[18rem] text-gray-700 align-top leading-snug">{{ row.leave_reason }}</td>
-                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.zntx_compensation_amount) }}</td>
+                            <td v-if="showStdReleaseLeaveCols" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.project_release_date) }}</td>
+                            <td v-if="showStdReleaseLeaveCols" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.company_resign_date) }}</td>
+                            <td v-if="showStdReleaseLeaveCols" class="crm-td px-3 py-3 min-w-[14rem] max-w-[18rem] text-gray-700 align-top leading-snug">{{ row.leave_reason }}</td>
                             <td class="crm-td px-3 py-3 max-w-[13rem] break-words text-gray-700 align-top leading-snug">{{ row.remarks }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap align-top sticky right-0 z-10 border-l border-gray-100 bg-white group-hover:bg-stone-50/90 roster-sticky-op crm-sticky-right-op">
                                 <button type="button" class="text-blue-600 hover:text-blue-800 hover:underline text-xs mr-2" @click="openEdit(row)">修改</button>
@@ -189,7 +195,7 @@
                             </td>
                         </tr>
                         <tr v-if="!loading && !filteredRows.length">
-                            <td :colspan="isZNTX ? 29 : 23" class="px-6 py-12 text-center text-gray-400 text-sm">暂无数据，请点击「新增行」或「导入 CSV」</td>
+                            <td :colspan="emptyRowColspan" class="px-6 py-12 text-center text-gray-400 text-sm">暂无数据，请点击「新增行」或「导入 CSV」</td>
                         </tr>
                     </tbody>
                     <tfoot v-if="!loading && filteredRows.length">
@@ -207,7 +213,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
                                 <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td :colspan="rosterFooterRemarkColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
                             </tr>
                             <tr class="text-sm font-medium">
@@ -220,7 +226,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgGms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgGmPct }}</td>
                                 <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td :colspan="rosterFooterRemarkColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
                             </tr>
                         </template>
@@ -238,7 +244,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
                                 <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td colspan="7" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td colspan="1" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
                             </tr>
                             <tr class="text-sm font-medium">
@@ -251,7 +257,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgGms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgGmPct }}</td>
                                 <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td colspan="7" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td colspan="1" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
                             </tr>
                         </template>
@@ -334,13 +340,14 @@
         </div>
     </div>
 
-    <!-- 删除确认 -->
-    <div v-if="showDel" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-        <div class="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full text-center">
-            <p class="text-gray-800 mb-4">确定删除该条花名册记录？</p>
+    <!-- 删除确认（整体/单客户花名册共用） -->
+    <div v-if="showDel" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" @click.self="cancelDelete">
+        <div class="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full text-center" role="dialog" aria-modal="true" aria-labelledby="roster-del-title">
+            <h3 id="roster-del-title" class="text-lg font-semibold text-gray-900 mb-2">确认删除</h3>
+            <p class="text-gray-600 text-sm mb-4">确定删除该条花名册记录？删除后不可恢复。</p>
             <div class="flex gap-2 justify-center">
-                <button type="button" class="flex-1 py-2 rounded-lg border" @click="showDel=false">取消</button>
-                <button type="button" class="flex-1 py-2 rounded-lg bg-red-600 text-white" @click="doDelete">删除</button>
+                <button type="button" class="flex-1 py-2 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50" @click="cancelDelete">取消</button>
+                <button type="button" class="flex-1 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700" @click="doDelete">确认删除</button>
             </div>
         </div>
     </div>
@@ -405,6 +412,11 @@ const STANDARD_FORM_FIELDS = [
     { key: 'leave_reason', label: '离职或释放原因' },
     { key: 'remarks', label: '备注' },
 ];
+/** 下列客户（及整体花名册）表格与表单不展示这三项，与中诺视图一致不占列 */
+const HIDE_RELEASE_LEAVE_FIELD_KEYS = ['project_release_date', 'company_resign_date', 'leave_reason'];
+function standardFormFieldsWithoutReleaseLeave() {
+    return STANDARD_FORM_FIELDS.filter((f) => !HIDE_RELEASE_LEAVE_FIELD_KEYS.includes(f.key));
+}
 const ZNTX_FORM_FIELDS = [
     { key: 'serial_no', label: '序号' },
     { key: 'employment_status', label: '在职情况' },
@@ -425,14 +437,8 @@ const ZNTX_FORM_FIELDS = [
     { key: 'employee_plus1', label: '员工+1' },
     { key: 'zntx_onboarding_channel', label: '入职渠道' },
     { key: 'zntx_attendance_checkin', label: '打卡' },
-    { key: 'zntx_attendance_makeup', label: '补卡' },
     { key: 'employee_plus2', label: '员工+2' },
     { key: 'interface_contact', label: '接口' },
-    { key: 'project_release_date', label: '项目释放时间' },
-    { key: 'company_resign_date', label: '离职时间' },
-    { key: 'zntx_separation_type', label: '离职类型' },
-    { key: 'leave_reason', label: '释放成功离职原因' },
-    { key: 'zntx_compensation_amount', label: '补偿金' },
     { key: 'remarks', label: '备注' },
 ];
 const FORM_FIELDS = [
@@ -578,6 +584,27 @@ createApp({
                 .replace(/[（）()]/g, '');
             return raw.includes('中诺通讯');
         });
+        /** 元枢/KPIT/日产/帷幄/华勤：不展示项目释放与离职相关三列（整体花名册沿用中诺式布局，本来就不含这三列） */
+        const hideReleaseLeaveCols = computed(() => {
+            const raw = String(brief.value?.name || '')
+                .replace(/\s+/g, '')
+                .replace(/[（）()]/g, '');
+            const upper = raw.toUpperCase();
+            return (
+                raw.includes('元枢')
+                || upper.includes('KPIT')
+                || raw.includes('日产')
+                || raw.includes('帷幄')
+                || raw.includes('华勤')
+            );
+        });
+        const showStdReleaseLeaveCols = computed(() => !isZNTX.value && !hideReleaseLeaveCols.value);
+        const emptyRowColspan = computed(() => {
+            if (isZNTX.value) return 23;
+            return hideReleaseLeaveCols.value ? 20 : 23;
+        });
+        /** 标准布局表尾「备注」占位：有离职三列时为 colspan 4，隐藏三列时为 1 */
+        const rosterFooterRemarkColspan = computed(() => (hideReleaseLeaveCols.value ? 1 : 4));
         const hasFieldData = (key) => rows.value.some((r) => String(r[key] || '').trim() !== '');
         const uniqueOptions = (key) => {
             const set = new Set();
@@ -592,7 +619,10 @@ createApp({
         const customerNameOptions = computed(() => uniqueOptions('customer_name'));
         const positionTitleOptions = computed(() => uniqueOptions('position_title'));
         const tableFieldKeys = computed(() => {
-            const fields = isZNTX.value ? ZNTX_FORM_FIELDS : STANDARD_FORM_FIELDS;
+            let fields;
+            if (isZNTX.value) fields = ZNTX_FORM_FIELDS;
+            else if (hideReleaseLeaveCols.value) fields = standardFormFieldsWithoutReleaseLeave();
+            else fields = STANDARD_FORM_FIELDS;
             return new Set(fields.map((f) => f.key));
         });
         const FILTER_FIELD_MAP = {
@@ -735,7 +765,11 @@ createApp({
                 avgGmPct: formatRatioAsPercent(avgGmRatio),
             };
         });
-        const activeFormFields = computed(() => (isZNTX.value ? ZNTX_FORM_FIELDS : STANDARD_FORM_FIELDS));
+        const activeFormFields = computed(() => {
+            if (isZNTX.value) return ZNTX_FORM_FIELDS;
+            if (hideReleaseLeaveCols.value) return standardFormFieldsWithoutReleaseLeave();
+            return STANDARD_FORM_FIELDS;
+        });
         const requiredFieldLabelMap = computed(() => {
             const map = {};
             activeFormFields.value.forEach((f) => { map[f.key] = f.label; });
@@ -913,13 +947,21 @@ createApp({
             delRow.value = row;
             showDel.value = true;
         };
-        const doDelete = async () => {
-            if (!delRow.value) return;
-            const r = await fetch(`/api/roster/${delRow.value.id}`, { method: 'DELETE', headers: authHeader() });
+        const cancelDelete = () => {
             showDel.value = false;
             delRow.value = null;
-            if (r.ok) loadRows();
-            else alert('删除失败');
+        };
+        const doDelete = async () => {
+            if (!delRow.value) return;
+            const id = delRow.value.id;
+            const r = await fetch(`/api/roster/${id}`, { method: 'DELETE', headers: authHeader() });
+            if (r.ok) {
+                cancelDelete();
+                loadRows();
+            } else {
+                alert('删除失败');
+                cancelDelete();
+            }
         };
         const triggerImport = () => {
             if (fileInput.value) fileInput.value.click();
@@ -1055,9 +1097,10 @@ createApp({
         return {
             rows, filteredRows, filters, employmentStatusOptions, workLocationOptions, customerNameOptions, positionTitleOptions,
             brief, loading, showForm, editingId, form, formFields: activeFormFields,
-            showDel, fileInput, rosterFooter, isZNTX, showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors,
+            showDel, fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
+            showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors,
             IS_GLOBAL_ROSTER,
-            openAdd, openEdit, saveForm, confirmDelete, doDelete,
+            openAdd, openEdit, saveForm, confirmDelete, cancelDelete, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, fieldInputType, markTouched, getFieldError,
             clearDateField, displayAmountInteger, displayRosterDate,
         };
