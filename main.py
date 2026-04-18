@@ -510,6 +510,32 @@ def _normalize_interview_payload(d: Dict[str, Any]) -> Dict[str, str]:
     return out
 
 
+def _validate_interview_business_fields(data: Dict[str, str]) -> None:
+    if len(str(data.get("delivery_judgment", "")).strip()) < 20:
+        raise HTTPException(status_code=400, detail="交付判断至少需要填写20个字")
+    if len(str(data.get("delivery_todos", "")).strip()) < 10:
+        raise HTTPException(status_code=400, detail="交付待办事项至少需要填写10个字")
+
+
+def _assert_interview_delivery_judgment_unique(
+    db: Session,
+    client_id: int,
+    full_name: str,
+    delivery_judgment: str,
+    exclude_row_id: Optional[int] = None,
+) -> None:
+    name = str(full_name or "").strip()
+    judgment = str(delivery_judgment or "").strip()
+    if not name or not judgment:
+        return
+    q = db.query(DeliveryInterviewEntry).filter(DeliveryInterviewEntry.client_id == client_id)
+    if exclude_row_id is not None:
+        q = q.filter(DeliveryInterviewEntry.id != exclude_row_id)
+    for row in q.all():
+        if str(row.full_name or "").strip() == name and str(row.delivery_judgment or "").strip() == judgment:
+            raise HTTPException(status_code=409, detail="同一员工的多条访谈记录中，交付判断内容不能重复")
+
+
 def _normalize_settlement_payload(d: Dict[str, Any]) -> Dict[str, str]:
     keys = [
         "serial_no",
@@ -2716,6 +2742,8 @@ async def interview_create_row(
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
     data = _normalize_interview_payload(body if isinstance(body, dict) else {})
+    _validate_interview_business_fields(data)
+    _assert_interview_delivery_judgment_unique(db, client_id, data.get("full_name", ""), data.get("delivery_judgment", ""))
     max_row = (
         db.query(DeliveryInterviewEntry)
         .filter(DeliveryInterviewEntry.client_id == client_id)
@@ -2746,6 +2774,14 @@ async def interview_update_row(
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
     data = _normalize_interview_payload(body if isinstance(body, dict) else {})
+    _validate_interview_business_fields(data)
+    _assert_interview_delivery_judgment_unique(
+        db,
+        entry.client_id,
+        data.get("full_name", ""),
+        data.get("delivery_judgment", ""),
+        exclude_row_id=row_id,
+    )
     for k, v in data.items():
         if k == "serial_no":
             continue

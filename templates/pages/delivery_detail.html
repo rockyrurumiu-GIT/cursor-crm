@@ -152,12 +152,19 @@
     .pipeline-filter-dropdown-item:hover {
         background: #f9fafb;
     }
+    .interview-filter-row {
+        align-items: flex-end;
+    }
+    .interview-filter-date {
+        min-width: 172px;
+        width: 172px;
+    }
     /* 员工访谈弹窗：三列长文本统一固定高度（不可拖拽改尺寸） */
     .interview-modal-textarea {
         width: 100%;
-        min-height: 5rem;
-        height: 5rem;
-        max-height: 5rem;
+        min-height: 4rem;
+        height: 4rem;
+        max-height: 4rem;
         resize: none;
         box-sizing: border-box;
     }
@@ -377,6 +384,141 @@
                     </svg>
                 </button>
             </div>
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <div class="flex items-end justify-between gap-3 flex-wrap">
+                    <label class="flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">员工姓名（模糊）</span>
+                        <input v-model.trim="interviewFilter.full_name" type="text" placeholder="输入员工姓名关键词" class="crm-filter-control w-[12rem]" />
+                    </label>
+                    <p class="text-sm font-semibold text-gray-700">
+                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredInterviewRows.length }}</span> 条
+                    </p>
+                </div>
+                <div class="crm-filter-row interview-filter-row">
+                    <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">在职/离职</span>
+                        <select v-model="interviewFilter.employment_status" class="crm-filter-control w-[7.2rem]">
+                            <option value="">全部</option>
+                            <option value="在职">在职</option>
+                            <option value="离职">离职</option>
+                        </select>
+                    </label>
+                    <label ref="interviewPositionFilterRef" class="crm-filter-item pipeline-filter-dropdown flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">岗位</span>
+                        <button
+                            type="button"
+                            class="crm-filter-control w-[8.4rem] text-left flex items-center justify-between"
+                            @click="toggleInterviewPositionDropdown"
+                        >
+                            <span class="truncate">{{ interviewPositionSummary }}</span>
+                            <span class="text-gray-400 ml-2">{{ interviewPositionDropdownOpen ? '▴' : '▾' }}</span>
+                        </button>
+                        <div v-if="interviewPositionDropdownOpen" class="pipeline-filter-dropdown-panel">
+                            <div class="px-2 py-1">
+                                <input
+                                    v-model.trim="interviewOptionSearch.position"
+                                    type="text"
+                                    placeholder="搜索岗位"
+                                    class="crm-filter-control w-full"
+                                />
+                            </div>
+                            <label v-for="v in filteredInterviewPositionOptions" :key="`interview-position-${v}`" class="pipeline-filter-dropdown-item">
+                                <input
+                                    type="checkbox"
+                                    :checked="interviewFilter.position.includes(v)"
+                                    @change="toggleInterviewMultiOption('position', v)"
+                                />
+                                <span class="truncate">{{ v }}</span>
+                            </label>
+                            <div v-if="!filteredInterviewPositionOptions.length" class="pipeline-filter-dropdown-empty">暂无可选项</div>
+                            <button
+                                type="button"
+                                class="w-full text-left px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                                @click="clearInterviewMultiOption('position')"
+                            >清空</button>
+                        </div>
+                    </label>
+                    <label ref="interviewQ1FilterRef" class="crm-filter-item pipeline-filter-dropdown flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">员工加1</span>
+                        <button
+                            type="button"
+                            class="crm-filter-control w-[8.4rem] text-left flex items-center justify-between"
+                            @click="toggleInterviewQ1Dropdown"
+                        >
+                            <span class="truncate">{{ interviewQ1Summary }}</span>
+                            <span class="text-gray-400 ml-2">{{ interviewQ1DropdownOpen ? '▴' : '▾' }}</span>
+                        </button>
+                        <div v-if="interviewQ1DropdownOpen" class="pipeline-filter-dropdown-panel">
+                            <div class="px-2 py-1">
+                                <input
+                                    v-model.trim="interviewOptionSearch.employee_q1"
+                                    type="text"
+                                    placeholder="搜索员工加1"
+                                    class="crm-filter-control w-full"
+                                />
+                            </div>
+                            <label v-for="v in filteredInterviewQ1Options" :key="`interview-q1-${v}`" class="pipeline-filter-dropdown-item">
+                                <input
+                                    type="checkbox"
+                                    :checked="interviewFilter.employee_q1.includes(v)"
+                                    @change="toggleInterviewMultiOption('employee_q1', v)"
+                                />
+                                <span class="truncate">{{ v }}</span>
+                            </label>
+                            <div v-if="!filteredInterviewQ1Options.length" class="pipeline-filter-dropdown-empty">暂无可选项</div>
+                            <button
+                                type="button"
+                                class="w-full text-left px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                                @click="clearInterviewMultiOption('employee_q1')"
+                            >清空</button>
+                        </div>
+                    </label>
+                    <div class="crm-filter-item crm-filter-date interview-filter-date">
+                        <span class="crm-filter-date-label">入职时间起点</span>
+                        <input v-model="interviewFilter.onboarding_start" type="date" class="crm-filter-date-input" />
+                    </div>
+                    <div class="crm-filter-item crm-filter-date interview-filter-date">
+                        <span class="crm-filter-date-label">入职时间终点</span>
+                        <input v-model="interviewFilter.onboarding_end" type="date" class="crm-filter-date-input" />
+                    </div>
+                    <label ref="interviewSatisfactionFilterRef" class="crm-filter-item pipeline-filter-dropdown flex flex-col gap-1 text-xs">
+                        <span class="text-gray-600">满意度</span>
+                        <button
+                            type="button"
+                            class="crm-filter-control w-[8.4rem] text-left flex items-center justify-between"
+                            @click="toggleInterviewSatisfactionDropdown"
+                        >
+                            <span class="truncate">{{ interviewSatisfactionSummary }}</span>
+                            <span class="text-gray-400 ml-2">{{ interviewSatisfactionDropdownOpen ? '▴' : '▾' }}</span>
+                        </button>
+                        <div v-if="interviewSatisfactionDropdownOpen" class="pipeline-filter-dropdown-panel">
+                            <div class="px-2 py-1">
+                                <input
+                                    v-model.trim="interviewOptionSearch.satisfaction"
+                                    type="text"
+                                    placeholder="搜索满意度"
+                                    class="crm-filter-control w-full"
+                                />
+                            </div>
+                            <label v-for="v in filteredInterviewSatisfactionOptions" :key="`interview-satisfaction-${v}`" class="pipeline-filter-dropdown-item">
+                                <input
+                                    type="checkbox"
+                                    :checked="interviewFilter.satisfaction.includes(v)"
+                                    @change="toggleInterviewMultiOption('satisfaction', v)"
+                                />
+                                <span class="truncate">{{ v }}</span>
+                            </label>
+                            <div v-if="!filteredInterviewSatisfactionOptions.length" class="pipeline-filter-dropdown-empty">暂无可选项</div>
+                            <button
+                                type="button"
+                                class="w-full text-left px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                                @click="clearInterviewMultiOption('satisfaction')"
+                            >清空</button>
+                        </div>
+                    </label>
+                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetInterviewFilter">清除筛选</button>
+                </div>
+            </div>
             <div
                 v-if="interviewHintRan && interviewHintTotal === 0"
                 class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"
@@ -384,9 +526,23 @@
                 比对完成：花名册与员工访谈未发现需要关注的差异。
             </div>
             <div v-if="interviewHintTotal > 0" ref="interviewHintBannerRef" class="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-4">
-                <div>
-                    <p class="text-sm font-semibold text-amber-800">花名册与员工访谈比对（共 {{ interviewHintTotal }} 条）</p>
-                    <p class="mt-1 text-xs text-amber-700">建议：在对应页面修改原始记录后，返回本页刷新数据并再次点击「提示」复核。</p>
+                <div class="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                        <p class="text-sm font-semibold text-amber-800">花名册与员工访谈比对（共 {{ interviewHintTotal }} 条）</p>
+                        <p class="mt-1 text-xs text-amber-700">建议：在对应页面修改原始记录后，返回本页刷新数据并再次点击「提示」复核。</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            class="rounded border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                            @click="copyInterviewHints"
+                        >复制提示结果</button>
+                        <button
+                            type="button"
+                            class="rounded border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                            @click="exportInterviewHintsCsv"
+                        >导出提示结果</button>
+                    </div>
                 </div>
                 <div v-if="interviewHints.activeMissing.length" class="space-y-2">
                     <p class="text-xs font-semibold text-amber-900">1. 在职 · 花名册有而访谈无</p>
@@ -443,6 +599,34 @@
                         </div>
                     </div>
                 </div>
+                <div v-if="interviewHints.overdueFollowups.length" class="space-y-2">
+                    <p class="text-xs font-semibold text-amber-900">4. 1D/7D/30D/90D 超期未完成</p>
+                    <p class="text-xs text-amber-800">下列员工的阶段访谈为空或 N，且已超过应完成时间，请尽快新建访谈并完成沟通：</p>
+                    <div class="max-h-32 overflow-y-auto text-sm text-amber-900 space-y-1">
+                        <div v-for="(item, idx) in interviewHints.overdueFollowups" :key="'of-'+idx" class="flex items-start justify-between gap-2">
+                            <span>{{ item.name }}：{{ item.text }}</span>
+                            <button
+                                type="button"
+                                class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
+                                @click="openInterviewAddForHintName(item.name)"
+                            >新建访谈</button>
+                        </div>
+                    </div>
+                </div>
+                <div v-if="interviewHints.staleInterviewNeedNew.length" class="space-y-2">
+                    <p class="text-xs font-semibold text-amber-900">5. 180 天无访谈</p>
+                    <p class="text-xs text-amber-800">下列花名册中在职员工最近一次访谈已超过 180 天，请新建访谈记录：</p>
+                    <div class="max-h-32 overflow-y-auto text-sm text-amber-900 space-y-1">
+                        <div v-for="(item, idx) in interviewHints.staleInterviewNeedNew" :key="'si-'+idx" class="flex items-start justify-between gap-2">
+                            <span>{{ item.name }}：{{ item.text }}</span>
+                            <button
+                                type="button"
+                                class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
+                                @click="openInterviewAddForHintName(item.name)"
+                            >新建访谈</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div ref="interviewScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
                 <table class="crm-table interview-table">
@@ -471,7 +655,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in interviewDisplayRows" :key="row.id">
+                    <tr v-for="row in filteredInterviewRows" :key="row.id">
                         <td class="crm-td interview-col-tight">{{ row.displaySerial }}</td>
                         <td class="crm-td interview-col-tight">{{ row.full_name }}</td>
                         <td class="crm-td interview-col-tight">{{ row.employment_status }}</td>
@@ -496,7 +680,7 @@
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removeInterviewRow(row)">删除</button>
                         </td>
                     </tr>
-                    <tr v-if="!interviewDisplayRows.length">
+                    <tr v-if="!filteredInterviewRows.length">
                         <td colspan="20" class="crm-td text-center text-gray-400 py-8">暂无数据，可新增行或导入 CSV（表头需与导出模板一致）</td>
                     </tr>
                 </tbody>
@@ -617,16 +801,16 @@
         </div>
     </div>
 
-    <div v-if="showInterviewForm && moduleKey === 'interviews'" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+    <div v-if="showInterviewForm && moduleKey === 'interviews'" class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 px-4 pb-4 pt-12">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[calc(100vh-4rem)] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ interviewEditingId ? '修改员工访谈' : '新增员工访谈' }}</h3>
                 <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showInterviewForm=false">&times;</button>
             </div>
-            <div class="overflow-y-auto p-5">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                    <label v-for="f in interviewFields" :key="f.key" class="flex flex-col gap-1" :class="f.type === 'textarea' ? 'md:col-span-3' : ''">
-                        <span class="text-gray-600">
+            <div class="overflow-y-auto px-5 py-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-3 gap-y-2 text-[13px]">
+                    <label v-for="f in interviewCompactFields" :key="f.key" class="flex flex-col gap-1 min-w-0">
+                        <span class="font-semibold text-gray-700">
                             {{ f.label }}
                             <span v-if="interviewFieldRequired(f.key)" class="text-red-500" aria-hidden="true">*</span>
                         </span>
@@ -669,6 +853,30 @@
                                 interviewFieldErrors[f.key] ? 'crm-form-control--error' : ''
                             ]"
                         />
+                    </label>
+                </div>
+                <div class="mt-3 space-y-2.5">
+                    <label v-for="f in interviewTextareaFields" :key="f.key" class="flex flex-col gap-1 text-sm">
+                        <span class="font-semibold text-gray-700">
+                            {{ f.label }}
+                            <span v-if="interviewFieldRequired(f.key)" class="text-red-500" aria-hidden="true">*</span>
+                        </span>
+                        <textarea
+                            v-model="interviewForm[f.key]"
+                            @input="clearInterviewFieldErrorKey(f.key)"
+                            :class="['interview-modal-textarea rounded px-2 py-1.5 text-sm', interviewFieldErrors[f.key] ? 'border-2 border-red-400' : 'border border-gray-300']"
+                        ></textarea>
+                        <div v-if="f.key === 'delivery_judgment'" class="flex items-center justify-between text-[11px]">
+                            <span :class="interviewTextLength(interviewForm.delivery_judgment) >= 20 ? 'text-gray-500' : 'text-red-500'">
+                                {{ interviewTextLength(interviewForm.delivery_judgment) }}/20
+                            </span>
+                            <span v-if="deliveryJudgmentDuplicate" class="text-red-500">同一员工的交付判断不能重复</span>
+                        </div>
+                        <div v-else-if="f.key === 'delivery_todos'" class="text-[11px]">
+                            <span :class="interviewTextLength(interviewForm.delivery_todos) >= 10 ? 'text-gray-500' : 'text-red-500'">
+                                {{ interviewTextLength(interviewForm.delivery_todos) }}/10
+                            </span>
+                        </div>
                     </label>
                 </div>
             </div>
@@ -768,16 +976,19 @@ const INTERVIEW_FIELDS = [
     { key: 'onboarding_time', label: '入职时间', type: 'date' },
     { key: 'interview_date', label: '访谈时间', type: 'date' },
     { key: 'satisfaction', label: '满意度', type: 'select', options: ['差', '一般', '良好', '满意'] },
-    { key: 'delivery_judgment', label: '交付判断', type: 'textarea' },
-    { key: 'employee_requests', label: '员工诉求', type: 'textarea' },
-    { key: 'delivery_todos', label: '交付待办事项', type: 'textarea' },
     { key: 'work_location', label: '工作地' },
     { key: 'hometown', label: '老家' },
     { key: 'followup_1d', label: '1 D', type: 'select', options: ['Y', 'N'] },
     { key: 'followup_7d', label: '7 D', type: 'select', options: ['Y', 'N'] },
     { key: 'followup_30d', label: '30 D', type: 'select', options: ['Y', 'N'] },
     { key: 'followup_90d', label: '90 D', type: 'select', options: ['Y', 'N'] },
+    { key: 'delivery_judgment', label: '交付判断', type: 'textarea' },
+    { key: 'employee_requests', label: '员工诉求', type: 'textarea' },
+    { key: 'delivery_todos', label: '交付待办事项', type: 'textarea' },
 ];
+const INTERVIEW_TEXTAREA_KEYS = new Set(['delivery_judgment', 'employee_requests', 'delivery_todos']);
+const INTERVIEW_COMPACT_FIELDS = INTERVIEW_FIELDS.filter((f) => !INTERVIEW_TEXTAREA_KEYS.has(f.key));
+const INTERVIEW_TEXTAREA_FIELDS = INTERVIEW_FIELDS.filter((f) => INTERVIEW_TEXTAREA_KEYS.has(f.key));
 /** 员工访谈弹窗保存前必填（与业务约定一致） */
 const INTERVIEW_REQUIRED_KEYS = new Set([
     'full_name',
@@ -877,6 +1088,73 @@ function displayDateSlash(raw) {
     if (!m) return s;
     return `${m[1]}/${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
 }
+function interviewDateRank(raw) {
+    const normalized = normalizeDateForInput(raw, false);
+    if (!normalized) return 0;
+    return Number(normalized.replace(/-/g, '')) || 0;
+}
+function normalizedDateToUtcMs(raw) {
+    const normalized = normalizeDateForInput(raw, false);
+    if (!normalized) return 0;
+    const m = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return 0;
+    return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+function diffDaysFromDate(raw, endRaw) {
+    const startMs = normalizedDateToUtcMs(raw);
+    const endMs = normalizedDateToUtcMs(endRaw);
+    if (!startMs || !endMs || endMs < startMs) return -1;
+    return Math.floor((endMs - startMs) / 86400000);
+}
+function isEmptyOrNoValue(raw) {
+    const s = String(raw || '').trim().toUpperCase();
+    return !s || s === 'N';
+}
+function csvCell(raw) {
+    const s = String(raw == null ? '' : raw);
+    if (/[",\n]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+}
+function flattenInterviewHintItems(hints) {
+    const items = [];
+    const pushItems = (list, issueType, actionLabel, jumpSuggestion, detailBuilder) => {
+        (Array.isArray(list) ? list : []).forEach((item) => {
+            items.push({
+                issueType,
+                name: item.name || '',
+                detail: detailBuilder ? detailBuilder(item) : (item.text || ''),
+                actionLabel,
+                jumpSuggestion,
+            });
+        });
+    };
+    pushItems(hints.activeMissing, '在职·花名册有而访谈无', '新建访谈', '本页点击“新建访谈”补录', (item) => item.text || '');
+    pushItems(hints.activeInterviewNotInRoster, '在职·访谈有而花名册无', '核实并修改/补录花名册', '优先核实状态，必要时去花名册补录', (item) => item.text || '');
+    pushItems(hints.pendingInInterview, '待入职异常', '去修改', '本页点击“去修改”更新访谈状态', (item) => item.text || '');
+    pushItems(hints.leftOnRoster, '离职但花名册仍有记录', '去花名册', '进入花名册页更新在职状态', (item) => `${item.rosterStatus ? `花名册状态：${item.rosterStatus}；` : ''}${item.text || ''}`);
+    pushItems(hints.overdueFollowups, '1D/7D/30D/90D 超期未完成', '新建访谈', '本页点击“新建访谈”完成补访谈', (item) => item.text || '');
+    pushItems(hints.staleInterviewNeedNew, '180 天无访谈', '新建访谈', '本页点击“新建访谈”补最新记录', (item) => item.text || '');
+    return items;
+}
+function buildInterviewHintCopyText(clientName, hints) {
+    const items = flattenInterviewHintItems(hints);
+    if (!items.length) return '';
+    const lines = [`【${clientName || '客户'} - 员工访谈待处理】`];
+    items.forEach((item, idx) => {
+        lines.push(`${idx + 1}. ${item.name}｜${item.issueType}｜${item.detail}｜建议动作：${item.actionLabel}｜跳转建议：${item.jumpSuggestion}`);
+    });
+    return lines.join('\n');
+}
+function buildInterviewHintCsv(clientName, hints) {
+    const items = flattenInterviewHintItems(hints);
+    const rows = [
+        ['客户', '员工姓名', '问题类型', '问题说明', '建议动作', '跳转建议'],
+        ...items.map((item) => [clientName || '', item.name || '', item.issueType || '', item.detail || '', item.actionLabel || '', item.jumpSuggestion || '']),
+    ];
+    return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+}
 /** 与花名册/访谈姓名比对：去空白、合并连续空白（与肉眼核对习惯一致） */
 function normalizePersonName(raw) {
     return String(raw || '').trim().replace(/\s+/g, ' ');
@@ -896,6 +1174,8 @@ function emptyInterviewRosterHints() {
         activeInterviewNotInRoster: [],
         pendingInInterview: [],
         leftOnRoster: [],
+        overdueFollowups: [],
+        staleInterviewNeedNew: [],
     };
 }
 /** 消费 URL 中的 edit_row_id，避免刷新/再次进入同页时重复弹出修改窗口 */
@@ -946,6 +1226,26 @@ function emptyPipelineFilter() {
         onboarded: '',
     };
 }
+function emptyInterviewFilter() {
+    return {
+        full_name: '',
+        employment_status: '',
+        position: [],
+        employee_q1: [],
+        onboarding_start: '',
+        onboarding_end: '',
+        satisfaction: [],
+    };
+}
+function multiSelectSummary(selected) {
+    const values = Array.isArray(selected) ? selected : [];
+    if (!values.length) return '全部';
+    if (values.length === 1) return values[0];
+    return `已选${values.length}项`;
+}
+function interviewTextLength(raw) {
+    return String(raw || '').trim().length;
+}
 createApp({
     setup() {
         const moduleKey = window.__DELIVERY_MODULE_KEY__;
@@ -957,6 +1257,7 @@ createApp({
         const pipelineFilter = reactive(emptyPipelineFilter());
         const interviewFileInput = ref(null);
         const interviewRows = ref([]);
+        const interviewFilter = reactive(emptyInterviewFilter());
         const rosterRows = ref([]);
         const interviewHints = ref(emptyInterviewRosterHints());
         const interviewHintRan = ref(false);
@@ -967,7 +1268,9 @@ createApp({
                 h.activeMissing.length +
                 h.activeInterviewNotInRoster.length +
                 h.pendingInInterview.length +
-                h.leftOnRoster.length
+                h.leftOnRoster.length +
+                h.overdueFollowups.length +
+                h.staleInterviewNeedNew.length
             );
         });
         const showInterviewForm = ref(false);
@@ -983,6 +1286,15 @@ createApp({
             if (interviewFieldErrors[key]) delete interviewFieldErrors[key];
         };
         const interviewFieldRequired = (key) => INTERVIEW_REQUIRED_KEYS.has(key);
+        const deliveryJudgmentDuplicate = computed(() => {
+            const name = String(interviewForm.full_name || '').trim();
+            const judgment = String(interviewForm.delivery_judgment || '').trim();
+            if (!name || !judgment) return false;
+            return interviewRows.value.some((row) => {
+                if (interviewEditingId.value && Number(row.id) === Number(interviewEditingId.value)) return false;
+                return String(row.full_name || '').trim() === name && String(row.delivery_judgment || '').trim() === judgment;
+            });
+        });
         const showInterviewLogs = ref(false);
         const interviewLogsLoading = ref(false);
         const interviewLogs = ref([]);
@@ -1005,6 +1317,105 @@ createApp({
                 return { ...row, displaySerial: sn };
             });
         });
+        const interviewPositionDropdownOpen = ref(false);
+        const interviewQ1DropdownOpen = ref(false);
+        const interviewSatisfactionDropdownOpen = ref(false);
+        const interviewOptionSearch = reactive({
+            position: '',
+            employee_q1: '',
+            satisfaction: '',
+        });
+        const interviewPositionFilterRef = ref(null);
+        const interviewQ1FilterRef = ref(null);
+        const interviewSatisfactionFilterRef = ref(null);
+        const interviewSelectOptions = computed(() => ({
+            position: pipelineUniqueSorted(interviewRows.value, 'position'),
+            employee_q1: pipelineUniqueSorted(interviewRows.value, 'employee_q1'),
+            satisfaction: pipelineUniqueSorted(interviewRows.value, 'satisfaction'),
+        }));
+        const filteredInterviewPositionOptions = computed(() => {
+            return interviewSelectOptions.value.position.filter((v) => pipelineFuzzyMatch(v, interviewOptionSearch.position));
+        });
+        const filteredInterviewQ1Options = computed(() => {
+            return interviewSelectOptions.value.employee_q1.filter((v) => pipelineFuzzyMatch(v, interviewOptionSearch.employee_q1));
+        });
+        const filteredInterviewSatisfactionOptions = computed(() => {
+            return interviewSelectOptions.value.satisfaction.filter((v) => pipelineFuzzyMatch(v, interviewOptionSearch.satisfaction));
+        });
+        const interviewPositionSummary = computed(() => multiSelectSummary(interviewFilter.position));
+        const interviewQ1Summary = computed(() => multiSelectSummary(interviewFilter.employee_q1));
+        const interviewSatisfactionSummary = computed(() => multiSelectSummary(interviewFilter.satisfaction));
+        const toggleInterviewPositionDropdown = () => {
+            interviewPositionDropdownOpen.value = !interviewPositionDropdownOpen.value;
+            if (interviewPositionDropdownOpen.value) {
+                interviewQ1DropdownOpen.value = false;
+                interviewSatisfactionDropdownOpen.value = false;
+            }
+        };
+        const toggleInterviewQ1Dropdown = () => {
+            interviewQ1DropdownOpen.value = !interviewQ1DropdownOpen.value;
+            if (interviewQ1DropdownOpen.value) {
+                interviewPositionDropdownOpen.value = false;
+                interviewSatisfactionDropdownOpen.value = false;
+            }
+        };
+        const toggleInterviewSatisfactionDropdown = () => {
+            interviewSatisfactionDropdownOpen.value = !interviewSatisfactionDropdownOpen.value;
+            if (interviewSatisfactionDropdownOpen.value) {
+                interviewPositionDropdownOpen.value = false;
+                interviewQ1DropdownOpen.value = false;
+            }
+        };
+        const toggleInterviewMultiOption = (key, value) => {
+            const selected = Array.isArray(interviewFilter[key]) ? interviewFilter[key] : [];
+            const idx = selected.indexOf(value);
+            if (idx >= 0) {
+                selected.splice(idx, 1);
+            } else {
+                selected.push(value);
+            }
+        };
+        const clearInterviewMultiOption = (key) => {
+            if (Array.isArray(interviewFilter[key])) {
+                interviewFilter[key] = [];
+            }
+        };
+        const filteredInterviewRows = computed(() => {
+            const f = interviewFilter;
+            return interviewDisplayRows.value.filter((row) => {
+                if (!pipelineFuzzyMatch(row.full_name, f.full_name)) return false;
+                if (f.employment_status && String(row.employment_status || '').trim() !== f.employment_status) return false;
+                if (Array.isArray(f.position) && f.position.length) {
+                    const positionValue = String(row.position || '').trim();
+                    if (!f.position.includes(positionValue)) return false;
+                }
+                if (Array.isArray(f.employee_q1) && f.employee_q1.length) {
+                    const q1Value = String(row.employee_q1 || '').trim();
+                    if (!f.employee_q1.includes(q1Value)) return false;
+                }
+                if (Array.isArray(f.satisfaction) && f.satisfaction.length) {
+                    const satisfactionValue = String(row.satisfaction || '').trim();
+                    if (!f.satisfaction.includes(satisfactionValue)) return false;
+                }
+                const onboardingNormalized = normalizeDateForInput(row.onboarding_time != null ? String(row.onboarding_time) : '', false);
+                if (f.onboarding_start) {
+                    if (!onboardingNormalized || onboardingNormalized < f.onboarding_start) return false;
+                }
+                if (f.onboarding_end) {
+                    if (!onboardingNormalized || onboardingNormalized > f.onboarding_end) return false;
+                }
+                return true;
+            });
+        });
+        const resetInterviewFilter = () => {
+            Object.assign(interviewFilter, emptyInterviewFilter());
+            interviewOptionSearch.position = '';
+            interviewOptionSearch.employee_q1 = '';
+            interviewOptionSearch.satisfaction = '';
+            interviewPositionDropdownOpen.value = false;
+            interviewQ1DropdownOpen.value = false;
+            interviewSatisfactionDropdownOpen.value = false;
+        };
         const resumeScreeningDropdownOpen = ref(false);
         const resumeScreeningFilterRef = ref(null);
         const resumeScreeningSummary = computed(() => {
@@ -1029,10 +1440,21 @@ createApp({
             pipelineFilter.resume_screening = [];
         };
         const handleDocumentClick = (event) => {
-            if (!resumeScreeningDropdownOpen.value) return;
             const root = resumeScreeningFilterRef.value;
-            if (root && !root.contains(event.target)) {
+            if (resumeScreeningDropdownOpen.value && root && !root.contains(event.target)) {
                 resumeScreeningDropdownOpen.value = false;
+            }
+            const interviewPositionRoot = interviewPositionFilterRef.value;
+            if (interviewPositionDropdownOpen.value && interviewPositionRoot && !interviewPositionRoot.contains(event.target)) {
+                interviewPositionDropdownOpen.value = false;
+            }
+            const interviewQ1Root = interviewQ1FilterRef.value;
+            if (interviewQ1DropdownOpen.value && interviewQ1Root && !interviewQ1Root.contains(event.target)) {
+                interviewQ1DropdownOpen.value = false;
+            }
+            const interviewSatisfactionRoot = interviewSatisfactionFilterRef.value;
+            if (interviewSatisfactionDropdownOpen.value && interviewSatisfactionRoot && !interviewSatisfactionRoot.contains(event.target)) {
+                interviewSatisfactionDropdownOpen.value = false;
             }
         };
         const pipelineDateOptions = computed(() => {
@@ -1150,6 +1572,7 @@ createApp({
             interviewHintRan.value = true;
             await loadRosterRows();
             await loadInterviewRows();
+            const todayDate = todayInputDate();
             const roster = Array.isArray(rosterRows.value) ? rosterRows.value : [];
             const interviews = Array.isArray(interviewRows.value) ? interviewRows.value : [];
             const rosterByName = new Map();
@@ -1161,6 +1584,7 @@ createApp({
                         id: row.id,
                         employment_status: row.employment_status != null ? String(row.employment_status) : '',
                         displayName: String(row.full_name != null ? row.full_name : '').trim() || nk,
+                        entryDate: row.entry_date != null ? String(row.entry_date) : '',
                     });
                 }
             });
@@ -1173,18 +1597,29 @@ createApp({
             });
             const interviewNameToRowId = new Map();
             const interviewNames = new Set();
-            const nameHasPending = new Set();
-            const nameHasLeft = new Set();
+            const latestInterviewMetaByName = new Map();
             interviews.forEach((row) => {
                 const nk = interviewNameKey(row.full_name);
                 if (!nk) return;
                 interviewNames.add(nk);
-                if (!interviewNameToRowId.has(nk)) {
-                    interviewNameToRowId.set(nk, row.id);
+                const rowId = Number(row.id || 0);
+                const rowDateRank = interviewDateRank(row.interview_date != null ? String(row.interview_date) : '');
+                const existingLatest = latestInterviewMetaByName.get(nk);
+                const shouldReplaceLatest =
+                    !existingLatest ||
+                    rowDateRank > existingLatest.dateRank ||
+                    (rowDateRank === existingLatest.dateRank && rowId >= existingLatest.rowId);
+                if (shouldReplaceLatest) {
+                    latestInterviewMetaByName.set(nk, {
+                        dateRank: rowDateRank,
+                        rowId,
+                        status: classifyEmploymentStatus(row.employment_status),
+                        row,
+                    });
                 }
-                const st = classifyEmploymentStatus(row.employment_status);
-                if (st === 'pending') nameHasPending.add(nk);
-                if (st === 'left') nameHasLeft.add(nk);
+                if (shouldReplaceLatest || !interviewNameToRowId.has(nk)) {
+                    interviewNameToRowId.set(nk, rowId);
+                }
             });
             const activeMissing = [];
             rosterActiveNames.forEach((nk) => {
@@ -1200,6 +1635,8 @@ createApp({
             const activeInterviewNotInRoster = [];
             interviewNames.forEach((nk) => {
                 if (!rosterAllNames.has(nk)) {
+                    const latestStatus = latestInterviewMetaByName.get(nk)?.status || 'unknown';
+                    if (latestStatus === 'left') return;
                     activeInterviewNotInRoster.push({
                         name: firstInterviewDisplayName(interviews, nk),
                         text: '花名册中无此员工姓名，请核实是否在职、是否需补录花名册。',
@@ -1209,7 +1646,9 @@ createApp({
             });
             activeInterviewNotInRoster.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
             const pendingInInterview = [];
-            nameHasPending.forEach((nk) => {
+            interviewNames.forEach((nk) => {
+                const latestStatus = latestInterviewMetaByName.get(nk)?.status || 'unknown';
+                if (latestStatus !== 'pending') return;
                 pendingInInterview.push({
                     name: firstInterviewDisplayName(interviews, nk),
                     text: '员工访谈「在职/离职」为待入职；正常情况下访谈不应出现待入职，请确认在职状态。',
@@ -1218,7 +1657,9 @@ createApp({
             });
             pendingInInterview.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
             const leftOnRoster = [];
-            nameHasLeft.forEach((nk) => {
+            interviewNames.forEach((nk) => {
+                const latestStatus = latestInterviewMetaByName.get(nk)?.status || 'unknown';
+                if (latestStatus !== 'left') return;
                 if (!rosterAllNames.has(nk)) return;
                 const meta = rosterByName.get(nk);
                 leftOnRoster.push({
@@ -1228,18 +1669,62 @@ createApp({
                 });
             });
             leftOnRoster.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+            const overdueFollowups = [];
+            const followupChecks = [
+                { key: 'followup_1d', label: '1D', days: 1 },
+                { key: 'followup_7d', label: '7D', days: 7 },
+                { key: 'followup_30d', label: '30D', days: 30 },
+                { key: 'followup_90d', label: '90D', days: 90 },
+            ];
+            latestInterviewMetaByName.forEach((meta, nk) => {
+                if (!meta || meta.status === 'left') return;
+                const row = meta.row || {};
+                const daysSinceOnboarding = diffDaysFromDate(row.onboarding_time != null ? String(row.onboarding_time) : '', todayDate);
+                if (daysSinceOnboarding < 0) return;
+                const overdueLabels = [];
+                followupChecks.forEach((item) => {
+                    if (daysSinceOnboarding >= item.days && isEmptyOrNoValue(row[item.key])) {
+                        overdueLabels.push(item.label);
+                    }
+                });
+                if (!overdueLabels.length) return;
+                overdueFollowups.push({
+                    name: firstInterviewDisplayName(interviews, nk),
+                    text: `已入职 ${daysSinceOnboarding} 天，${overdueLabels.join('、')} 为空或 N，已超期，请尽快补充访谈沟通并更新记录。`,
+                    rowId: meta.rowId,
+                });
+            });
+            overdueFollowups.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+            const staleInterviewNeedNew = [];
+            rosterActiveNames.forEach((nk) => {
+                if (!interviewNames.has(nk)) return;
+                const latestMeta = latestInterviewMetaByName.get(nk);
+                if (!latestMeta || latestMeta.status === 'left') return;
+                const daysSinceLatestInterview = diffDaysFromDate(latestMeta.row?.interview_date != null ? String(latestMeta.row.interview_date) : '', todayDate);
+                if (daysSinceLatestInterview < 180) return;
+                const rosterMeta = rosterByName.get(nk);
+                staleInterviewNeedNew.push({
+                    name: rosterMeta && rosterMeta.displayName ? rosterMeta.displayName : firstInterviewDisplayName(interviews, nk),
+                    text: `最近一次访谈距今已 ${daysSinceLatestInterview} 天，超过 180 天未做访谈，请新建访谈记录。`,
+                });
+            });
+            staleInterviewNeedNew.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
             interviewHints.value = {
                 activeMissing,
                 activeInterviewNotInRoster,
                 pendingInInterview,
                 leftOnRoster,
+                overdueFollowups,
+                staleInterviewNeedNew,
             };
             await nextTick();
             const tot =
                 activeMissing.length +
                 activeInterviewNotInRoster.length +
                 pendingInInterview.length +
-                leftOnRoster.length;
+                leftOnRoster.length +
+                overdueFollowups.length +
+                staleInterviewNeedNew.length;
             if (tot > 0 && interviewHintBannerRef.value && typeof interviewHintBannerRef.value.scrollIntoView === 'function') {
                 interviewHintBannerRef.value.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
@@ -1296,6 +1781,21 @@ createApp({
                 alert(`请填写以下必填项：${labels}`);
                 return;
             }
+            if (interviewTextLength(interviewForm.delivery_judgment) < 20) {
+                interviewFieldErrors.delivery_judgment = true;
+                alert('交付判断至少需要填写 20 个字');
+                return;
+            }
+            if (interviewTextLength(interviewForm.delivery_todos) < 10) {
+                interviewFieldErrors.delivery_todos = true;
+                alert('交付待办事项至少需要填写 10 个字');
+                return;
+            }
+            if (deliveryJudgmentDuplicate.value) {
+                interviewFieldErrors.delivery_judgment = true;
+                alert('同一员工的多条访谈记录中，交付判断内容不能重复');
+                return;
+            }
             const payload = {};
             INTERVIEW_FIELDS.forEach((f) => { payload[f.key] = interviewForm[f.key]; });
             const url = interviewEditingId.value
@@ -1308,7 +1808,12 @@ createApp({
                 body: JSON.stringify(payload),
             });
             if (!r.ok) {
-                alert('保存失败');
+                let msg = '保存失败';
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') msg = err.detail;
+                } catch (e) {}
+                alert(msg);
                 return;
             }
             stripInterviewEditQueryFromUrl();
@@ -1478,6 +1983,41 @@ createApp({
             alert(`已从备份 ${j.backup_file} 回滚，清空 ${j.cleared_existing || 0} 行，恢复 ${j.restored_rows || 0} 行`);
             await loadInterviewRows();
             await openInterviewLogs();
+        };
+        const copyInterviewHints = async () => {
+            const text = buildInterviewHintCopyText(clientName.value, interviewHints.value);
+            if (!text) {
+                alert('当前没有可复制的提示结果');
+                return;
+            }
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.setAttribute('readonly', 'readonly');
+                    ta.style.position = 'fixed';
+                    ta.style.opacity = '0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                }
+                alert('提示结果已复制');
+            } catch (err) {
+                alert('复制失败，请稍后重试');
+            }
+        };
+        const exportInterviewHintsCsv = () => {
+            const csv = buildInterviewHintCsv(clientName.value, interviewHints.value);
+            if (!csv) {
+                alert('当前没有可导出的提示结果');
+                return;
+            }
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const safeClientName = String(clientName.value || '客户').trim() || '客户';
+            window.crmDownloadBlob(blob, '', `${safeClientName}_员工访谈提示_${Date.now()}.csv`);
         };
         const onPipelineImportFile = async (e) => {
             const f = e.target.files && e.target.files[0];
@@ -1662,15 +2202,23 @@ createApp({
             settlementRows, settlementFields: SETTLEMENT_FIELDS,
             showForm, editingId, form,
             openPipelineAdd, openPipelineEdit, savePipelineForm, removePipelineRow,
-            interviewRows, interviewDisplayRows, interviewFields: INTERVIEW_FIELDS,
+            interviewRows, interviewDisplayRows, filteredInterviewRows, interviewFields: INTERVIEW_FIELDS,
+            interviewCompactFields: INTERVIEW_COMPACT_FIELDS, interviewTextareaFields: INTERVIEW_TEXTAREA_FIELDS,
+            interviewFilter, interviewSelectOptions, interviewOptionSearch,
+            interviewPositionDropdownOpen, interviewQ1DropdownOpen, interviewSatisfactionDropdownOpen,
+            interviewPositionFilterRef, interviewQ1FilterRef, interviewSatisfactionFilterRef,
+            filteredInterviewPositionOptions, filteredInterviewQ1Options, filteredInterviewSatisfactionOptions,
+            interviewPositionSummary, interviewQ1Summary, interviewSatisfactionSummary,
+            toggleInterviewPositionDropdown, toggleInterviewQ1Dropdown, toggleInterviewSatisfactionDropdown,
+            toggleInterviewMultiOption, clearInterviewMultiOption, resetInterviewFilter,
             rosterRows, interviewHints, interviewHintRan, interviewHintTotal, interviewHintBannerRef, interviewScrollWrap,
             runInterviewRosterHints,
             showInterviewForm, interviewEditingId, interviewForm,
-            interviewFieldErrors, interviewFieldRequired, clearInterviewFieldErrorKey,
+            interviewFieldErrors, interviewFieldRequired, clearInterviewFieldErrorKey, interviewTextLength, deliveryJudgmentDuplicate,
             showInterviewLogs, interviewLogsLoading, interviewLogs,
             openInterviewAdd, openInterviewAddForHintName, openInterviewEdit, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
             triggerInterviewImport, onInterviewImportFile,
-            exportInterviewCsv, openInterviewLogs, restoreInterviewLatestBackup,
+            exportInterviewCsv, openInterviewLogs, restoreInterviewLatestBackup, copyInterviewHints, exportInterviewHintsCsv,
             triggerPipelineImport, onPipelineImportFile, exportPipelineCsv, openPipelineLogs, restorePipelineLatestBackup, formatDate,
             scrollToTop, clearPipelineDateField, clearSettlementDateField, displayDateSlash,
             openAdd, openEdit, saveForm, removeRow,
