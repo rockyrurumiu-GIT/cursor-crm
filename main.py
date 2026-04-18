@@ -189,7 +189,7 @@ class DeliveryPipelineInsightDemand(Base):
 
 
 class DeliveryInterviewEntry(Base):
-    """员工访谈 — CSV 导出表头与客户模板一致（不含入职时间）；旧列仍兼容备份/导入。"""
+    """员工访谈 — 全客户统一表头/字段（不含入职时间）；旧列仍兼容备份/导入。"""
     __tablename__ = "delivery_interview_entries"
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), index=True)
@@ -223,7 +223,7 @@ Base.metadata.create_all(bind=engine)
 
 
 def _ensure_interview_schema_compat():
-    """旧库仅有早期员工访谈列时，补齐中诺模板字段，避免查询失败。"""
+    """旧库仅有早期员工访谈列时，补齐当前全局统一员工访谈字段，避免查询失败。"""
     with engine.begin() as conn:
         try:
             existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(delivery_interview_entries)").fetchall()}
@@ -2794,7 +2794,9 @@ async def interview_import_csv(
         raise HTTPException(status_code=400, detail="CSV 缺少表头，无法导入")
 
     def _norm_header(h: str) -> str:
-        s = str(h or "").replace("\ufeff", "").replace(" ", "").replace("\u3000", "")
+        # 兼容 Excel 导出的 BOM、零宽字符、换行、全角空格等脏表头
+        s = _strip_csv_header_noise(h)
+        s = re.sub(r"\s+", "", s)
         for plus_ch in ("\uff0b", "\u2795", "\u229e", "\u208a"):
             s = s.replace(plus_ch, "+")
         return s.strip().lower()
@@ -2843,7 +2845,12 @@ async def interview_import_csv(
 
     matched_columns: Dict[str, str] = {}
     for original_h in reader.fieldnames:
-        fk = norm_map.get(_norm_header(original_h))
+        normalized_h = _norm_header(original_h)
+        fk = norm_map.get(normalized_h)
+        if not fk:
+            # 「员工加1」这一列在不同模板里偶发携带换行/隐藏字符/变体写法，做额外兜底
+            if ("员工" in normalized_h and "1" in normalized_h and any(token in normalized_h for token in ("加", "+", "q"))):
+                fk = "employee_q1"
         if fk and fk not in matched_columns:
             matched_columns[fk] = original_h
 

@@ -4,18 +4,7 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
     .settlement-filter-row {
-        display: flex;
-        flex-wrap: nowrap;
-        gap: 6px;
         overflow: hidden;
-        padding-bottom: 2px;
-    }
-    .settlement-filter-item {
-        flex: 0 0 auto;
-        height: 36px;
-        border-radius: 6px;
-        font-size: 12px;
-        line-height: 1.1;
     }
     .settlement-filter-text {
         width: 110px;
@@ -34,29 +23,11 @@
     .settlement-filter-date {
         width: 190px;
         min-width: 190px;
-        display: flex;
-        align-items: center;
-        border: 1px solid #d1d5db;
-        background: #fff;
-        padding: 0 6px;
-        color: #1f2937;
     }
     .settlement-filter-date-label {
-        margin-right: 6px;
         white-space: nowrap;
-        font-size: 11px;
-        color: #6b7280;
     }
     .settlement-filter-date-input {
-        width: 100%;
-        height: 100%;
-        border: 0;
-        background: transparent;
-        padding: 0;
-        font-size: 12px;
-        color: #1f2937;
-        outline: none;
-        text-align: right;
     }
 </style>
 {% endblock %}
@@ -81,35 +52,35 @@
             <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openLogs">日志</button>
             <button type="button" class="crm-btn-rollback" @click="restoreLatestBackup">回滚</button>
         </div>
-        <div class="mt-4 settlement-filter-row">
-            <input v-model="filters.customer" type="text" placeholder="筛选客户" class="settlement-filter-item settlement-filter-text border border-gray-300 bg-white px-3 text-gray-800" />
-            <input v-model="filters.feeMonth" type="text" placeholder="筛选费用月份" class="settlement-filter-item settlement-filter-text border border-gray-300 bg-white px-3 text-gray-800" />
-            <select v-model="filters.invoiced" class="settlement-filter-item settlement-filter-select border border-gray-300 bg-white px-3 text-gray-800">
+        <div class="mt-4 crm-filter-row settlement-filter-row">
+            <input v-model="filters.customer" type="text" placeholder="筛选客户" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-text" />
+            <input v-model="filters.feeMonth" type="text" placeholder="筛选费用月份" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-text" />
+            <select v-model="filters.invoiced" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
                 <option value="">是否开票（全部）</option>
                 <option value="是">是</option>
                 <option value="否">否</option>
             </select>
-            <select v-model="filters.paid" class="settlement-filter-item settlement-filter-select border border-gray-300 bg-white px-3 text-gray-800">
+            <select v-model="filters.paid" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
                 <option value="">是否回款（全部）</option>
                 <option value="是">是</option>
                 <option value="否">否</option>
             </select>
-            <select v-model="filters.paymentCycle" class="settlement-filter-item settlement-filter-select border border-gray-300 bg-white px-3 text-gray-800">
+            <select v-model="filters.paymentCycle" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
                 <option value="">回款周期（全部）</option>
                 <option value="月度">月度</option>
                 <option value="双月">双月</option>
                 <option value="季度">季度</option>
                 <option value="半年度">半年度</option>
             </select>
-            <div class="settlement-filter-item settlement-filter-date">
-                <span class="settlement-filter-date-label">预计回款起点</span>
-                <input v-model="filters.expectedPaymentStart" type="date" class="settlement-filter-date-input" title="预计回款时间起点" />
+            <div class="crm-filter-item settlement-filter-item crm-filter-date settlement-filter-date">
+                <span class="crm-filter-date-label settlement-filter-date-label">预计回款起点</span>
+                <input v-model="filters.expectedPaymentStart" type="date" class="crm-filter-date-input settlement-filter-date-input" title="预计回款时间起点" />
             </div>
-            <div class="settlement-filter-item settlement-filter-date">
-                <span class="settlement-filter-date-label">预计回款终点</span>
-                <input v-model="filters.expectedPaymentEnd" type="date" class="settlement-filter-date-input" title="预计回款时间终点" />
+            <div class="crm-filter-item settlement-filter-item crm-filter-date settlement-filter-date">
+                <span class="crm-filter-date-label settlement-filter-date-label">预计回款终点</span>
+                <input v-model="filters.expectedPaymentEnd" type="date" class="crm-filter-date-input settlement-filter-date-input" title="预计回款时间终点" />
             </div>
-            <button type="button" class="settlement-filter-item settlement-filter-reset rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50" @click="clearFilters">重置</button>
+            <button type="button" class="crm-filter-item settlement-filter-item crm-filter-reset settlement-filter-reset" @click="clearFilters">重置</button>
         </div>
         <div class="mt-4 border border-gray-200 rounded-lg crm-table-scroll" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
             <table class="crm-table settlement-table min-w-[1900px]">
@@ -197,15 +168,15 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                     <label v-for="f in fields" :key="f.key" class="flex flex-col gap-1">
                         <span class="text-gray-600">{{ f.label }}<span v-if="f.required" class="text-red-500">*</span></span>
-                        <select v-if="f.type==='select'" v-model="form[f.key]" @change="onSettlementFieldChange(f.key)" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-base leading-6 text-gray-800 appearance-none">
+                        <select v-if="f.type==='select'" v-model="form[f.key]" @change="onSettlementFieldChange(f.key)" class="crm-form-control">
                             <option value="">请选择</option>
                             <option v-for="op in f.options" :key="op" :value="op">{{ op }}</option>
                         </select>
                         <div v-else-if="f.type === 'date'" class="relative">
-                            <input v-model="form[f.key]" type="date" :readonly="f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="w-full h-10 rounded border border-gray-300 bg-white px-3 pr-14 text-base leading-6 text-gray-800" />
+                            <input v-model="form[f.key]" type="date" :readonly="f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="crm-form-control crm-form-control--date" />
                             <button v-if="form[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearDateField(f.key)">清空</button>
                         </div>
-                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" :readonly="f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="w-full h-10 rounded border border-gray-300 bg-white px-3 text-base leading-6 text-gray-800" />
+                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" :readonly="f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="crm-form-control" />
                     </label>
                 </div>
             </div>
