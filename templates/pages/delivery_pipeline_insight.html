@@ -51,9 +51,10 @@
     .insight-table th:nth-child(14), .insight-table td:nth-child(14) { width: 64px; max-width: 64px; }
     .insight-table th:nth-child(15), .insight-table td:nth-child(15) { width: 66px; max-width: 66px; }
     .insight-table th:nth-child(16), .insight-table td:nth-child(16) { width: 66px; max-width: 66px; }
-    .insight-table th:nth-child(17), .insight-table td:nth-child(17) { width: 72px; max-width: 72px; }
-    .insight-table th:nth-child(18), .insight-table td:nth-child(18) { width: 62px; max-width: 62px; }
+    .insight-table th:nth-child(17), .insight-table td:nth-child(17) { width: 66px; max-width: 66px; }
+    .insight-table th:nth-child(18), .insight-table td:nth-child(18) { width: 72px; max-width: 72px; }
     .insight-table th:nth-child(19), .insight-table td:nth-child(19) { width: 62px; max-width: 62px; }
+    .insight-table th:nth-child(20), .insight-table td:nth-child(20) { width: 62px; max-width: 62px; }
     .insight-table td:nth-child(2) {
         white-space: normal;
         overflow: visible;
@@ -87,6 +88,51 @@
     }
     .insight-table tbody tr.insight-month-summary-row:hover .crm-td {
         background: #d9d4cc;
+    }
+    .insight-metric-trigger {
+        cursor: help;
+        text-decoration: underline dotted transparent;
+        text-underline-offset: 2px;
+    }
+    .insight-metric-trigger:hover {
+        color: #1d4ed8;
+        text-decoration-color: currentColor;
+    }
+    .insight-hover-tooltip {
+        position: fixed;
+        z-index: 80;
+        min-width: 240px;
+        max-width: 380px;
+        max-height: min(420px, calc(100vh - 24px));
+        overflow-y: auto;
+        border: 1px solid #d1d5db;
+        border-radius: 0.75rem;
+        background: rgba(17, 24, 39, 0.96);
+        color: #f9fafb;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.28);
+        padding: 10px 12px;
+        pointer-events: auto;
+        overscroll-behavior: contain;
+    }
+    .insight-hover-tooltip-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #bfdbfe;
+        margin-bottom: 6px;
+        position: sticky;
+        top: -10px;
+        padding-top: 2px;
+        padding-bottom: 6px;
+        background: rgba(17, 24, 39, 0.96);
+    }
+    .insight-hover-tooltip-list {
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: normal;
+        word-break: break-word;
+    }
+    .insight-hover-tooltip-list li + li {
+        margin-top: 4px;
     }
 </style>
 {% endblock %}
@@ -147,11 +193,12 @@
                         <th class="crm-th">待面试</th>
                         <th class="crm-th">已面试</th>
                         <th class="crm-th">面试<br>通过</th>
-                        <th class="crm-th">offer数</th>
-                        <th class="crm-th">弃offer/<br>谈薪失败</th>
+                        <th class="crm-th">接offer</th>
+        <th class="crm-th">offer<br>在谈</th>
+                        <th class="crm-th">弃offer</th>
                         <th class="crm-th">在途数</th>
                         <th class="crm-th">在途流失</th>
-                        <th class="crm-th">周入职数</th>
+                        <th class="crm-th">入职数</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -181,20 +228,61 @@
                         <td class="crm-td">{{ row['待客户筛选'] }}</td>
                         <td class="crm-td">{{ row['客筛通过'] }}</td>
                         <td class="crm-td">{{ row['放弃面试'] }}</td>
-                        <td class="crm-td">{{ row['待面试'] }}</td>
-                        <td class="crm-td">{{ row['已面试'] }}</td>
-                        <td class="crm-td">{{ row['面试通过'] }}</td>
-                        <td class="crm-td">{{ row['本周offer人数'] }}</td>
-                        <td class="crm-td">{{ row['弃offer/谈薪失败'] }}</td>
-                        <td class="crm-td">{{ row['在途人数/待入职'] }}</td>
-                        <td class="crm-td">{{ row['月度在途流失(包含前序)'] }}</td>
-                        <td class="crm-td">{{ row['本周入职人数'] }}</td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, '待面试')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, '待面试', '待面试')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['待面试'] }}</span>
+                            <span v-else>{{ row['待面试'] }}</span>
+                        </td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, '已面试')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, '已面试', '已面试')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['已面试'] }}</span>
+                            <span v-else>{{ row['已面试'] }}</span>
+                        </td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, '面试通过')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, '面试通过', '面试通过')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['面试通过'] }}</span>
+                            <span v-else>{{ row['面试通过'] }}</span>
+                        </td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, '本周offer人数')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, '本周offer人数', '接offer')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['本周offer人数'] }}</span>
+                            <span v-else>{{ row['本周offer人数'] }}</span>
+                        </td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, 'offer在谈')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, 'offer在谈', 'offer在谈')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['offer在谈'] }}</span>
+                            <span v-else>{{ row['offer在谈'] }}</span>
+                        </td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, '弃offer/谈薪失败')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, '弃offer/谈薪失败', '弃offer')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['弃offer/谈薪失败'] }}</span>
+                            <span v-else>{{ row['弃offer/谈薪失败'] }}</span>
+                        </td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, '在途人数/待入职')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, '在途人数/待入职', '在途数')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['在途人数/待入职'] }}</span>
+                            <span v-else>{{ row['在途人数/待入职'] }}</span>
+                        </td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, '月度在途流失(包含前序)')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, '月度在途流失(包含前序)', '在途流失')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['月度在途流失(包含前序)'] }}</span>
+                            <span v-else>{{ row['月度在途流失(包含前序)'] }}</span>
+                        </td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, '本周入职人数')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, '本周入职人数', '入职数')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['本周入职人数'] }}</span>
+                            <span v-else>{{ row['本周入职人数'] }}</span>
+                        </td>
                     </tr>
                     <tr v-if="!displayRows.length">
-                        <td colspan="18" class="crm-td text-center text-gray-400 py-8">暂无透析数据</td>
+                        <td colspan="19" class="crm-td text-center text-gray-400 py-8">暂无透析数据</td>
                     </tr>
                 </tbody>
             </table>
+        </div>
+        <div
+            v-if="metricTooltip.visible"
+            ref="metricTooltipRef"
+            class="insight-hover-tooltip"
+            :style="{ left: `${metricTooltip.x}px`, top: `${metricTooltip.y}px` }"
+            @mouseenter="handleMetricTooltipEnter"
+            @mouseleave="handleMetricTooltipLeave"
+        >
+            <div class="insight-hover-tooltip-title">{{ metricTooltip.title }}</div>
+            <ul class="insight-hover-tooltip-list">
+                <li v-for="(item, idx) in metricTooltip.items" :key="`${metricTooltip.title}-${idx}`">{{ item }}</li>
+            </ul>
         </div>
     </div>
 </div>
@@ -224,11 +312,103 @@ createApp({
         const loading = ref(false);
         const onlyAnomalyRows = ref(false);
         const insightScrollWrap = ref(null);
+        const metricTooltipRef = ref(null);
         const manualDemand = reactive({});
         const savingDemandKeys = reactive({});
         const saveTimers = {};
+        let metricTooltipHideTimer = null;
+        const metricTooltip = reactive({ visible: false, title: '', items: [], x: 0, y: 0, hovering: false });
         const authHeader = () => window.crmAuthHeader();
         const rowKey = (row) => `${row['时间'] || ''}|${row['岗位'] || ''}|${row['地点'] || ''}`;
+        const tooltipMetricFieldKeys = [
+            '待面试',
+            '已面试',
+            '面试通过',
+            '本周offer人数',
+            'offer在谈',
+            '弃offer/谈薪失败',
+            '在途人数/待入职',
+            '月度在途流失(包含前序)',
+            '本周入职人数',
+        ];
+        const createEmptyMetricDetails = () => Object.fromEntries(tooltipMetricFieldKeys.map((key) => [key, []]));
+        const metricTooltipItems = (row, metricKey) => {
+            const detailMap = row && row._metric_details && typeof row._metric_details === 'object'
+                ? row._metric_details
+                : null;
+            const list = detailMap && Array.isArray(detailMap[metricKey]) ? detailMap[metricKey] : [];
+            return list.filter((item) => String(item || '').trim());
+        };
+        const shouldShowMetricTooltip = (row, metricKey) => {
+            if (!row || (!row._isSummary && !row._isMonthSummary)) return false;
+            if (row._isMonthSummary && metricKey === '已面试') return false;
+            return metricTooltipItems(row, metricKey).length > 0;
+        };
+        const mergeMetricDetails = (sourceRows) => {
+            const merged = createEmptyMetricDetails();
+            (sourceRows || []).forEach((row) => {
+                tooltipMetricFieldKeys.forEach((metricKey) => {
+                    merged[metricKey].push(...metricTooltipItems(row, metricKey));
+                });
+            });
+            return merged;
+        };
+        const clearMetricTooltipHideTimer = () => {
+            if (metricTooltipHideTimer) {
+                clearTimeout(metricTooltipHideTimer);
+                metricTooltipHideTimer = null;
+            }
+        };
+        const updateMetricTooltipPosition = (event) => {
+            const tooltipWidth = metricTooltipRef.value?.offsetWidth || 380;
+            const tooltipHeight = metricTooltipRef.value?.offsetHeight || Math.min(window.innerHeight - 24, 420);
+            const gap = 14;
+            const nextX = Math.min(event.clientX + gap, window.innerWidth - tooltipWidth - 12);
+            const nextY = Math.min(event.clientY + gap, window.innerHeight - tooltipHeight - 12);
+            metricTooltip.x = Math.max(12, nextX);
+            metricTooltip.y = Math.max(12, nextY);
+        };
+        const showMetricTooltip = (event, row, metricKey, label) => {
+            clearMetricTooltipHideTimer();
+            if (!shouldShowMetricTooltip(row, metricKey)) {
+                metricTooltip.visible = false;
+                return;
+            }
+            const items = metricTooltipItems(row, metricKey);
+            if (!items.length) {
+                metricTooltip.visible = false;
+                return;
+            }
+            metricTooltip.title = `${label}明细`;
+            metricTooltip.items = items;
+            metricTooltip.hovering = false;
+            metricTooltip.visible = true;
+            nextTick(() => updateMetricTooltipPosition(event));
+        };
+        const moveMetricTooltip = (event) => {
+            if (!metricTooltip.visible) return;
+            updateMetricTooltipPosition(event);
+        };
+        const handleMetricTooltipEnter = () => {
+            metricTooltip.hovering = true;
+            clearMetricTooltipHideTimer();
+        };
+        const handleMetricTooltipLeave = () => {
+            metricTooltip.hovering = false;
+            hideMetricTooltip();
+        };
+        const hideMetricTooltip = () => {
+            clearMetricTooltipHideTimer();
+            if (metricTooltip.hovering) return;
+            metricTooltipHideTimer = window.setTimeout(() => {
+                if (metricTooltip.hovering) return;
+                metricTooltip.visible = false;
+                metricTooltip.title = '';
+                metricTooltip.items = [];
+                metricTooltip.hovering = false;
+                metricTooltipHideTimer = null;
+            }, 120);
+        };
         const setManualDemandValue = (key, value) => {
             if (value) {
                 manualDemand[key] = value;
@@ -251,7 +431,7 @@ createApp({
         });
         const sumFieldKeys = [
             '推送简历量', '内筛通过', '重复', '待客户筛选', '客筛通过',
-            '放弃面试', '待面试', '已面试', '面试通过', '本周offer人数',
+            '放弃面试', '待面试', '已面试', '面试通过', '本周offer人数', 'offer在谈',
             '弃offer/谈薪失败', '在途人数/待入职', '月度在途流失(包含前序)', '本周入职人数',
         ];
         const toInt = (v) => {
@@ -261,6 +441,12 @@ createApp({
         const periodMonth = (period) => {
             const p = parsePeriodForSort(period);
             return Number.isFinite(p.month) ? p.month : -1;
+        };
+        const onboardingMonthFromDetail = (detailItem) => {
+            const parts = String(detailItem || '').split('｜');
+            const rawDate = String(parts[2] || '').trim();
+            const m = rawDate.match(/^(\d{4})\D+(\d{1,2})\D+(\d{1,2})$/);
+            return m ? Number(m[2]) : -1;
         };
         const renderedRows = computed(() => {
             const result = [];
@@ -283,6 +469,15 @@ createApp({
                     monthTotals[m][k] += groupRows.reduce((acc, r) => acc + toInt(r[k]), 0);
                 });
             });
+            const monthOnboardDetails = {};
+            displayRows.value.forEach((row) => {
+                metricTooltipItems(row, '本周入职人数').forEach((item) => {
+                    const m = onboardingMonthFromDetail(item);
+                    if (m < 0) return;
+                    if (!monthOnboardDetails[m]) monthOnboardDetails[m] = [];
+                    monthOnboardDetails[m].push(item);
+                });
+            });
             const emittedMonthSummary = new Set();
             timeGroups.forEach(([timeLabel, groupRows], groupIdx) => {
                 groupRows.forEach((row, idx) => {
@@ -299,6 +494,7 @@ createApp({
                     _showTime: false,
                     _timeRowspan: 1,
                     _renderKey: `sum|${timeLabel}`,
+                    _metric_details: mergeMetricDetails(groupRows),
                     '时间': groupRows[0] ? (groupRows[0]['时间'] || '') : '',
                     '岗位': '合计',
                     '需求数量': '',
@@ -317,6 +513,11 @@ createApp({
                         _showTime: false,
                         _timeRowspan: 1,
                         _renderKey: `month-sum|${currentMonth}|${groupIdx}`,
+                        _metric_details: mergeMetricDetails(
+                            timeGroups
+                                .filter(([label]) => periodMonth(label) === currentMonth)
+                                .flatMap(([, rows]) => rows)
+                        ),
                         '时间': `${currentMonth}月`,
                         '岗位': '月合计',
                         '需求数量': '',
@@ -325,6 +526,8 @@ createApp({
                     sumFieldKeys.forEach((k) => {
                         monthSummary[k] = (monthTotals[currentMonth] && monthTotals[currentMonth][k]) || 0;
                     });
+                    monthSummary['本周入职人数'] = (monthOnboardDetails[currentMonth] || []).length;
+                    monthSummary._metric_details['本周入职人数'] = (monthOnboardDetails[currentMonth] || []).slice();
                     result.push(monthSummary);
                     emittedMonthSummary.add(currentMonth);
                 }
@@ -422,11 +625,12 @@ createApp({
                 { label: '待面试', key: '待面试' },
                 { label: '已面试', key: '已面试' },
                 { label: '面试通过', key: '面试通过' },
-                { label: 'offer数', key: '本周offer人数' },
-                { label: '弃offer/谈薪失败', key: '弃offer/谈薪失败' },
+                { label: '接offer', key: '本周offer人数' },
+                { label: 'offer在谈', key: 'offer在谈' },
+                { label: '弃offer', key: '弃offer/谈薪失败' },
                 { label: '在途数', key: '在途人数/待入职' },
                 { label: '在途流失', key: '月度在途流失(包含前序)' },
-                { label: '周入职数', key: '本周入职人数' },
+                { label: '入职数', key: '本周入职人数' },
             ];
             const escapeCsv = (v) => {
                 const s = String(v == null ? '' : v);
@@ -460,8 +664,9 @@ createApp({
         });
 
         return {
-            clientId, clientName, rows, anomalies, loading, manualDemand, savingDemandKeys,
+            clientId, clientName, rows, anomalies, loading, manualDemand, savingDemandKeys, metricTooltip, metricTooltipRef,
             onlyAnomalyRows, displayRows, renderedRows, rowKey, loadInsight, exportInsightCsv, insightScrollWrap, scrollToTop, queueSaveManualDemand,
+            showMetricTooltip, moveMetricTooltip, hideMetricTooltip, shouldShowMetricTooltip, handleMetricTooltipEnter, handleMetricTooltipLeave,
         };
     },
 }).mount('#pipeline-insight-app');

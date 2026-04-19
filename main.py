@@ -454,6 +454,50 @@ def _normalize_pipeline_payload(d: Dict[str, Any]) -> Dict[str, str]:
     return out
 
 
+def _validate_pipeline_payload(
+    data: Dict[str, str],
+    *,
+    context: str = "保存",
+    row_hint: str = "",
+) -> None:
+    allowed_interviewed = {"", "是", "放弃", "约面"}
+    # 兼容少量历史脏值，避免旧记录无法打开/保存；前端新录入仅提供标准选项。
+    allowed_result = {"", "通过", "不通过", "待定", "放弃面试", "待面ing"}
+    name = str(data.get("full_name") or "").strip()
+    interviewed = str(data.get("interviewed") or "").strip()
+    interview_time = str(data.get("interview_time") or "").strip()
+    result = str(data.get("result") or "").strip()
+    got_offer = str(data.get("got_offer") or "").strip()
+    onboarding_time = str(data.get("onboarding_time") or "").strip()
+    onboarded = str(data.get("onboarded") or "").strip()
+
+    label_parts = [context]
+    if row_hint:
+        label_parts.append(row_hint)
+    if name:
+        label_parts.append(name)
+    prefix = "｜".join(label_parts)
+
+    if interviewed not in allowed_interviewed:
+        raise HTTPException(status_code=400, detail=f"{prefix}：是否面试仅支持填写“是 / 放弃 / 约面”")
+    if result not in allowed_result:
+        raise HTTPException(status_code=400, detail=f"{prefix}：面试结果仅支持填写“通过 / 不通过 / 待定”")
+    if got_offer and got_offer not in ("是", "否"):
+        raise HTTPException(status_code=400, detail=f"{prefix}：是否接offer仅支持填写“是”或“否”")
+    if interviewed == "是" and not interview_time:
+        raise HTTPException(status_code=400, detail=f"{prefix}：是否面试为“是”时，必须填写面试时间")
+    if got_offer and result != "通过":
+        raise HTTPException(status_code=400, detail=f"{prefix}：已填写是否接offer时，面试结果必须为“通过”")
+
+    has_onboarding_signal = bool(onboarding_time) or ("已入职" in onboarded) or ("待入职" in onboarded)
+    if has_onboarding_signal and not got_offer:
+        raise HTTPException(status_code=400, detail=f"{prefix}：已填写入职时间或将是否入职改为“X月已入职/待入职”时，必须填写是否接offer")
+    if has_onboarding_signal and result != "通过":
+        raise HTTPException(status_code=400, detail=f"{prefix}：已填写入职时间或已标记待入职/已入职时，面试结果必须为“通过”")
+    if has_onboarding_signal and got_offer == "否":
+        raise HTTPException(status_code=400, detail=f"{prefix}：已填写入职时间或已标记待入职/已入职时，是否接offer不能为“否”")
+
+
 def _interview_entry_to_dict(e: DeliveryInterviewEntry) -> Dict[str, str]:
     return {
         "id": e.id,
@@ -2070,6 +2114,27 @@ def _week_label_from_date(d: Any) -> str:
     return f"{target_month}w{week_no}"
 
 
+def _period_week_bounds(period: str, year: Optional[int] = None) -> Optional[tuple]:
+    """按与 _week_label_from_date 一致的口径，返回周期对应的周一/周日日期。"""
+    s = _normalize_period_label(period)
+    m = re.match(r"^\s*(\d{1,2})\s*w\s*(\d{1,2})\s*$", s, re.IGNORECASE)
+    if not m:
+        return None
+    target_month = int(m.group(1))
+    week_no = int(m.group(2))
+    target_year = int(year or datetime.now().year)
+    try:
+        first_day = datetime(target_year, target_month, 1).date()
+    except Exception:
+        return None
+    cursor = first_day - timedelta(days=first_day.weekday())
+    while int((cursor + timedelta(days=3)).month) != target_month:
+        cursor += timedelta(days=7)
+    monday_start = cursor + timedelta(days=(week_no - 1) * 7)
+    sunday_end = monday_start + timedelta(days=6)
+    return (monday_start, sunday_end)
+
+
 def _period_sort_key(period: str) -> tuple:
     s = str(period or "").strip()
     if not s:
@@ -2117,6 +2182,64 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
+    detail_metric_keys = [
+        "待面试",
+        "已面试",
+        "面试通过",
+        "本周offer人数",
+        "offer在谈",
+        "弃offer/谈薪失败",
+        "在途人数/待入职",
+        "月度在途流失(包含前序)",
+        "本周入职人数",
+    ]
+
+    def empty_detail_map() -> Dict[str, List[str]]:
+        return {k: [] for k in detail_metric_keys}
+
+    def append_detail(detail_map: Dict[str, List[str]], metric_key: str, full_name: str, position: str) -> None:
+        name = str(full_name or "").strip()
+        pos = str(position or "").strip()
+        if not name:
+            return
+        detail_map.setdefault(metric_key, []).append(f"{name}｜{pos or '-'}")
+
+    def _detail_date_text(raw_value: str, parsed_date: Optional[Any]) -> str:
+        if parsed_date:
+            return parsed_date.strftime("%Y/%m/%d")
+        return str(raw_value or "").strip() or "-"
+
+    def _is_previous_month_period(period_label: str, onboarding_parsed: Optional[Any]) -> bool:
+        if not onboarding_parsed:
+            return False
+        period_month = _extract_period_month(period_label)
+        if period_month is None:
+            return False
+        previous_month = 12 if int(onboarding_parsed.month) == 1 else int(onboarding_parsed.month) - 1
+        return int(period_month) == previous_month
+
+    def _detail_name_with_period_mark(full_name: str, period_label: str, onboarding_parsed: Optional[Any]) -> str:
+        name = str(full_name or "").strip() or "-"
+        if _is_previous_month_period(period_label, onboarding_parsed):
+            return f"{name}(上月)"
+        return name
+
+    def detail_with_onboarding(
+        full_name: str,
+        position: str,
+        period_label: str,
+        onboarding_raw: str,
+        onboarding_parsed: Optional[Any],
+    ) -> str:
+        name = _detail_name_with_period_mark(full_name, period_label, onboarding_parsed)
+        pos = str(position or "").strip() or "-"
+        return f"{name}｜{pos}｜{_detail_date_text(onboarding_raw, onboarding_parsed)}"
+
+    def detail_with_cross_month_mark(full_name: str, position: str, period_label: str, onboarding_parsed: Optional[Any]) -> str:
+        name = _detail_name_with_period_mark(full_name, period_label, onboarding_parsed)
+        pos = str(position or "").strip() or "-"
+        return f"{name}｜{pos}"
+
     demand_rows = (
         db.query(DeliveryPipelineInsightDemand)
         .filter(DeliveryPipelineInsightDemand.client_id == client_id)
@@ -2142,20 +2265,19 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
     weekly_onboard_counts: Dict[tuple, int] = {}
     weekly_in_transit_counts: Dict[tuple, int] = {}
     weekly_in_transit_loss_counts: Dict[tuple, int] = {}
+    weekly_onboard_details: Dict[tuple, List[str]] = {}
+    weekly_in_transit_details: Dict[tuple, List[str]] = {}
+    weekly_in_transit_loss_details: Dict[tuple, List[str]] = {}
     anomalies: List[Dict[str, str]] = []
-    for e in rows:
-        period = _normalize_period_label(str(e.date or "").strip())
-        position = str(e.position or "").strip()
-        region = str(e.region or "").strip()
-        if not period or not position:
-            continue
-        key = (period, position, region)
-        if key not in grouped:
-            grouped[key] = {
-                "时间": period,
-                "岗位": position,
+
+    def ensure_group(group_key: tuple) -> Dict[str, Any]:
+        group_period, group_position, group_region = group_key
+        if group_key not in grouped:
+            grouped[group_key] = {
+                "时间": group_period,
+                "岗位": group_position,
                 "需求数量": "",
-                "地点": region,
+                "地点": group_region,
                 "推送简历量": 0,
                 "内筛通过": 0,
                 "重复": 0,
@@ -2166,22 +2288,39 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
                 "已面试": 0,
                 "面试通过": 0,
                 "本周offer人数": 0,
+                "offer在谈": 0,
                 "弃offer/谈薪失败": 0,
                 "在途人数/待入职": 0,
                 "月度在途流失(包含前序)": 0,
                 "本周入职人数": 0,
                 "本月入职人数": 0,
+                "_metric_details": empty_detail_map(),
             }
-            inner_fail_counts[key] = 0
-        item = grouped[key]
+            inner_fail_counts[group_key] = 0
+        return grouped[group_key]
+
+    for e in rows:
+        period = _normalize_period_label(str(e.date or "").strip())
+        position = str(e.position or "").strip()
+        region = str(e.region or "").strip()
+        if not period or not position:
+            continue
+        key = (period, position, region)
+        item = ensure_group(key)
         item["推送简历量"] += 1
+        detail_map = item["_metric_details"]
         resume_screening = str(e.resume_screening or "").strip()
         interviewed = str(e.interviewed or "").strip()
         interview_time = str(e.interview_time or "").strip()
         result = str(e.result or "").strip()
         got_offer = str(e.got_offer or "").strip()
         onboarded = str(e.onboarded or "").strip()
-        onboarding_date = _parse_loose_date(str(e.onboarding_time or "").strip())
+        interview_date = _parse_loose_date(interview_time)
+        interview_period = _week_label_from_date(interview_date) if interview_date else ""
+        onboarding_time = str(e.onboarding_time or "").strip()
+        onboarding_date = _parse_loose_date(onboarding_time)
+        period_bounds = _period_week_bounds(period)
+        period_end = period_bounds[1] if period_bounds else None
 
         if resume_screening == "友商重复":
             item["重复"] += 1
@@ -2194,10 +2333,14 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             item["客筛通过"] += 1
         if interviewed == "放弃":
             item["放弃面试"] += 1
-        if interviewed == "约面":
+        if interviewed == "约面" and (
+            not interview_time or (interview_date and period_end and interview_date > period_end)
+        ):
             item["待面试"] += 1
-        if interviewed == "是" and interview_time:
+            append_detail(detail_map, "待面试", e.full_name, position)
+        if interviewed == "是" and interview_date:
             item["已面试"] += 1
+            append_detail(detail_map, "已面试", e.full_name, position)
         if interviewed == "是" and not interview_time:
             anomalies.append(
                 {
@@ -2210,7 +2353,9 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
                 }
             )
         if result == "通过":
-            item["面试通过"] += 1
+            result_item = ensure_group((interview_period or period, position, region))
+            result_item["面试通过"] += 1
+            append_detail(result_item["_metric_details"], "面试通过", e.full_name, position)
             if interviewed != "是":
                 anomalies.append(
                     {
@@ -2233,15 +2378,26 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
                     "地点": region,
                 }
             )
-        if got_offer == "是":
-            item["本周offer人数"] += 1
-        if got_offer == "否":
-            item["弃offer/谈薪失败"] += 1
+        if got_offer == "是" and result == "通过":
+            offer_item = ensure_group((interview_period or period, position, region))
+            offer_item["本周offer人数"] += 1
+            append_detail(offer_item["_metric_details"], "本周offer人数", e.full_name, position)
+        if result == "通过" and not got_offer:
+            negotiating_item = ensure_group((interview_period or period, position, region))
+            negotiating_item["offer在谈"] += 1
+            append_detail(negotiating_item["_metric_details"], "offer在谈", e.full_name, position)
+        if got_offer == "否" and result == "通过":
+            offer_reject_item = ensure_group((interview_period or period, position, region))
+            offer_reject_item["弃offer/谈薪失败"] += 1
+            append_detail(offer_reject_item["_metric_details"], "弃offer/谈薪失败", e.full_name, position)
         if onboarded == "放弃入职":
             if onboarding_date:
                 loss_week = _week_label_from_date(onboarding_date)
                 loss_key = (loss_week, position, region)
                 weekly_in_transit_loss_counts[loss_key] = int(weekly_in_transit_loss_counts.get(loss_key, 0)) + 1
+                weekly_in_transit_loss_details.setdefault(loss_key, []).append(
+                    detail_with_cross_month_mark(e.full_name, position, period, onboarding_date)
+                )
             else:
                 anomalies.append(
                     {
@@ -2282,6 +2438,9 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             waiting_week = _week_label_from_date(onboarding_date)
             waiting_key = (waiting_week, position, region)
             weekly_in_transit_counts[waiting_key] = int(weekly_in_transit_counts.get(waiting_key, 0)) + 1
+            weekly_in_transit_details.setdefault(waiting_key, []).append(
+                detail_with_onboarding(e.full_name, position, period, onboarding_time, onboarding_date)
+            )
         if "已入职" in onboarded and not onboarding_date:
             anomalies.append(
                 {
@@ -2297,6 +2456,9 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             onboard_week = _week_label_from_date(onboarding_date)
             onboard_key = (onboard_week, position, region)
             weekly_onboard_counts[onboard_key] = int(weekly_onboard_counts.get(onboard_key, 0)) + 1
+            weekly_onboard_details.setdefault(onboard_key, []).append(
+                detail_with_onboarding(e.full_name, position, period, onboarding_time, onboarding_date)
+            )
         period_month = _extract_period_month(period)
         if period_month is not None:
             if re.search(rf"{int(period_month)}\s*月\s*已入职", onboarded):
@@ -2318,28 +2480,7 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
         synthetic_key = (onboard_week, onboard_pos, onboard_region)
         if synthetic_key in grouped:
             continue
-        grouped[synthetic_key] = {
-            "时间": onboard_week,
-            "岗位": onboard_pos,
-            "需求数量": "",
-            "地点": onboard_region,
-            "推送简历量": 0,
-            "内筛通过": 0,
-            "重复": 0,
-            "待客户筛选": 0,
-            "客筛通过": 0,
-            "放弃面试": 0,
-            "待面试": 0,
-            "已面试": 0,
-            "面试通过": 0,
-            "本周offer人数": 0,
-            "弃offer/谈薪失败": 0,
-            "在途人数/待入职": 0,
-            "月度在途流失(包含前序)": 0,
-            "本周入职人数": 0,
-            "本月入职人数": 0,
-        }
-        inner_fail_counts[synthetic_key] = 0
+        ensure_group(synthetic_key)
 
     out = list(grouped.values())
     for item in out:
@@ -2353,6 +2494,9 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
         item["本周入职人数"] = int(weekly_onboard_counts.get(onboard_key, 0))
         item["在途人数/待入职"] = int(weekly_in_transit_counts.get(onboard_key, 0))
         item["月度在途流失(包含前序)"] = int(weekly_in_transit_loss_counts.get(onboard_key, 0))
+        item["_metric_details"]["本周入职人数"] = list(weekly_onboard_details.get(onboard_key, []))
+        item["_metric_details"]["在途人数/待入职"] = list(weekly_in_transit_details.get(onboard_key, []))
+        item["_metric_details"]["月度在途流失(包含前序)"] = list(weekly_in_transit_loss_details.get(onboard_key, []))
         item["需求数量"] = demand_map.get(key, "")
     out.sort(
         key=lambda x: (
@@ -2437,6 +2581,7 @@ async def pipeline_create_row(
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
     data = _normalize_pipeline_payload(body if isinstance(body, dict) else {})
+    _validate_pipeline_payload(data, context="管道数据新增")
     max_row = (
         db.query(DeliveryPipelineEntry)
         .filter(DeliveryPipelineEntry.client_id == client_id)
@@ -2467,6 +2612,7 @@ async def pipeline_update_row(
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
     data = _normalize_pipeline_payload(body if isinstance(body, dict) else {})
+    _validate_pipeline_payload(data, context="管道数据修改")
     for k, v in data.items():
         if k == "serial_no":
             continue
@@ -2566,11 +2712,13 @@ async def pipeline_import_csv(
         for fk, original_h in matched_columns.items():
             mapped[fk] = str(row.get(original_h, "") or "").strip()
         mapped["serial_no"] = ""
+        mapped = _normalize_pipeline_payload(mapped)
         if not any(mapped.get(k, "") for k in matched_non_serial):
             skipped_empty_rows += 1
             if len(skipped_empty_row_numbers) < 20:
                 skipped_empty_row_numbers.append(csv_line_no)
             continue
+        _validate_pipeline_payload(mapped, context="管道数据CSV导入", row_hint=f"第{csv_line_no}行")
 
         pending_rows.append(mapped)
 

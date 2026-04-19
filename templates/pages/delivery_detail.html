@@ -220,10 +220,59 @@
                 <div class="crm-filter-row pipeline-filter-row">
                     <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
                         <span class="text-gray-600">日期</span>
-                        <select v-model="pipelineFilter.date" class="crm-filter-control pipeline-filter-control w-[6.4rem]">
-                            <option value="">全部</option>
-                            <option v-for="d in pipelineDateOptions" :key="d" :value="d">{{ displayDateSlash(d) }}</option>
-                        </select>
+                        <div ref="pipelineFilterPeriodPickerRef" class="relative">
+                            <button
+                                type="button"
+                                class="crm-filter-control pipeline-filter-control flex w-[6.8rem] items-center justify-between text-left"
+                                @click="togglePipelineFilterPeriodDropdown"
+                            >
+                                <span :class="pipelineFilter.date ? 'text-gray-900' : 'text-gray-400'">
+                                    {{ pipelineFilter.date ? pipelinePeriodDisplay(pipelineFilter.date) : '全部' }}
+                                </span>
+                                <span class="ml-2 shrink-0 text-[10px] text-gray-500">{{ pipelineFilterPeriodDropdownOpen ? '▲' : '▼' }}</span>
+                            </button>
+                            <button
+                                v-if="pipelineFilter.date"
+                                type="button"
+                                class="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 hover:text-gray-700"
+                                @click.stop="clearPipelineFilterPeriod"
+                            >
+                                清空
+                            </button>
+                            <div
+                                v-if="pipelineFilterPeriodDropdownOpen"
+                                class="absolute left-0 top-[calc(100%+0.35rem)] z-30"
+                            >
+                                <div class="relative w-20 overflow-visible rounded-lg border border-gray-200 bg-white shadow-xl">
+                                    <button
+                                        v-for="month in PIPELINE_PERIOD_MONTHS"
+                                        :key="`filter-period-month-${month}`"
+                                        type="button"
+                                        class="flex h-9 w-full items-center justify-between px-3 text-sm hover:bg-gray-50"
+                                        :class="pipelineFilterPeriodHoverMonth === month ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700'"
+                                        @mouseenter="setPipelineFilterPeriodHoverMonth(month)"
+                                    >
+                                        <span>{{ month }}</span>
+                                        <span class="text-[10px] text-gray-400">&gt;</span>
+                                    </button>
+                                    <div
+                                        class="absolute left-[calc(100%+0.25rem)] w-24 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl"
+                                        :style="pipelinePeriodPanelStyle(pipelineFilterPeriodHoverMonth)"
+                                    >
+                                        <button
+                                            v-for="week in PIPELINE_PERIOD_WEEKS"
+                                            :key="`filter-period-week-${week}`"
+                                            type="button"
+                                            class="block h-9 w-full px-3 text-left text-sm hover:bg-blue-50"
+                                            :class="pipelinePeriodValue(pipelineFilterPeriodHoverMonth, week) === pipelineFilter.date ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700'"
+                                            @click="selectPipelineFilterPeriod(pipelineFilterPeriodHoverMonth, week)"
+                                        >
+                                            {{ week }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </label>
                     <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
                         <span class="text-gray-600">岗位（模糊）</span>
@@ -762,11 +811,71 @@
             <div class="overflow-y-auto p-5">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                     <label v-for="f in pipelineFields" :key="f.key" class="flex flex-col gap-1">
-                        <span class="text-gray-600">{{ f.label }}</span>
+                        <span class="font-semibold text-gray-700">
+                            {{ f.label }}
+                            <span v-if="pipelineFieldRequired(f.key)" class="text-red-500" aria-hidden="true">*</span>
+                        </span>
                         <div v-if="f.type === 'date'" class="relative">
                             <input v-model="pipelineForm[f.key]" type="date" class="crm-form-control crm-form-control--date" />
                             <button v-if="pipelineForm[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearPipelineDateField(f.key)">清空</button>
                         </div>
+                        <div v-else-if="f.type === 'period'" ref="pipelinePeriodPickerRef" class="relative">
+                            <button
+                                type="button"
+                                class="crm-form-control flex items-center justify-between text-left"
+                                @click="togglePipelinePeriodDropdown"
+                            >
+                                <span :class="pipelineForm[f.key] ? 'text-gray-900' : 'text-gray-400'">
+                                    {{ pipelineForm[f.key] ? pipelinePeriodDisplay(pipelineForm[f.key]) : '请选择月份周次' }}
+                                </span>
+                                <span class="ml-2 shrink-0 text-xs text-gray-500">{{ pipelinePeriodDropdownOpen ? '▲' : '▼' }}</span>
+                            </button>
+                            <button
+                                v-if="pipelineForm[f.key]"
+                                type="button"
+                                class="absolute right-7 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700"
+                                @click.stop="clearPipelinePeriodField"
+                            >
+                                清空
+                            </button>
+                            <div
+                                v-if="pipelinePeriodDropdownOpen"
+                                class="absolute left-0 top-[calc(100%+0.35rem)] z-30"
+                            >
+                                <div class="relative w-20 overflow-visible rounded-lg border border-gray-200 bg-white shadow-xl">
+                                    <button
+                                        v-for="month in PIPELINE_PERIOD_MONTHS"
+                                        :key="`period-month-${month}`"
+                                        type="button"
+                                        class="flex h-9 w-full items-center justify-between px-3 text-sm hover:bg-gray-50"
+                                        :class="pipelinePeriodHoverMonth === month ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700'"
+                                        @mouseenter="setPipelinePeriodHoverMonth(month)"
+                                    >
+                                        <span>{{ month }}</span>
+                                        <span class="text-[10px] text-gray-400">&gt;</span>
+                                    </button>
+                                    <div
+                                        class="absolute left-[calc(100%+0.25rem)] w-24 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl"
+                                        :style="pipelinePeriodPanelStyle(pipelinePeriodHoverMonth)"
+                                    >
+                                        <button
+                                            v-for="week in PIPELINE_PERIOD_WEEKS"
+                                            :key="`period-week-${week}`"
+                                            type="button"
+                                            class="block h-9 w-full px-3 text-left text-sm hover:bg-blue-50"
+                                            :class="pipelinePeriodValue(pipelinePeriodHoverMonth, week) === pipelineForm[f.key] ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700'"
+                                            @click="selectPipelinePeriod(pipelinePeriodHoverMonth, week)"
+                                        >
+                                            {{ week }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <select v-else-if="f.type === 'select'" v-model="pipelineForm[f.key]" class="crm-form-control">
+                            <option value="">请选择</option>
+                            <option v-for="opt in pipelineFieldOptions(f)" :key="`${f.key}-${opt}`" :value="opt">{{ opt }}</option>
+                        </select>
                         <input v-else v-model="pipelineForm[f.key]" :type="f.type || 'text'" class="crm-form-control" />
                     </label>
                 </div>
@@ -946,7 +1055,7 @@ window.__DELIVERY_CLIENT_ID__ = Number("{{ client_id }}");
 const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } = Vue;
 const PIPELINE_FIELDS = [
     { key: 'resume_time', label: '简历时间', type: 'date' },
-    { key: 'date', label: '日期', type: 'date' },
+    { key: 'date', label: '日期', type: 'period' },
     { key: 'position', label: '岗位' },
     { key: 'full_name', label: '姓名' },
     { key: 'domain', label: '领域' },
@@ -956,16 +1065,30 @@ const PIPELINE_FIELDS = [
     { key: 'education', label: '学历' },
     { key: 'recruiter', label: '招聘' },
     { key: 'resume_screening', label: '简历筛选' },
-    { key: 'interviewed', label: '是否面试' },
+    { key: 'interviewed', label: '是否面试', type: 'select', options: ['是', '放弃', '约面'] },
     { key: 'interview_time', label: '面试时间', type: 'date' },
     { key: 'interviewer', label: '面试官' },
-    { key: 'result', label: '面试结果' },
-    { key: 'got_offer', label: '是否拿offer' },
+    { key: 'result', label: '面试结果', type: 'select', options: ['通过', '不通过', '待定'] },
+    { key: 'got_offer', label: '是否拿offer', type: 'select', options: ['是', '否'] },
     { key: 'onboarding_time', label: '入职时间', type: 'date' },
     { key: 'onboarded', label: '是否入职' },
     { key: 'status_note', label: '情况' },
     { key: 'serial_no', label: '序号' },
 ];
+const PIPELINE_PERIOD_MONTHS = Array.from({ length: 12 }, (_, idx) => idx + 1);
+const PIPELINE_PERIOD_WEEKS = ['W1', 'W2', 'W3', 'W4'];
+const PIPELINE_PERIOD_ROW_HEIGHT = 36;
+const PIPELINE_REQUIRED_KEYS = new Set([
+    'resume_time',
+    'date',
+    'full_name',
+    'domain',
+    'years_experience',
+    'region',
+    'phone',
+    'education',
+    'recruiter',
+]);
 const INTERVIEW_FIELDS = [
     { key: 'full_name', label: '员工姓名' },
     { key: 'employment_status', label: '在职/离职', type: 'select', options: ['在职', '离职'] },
@@ -1199,6 +1322,23 @@ function parsePeriodForSort(raw) {
     if (m) return { month: parseInt(m[1], 10), week: parseInt(m[2], 10) };
     return { month: -1, week: -1 };
 }
+function pipelinePeriodValue(month, weekLabel) {
+    const m = Number(month || 0);
+    const weekNo = String(weekLabel || '').replace(/[^0-9]/g, '');
+    if (!m || !weekNo) return '';
+    return `${m}W${weekNo}`;
+}
+function pipelinePeriodDisplay(raw) {
+    const parsed = parsePeriodForSort(raw);
+    if (parsed.month >= 1 && parsed.week >= 1) {
+        return `${parsed.month}W${parsed.week}`;
+    }
+    return String(raw || '').trim();
+}
+function pipelinePeriodPanelStyle(month) {
+    const safeMonth = Math.max(1, Math.min(12, Number(month || 1) || 1));
+    return { top: `${(safeMonth - 1) * PIPELINE_PERIOD_ROW_HEIGHT}px` };
+}
 function pipelineUniqueSorted(rows, field) {
     const set = new Set();
     (rows || []).forEach((row) => {
@@ -1418,6 +1558,12 @@ createApp({
         };
         const resumeScreeningDropdownOpen = ref(false);
         const resumeScreeningFilterRef = ref(null);
+        const pipelineFilterPeriodPickerRef = ref(null);
+        const pipelineFilterPeriodDropdownOpen = ref(false);
+        const pipelineFilterPeriodHoverMonth = ref(1);
+        const pipelinePeriodPickerRef = ref(null);
+        const pipelinePeriodDropdownOpen = ref(false);
+        const pipelinePeriodHoverMonth = ref(1);
         const resumeScreeningSummary = computed(() => {
             const selected = Array.isArray(pipelineFilter.resume_screening) ? pipelineFilter.resume_screening : [];
             if (!selected.length) return '全部';
@@ -1443,6 +1589,14 @@ createApp({
             const root = resumeScreeningFilterRef.value;
             if (resumeScreeningDropdownOpen.value && root && !root.contains(event.target)) {
                 resumeScreeningDropdownOpen.value = false;
+            }
+            const pipelineFilterPeriodRoot = pipelineFilterPeriodPickerRef.value;
+            if (pipelineFilterPeriodDropdownOpen.value && pipelineFilterPeriodRoot && !pipelineFilterPeriodRoot.contains(event.target)) {
+                pipelineFilterPeriodDropdownOpen.value = false;
+            }
+            const pipelinePeriodRoot = pipelinePeriodPickerRef.value;
+            if (pipelinePeriodDropdownOpen.value && pipelinePeriodRoot && !pipelinePeriodRoot.contains(event.target)) {
+                pipelinePeriodDropdownOpen.value = false;
             }
             const interviewPositionRoot = interviewPositionFilterRef.value;
             if (interviewPositionDropdownOpen.value && interviewPositionRoot && !interviewPositionRoot.contains(event.target)) {
@@ -1498,6 +1652,8 @@ createApp({
         const resetPipelineFilter = () => {
             Object.assign(pipelineFilter, emptyPipelineFilter());
             resumeScreeningDropdownOpen.value = false;
+            pipelineFilterPeriodHoverMonth.value = 1;
+            pipelineFilterPeriodDropdownOpen.value = false;
         };
         const pipelineScrollWrap = ref(null);
         const interviewScrollWrap = ref(null);
@@ -1836,6 +1992,8 @@ createApp({
             pipelineEditingId.value = null;
             Object.assign(pipelineForm, emptyPipelineForm());
             pipelineForm.serial_no = String(pipelineRows.value.length + 1);
+            pipelinePeriodHoverMonth.value = 1;
+            pipelinePeriodDropdownOpen.value = false;
             showPipelineForm.value = true;
         };
         const openPipelineEdit = (row) => {
@@ -1846,11 +2004,121 @@ createApp({
                     ? normalizeDateForInput(raw, false)
                     : raw;
             });
+            const parsedPeriod = parsePeriodForSort(pipelineForm.date);
+            pipelinePeriodHoverMonth.value = parsedPeriod.month >= 1 ? parsedPeriod.month : 1;
+            pipelinePeriodDropdownOpen.value = false;
             showPipelineForm.value = true;
+        };
+        const togglePipelinePeriodDropdown = () => {
+            const parsedPeriod = parsePeriodForSort(pipelineForm.date);
+            if (parsedPeriod.month >= 1) {
+                pipelinePeriodHoverMonth.value = parsedPeriod.month;
+            } else if (!pipelinePeriodHoverMonth.value) {
+                pipelinePeriodHoverMonth.value = 1;
+            }
+            pipelinePeriodDropdownOpen.value = !pipelinePeriodDropdownOpen.value;
+        };
+        const setPipelinePeriodHoverMonth = (month) => {
+            pipelinePeriodHoverMonth.value = Number(month || 1) || 1;
+        };
+        const selectPipelinePeriod = (month, weekLabel) => {
+            pipelineForm.date = pipelinePeriodValue(month, weekLabel);
+            pipelinePeriodHoverMonth.value = Number(month || 1) || 1;
+            pipelinePeriodDropdownOpen.value = false;
+        };
+        const clearPipelinePeriodField = () => {
+            pipelineForm.date = '';
+            pipelinePeriodDropdownOpen.value = false;
+        };
+        const togglePipelineFilterPeriodDropdown = () => {
+            const parsedPeriod = parsePeriodForSort(pipelineFilter.date);
+            if (parsedPeriod.month >= 1) {
+                pipelineFilterPeriodHoverMonth.value = parsedPeriod.month;
+            } else if (!pipelineFilterPeriodHoverMonth.value) {
+                pipelineFilterPeriodHoverMonth.value = 1;
+            }
+            pipelineFilterPeriodDropdownOpen.value = !pipelineFilterPeriodDropdownOpen.value;
+        };
+        const setPipelineFilterPeriodHoverMonth = (month) => {
+            pipelineFilterPeriodHoverMonth.value = Number(month || 1) || 1;
+        };
+        const selectPipelineFilterPeriod = (month, weekLabel) => {
+            pipelineFilter.date = pipelinePeriodValue(month, weekLabel);
+            pipelineFilterPeriodHoverMonth.value = Number(month || 1) || 1;
+            pipelineFilterPeriodDropdownOpen.value = false;
+        };
+        const clearPipelineFilterPeriod = () => {
+            pipelineFilter.date = '';
+            pipelineFilterPeriodDropdownOpen.value = false;
+        };
+        const pipelineFieldRequired = (key) => PIPELINE_REQUIRED_KEYS.has(key);
+        const pipelineFieldOptions = (field) => {
+            const base = Array.isArray(field && field.options) ? field.options.slice() : [];
+            const current = String(pipelineForm[field && field.key] || '').trim();
+            if (current && !base.includes(current)) {
+                base.unshift(current);
+            }
+            return base;
+        };
+        const readApiErrorMessage = async (response, fallback) => {
+            let msg = fallback;
+            try {
+                const err = await response.json();
+                if (typeof err.detail === 'string') {
+                    msg = err.detail;
+                } else if (Array.isArray(err.detail)) {
+                    msg = err.detail.map((x) => (x && x.msg) || JSON.stringify(x)).join('；') || msg;
+                } else if (err.detail != null) {
+                    msg = String(err.detail);
+                }
+            } catch (err) {
+                // Ignore parse failure and keep fallback message.
+            }
+            return msg;
+        };
+        const validatePipelinePayload = (payload) => {
+            const interviewed = String(payload.interviewed || '').trim();
+            const interviewTime = String(payload.interview_time || '').trim();
+            const result = String(payload.result || '').trim();
+            const gotOffer = String(payload.got_offer || '').trim();
+            const onboardingTime = String(payload.onboarding_time || '').trim();
+            const onboarded = String(payload.onboarded || '').trim();
+            const hasOnboardingSignal = Boolean(onboardingTime) || onboarded.includes('已入职') || onboarded.includes('待入职');
+
+            if (interviewed && !['是', '放弃', '约面'].includes(interviewed)) {
+                return '“是否面试”只能填写“是”“放弃”“约面”。';
+            }
+            if (result && !['通过', '不通过', '待定', '放弃面试', '待面ing'].includes(result)) {
+                return '“面试结果”只能填写“通过”“不通过”“待定”。';
+            }
+            if (gotOffer && !['是', '否'].includes(gotOffer)) {
+                return '“是否拿offer”只能填写“是”或“否”。';
+            }
+            if (interviewed === '是' && !interviewTime) {
+                return '“是否面试”为“是”时，必须填写“面试时间”。';
+            }
+            if (gotOffer && result !== '通过') {
+                return '已填写“是否拿offer”时，“面试结果”必须为“通过”。';
+            }
+            if (hasOnboardingSignal && !gotOffer) {
+                return '已填写“入职时间”或将“是否入职”改为“X月已入职/待入职”时，必须填写“是否拿offer”。';
+            }
+            if (hasOnboardingSignal && result !== '通过') {
+                return '已填写“入职时间”或已标记待入职/已入职时，“面试结果”必须为“通过”。';
+            }
+            if (hasOnboardingSignal && gotOffer === '否') {
+                return '已填写“入职时间”或已标记待入职/已入职时，“是否拿offer”不能为“否”。';
+            }
+            return '';
         };
         const savePipelineForm = async (goInsightAfterSave = false) => {
             const payload = {};
             PIPELINE_FIELDS.forEach((f) => { payload[f.key] = pipelineForm[f.key]; });
+            const validationMsg = validatePipelinePayload(payload);
+            if (validationMsg) {
+                alert(validationMsg);
+                return;
+            }
             const url = pipelineEditingId.value
                 ? `/api/delivery/pipeline/row/${pipelineEditingId.value}`
                 : `/api/clients/${clientId}/delivery/pipeline`;
@@ -1861,7 +2129,8 @@ createApp({
                 body: JSON.stringify(payload),
             });
             if (!r.ok) {
-                alert('保存失败');
+                const msg = await readApiErrorMessage(r, `保存失败（HTTP ${r.status}）`);
+                alert(msg);
                 return;
             }
             if (goInsightAfterSave && returnToInsight.value) {
@@ -2195,8 +2464,12 @@ createApp({
             moduleKey, moduleTitle, clientId, clientName,
             pipelineRows, pipelineFilter, pipelineDateOptions, pipelineSelectOptions, filteredPipelineRows, resetPipelineFilter,
             resumeScreeningDropdownOpen, resumeScreeningFilterRef, resumeScreeningSummary,
+            pipelineFilterPeriodPickerRef, pipelineFilterPeriodDropdownOpen, pipelineFilterPeriodHoverMonth,
+            togglePipelineFilterPeriodDropdown, setPipelineFilterPeriodHoverMonth, selectPipelineFilterPeriod, clearPipelineFilterPeriod,
             toggleResumeScreeningDropdown, toggleResumeScreeningOption, clearResumeScreeningOption,
-            pipelineFields: PIPELINE_FIELDS, pipelineFileInput, interviewFileInput, pipelineScrollWrap,
+            pipelineFields: PIPELINE_FIELDS, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput, pipelineScrollWrap,
+            PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,
+            pipelinePeriodValue, pipelinePeriodDisplay, pipelinePeriodPanelStyle, togglePipelinePeriodDropdown, setPipelinePeriodHoverMonth, selectPipelinePeriod, clearPipelinePeriodField,
             showPipelineForm, pipelineEditingId, pipelineForm, returnToInsight,
             showPipelineLogs, pipelineLogsLoading, pipelineLogs,
             settlementRows, settlementFields: SETTLEMENT_FIELDS,
