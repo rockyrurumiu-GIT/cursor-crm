@@ -108,10 +108,14 @@
             overscroll-behavior: contain;
             -webkit-overflow-scrolling: touch;
         }
+        /* 默认表头吸顶；有左右冻结列时，非冻结表头必须低于冻结角，否则横向滚动会盖住冻结表头 */
         .crm-table-scroll .crm-table thead th.crm-th {
             position: sticky;
             top: 0;
             z-index: 5;
+        }
+        .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer) {
+            z-index: 3;
         }
         /* 通用：操作列固定在最右侧（表头/表体分层） */
         .crm-sticky-right-op {
@@ -304,7 +308,7 @@
                 </div>
             </div>
         </header>
-        <main class="flex-1 {% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
+        <main class="flex-1 min-h-0 flex flex-col {% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
     </div>
 
     <script>

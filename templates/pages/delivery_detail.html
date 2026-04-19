@@ -6,6 +6,12 @@
     .delivery-table-wrap.crm-table-scroll {
         padding-bottom: 22px;
     }
+    /* 交付详情：主区域 flex 占满视口剩余高度，仅表格内部纵向滚动（避免整页跟表格双滚动） */
+    .delivery-table-scroll-fill.crm-table-scroll {
+        flex: 1 1 0;
+        min-height: 0;
+        max-height: none !important;
+    }
     .pipeline-table th,
     .pipeline-table td {
         white-space: nowrap;
@@ -65,6 +71,10 @@
         table-layout: auto;
         width: max-content;
         max-width: none;
+        border-collapse: separate;
+        border-spacing: 0;
+        --interview-sticky-serial-width: 4.5rem;
+        --interview-sticky-name-width: 7.5rem;
     }
     .crm-table.interview-table .crm-td.interview-col-tight,
     .crm-table.interview-table .crm-th.interview-col-tight {
@@ -168,6 +178,31 @@
         resize: none;
         box-sizing: border-box;
     }
+    /* 管道/结算弹窗：多行文本默认较矮，避免撑高整页弹窗；过长时在框内滚动 */
+    .delivery-modal-textarea {
+        width: 100%;
+        min-height: 2.75rem;
+        max-height: min(7rem, 22vh);
+        resize: vertical;
+        box-sizing: border-box;
+        font-size: 0.875rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        overflow-y: auto;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        padding: 0.45rem 0.65rem;
+        color: #111827;
+        background: #fff;
+    }
+    .delivery-modal-textarea:disabled {
+        resize: none;
+        background: #f9fafb;
+        color: #374151;
+        cursor: default;
+    }
     .interview-contact-input {
         font-variant-numeric: tabular-nums;
     }
@@ -181,16 +216,140 @@
         max-width: 14ch;
         text-overflow: clip;
     }
+    .crm-table.interview-table .crm-td.interview-col-serial,
+    .crm-table.interview-table .crm-th.interview-col-serial {
+        width: var(--interview-sticky-serial-width);
+        min-width: var(--interview-sticky-serial-width);
+        max-width: var(--interview-sticky-serial-width);
+        box-sizing: border-box;
+    }
+    .crm-table.interview-table .crm-td.interview-col-name,
+    .crm-table.interview-table .crm-th.interview-col-name {
+        width: var(--interview-sticky-name-width);
+        min-width: var(--interview-sticky-name-width);
+        max-width: var(--interview-sticky-name-width);
+        box-sizing: border-box;
+    }
+    .delivery-sticky-left-serial,
+    .delivery-sticky-left-key {
+        position: sticky;
+        background: #fff;
+        border-right: 1px solid #e5e7eb;
+        box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
+        background-clip: padding-box;
+    }
+    .delivery-sticky-left-serial {
+        left: 0;
+    }
+    .delivery-sticky-left-key {
+        left: var(--interview-sticky-serial-width);
+    }
+    .crm-table tbody .delivery-sticky-left-serial {
+        z-index: 2;
+    }
+    .crm-table tbody .delivery-sticky-left-key {
+        z-index: 1;
+    }
+    .crm-table thead .delivery-sticky-left-serial {
+        top: 0;
+        z-index: 30;
+        background: #e6e2db;
+    }
+    .crm-table thead .delivery-sticky-left-key {
+        top: 0;
+        z-index: 29;
+        background: #e6e2db;
+    }
+    .crm-table tbody tr:hover .delivery-sticky-left-serial,
+    .crm-table tbody tr:hover .delivery-sticky-left-key {
+        background: #fafaf9;
+    }
+    /* 结算回款：前三列冻结（序号 / 结算进度更新时间 / 客户） */
+    .crm-table.settlement-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        --settlement-sticky-serial-width: 4.5rem;
+        --settlement-sticky-date-width: 11rem;
+        --settlement-sticky-customer-width: 7.5rem;
+    }
+    .crm-table.settlement-table .settlement-col-serial,
+    .crm-table.settlement-table .crm-th.settlement-col-serial {
+        width: var(--settlement-sticky-serial-width);
+        min-width: var(--settlement-sticky-serial-width);
+        max-width: var(--settlement-sticky-serial-width);
+        box-sizing: border-box;
+    }
+    .crm-table.settlement-table .settlement-col-date,
+    .crm-table.settlement-table .crm-th.settlement-col-date {
+        width: var(--settlement-sticky-date-width);
+        min-width: var(--settlement-sticky-date-width);
+        max-width: var(--settlement-sticky-date-width);
+        box-sizing: border-box;
+    }
+    .crm-table.settlement-table .settlement-col-customer,
+    .crm-table.settlement-table .crm-th.settlement-col-customer {
+        width: var(--settlement-sticky-customer-width);
+        min-width: var(--settlement-sticky-customer-width);
+        max-width: var(--settlement-sticky-customer-width);
+        box-sizing: border-box;
+    }
+    .settlement-sticky-serial,
+    .settlement-sticky-date,
+    .settlement-sticky-customer {
+        position: sticky;
+        background: #fff;
+        border-right: 1px solid #e5e7eb;
+        box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
+        background-clip: padding-box;
+    }
+    .settlement-sticky-serial {
+        left: 0;
+    }
+    .settlement-sticky-date {
+        left: var(--settlement-sticky-serial-width);
+    }
+    .settlement-sticky-customer {
+        left: calc(var(--settlement-sticky-serial-width) + var(--settlement-sticky-date-width));
+    }
+    .crm-table tbody .settlement-sticky-serial {
+        z-index: 3;
+    }
+    .crm-table tbody .settlement-sticky-date {
+        z-index: 2;
+    }
+    .crm-table tbody .settlement-sticky-customer {
+        z-index: 1;
+    }
+    .crm-table thead .settlement-sticky-serial {
+        top: 0;
+        z-index: 32;
+        background: #e6e2db;
+    }
+    .crm-table thead .settlement-sticky-date {
+        top: 0;
+        z-index: 31;
+        background: #e6e2db;
+    }
+    .crm-table thead .settlement-sticky-customer {
+        top: 0;
+        z-index: 30;
+        background: #e6e2db;
+    }
+    .crm-table.settlement-table tbody tr:hover .settlement-sticky-serial,
+    .crm-table.settlement-table tbody tr:hover .settlement-sticky-date,
+    .crm-table.settlement-table tbody tr:hover .settlement-sticky-customer {
+        background: #fafaf9;
+    }
 </style>
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="delivery-detail-app" class="container mx-auto p-6 max-w-[1280px]">
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-8 max-w-[1200px]">
-        <a :href="`/delivery/${moduleKey}`" class="text-sm text-blue-600 hover:underline">← 返回{{ moduleTitle }}客户列表</a>
-        <h1 class="text-2xl font-bold text-gray-900 mt-3">{{ clientName }} · {{ moduleTitle }}</h1>
-        <div v-if="moduleKey === 'pipeline'" class="mt-5 space-y-3">
-            <div class="flex items-end justify-between gap-3 flex-wrap">
+<div id="delivery-detail-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6" :class="moduleKey === 'interviews' ? 'py-3 sm:py-4' : 'py-4 sm:py-5'">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="moduleKey === 'interviews' ? 'p-4 sm:p-5' : 'p-5 sm:p-6'">
+        <a :href="`/delivery/${moduleKey}`" class="text-sm text-blue-600 hover:underline shrink-0">← 返回{{ moduleTitle }}客户列表</a>
+        <h1 class="font-bold text-gray-900 shrink-0" :class="moduleKey === 'interviews' ? 'mt-1 text-xl sm:text-2xl' : 'mt-2 text-2xl'">{{ clientName }} · {{ moduleTitle }}</h1>
+        <div v-if="moduleKey === 'pipeline'" class="mt-4 flex flex-col flex-1 min-h-0 gap-3">
+            <div class="flex items-end justify-between gap-3 flex-wrap shrink-0">
                 <label class="flex flex-col gap-1 text-xs">
                     <span class="text-gray-600">姓名（模糊）</span>
                     <input v-model.trim="pipelineFilter.full_name" type="text" placeholder="输入姓名关键词" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[10rem]" />
@@ -216,7 +375,7 @@
                 </button>
                 </div>
             </div>
-            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4 space-y-3 shrink-0">
                 <div class="crm-filter-row pipeline-filter-row">
                     <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
                         <span class="text-gray-600">日期</span>
@@ -347,13 +506,13 @@
                     <button type="button" class="crm-filter-item pipeline-filter-item crm-filter-reset pipeline-filter-control" @click="resetPipelineFilter">清除筛选</button>
                 </div>
             </div>
-            <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center justify-between gap-3 shrink-0">
                 <h2 class="text-sm font-semibold text-gray-700">简历raw data（共 {{ pipelineRows.length }} 条）</h2>
                 <p class="text-sm font-semibold text-gray-700">
                     合计（符合筛选条件）：<span class="text-blue-700">{{ filteredPipelineRows.length }}</span> 条
                 </p>
             </div>
-            <div ref="pipelineScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
+            <div ref="pipelineScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
             <table class="crm-table pipeline-table min-w-[2400px]">
                 <thead>
                     <tr>
@@ -401,6 +560,7 @@
                         <td class="crm-td">{{ row.onboarded }}</td>
                         <td class="crm-td">{{ row.status_note }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
+                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openPipelineDetail(row)">详情</button>
                             <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openPipelineEdit(row)">修改</button>
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removePipelineRow(row)">删除</button>
                         </td>
@@ -412,36 +572,38 @@
             </table>
             </div>
         </div>
-        <div v-else-if="moduleKey === 'interviews'" class="mt-5 space-y-3">
-            <div class="flex justify-end gap-2">
-                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openInterviewAdd">新增行</button>
-                <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-100" @click="runInterviewRosterHints">提示</button>
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openInterviewLogs">日志</button>
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerInterviewImport">导入</button>
-                <input ref="interviewFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onInterviewImportFile" />
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportInterviewCsv">导出</button>
-                <button type="button" class="crm-btn-rollback" @click="restoreInterviewLatestBackup">回滚</button>
-                <button
-                    type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                    title="回到顶部"
-                    aria-label="回到顶部"
-                    @click="scrollToTop"
-                >
-                    <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-                        <path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
-                <div class="flex items-end justify-between gap-3 flex-wrap">
-                    <label class="flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">员工姓名（模糊）</span>
-                        <input v-model.trim="interviewFilter.full_name" type="text" placeholder="输入员工姓名关键词" class="crm-filter-control w-[12rem]" />
-                    </label>
-                    <p class="text-sm font-semibold text-gray-700">
-                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredInterviewRows.length }}</span> 条
-                    </p>
+        <div v-else-if="moduleKey === 'interviews'" class="mt-2 flex flex-col flex-1 min-h-0 gap-2">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-3 shrink-0 space-y-2">
+                <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
+                    <div class="flex flex-wrap items-end gap-3 min-w-0">
+                        <label class="flex flex-col gap-0.5 text-xs">
+                            <span class="text-gray-600">员工姓名（模糊）</span>
+                            <input v-model.trim="interviewFilter.full_name" type="text" placeholder="输入员工姓名关键词" class="crm-filter-control w-[12rem]" />
+                        </label>
+                        <p class="text-sm font-semibold text-gray-700">
+                            合计（符合筛选条件）：<span class="text-blue-700">{{ filteredInterviewRows.length }}</span> 条
+                        </p>
+                    </div>
+                    <div class="flex flex-wrap justify-end gap-1.5 lg:shrink-0">
+                        <button type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" @click="openInterviewAdd">新增行</button>
+                        <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100" @click="runInterviewRosterHints">提示</button>
+                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openInterviewLogs">日志</button>
+                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerInterviewImport">导入</button>
+                        <input ref="interviewFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onInterviewImportFile" />
+                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportInterviewCsv">导出</button>
+                        <button type="button" class="crm-btn-rollback !py-1.5 !px-3 !text-sm" @click="restoreInterviewLatestBackup">回滚</button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                            title="回到顶部"
+                            aria-label="回到顶部"
+                            @click="scrollToTop"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                                <path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="crm-filter-row interview-filter-row">
                     <label class="crm-filter-item flex flex-col gap-1 text-xs">
@@ -570,11 +732,11 @@
             </div>
             <div
                 v-if="interviewHintRan && interviewHintTotal === 0"
-                class="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700"
+                class="rounded-lg border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700 shrink-0"
             >
                 比对完成：花名册与员工访谈未发现需要关注的差异。
             </div>
-            <div v-if="interviewHintTotal > 0" ref="interviewHintBannerRef" class="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-4">
+            <div v-if="interviewHintTotal > 0" ref="interviewHintBannerRef" class="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-3 shrink-0 max-h-[40vh] overflow-y-auto">
                 <div class="flex items-start justify-between gap-3 flex-wrap">
                     <div>
                         <p class="text-sm font-semibold text-amber-800">花名册与员工访谈比对（共 {{ interviewHintTotal }} 条）</p>
@@ -677,12 +839,11 @@
                     </div>
                 </div>
             </div>
-            <div ref="interviewScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
+            <div ref="interviewScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
                 <table class="crm-table interview-table">
                 <thead>
                     <tr>
-                        <th class="crm-th interview-col-tight">序号</th>
-                        <th class="crm-th interview-col-tight">员工姓名</th>
+                        <th class="crm-th interview-col-tight interview-col-name delivery-sticky-left-serial">员工姓名</th>
                         <th class="crm-th interview-col-tight">在职/离职</th>
                         <th class="crm-th interview-col-contact">联系方式</th>
                         <th class="crm-th interview-col-tight">所属项目</th>
@@ -705,8 +866,7 @@
                 </thead>
                 <tbody>
                     <tr v-for="row in filteredInterviewRows" :key="row.id">
-                        <td class="crm-td interview-col-tight">{{ row.displaySerial }}</td>
-                        <td class="crm-td interview-col-tight">{{ row.full_name }}</td>
+                        <td class="crm-td crm-name-cell interview-col-tight interview-col-name delivery-sticky-left-serial">{{ row.full_name }}</td>
                         <td class="crm-td interview-col-tight">{{ row.employment_status }}</td>
                         <td class="crm-td interview-col-contact">{{ row.contact }}</td>
                         <td class="crm-td interview-col-tight">{{ row.project_name }}</td>
@@ -725,28 +885,29 @@
                         <td class="crm-td interview-col-tight">{{ row.followup_30d }}</td>
                         <td class="crm-td interview-col-tight">{{ row.followup_90d }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
+                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openInterviewDetail(row)">详情</button>
                             <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openInterviewEdit(row)">修改</button>
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removeInterviewRow(row)">删除</button>
                         </td>
                     </tr>
                     <tr v-if="!filteredInterviewRows.length">
-                        <td colspan="20" class="crm-td text-center text-gray-400 py-8">暂无数据，可新增行或导入 CSV（表头需与导出模板一致）</td>
+                        <td colspan="19" class="crm-td text-center text-gray-400 py-8">暂无数据，可新增行或导入 CSV（表头需与导出模板一致）</td>
                     </tr>
                 </tbody>
             </table>
             </div>
         </div>
-        <div v-else-if="moduleKey === 'settlement'" class="mt-5 space-y-3">
-            <div class="flex justify-end">
+        <div v-else-if="moduleKey === 'settlement'" class="mt-4 flex flex-col flex-1 min-h-0 gap-3">
+            <div class="flex justify-end shrink-0">
                 <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openAdd">新增</button>
             </div>
-            <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
+            <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
                 <table class="crm-table settlement-table min-w-[1900px]">
                 <thead>
                     <tr>
-                        <th class="crm-th">序号</th>
-                        <th class="crm-th">结算进度更新时间</th>
-                        <th class="crm-th">客户</th>
+                        <th class="crm-th settlement-col-serial settlement-sticky-serial">序号</th>
+                        <th class="crm-th settlement-col-date settlement-sticky-date">结算进度更新时间</th>
+                        <th class="crm-th settlement-col-customer settlement-sticky-customer">客户</th>
                         <th class="crm-th">费用月份</th>
                         <th class="crm-th">追款月份</th>
                         <th class="crm-th crm-currency-cell">金额</th>
@@ -768,9 +929,9 @@
                 </thead>
                 <tbody>
                     <tr v-for="row in settlementRows" :key="row.id">
-                        <td class="crm-td">{{ row.serial_no }}</td>
-                        <td class="crm-td">{{ displayDateSlash(row.progress_updated_at) }}</td>
-                        <td class="crm-td">{{ row.customer_name }}</td>
+                        <td class="crm-td settlement-col-serial settlement-sticky-serial">{{ row.serial_no }}</td>
+                        <td class="crm-td settlement-col-date settlement-sticky-date">{{ displayDateSlash(row.progress_updated_at) }}</td>
+                        <td class="crm-td crm-name-cell settlement-col-customer settlement-sticky-customer">{{ row.customer_name }}</td>
                         <td class="crm-td">{{ row.fee_month }}</td>
                         <td class="crm-td">{{ row.chase_month }}</td>
                         <td class="crm-td crm-currency-cell">{{ row.amount }}</td>
@@ -788,6 +949,7 @@
                         <td class="crm-td">{{ row.invoice_no }}</td>
                         <td class="crm-td">{{ row.remarks }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
+                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openSettlementDetail(row)">详情</button>
                             <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
                         </td>
@@ -805,24 +967,25 @@
     <div v-if="showPipelineForm && moduleKey === 'pipeline'" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">{{ pipelineEditingId ? '修改管道数据' : '新增管道数据' }}</h3>
-                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showPipelineForm=false">&times;</button>
+                <h3 class="font-bold text-lg">{{ pipelineFormReadonly ? '管道数据详情' : (pipelineEditingId ? '修改管道数据' : '新增管道数据') }}</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showPipelineForm=false; pipelineFormReadonly=false">&times;</button>
             </div>
             <div class="overflow-y-auto p-5">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                    <label v-for="f in pipelineFields" :key="f.key" class="flex flex-col gap-1">
+                    <label v-for="f in pipelineFields" :key="f.key" class="flex flex-col gap-1" :class="{ 'md:col-span-3': f.type === 'textarea' }">
                         <span class="font-semibold text-gray-700">
                             {{ f.label }}
                             <span v-if="pipelineFieldRequired(f.key)" class="text-red-500" aria-hidden="true">*</span>
                         </span>
                         <div v-if="f.type === 'date'" class="relative">
-                            <input v-model="pipelineForm[f.key]" type="date" class="crm-form-control crm-form-control--date" />
-                            <button v-if="pipelineForm[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearPipelineDateField(f.key)">清空</button>
+                            <input v-model="pipelineForm[f.key]" type="date" class="crm-form-control crm-form-control--date" :disabled="pipelineFormReadonly" />
+                            <button v-if="!pipelineFormReadonly && pipelineForm[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearPipelineDateField(f.key)">清空</button>
                         </div>
                         <div v-else-if="f.type === 'period'" ref="pipelinePeriodPickerRef" class="relative">
                             <button
                                 type="button"
                                 class="crm-form-control flex items-center justify-between text-left"
+                                :disabled="pipelineFormReadonly"
                                 @click="togglePipelinePeriodDropdown"
                             >
                                 <span :class="pipelineForm[f.key] ? 'text-gray-900' : 'text-gray-400'">
@@ -831,7 +994,7 @@
                                 <span class="ml-2 shrink-0 text-xs text-gray-500">{{ pipelinePeriodDropdownOpen ? '▲' : '▼' }}</span>
                             </button>
                             <button
-                                v-if="pipelineForm[f.key]"
+                                v-if="!pipelineFormReadonly && pipelineForm[f.key]"
                                 type="button"
                                 class="absolute right-7 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700"
                                 @click.stop="clearPipelinePeriodField"
@@ -839,7 +1002,7 @@
                                 清空
                             </button>
                             <div
-                                v-if="pipelinePeriodDropdownOpen"
+                                v-if="pipelinePeriodDropdownOpen && !pipelineFormReadonly"
                                 class="absolute left-0 top-[calc(100%+0.35rem)] z-30"
                             >
                                 <div class="relative w-20 overflow-visible rounded-lg border border-gray-200 bg-white shadow-xl">
@@ -872,18 +1035,25 @@
                                 </div>
                             </div>
                         </div>
-                        <select v-else-if="f.type === 'select'" v-model="pipelineForm[f.key]" class="crm-form-control">
+                        <select v-else-if="f.type === 'select'" v-model="pipelineForm[f.key]" class="crm-form-control" :disabled="pipelineFormReadonly">
                             <option value="">请选择</option>
                             <option v-for="opt in pipelineFieldOptions(f)" :key="`${f.key}-${opt}`" :value="opt">{{ opt }}</option>
                         </select>
-                        <input v-else v-model="pipelineForm[f.key]" :type="f.type || 'text'" class="crm-form-control" />
+                        <textarea
+                            v-else-if="f.type === 'textarea'"
+                            v-model="pipelineForm[f.key]"
+                            class="delivery-modal-textarea"
+                            rows="2"
+                            :disabled="pipelineFormReadonly"
+                        ></textarea>
+                        <input v-else v-model="pipelineForm[f.key]" :type="f.type || 'text'" class="crm-form-control" :disabled="pipelineFormReadonly" />
                     </label>
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
-                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showPipelineForm=false">取消</button>
-                <button v-if="returnToInsight" type="button" class="px-4 py-2 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100" @click="savePipelineForm(true)">保存并返回透析</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="savePipelineForm(false)">保存</button>
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showPipelineForm=false; pipelineFormReadonly=false">{{ pipelineFormReadonly ? '关闭' : '取消' }}</button>
+                <button v-if="!pipelineFormReadonly && returnToInsight" type="button" class="px-4 py-2 rounded-lg border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100" @click="savePipelineForm(true)">保存并返回透析</button>
+                <button v-if="!pipelineFormReadonly" type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="savePipelineForm(false)">保存</button>
             </div>
         </div>
     </div>
@@ -913,8 +1083,8 @@
     <div v-if="showInterviewForm && moduleKey === 'interviews'" class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/45 px-4 pb-4 pt-12">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[calc(100vh-4rem)] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">{{ interviewEditingId ? '修改员工访谈' : '新增员工访谈' }}</h3>
-                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showInterviewForm=false">&times;</button>
+                <h3 class="font-bold text-lg">{{ interviewFormReadonly ? '员工访谈详情' : (interviewEditingId ? '修改员工访谈' : '新增员工访谈') }}</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showInterviewForm=false; interviewFormReadonly=false">&times;</button>
             </div>
             <div class="overflow-y-auto px-5 py-4">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-3 gap-y-2 text-[13px]">
@@ -927,14 +1097,16 @@
                             <input
                                 v-model="interviewForm[f.key]"
                                 type="date"
+                                :disabled="interviewFormReadonly"
                                 @input="clearInterviewFieldErrorKey(f.key)"
                                 :class="['crm-form-control crm-form-control--date', interviewFieldErrors[f.key] ? 'crm-form-control--error' : '']"
                             />
-                            <button v-if="interviewForm[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearInterviewDateField(f.key)">清空</button>
+                            <button v-if="!interviewFormReadonly && interviewForm[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearInterviewDateField(f.key)">清空</button>
                         </div>
                         <select
                             v-else-if="f.type === 'select'"
                             v-model="interviewForm[f.key]"
+                            :disabled="interviewFormReadonly"
                             @change="clearInterviewFieldErrorKey(f.key)"
                             :class="[
                                 'crm-form-control',
@@ -947,6 +1119,7 @@
                         <textarea
                             v-else-if="f.type === 'textarea'"
                             v-model="interviewForm[f.key]"
+                            :disabled="interviewFormReadonly"
                             @input="clearInterviewFieldErrorKey(f.key)"
                             :class="['interview-modal-textarea rounded px-2 py-1.5 text-sm', interviewFieldErrors[f.key] ? 'border-2 border-red-400' : 'border border-gray-300']"
                         ></textarea>
@@ -954,6 +1127,7 @@
                             v-else
                             v-model="interviewForm[f.key]"
                             :type="f.type || 'text'"
+                            :disabled="interviewFormReadonly"
                             @input="clearInterviewFieldErrorKey(f.key)"
                             :inputmode="f.key === 'contact' ? 'numeric' : null"
                             :maxlength="f.key === 'contact' ? 11 : null"
@@ -972,16 +1146,17 @@
                         </span>
                         <textarea
                             v-model="interviewForm[f.key]"
+                            :disabled="interviewFormReadonly"
                             @input="clearInterviewFieldErrorKey(f.key)"
                             :class="['interview-modal-textarea rounded px-2 py-1.5 text-sm', interviewFieldErrors[f.key] ? 'border-2 border-red-400' : 'border border-gray-300']"
                         ></textarea>
-                        <div v-if="f.key === 'delivery_judgment'" class="flex items-center justify-between text-[11px]">
+                        <div v-if="!interviewFormReadonly && f.key === 'delivery_judgment'" class="flex items-center justify-between text-[11px]">
                             <span :class="interviewTextLength(interviewForm.delivery_judgment) >= 20 ? 'text-gray-500' : 'text-red-500'">
                                 {{ interviewTextLength(interviewForm.delivery_judgment) }}/20
                             </span>
                             <span v-if="deliveryJudgmentDuplicate" class="text-red-500">同一员工的交付判断不能重复</span>
                         </div>
-                        <div v-else-if="f.key === 'delivery_todos'" class="text-[11px]">
+                        <div v-else-if="!interviewFormReadonly && f.key === 'delivery_todos'" class="text-[11px]">
                             <span :class="interviewTextLength(interviewForm.delivery_todos) >= 10 ? 'text-gray-500' : 'text-red-500'">
                                 {{ interviewTextLength(interviewForm.delivery_todos) }}/10
                             </span>
@@ -990,8 +1165,8 @@
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
-                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showInterviewForm=false">取消</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="saveInterviewForm">保存</button>
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showInterviewForm=false; interviewFormReadonly=false">{{ interviewFormReadonly ? '关闭' : '取消' }}</button>
+                <button v-if="!interviewFormReadonly" type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="saveInterviewForm">保存</button>
             </div>
         </div>
     </div>
@@ -1021,24 +1196,31 @@
     <div v-if="showForm && moduleKey === 'settlement'" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">{{ editingId ? '修改结算回款' : '新增结算回款' }}</h3>
-                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false">&times;</button>
+                <h3 class="font-bold text-lg">{{ settlementFormReadonly ? '结算回款详情' : (editingId ? '修改结算回款' : '新增结算回款') }}</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false; settlementFormReadonly=false">&times;</button>
             </div>
             <div class="overflow-y-auto p-5">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                    <label v-for="f in settlementFields" :key="f.key" class="flex flex-col gap-1">
+                    <label v-for="f in settlementFields" :key="f.key" class="flex flex-col gap-1" :class="{ 'md:col-span-3': f.type === 'textarea' }">
                         <span class="text-gray-600">{{ f.label }}</span>
                         <div v-if="f.type === 'date'" class="relative">
-                            <input v-model="form[f.key]" type="date" class="crm-form-control crm-form-control--date" />
-                            <button v-if="form[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearSettlementDateField(f.key)">清空</button>
+                            <input v-model="form[f.key]" type="date" class="crm-form-control crm-form-control--date" :disabled="settlementFormReadonly" />
+                            <button v-if="!settlementFormReadonly && form[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearSettlementDateField(f.key)">清空</button>
                         </div>
-                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" class="crm-form-control" />
+                        <textarea
+                            v-else-if="f.type === 'textarea'"
+                            v-model="form[f.key]"
+                            class="delivery-modal-textarea"
+                            rows="2"
+                            :disabled="settlementFormReadonly"
+                        ></textarea>
+                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" class="crm-form-control" :disabled="settlementFormReadonly" />
                     </label>
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
-                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false">取消</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="saveForm">保存</button>
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false; settlementFormReadonly=false">{{ settlementFormReadonly ? '关闭' : '取消' }}</button>
+                <button v-if="!settlementFormReadonly" type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="saveForm">保存</button>
             </div>
         </div>
     </div>
@@ -1064,7 +1246,12 @@ const PIPELINE_FIELDS = [
     { key: 'phone', label: '电话' },
     { key: 'education', label: '学历' },
     { key: 'recruiter', label: '招聘' },
-    { key: 'resume_screening', label: '简历筛选' },
+    {
+        key: 'resume_screening',
+        label: '简历筛选',
+        type: 'select',
+        options: ['内筛不通过', '友商重复', '待反馈', '通过', '不通过', '需求满足', '需求暂停'],
+    },
     { key: 'interviewed', label: '是否面试', type: 'select', options: ['是', '放弃', '约面'] },
     { key: 'interview_time', label: '面试时间', type: 'date' },
     { key: 'interviewer', label: '面试官' },
@@ -1072,8 +1259,7 @@ const PIPELINE_FIELDS = [
     { key: 'got_offer', label: '是否拿offer', type: 'select', options: ['是', '否'] },
     { key: 'onboarding_time', label: '入职时间', type: 'date' },
     { key: 'onboarded', label: '是否入职' },
-    { key: 'status_note', label: '情况' },
-    { key: 'serial_no', label: '序号' },
+    { key: 'status_note', label: '情况', type: 'textarea' },
 ];
 const PIPELINE_PERIOD_MONTHS = Array.from({ length: 12 }, (_, idx) => idx + 1);
 const PIPELINE_PERIOD_WEEKS = ['W1', 'W2', 'W3', 'W4'];
@@ -1159,7 +1345,7 @@ const SETTLEMENT_FIELDS = [
     { key: 'payment_nature', label: '回款性质' },
     { key: 'po_no', label: 'PO单' },
     { key: 'invoice_no', label: '发票号' },
-    { key: 'remarks', label: '备注' },
+    { key: 'remarks', label: '备注', type: 'textarea' },
 ];
 const PIPELINE_DATE_FIELD_KEYS = new Set(
     PIPELINE_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
@@ -1179,6 +1365,7 @@ function emptySettlementForm() {
 function emptyPipelineForm() {
     const f = {};
     PIPELINE_FIELDS.forEach((x) => { f[x.key] = ''; });
+    f.serial_no = '';
     return f;
 }
 function emptyInterviewForm() {
@@ -1415,6 +1602,7 @@ createApp({
         });
         const showInterviewForm = ref(false);
         const interviewEditingId = ref(null);
+        const interviewFormReadonly = ref(false);
         const interviewForm = reactive(emptyInterviewForm());
         const interviewFieldErrors = reactive({});
         const resetInterviewFieldErrors = () => {
@@ -1585,31 +1773,45 @@ createApp({
         const clearResumeScreeningOption = () => {
             pipelineFilter.resume_screening = [];
         };
-        const handleDocumentClick = (event) => {
+        const rootContainsTarget = (root, target) => {
+            if (!root || !target) return false;
+            const nodes = Array.isArray(root) ? root : [root];
+            return nodes.some((node) => {
+                const el = node && node.$el ? node.$el : node;
+                return !!(el && typeof el.contains === 'function' && el.contains(target));
+            });
+        };
+        const closeDropdownsForTarget = (target) => {
             const root = resumeScreeningFilterRef.value;
-            if (resumeScreeningDropdownOpen.value && root && !root.contains(event.target)) {
+            if (resumeScreeningDropdownOpen.value && root && !rootContainsTarget(root, target)) {
                 resumeScreeningDropdownOpen.value = false;
             }
             const pipelineFilterPeriodRoot = pipelineFilterPeriodPickerRef.value;
-            if (pipelineFilterPeriodDropdownOpen.value && pipelineFilterPeriodRoot && !pipelineFilterPeriodRoot.contains(event.target)) {
+            if (pipelineFilterPeriodDropdownOpen.value && pipelineFilterPeriodRoot && !rootContainsTarget(pipelineFilterPeriodRoot, target)) {
                 pipelineFilterPeriodDropdownOpen.value = false;
             }
             const pipelinePeriodRoot = pipelinePeriodPickerRef.value;
-            if (pipelinePeriodDropdownOpen.value && pipelinePeriodRoot && !pipelinePeriodRoot.contains(event.target)) {
+            if (pipelinePeriodDropdownOpen.value && pipelinePeriodRoot && !rootContainsTarget(pipelinePeriodRoot, target)) {
                 pipelinePeriodDropdownOpen.value = false;
             }
             const interviewPositionRoot = interviewPositionFilterRef.value;
-            if (interviewPositionDropdownOpen.value && interviewPositionRoot && !interviewPositionRoot.contains(event.target)) {
+            if (interviewPositionDropdownOpen.value && interviewPositionRoot && !rootContainsTarget(interviewPositionRoot, target)) {
                 interviewPositionDropdownOpen.value = false;
             }
             const interviewQ1Root = interviewQ1FilterRef.value;
-            if (interviewQ1DropdownOpen.value && interviewQ1Root && !interviewQ1Root.contains(event.target)) {
+            if (interviewQ1DropdownOpen.value && interviewQ1Root && !rootContainsTarget(interviewQ1Root, target)) {
                 interviewQ1DropdownOpen.value = false;
             }
             const interviewSatisfactionRoot = interviewSatisfactionFilterRef.value;
-            if (interviewSatisfactionDropdownOpen.value && interviewSatisfactionRoot && !interviewSatisfactionRoot.contains(event.target)) {
+            if (interviewSatisfactionDropdownOpen.value && interviewSatisfactionRoot && !rootContainsTarget(interviewSatisfactionRoot, target)) {
                 interviewSatisfactionDropdownOpen.value = false;
             }
+        };
+        const handleDocumentClick = (event) => {
+            closeDropdownsForTarget(event.target);
+        };
+        const handleDocumentFocusIn = (event) => {
+            closeDropdownsForTarget(event.target);
         };
         const pipelineDateOptions = computed(() => {
             const set = new Set();
@@ -1660,6 +1862,7 @@ createApp({
         const pipelineFileInput = ref(null);
         const showPipelineForm = ref(false);
         const pipelineEditingId = ref(null);
+        const pipelineFormReadonly = ref(false);
         const pipelineForm = reactive(emptyPipelineForm());
         const openPipelineEditByQuery = () => {
             const params = new URLSearchParams(window.location.search);
@@ -1678,6 +1881,7 @@ createApp({
         const settlementRows = ref([]);
         const showForm = ref(false);
         const editingId = ref(null);
+        const settlementFormReadonly = ref(false);
         const form = reactive(emptySettlementForm());
         const loadBrief = async () => {
             const r = await fetch(`/api/clients/${clientId}/brief`, { headers: window.crmAuthHeader() });
@@ -1887,6 +2091,7 @@ createApp({
         };
         const openInterviewAdd = () => {
             interviewEditingId.value = null;
+            interviewFormReadonly.value = false;
             Object.assign(interviewForm, emptyInterviewForm());
             resetInterviewFieldErrors();
             showInterviewForm.value = true;
@@ -1894,6 +2099,7 @@ createApp({
         /** 花名册有而访谈无：直接打开新增并预填姓名（缺访谈应补录访谈，而非跳转花名册） */
         const openInterviewAddForHintName = (displayName) => {
             interviewEditingId.value = null;
+            interviewFormReadonly.value = false;
             Object.assign(interviewForm, emptyInterviewForm());
             resetInterviewFieldErrors();
             const n = displayName != null ? String(displayName).trim() : '';
@@ -1905,6 +2111,7 @@ createApp({
         };
         const openInterviewEdit = (row) => {
             interviewEditingId.value = row.id;
+            interviewFormReadonly.value = false;
             resetInterviewFieldErrors();
             INTERVIEW_FIELDS.forEach((f) => {
                 const raw = row[f.key] != null ? String(row[f.key]) : '';
@@ -1913,6 +2120,10 @@ createApp({
                     : raw;
             });
             showInterviewForm.value = true;
+        };
+        const openInterviewDetail = (row) => {
+            openInterviewEdit(row);
+            interviewFormReadonly.value = true;
         };
         const openInterviewEditByQuery = () => {
             if (moduleKey !== 'interviews') return;
@@ -1927,6 +2138,7 @@ createApp({
             stripInterviewEditQueryFromUrl();
         };
         const saveInterviewForm = async () => {
+            if (interviewFormReadonly.value) return;
             resetInterviewFieldErrors();
             const missing = collectInterviewMissingRequiredKeys(interviewForm);
             if (missing.length) {
@@ -1974,6 +2186,7 @@ createApp({
             }
             stripInterviewEditQueryFromUrl();
             showInterviewForm.value = false;
+            interviewFormReadonly.value = false;
             await loadInterviewRows();
         };
         const removeInterviewRow = async (row) => {
@@ -1990,6 +2203,7 @@ createApp({
         };
         const openPipelineAdd = () => {
             pipelineEditingId.value = null;
+            pipelineFormReadonly.value = false;
             Object.assign(pipelineForm, emptyPipelineForm());
             pipelineForm.serial_no = String(pipelineRows.value.length + 1);
             pipelinePeriodHoverMonth.value = 1;
@@ -1998,18 +2212,25 @@ createApp({
         };
         const openPipelineEdit = (row) => {
             pipelineEditingId.value = row.id;
+            pipelineFormReadonly.value = false;
             PIPELINE_FIELDS.forEach((f) => {
                 const raw = row[f.key] != null ? String(row[f.key]) : '';
                 pipelineForm[f.key] = PIPELINE_DATE_FIELD_KEYS.has(f.key)
                     ? normalizeDateForInput(raw, false)
                     : raw;
             });
+            pipelineForm.serial_no = row.serial_no != null ? String(row.serial_no) : '';
             const parsedPeriod = parsePeriodForSort(pipelineForm.date);
             pipelinePeriodHoverMonth.value = parsedPeriod.month >= 1 ? parsedPeriod.month : 1;
             pipelinePeriodDropdownOpen.value = false;
             showPipelineForm.value = true;
         };
+        const openPipelineDetail = (row) => {
+            openPipelineEdit(row);
+            pipelineFormReadonly.value = true;
+        };
         const togglePipelinePeriodDropdown = () => {
+            if (pipelineFormReadonly.value) return;
             const parsedPeriod = parsePeriodForSort(pipelineForm.date);
             if (parsedPeriod.month >= 1) {
                 pipelinePeriodHoverMonth.value = parsedPeriod.month;
@@ -2112,8 +2333,10 @@ createApp({
             return '';
         };
         const savePipelineForm = async (goInsightAfterSave = false) => {
+            if (pipelineFormReadonly.value) return;
             const payload = {};
             PIPELINE_FIELDS.forEach((f) => { payload[f.key] = pipelineForm[f.key]; });
+            payload.serial_no = pipelineForm.serial_no != null ? String(pipelineForm.serial_no) : '';
             const validationMsg = validatePipelinePayload(payload);
             if (validationMsg) {
                 alert(validationMsg);
@@ -2138,6 +2361,7 @@ createApp({
                 return;
             }
             showPipelineForm.value = false;
+            pipelineFormReadonly.value = false;
             await loadPipelineRows();
         };
         const removePipelineRow = async (row) => {
@@ -2401,6 +2625,7 @@ createApp({
         };
         const openAdd = () => {
             editingId.value = null;
+            settlementFormReadonly.value = false;
             Object.assign(form, emptySettlementForm());
             form.customer_name = clientName.value;
             form.serial_no = String(settlementRows.value.length + 1);
@@ -2408,6 +2633,7 @@ createApp({
         };
         const openEdit = (row) => {
             editingId.value = row.id;
+            settlementFormReadonly.value = false;
             SETTLEMENT_FIELDS.forEach((f) => {
                 const raw = row[f.key] != null ? String(row[f.key]) : '';
                 form[f.key] = SETTLEMENT_DATE_FIELD_KEYS.has(f.key)
@@ -2416,7 +2642,12 @@ createApp({
             });
             showForm.value = true;
         };
+        const openSettlementDetail = (row) => {
+            openEdit(row);
+            settlementFormReadonly.value = true;
+        };
         const saveForm = async () => {
+            if (settlementFormReadonly.value) return;
             const payload = {};
             SETTLEMENT_FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
             const url = editingId.value
@@ -2433,6 +2664,7 @@ createApp({
                 return;
             }
             showForm.value = false;
+            settlementFormReadonly.value = false;
             await loadSettlementRows();
         };
         const removeRow = async (row) => {
@@ -2446,6 +2678,7 @@ createApp({
         };
         onMounted(async () => {
             document.addEventListener('click', handleDocumentClick);
+            document.addEventListener('focusin', handleDocumentFocusIn);
             await loadBrief();
             await loadSettlementRows();
             await loadPipelineRows();
@@ -2459,6 +2692,7 @@ createApp({
         });
         onBeforeUnmount(() => {
             document.removeEventListener('click', handleDocumentClick);
+            document.removeEventListener('focusin', handleDocumentFocusIn);
         });
         return {
             moduleKey, moduleTitle, clientId, clientName,
@@ -2470,10 +2704,11 @@ createApp({
             pipelineFields: PIPELINE_FIELDS, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput, pipelineScrollWrap,
             PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,
             pipelinePeriodValue, pipelinePeriodDisplay, pipelinePeriodPanelStyle, togglePipelinePeriodDropdown, setPipelinePeriodHoverMonth, selectPipelinePeriod, clearPipelinePeriodField,
-            showPipelineForm, pipelineEditingId, pipelineForm, returnToInsight,
+            showPipelineForm, pipelineEditingId, pipelineFormReadonly, pipelineForm, returnToInsight,
+            openPipelineDetail,
             showPipelineLogs, pipelineLogsLoading, pipelineLogs,
             settlementRows, settlementFields: SETTLEMENT_FIELDS,
-            showForm, editingId, form,
+            showForm, editingId, settlementFormReadonly, form,
             openPipelineAdd, openPipelineEdit, savePipelineForm, removePipelineRow,
             interviewRows, interviewDisplayRows, filteredInterviewRows, interviewFields: INTERVIEW_FIELDS,
             interviewCompactFields: INTERVIEW_COMPACT_FIELDS, interviewTextareaFields: INTERVIEW_TEXTAREA_FIELDS,
@@ -2486,15 +2721,15 @@ createApp({
             toggleInterviewMultiOption, clearInterviewMultiOption, resetInterviewFilter,
             rosterRows, interviewHints, interviewHintRan, interviewHintTotal, interviewHintBannerRef, interviewScrollWrap,
             runInterviewRosterHints,
-            showInterviewForm, interviewEditingId, interviewForm,
+            showInterviewForm, interviewEditingId, interviewFormReadonly, interviewForm,
             interviewFieldErrors, interviewFieldRequired, clearInterviewFieldErrorKey, interviewTextLength, deliveryJudgmentDuplicate,
             showInterviewLogs, interviewLogsLoading, interviewLogs,
-            openInterviewAdd, openInterviewAddForHintName, openInterviewEdit, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
+            openInterviewAdd, openInterviewAddForHintName, openInterviewEdit, openInterviewDetail, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
             triggerInterviewImport, onInterviewImportFile,
             exportInterviewCsv, openInterviewLogs, restoreInterviewLatestBackup, copyInterviewHints, exportInterviewHintsCsv,
             triggerPipelineImport, onPipelineImportFile, exportPipelineCsv, openPipelineLogs, restorePipelineLatestBackup, formatDate,
             scrollToTop, clearPipelineDateField, clearSettlementDateField, displayDateSlash,
-            openAdd, openEdit, saveForm, removeRow,
+            openAdd, openEdit, openSettlementDetail, saveForm, removeRow,
         };
     }
 }).mount('#delivery-detail-app');

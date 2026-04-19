@@ -2209,34 +2209,31 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             return parsed_date.strftime("%Y/%m/%d")
         return str(raw_value or "").strip() or "-"
 
-    def _is_previous_month_period(period_label: str, onboarding_parsed: Optional[Any]) -> bool:
-        if not onboarding_parsed:
-            return False
-        period_month = _extract_period_month(period_label)
-        if period_month is None:
+    def _is_previous_month_interview(interview_parsed: Optional[Any], onboarding_parsed: Optional[Any]) -> bool:
+        if not interview_parsed or not onboarding_parsed:
             return False
         previous_month = 12 if int(onboarding_parsed.month) == 1 else int(onboarding_parsed.month) - 1
-        return int(period_month) == previous_month
+        return int(interview_parsed.month) == previous_month
 
-    def _detail_name_with_period_mark(full_name: str, period_label: str, onboarding_parsed: Optional[Any]) -> str:
+    def _detail_name_with_period_mark(full_name: str, interview_parsed: Optional[Any], onboarding_parsed: Optional[Any]) -> str:
         name = str(full_name or "").strip() or "-"
-        if _is_previous_month_period(period_label, onboarding_parsed):
+        if _is_previous_month_interview(interview_parsed, onboarding_parsed):
             return f"{name}(上月)"
         return name
 
     def detail_with_onboarding(
         full_name: str,
         position: str,
-        period_label: str,
+        interview_parsed: Optional[Any],
         onboarding_raw: str,
         onboarding_parsed: Optional[Any],
     ) -> str:
-        name = _detail_name_with_period_mark(full_name, period_label, onboarding_parsed)
+        name = _detail_name_with_period_mark(full_name, interview_parsed, onboarding_parsed)
         pos = str(position or "").strip() or "-"
         return f"{name}｜{pos}｜{_detail_date_text(onboarding_raw, onboarding_parsed)}"
 
-    def detail_with_cross_month_mark(full_name: str, position: str, period_label: str, onboarding_parsed: Optional[Any]) -> str:
-        name = _detail_name_with_period_mark(full_name, period_label, onboarding_parsed)
+    def detail_with_cross_month_mark(full_name: str, position: str, interview_parsed: Optional[Any], onboarding_parsed: Optional[Any]) -> str:
+        name = _detail_name_with_period_mark(full_name, interview_parsed, onboarding_parsed)
         pos = str(position or "").strip() or "-"
         return f"{name}｜{pos}"
 
@@ -2381,7 +2378,9 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
         if got_offer == "是" and result == "通过":
             offer_item = ensure_group((interview_period or period, position, region))
             offer_item["本周offer人数"] += 1
-            append_detail(offer_item["_metric_details"], "本周offer人数", e.full_name, position)
+            offer_item["_metric_details"].setdefault("本周offer人数", []).append(
+                detail_with_cross_month_mark(e.full_name, position, interview_date, onboarding_date)
+            )
         if result == "通过" and not got_offer:
             negotiating_item = ensure_group((interview_period or period, position, region))
             negotiating_item["offer在谈"] += 1
@@ -2396,7 +2395,7 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
                 loss_key = (loss_week, position, region)
                 weekly_in_transit_loss_counts[loss_key] = int(weekly_in_transit_loss_counts.get(loss_key, 0)) + 1
                 weekly_in_transit_loss_details.setdefault(loss_key, []).append(
-                    detail_with_cross_month_mark(e.full_name, position, period, onboarding_date)
+                    detail_with_cross_month_mark(e.full_name, position, interview_date, onboarding_date)
                 )
             else:
                 anomalies.append(
@@ -2439,7 +2438,7 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             waiting_key = (waiting_week, position, region)
             weekly_in_transit_counts[waiting_key] = int(weekly_in_transit_counts.get(waiting_key, 0)) + 1
             weekly_in_transit_details.setdefault(waiting_key, []).append(
-                detail_with_onboarding(e.full_name, position, period, onboarding_time, onboarding_date)
+                detail_with_onboarding(e.full_name, position, interview_date, onboarding_time, onboarding_date)
             )
         if "已入职" in onboarded and not onboarding_date:
             anomalies.append(
@@ -2457,7 +2456,7 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             onboard_key = (onboard_week, position, region)
             weekly_onboard_counts[onboard_key] = int(weekly_onboard_counts.get(onboard_key, 0)) + 1
             weekly_onboard_details.setdefault(onboard_key, []).append(
-                detail_with_onboarding(e.full_name, position, period, onboarding_time, onboarding_date)
+                detail_with_onboarding(e.full_name, position, interview_date, onboarding_time, onboarding_date)
             )
         period_month = _extract_period_month(period)
         if period_month is not None:

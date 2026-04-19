@@ -51,13 +51,75 @@
         overflow-wrap: anywhere;
         vertical-align: top;
     }
+    .crm-table {
+        --roster-sticky-serial-width: 4.5rem;
+        --roster-sticky-name-width: 7.5rem;
+    }
+    .crm-table.roster-table {
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .crm-table .crm-th.roster-col-serial,
+    .crm-table .crm-td.roster-col-serial {
+        width: var(--roster-sticky-serial-width);
+        min-width: var(--roster-sticky-serial-width);
+        max-width: var(--roster-sticky-serial-width);
+        box-sizing: border-box;
+    }
+    .crm-table .crm-th.roster-col-name,
+    .crm-table .crm-td.roster-col-name {
+        width: var(--roster-sticky-name-width);
+        min-width: var(--roster-sticky-name-width);
+        max-width: var(--roster-sticky-name-width);
+        box-sizing: border-box;
+    }
+    .roster-sticky-left-serial,
+    .roster-sticky-left-key {
+        position: sticky;
+        background: #fff;
+        border-right: 1px solid #e5e7eb;
+        box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
+        background-clip: padding-box;
+    }
+    .roster-sticky-left-serial {
+        left: 0;
+    }
+    .roster-sticky-left-key {
+        left: var(--roster-sticky-serial-width);
+    }
+    .crm-table tbody .roster-sticky-left-serial {
+        z-index: 2;
+    }
+    .crm-table tbody .roster-sticky-left-key {
+        z-index: 1;
+    }
+    .crm-table thead .roster-sticky-left-serial {
+        top: 0;
+        z-index: 30;
+        background: #e6e2db;
+    }
+    .crm-table thead .roster-sticky-left-key {
+        top: 0;
+        z-index: 29;
+        background: #e6e2db;
+    }
+    .crm-table tbody tr:hover .roster-sticky-left-serial,
+    .crm-table tbody tr:hover .roster-sticky-left-key {
+        background: #fafaf9;
+    }
+    /* 与交付详情一致：表格占满主区域剩余高度，仅表格内滚动，避免整页与表格双滚动、底栏遮挡感 */
+    .roster-table-scroll-fill.crm-table-scroll {
+        flex: 1 1 0;
+        min-height: 0;
+        max-height: none !important;
+    }
 </style>
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="roster-detail-app">
-    <div class="max-w-[100vw] mx-auto px-3 py-6 md:px-6">
-        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
+<div id="roster-detail-app" class="flex-1 min-h-0 flex flex-col w-full">
+    <div class="max-w-[100vw] mx-auto px-3 py-4 md:px-6 flex-1 min-h-0 flex flex-col w-full">
+        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4 shrink-0">
             <div>
                 <a href="/customers" class="text-sm text-blue-600 hover:underline">← 返回客户列表</a>
                 <h1 class="mt-2 text-xl md:text-2xl font-bold text-gray-900">
@@ -76,7 +138,7 @@
                 <button type="button" @click="restoreLatestBackup" class="crm-btn-rollback">回滚</button>
             </div>
         </div>
-        <div class="mb-4 crm-filter-row roster-filter-row text-sm">
+        <div class="mb-3 crm-filter-row roster-filter-row text-sm shrink-0">
             <select v-if="hasFilterField('employmentStatus')" v-model="filters.employmentStatus" class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control">
                 <option value="">在职情况（全部）</option>
                 <option v-for="v in employmentStatusOptions" :key="`es-${v}`" :value="v">{{ v }}</option>
@@ -110,14 +172,14 @@
             </div>
         </div>
 
-        <div class="rounded-xl border border-gray-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_24px_-4px_rgba(15,23,42,0.06)] overflow-hidden">
-            <div class="crm-h-scroll roster-wrap crm-table-scroll" style="--crm-table-scroll-max-height: calc(100vh - 280px);">
-                <table class="crm-table min-w-[2280px] text-sm text-gray-800">
+        <div class="rounded-xl border border-gray-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_24px_-4px_rgba(15,23,42,0.06)] overflow-hidden flex-1 min-h-0 flex flex-col">
+            <div class="crm-h-scroll roster-wrap crm-table-scroll roster-table-scroll-fill flex-1 min-h-0">
+                <table class="crm-table roster-table min-w-[2280px] text-sm text-gray-800">
                     <thead>
                         <tr>
-                            <th class="crm-th min-w-[3.25rem]">序号</th>
+                            <th class="crm-th min-w-[3.25rem] roster-col-serial roster-sticky-left-serial">序号</th>
+                            <th class="crm-th min-w-[5.5rem] roster-col-name roster-sticky-left-key">姓名</th>
                             <th class="crm-th min-w-[4.5rem]">在职情况</th>
-                            <th class="crm-th min-w-[5.5rem]">姓名</th>
                             <th v-if="isZNTX" class="crm-th min-w-[6rem]">工号</th>
                             <th class="crm-th min-w-[8rem]">联系方式</th>
                             <th class="crm-th min-w-[5rem]">客户</th>
@@ -145,9 +207,9 @@
                     </thead>
                     <tbody>
                         <tr v-for="(row, idx) in filteredRows" :key="row.id" class="group border-b border-gray-100/90 bg-white transition-colors duration-150 hover:bg-stone-50/80">
-                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top tabular-nums">{{ IS_GLOBAL_ROSTER ? (idx + 1) : row.serial_no }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top tabular-nums roster-col-serial roster-sticky-left-serial">{{ IS_GLOBAL_ROSTER ? (idx + 1) : row.serial_no }}</td>
+                            <td class="crm-td crm-name-cell px-3 py-3 whitespace-nowrap align-top tracking-tight roster-col-name roster-sticky-left-key">{{ row.full_name }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top">{{ row.employment_status }}</td>
-                            <td class="crm-td crm-name-cell px-3 py-3 whitespace-nowrap align-top tracking-tight">{{ row.full_name }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.zntx_staff_no }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.contact_info }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.customer_name }}</td>
@@ -171,6 +233,7 @@
                             <td v-if="showStdReleaseLeaveCols" class="crm-td px-3 py-3 min-w-[14rem] max-w-[18rem] text-gray-700 align-top leading-snug">{{ row.leave_reason }}</td>
                             <td class="crm-td px-3 py-3 max-w-[13rem] break-words text-gray-700 align-top leading-snug">{{ row.remarks }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap align-top sticky right-0 z-10 border-l border-gray-100 bg-white group-hover:bg-stone-50/90 roster-sticky-op crm-sticky-right-op">
+                                <button type="button" class="text-gray-700 hover:text-gray-900 hover:underline text-xs mr-2" @click="openRosterDetail(row)">详情</button>
                                 <button type="button" class="text-blue-600 hover:text-blue-800 hover:underline text-xs mr-2" @click="openEdit(row)">修改</button>
                                 <button type="button" class="text-red-600 hover:text-red-700 hover:underline text-xs" @click="confirmDelete(row)">删除</button>
                             </td>
@@ -252,8 +315,8 @@
     <div v-if="showForm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">{{ editingId ? '修改行' : '新增行' }}</h3>
-                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false">&times;</button>
+                <h3 class="font-bold text-lg">{{ formReadonly ? '花名册详情' : (editingId ? '修改行' : '新增行') }}</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false; formReadonly=false">&times;</button>
             </div>
             <div class="overflow-y-auto p-5">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -265,6 +328,7 @@
                         <select
                             v-if="f.key === 'employment_status'"
                             v-model="form[f.key]"
+                            :disabled="formReadonly"
                             @change="markTouched(f.key)"
                             :class="[
                                 'crm-form-control',
@@ -279,6 +343,7 @@
                             <input
                                 v-model="form[f.key]"
                                 type="date"
+                                :disabled="formReadonly"
                                 @input="markTouched(f.key)"
                                 @change="markTouched(f.key)"
                                 :class="[
@@ -287,7 +352,7 @@
                                 ]"
                             />
                             <button
-                                v-if="form[f.key]"
+                                v-if="!formReadonly && form[f.key]"
                                 type="button"
                                 class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700"
                                 @click="clearDateField(f.key)"
@@ -297,6 +362,7 @@
                             v-else
                             v-model="form[f.key]"
                             type="text"
+                            :disabled="formReadonly"
                             @input="markTouched(f.key)"
                             @change="markTouched(f.key)"
                             :class="[
@@ -309,8 +375,9 @@
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
-                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false">取消</button>
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false; formReadonly=false">{{ formReadonly ? '关闭' : '取消' }}</button>
                 <button
+                    v-if="!formReadonly"
                     type="button"
                     class="px-4 py-2 rounded-lg text-white"
                     :class="hasBlockingErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
@@ -371,8 +438,8 @@ const CLIENT_ID = window.__ROSTER_CLIENT_ID__;
 const IS_GLOBAL_ROSTER = !CLIENT_ID || Number(CLIENT_ID) === 0;
 const STANDARD_FORM_FIELDS = [
     { key: 'serial_no', label: '序号' },
-    { key: 'employment_status', label: '在职情况' },
     { key: 'full_name', label: '姓名' },
+    { key: 'employment_status', label: '在职情况' },
     { key: 'contact_info', label: '联系方式' },
     { key: 'customer_name', label: '客户' },
     { key: 'work_location', label: '工作地' },
@@ -400,8 +467,8 @@ function standardFormFieldsWithoutReleaseLeave() {
 }
 const ZNTX_FORM_FIELDS = [
     { key: 'serial_no', label: '序号' },
-    { key: 'employment_status', label: '在职情况' },
     { key: 'full_name', label: '姓名' },
+    { key: 'employment_status', label: '在职情况' },
     { key: 'zntx_staff_no', label: '工号' },
     { key: 'contact_info', label: '联系方式' },
     { key: 'customer_name', label: '客户' },
@@ -537,6 +604,7 @@ createApp({
         const loading = ref(true);
         const showForm = ref(false);
         const editingId = ref(null);
+        const formReadonly = ref(false);
         const form = reactive(emptyForm());
         const showDel = ref(false);
         const delRow = ref(null);
@@ -863,6 +931,7 @@ createApp({
         };
         const openAdd = () => {
             editingId.value = null;
+            formReadonly.value = false;
             Object.assign(form, emptyForm());
             clearTouched();
             const nextNo = nextSerialNo();
@@ -873,6 +942,7 @@ createApp({
         };
         const openEdit = (row) => {
             editingId.value = row.id;
+            formReadonly.value = false;
             FORM_FIELDS.forEach((f) => {
                 const raw = row[f.key] != null ? String(row[f.key]) : '';
                 form[f.key] = DATE_FIELD_KEYS.has(f.key)
@@ -882,7 +952,12 @@ createApp({
             clearTouched();
             showForm.value = true;
         };
+        const openRosterDetail = (row) => {
+            openEdit(row);
+            formReadonly.value = true;
+        };
         const saveForm = async () => {
+            if (formReadonly.value) return;
             if (!editingId.value && missingRequiredFields.value.length) {
                 const missingLabels = missingRequiredFields.value.map((k) => requiredFieldLabelMap.value[k] || k);
                 alert(`请先完整填写必填项：${missingLabels.join('、')}`);
@@ -922,6 +997,7 @@ createApp({
                 return;
             }
             showForm.value = false;
+            formReadonly.value = false;
             loadRows();
         };
         const confirmDelete = (row) => {
@@ -1081,7 +1157,7 @@ createApp({
             showDel, fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
             showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors,
             IS_GLOBAL_ROSTER,
-            openAdd, openEdit, saveForm, confirmDelete, cancelDelete, doDelete,
+            openAdd, openEdit, openRosterDetail, formReadonly, saveForm, confirmDelete, cancelDelete, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, fieldInputType, markTouched, getFieldError,
             clearDateField, displayAmountInteger, displayRosterDate,
         };

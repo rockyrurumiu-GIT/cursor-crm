@@ -29,14 +29,126 @@
     }
     .settlement-filter-date-input {
     }
+    /* 与 delivery_detail 结算模块一致：前三列冻结 + 客户高亮（crm-name-cell） */
+    .crm-table.settlement-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        --settlement-sticky-serial-width: 4.5rem;
+        --settlement-sticky-date-width: 11rem;
+        --settlement-sticky-customer-width: 7.5rem;
+    }
+    .crm-table.settlement-table .settlement-col-serial,
+    .crm-table.settlement-table .crm-th.settlement-col-serial {
+        width: var(--settlement-sticky-serial-width);
+        min-width: var(--settlement-sticky-serial-width);
+        max-width: var(--settlement-sticky-serial-width);
+        box-sizing: border-box;
+    }
+    .crm-table.settlement-table .settlement-col-date,
+    .crm-table.settlement-table .crm-th.settlement-col-date {
+        width: var(--settlement-sticky-date-width);
+        min-width: var(--settlement-sticky-date-width);
+        max-width: var(--settlement-sticky-date-width);
+        box-sizing: border-box;
+    }
+    .crm-table.settlement-table .settlement-col-customer,
+    .crm-table.settlement-table .crm-th.settlement-col-customer {
+        width: var(--settlement-sticky-customer-width);
+        min-width: var(--settlement-sticky-customer-width);
+        max-width: var(--settlement-sticky-customer-width);
+        box-sizing: border-box;
+    }
+    .settlement-sticky-serial,
+    .settlement-sticky-date,
+    .settlement-sticky-customer {
+        position: sticky;
+        background: #fff;
+        border-right: 1px solid #e5e7eb;
+        box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
+        background-clip: padding-box;
+    }
+    .settlement-sticky-serial {
+        left: 0;
+    }
+    .settlement-sticky-date {
+        left: var(--settlement-sticky-serial-width);
+    }
+    .settlement-sticky-customer {
+        left: calc(var(--settlement-sticky-serial-width) + var(--settlement-sticky-date-width));
+    }
+    .crm-table tbody .settlement-sticky-serial {
+        z-index: 3;
+    }
+    .crm-table tbody .settlement-sticky-date {
+        z-index: 2;
+    }
+    .crm-table tbody .settlement-sticky-customer {
+        z-index: 1;
+    }
+    .crm-table thead .settlement-sticky-serial {
+        top: 0;
+        z-index: 32;
+        background: #e6e2db;
+    }
+    .crm-table thead .settlement-sticky-date {
+        top: 0;
+        z-index: 31;
+        background: #e6e2db;
+    }
+    .crm-table thead .settlement-sticky-customer {
+        top: 0;
+        z-index: 30;
+        background: #e6e2db;
+    }
+    .crm-table.settlement-table tbody tr:hover .settlement-sticky-serial,
+    .crm-table.settlement-table tbody tr:hover .settlement-sticky-date,
+    .crm-table.settlement-table tbody tr:hover .settlement-sticky-customer {
+        background: #fafaf9;
+    }
+    .crm-table.settlement-table tfoot .settlement-sticky-serial,
+    .crm-table.settlement-table tfoot .settlement-sticky-date,
+    .crm-table.settlement-table tfoot .settlement-sticky-customer {
+        background: #f8fafc;
+    }
+    /* 结算弹窗：备注等多行文本（与 delivery_detail 一致） */
+    .delivery-modal-textarea {
+        width: 100%;
+        min-height: 2.75rem;
+        max-height: min(7rem, 22vh);
+        resize: vertical;
+        box-sizing: border-box;
+        font-size: 0.875rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        overflow-y: auto;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        padding: 0.45rem 0.65rem;
+        color: #111827;
+        background: #fff;
+    }
+    .delivery-modal-textarea:disabled {
+        resize: none;
+        background: #f9fafb;
+        color: #374151;
+        cursor: default;
+    }
+    /* 与交付详情一致：表格占满剩余高度，仅表格内滚动 */
+    .delivery-table-scroll-fill.crm-table-scroll {
+        flex: 1 1 0;
+        min-height: 0;
+        max-height: none !important;
+    }
 </style>
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="delivery-settlement-app" class="container mx-auto p-6 max-w-[1280px]">
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <h1 class="text-2xl font-bold text-gray-900">结算回款</h1>
-        <div class="mt-4 flex justify-end gap-2">
+<div id="delivery-settlement-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 py-4 sm:px-6 sm:py-5">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6 flex-1 min-h-0 flex flex-col gap-3">
+        <h1 class="text-2xl font-bold text-gray-900 shrink-0">结算回款</h1>
+        <div class="flex justify-end gap-2 flex-wrap shrink-0">
             <button type="button" class="inline-flex h-10 w-[92px] items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openAdd">新增</button>
             <button
                 type="button"
@@ -52,7 +164,7 @@
             <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openLogs">日志</button>
             <button type="button" class="crm-btn-rollback" @click="restoreLatestBackup">回滚</button>
         </div>
-        <div class="mt-4 crm-filter-row settlement-filter-row">
+        <div class="crm-filter-row settlement-filter-row shrink-0">
             <input v-model="filters.customer" type="text" placeholder="筛选客户" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-text" />
             <input v-model="filters.feeMonth" type="text" placeholder="筛选费用月份" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-text" />
             <select v-model="filters.invoiced" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
@@ -82,13 +194,13 @@
             </div>
             <button type="button" class="crm-filter-item settlement-filter-item crm-filter-reset settlement-filter-reset" @click="clearFilters">重置</button>
         </div>
-        <div class="mt-4 border border-gray-200 rounded-lg crm-table-scroll" style="--crm-table-scroll-max-height: calc(100vh - 260px);">
+        <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-scroll-fill flex-1 min-h-0">
             <table class="crm-table settlement-table min-w-[1900px]">
                 <thead>
                     <tr>
-                        <th class="crm-th">序号</th>
-                        <th class="crm-th">结算进度更新日期</th>
-                        <th class="crm-th min-w-[6em] whitespace-nowrap">客户</th>
+                        <th class="crm-th settlement-col-serial settlement-sticky-serial">序号</th>
+                        <th class="crm-th settlement-col-date settlement-sticky-date">结算进度更新日期</th>
+                        <th class="crm-th settlement-col-customer settlement-sticky-customer">客户</th>
                         <th class="crm-th min-w-[8rem] whitespace-nowrap">费用月份</th>
                         <th class="crm-th min-w-[8rem] whitespace-nowrap">追款月份</th>
                         <th class="crm-th crm-currency-cell">金额</th>
@@ -110,9 +222,9 @@
                 </thead>
                 <tbody>
                     <tr v-for="row in filteredRows" :key="row.id">
-                        <td class="crm-td">{{ row.serial_no }}</td>
-                        <td class="crm-td">{{ displayDateSlash(row.progress_updated_at) }}</td>
-                        <td class="crm-td whitespace-nowrap">{{ row.customer_name }}</td>
+                        <td class="crm-td settlement-col-serial settlement-sticky-serial">{{ row.serial_no }}</td>
+                        <td class="crm-td settlement-col-date settlement-sticky-date">{{ displayDateSlash(row.progress_updated_at) }}</td>
+                        <td class="crm-td crm-name-cell settlement-col-customer settlement-sticky-customer whitespace-nowrap">{{ row.customer_name }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.fee_month }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.chase_month }}</td>
                         <td class="crm-td crm-currency-cell">{{ displayAmountInteger(row.amount) }}</td>
@@ -130,6 +242,7 @@
                         <td class="crm-td">{{ row.invoice_no }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.remarks }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
+                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openDetail(row)">详情</button>
                             <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
                         </td>
@@ -161,28 +274,38 @@
     <div v-if="showForm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">{{ editingId ? '修改结算回款' : '新增结算回款' }}</h3>
-                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false">&times;</button>
+                <h3 class="font-bold text-lg">{{ formDetailReadonly ? '结算回款详情' : (editingId ? '修改结算回款' : '新增结算回款') }}</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false; formDetailReadonly=false">&times;</button>
             </div>
             <div class="overflow-y-auto p-5">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                    <label v-for="f in fields" :key="f.key" class="flex flex-col gap-1">
+                    <label v-for="f in fields" :key="f.key" class="flex flex-col gap-1" :class="{ 'md:col-span-3': f.type === 'textarea' }">
                         <span class="text-gray-600">{{ f.label }}<span v-if="f.required" class="text-red-500">*</span></span>
-                        <select v-if="f.type==='select'" v-model="form[f.key]" @change="onSettlementFieldChange(f.key)" class="crm-form-control">
+                        <select v-if="f.type==='select'" v-model="form[f.key]" :disabled="formDetailReadonly" @change="onSettlementFieldChange(f.key)" class="crm-form-control">
                             <option value="">请选择</option>
                             <option v-for="op in f.options" :key="op" :value="op">{{ op }}</option>
                         </select>
                         <div v-else-if="f.type === 'date'" class="relative">
-                            <input v-model="form[f.key]" type="date" :readonly="f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="crm-form-control crm-form-control--date" />
-                            <button v-if="form[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearDateField(f.key)">清空</button>
+                            <input v-model="form[f.key]" type="date" :disabled="formDetailReadonly" :readonly="!formDetailReadonly && f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="crm-form-control crm-form-control--date" />
+                            <button v-if="!formDetailReadonly && form[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearDateField(f.key)">清空</button>
                         </div>
-                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" :readonly="f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="crm-form-control" />
+                        <textarea
+                            v-else-if="f.type === 'textarea'"
+                            v-model="form[f.key]"
+                            class="delivery-modal-textarea"
+                            rows="2"
+                            :disabled="formDetailReadonly"
+                            :readonly="!formDetailReadonly && f.readonly"
+                            @input="onSettlementFieldChange(f.key)"
+                            @change="onSettlementFieldChange(f.key)"
+                        ></textarea>
+                        <input v-else v-model="form[f.key]" :type="f.type || 'text'" :disabled="formDetailReadonly" :readonly="!formDetailReadonly && f.readonly" @input="onSettlementFieldChange(f.key)" @change="onSettlementFieldChange(f.key)" class="crm-form-control" />
                     </label>
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
-                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false">取消</button>
-                <button type="button" class="px-4 py-2 rounded-lg text-white" :class="hasErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'" :disabled="hasErrors" @click="saveForm">保存</button>
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false; formDetailReadonly=false">{{ formDetailReadonly ? '关闭' : '取消' }}</button>
+                <button v-if="!formDetailReadonly" type="button" class="px-4 py-2 rounded-lg text-white" :class="hasErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'" :disabled="hasErrors" @click="saveForm">保存</button>
             </div>
         </div>
     </div>
@@ -233,7 +356,7 @@ const FIELDS = [
     { key: 'payment_nature', label: '回款性质', type: 'select', options: ['增量回款', '存量回款'] },
     { key: 'po_no', label: 'PO单' },
     { key: 'invoice_no', label: '发票号' },
-    { key: 'remarks', label: '备注' },
+    { key: 'remarks', label: '备注', type: 'textarea' },
 ];
 const DATE_FIELD_KEYS = new Set(
     FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
@@ -354,6 +477,7 @@ createApp({
         const logs = ref([]);
         const showForm = ref(false);
         const editingId = ref(null);
+        const formDetailReadonly = ref(false);
         const form = reactive(emptyForm());
         const fields = ref(FIELDS.map((f) => ({ ...f })));
         const customerNameText = computed(() => String(form.customer_name || '').trim());
@@ -625,12 +749,14 @@ createApp({
         };
         const openAdd = () => {
             editingId.value = null;
+            formDetailReadonly.value = false;
             Object.assign(form, emptyForm());
             form.serial_no = String(rows.value.length + 1);
             showForm.value = true;
         };
         const openEdit = (row) => {
             editingId.value = row.id;
+            formDetailReadonly.value = false;
             FIELDS.forEach((f) => {
                 const raw = row[f.key] != null ? String(row[f.key]) : '';
                 form[f.key] = DATE_FIELD_KEYS.has(f.key)
@@ -639,7 +765,12 @@ createApp({
             });
             showForm.value = true;
         };
+        const openDetail = (row) => {
+            openEdit(row);
+            formDetailReadonly.value = true;
+        };
         const saveForm = async () => {
+            if (formDetailReadonly.value) return;
             const payload = {};
             FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
             const url = editingId.value ? `/api/delivery/settlement/row/${editingId.value}` : '/api/delivery/settlement';
@@ -659,6 +790,7 @@ createApp({
                 return;
             }
             showForm.value = false;
+            formDetailReadonly.value = false;
             await loadRows();
         };
         const removeRow = async (row) => {
@@ -676,8 +808,8 @@ createApp({
         return {
             rows, filters, filteredRows, fields, fileInput, showLogs, logsLoading, logs,
             totalAmountDisplay, totalAmountAllDisplay,
-            showForm, editingId, form, hasErrors,
-            openAdd, openEdit, saveForm, removeRow,
+            showForm, editingId, formDetailReadonly, form, hasErrors,
+            openAdd, openEdit, openDetail, saveForm, removeRow,
             triggerImport, onImportFile, exportCsv, restoreLatestBackup, openLogs, formatDate, clearFilters, clearDateField, fillPaymentDaysByDates, onSettlementFieldChange, displayAmountInteger, displayDateSlash,
         };
     }
