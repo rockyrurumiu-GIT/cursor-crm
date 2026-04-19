@@ -1380,23 +1380,30 @@ function todayInputDate() {
     const d = String(now.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
 }
+function extractLooseDateParts(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+    const m = s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    if (!m) return null;
+    return [m[1], m[2], m[3]];
+}
 function normalizeDateForInput(raw, fallbackTodayIfEmpty = false) {
     const s = String(raw || '').trim();
     if (!s) return fallbackTodayIfEmpty ? todayInputDate() : '';
-    const m = s.match(/^(\d{4})\D?(\d{1,2})\D?(\d{1,2})$/);
-    if (!m) return s;
-    const y = m[1];
-    const mo = String(parseInt(m[2], 10)).padStart(2, '0');
-    const d = String(parseInt(m[3], 10)).padStart(2, '0');
+    const parts = extractLooseDateParts(s);
+    if (!parts) return s;
+    const y = parts[0];
+    const mo = String(parseInt(parts[1], 10)).padStart(2, '0');
+    const d = String(parseInt(parts[2], 10)).padStart(2, '0');
     if (mo === 'NaN' || d === 'NaN') return s;
     return `${y}-${mo}-${d}`;
 }
 function displayDateSlash(raw) {
     const s = String(raw || '').trim();
     if (!s) return '';
-    const m = s.match(/^(\d{4})\D?(\d{1,2})\D?(\d{1,2})$/);
-    if (!m) return s;
-    return `${m[1]}/${parseInt(m[2], 10)}/${parseInt(m[3], 10)}`;
+    const parts = extractLooseDateParts(s);
+    if (!parts) return s;
+    return `${parts[0]}/${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
 }
 function interviewDateRank(raw) {
     const normalized = normalizeDateForInput(raw, false);
