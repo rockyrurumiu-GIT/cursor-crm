@@ -470,12 +470,19 @@ createApp({
                 });
             });
             const monthOnboardDetails = {};
+            const monthTransitLossDetails = {};
             displayRows.value.forEach((row) => {
                 metricTooltipItems(row, '本周入职人数').forEach((item) => {
                     const m = onboardingMonthFromDetail(item);
                     if (m < 0) return;
                     if (!monthOnboardDetails[m]) monthOnboardDetails[m] = [];
                     monthOnboardDetails[m].push(item);
+                });
+                metricTooltipItems(row, '月度在途流失(包含前序)').forEach((item) => {
+                    const m = onboardingMonthFromDetail(item);
+                    if (m < 0) return;
+                    if (!monthTransitLossDetails[m]) monthTransitLossDetails[m] = [];
+                    monthTransitLossDetails[m].push(item);
                 });
             });
             const emittedMonthSummary = new Set();
@@ -528,6 +535,8 @@ createApp({
                     });
                     monthSummary['本周入职人数'] = (monthOnboardDetails[currentMonth] || []).length;
                     monthSummary._metric_details['本周入职人数'] = (monthOnboardDetails[currentMonth] || []).slice();
+                    monthSummary['月度在途流失(包含前序)'] = (monthTransitLossDetails[currentMonth] || []).length;
+                    monthSummary._metric_details['月度在途流失(包含前序)'] = (monthTransitLossDetails[currentMonth] || []).slice();
                     result.push(monthSummary);
                     emittedMonthSummary.add(currentMonth);
                 }

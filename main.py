@@ -2336,8 +2336,9 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             item["待面试"] += 1
             append_detail(detail_map, "待面试", e.full_name, position)
         if interviewed == "是" and interview_date:
-            item["已面试"] += 1
-            append_detail(detail_map, "已面试", e.full_name, position)
+            interviewed_item = ensure_group((interview_period or period, position, region))
+            interviewed_item["已面试"] += 1
+            append_detail(interviewed_item["_metric_details"], "已面试", e.full_name, position)
         if interviewed == "是" and not interview_time:
             anomalies.append(
                 {
@@ -2389,13 +2390,13 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             offer_reject_item = ensure_group((interview_period or period, position, region))
             offer_reject_item["弃offer/谈薪失败"] += 1
             append_detail(offer_reject_item["_metric_details"], "弃offer/谈薪失败", e.full_name, position)
-        if onboarded == "放弃入职":
+        if got_offer == "是" and onboarded == "放弃入职":
             if onboarding_date:
                 loss_week = _week_label_from_date(onboarding_date)
                 loss_key = (loss_week, position, region)
                 weekly_in_transit_loss_counts[loss_key] = int(weekly_in_transit_loss_counts.get(loss_key, 0)) + 1
                 weekly_in_transit_loss_details.setdefault(loss_key, []).append(
-                    detail_with_cross_month_mark(e.full_name, position, interview_date, onboarding_date)
+                    detail_with_onboarding(e.full_name, position, interview_date, onboarding_time, onboarding_date)
                 )
             else:
                 anomalies.append(
