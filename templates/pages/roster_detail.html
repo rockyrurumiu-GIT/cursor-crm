@@ -216,7 +216,6 @@
                     class="rounded-lg border px-4 py-2 text-sm font-medium"
                     :class="showOnlyChecked ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50'"
                 >只显示勾选</button>
-                <button type="button" @click="clearCheckedRows" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">取消勾选</button>
                 <button type="button" @click="openLogs" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">日志</button>
                 <button type="button" @click="triggerImport" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导入</button>
                 <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
@@ -462,7 +461,7 @@
                             v-else
                             v-model="form[f.key]"
                             type="text"
-                            :disabled="formReadonly"
+                            :disabled="formReadonly || f.key === 'salary_quote_ratio'"
                             @input="markTouched(f.key)"
                             @change="markTouched(f.key)"
                             :class="[
@@ -552,7 +551,7 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, onMounted, reactive, computed } = Vue;
+const { createApp, ref, onMounted, reactive, computed, watch } = Vue;
 const CLIENT_ID = window.__ROSTER_CLIENT_ID__;
 const IS_GLOBAL_ROSTER = !CLIENT_ID || Number(CLIENT_ID) === 0;
 const STANDARD_FORM_FIELDS = [
@@ -728,6 +727,19 @@ createApp({
         const editingId = ref(null);
         const formReadonly = ref(false);
         const form = reactive(emptyForm());
+        watch(
+            () => [form.monthly_quote_tax, form.pre_tax_salary],
+            () => {
+                if (formReadonly.value) return;
+                const q = parseAmountCell(form.monthly_quote_tax);
+                const p = parseAmountCell(form.pre_tax_salary);
+                if (!Number.isFinite(q) || !Number.isFinite(p) || q <= 0) {
+                    form.salary_quote_ratio = '';
+                } else {
+                    form.salary_quote_ratio = formatRatioAsPercent(p / q);
+                }
+            },
+        );
         const showDel = ref(false);
         const delRow = ref(null);
         const fileInput = ref(null);
@@ -1302,12 +1314,6 @@ createApp({
         const toggleShowCheckedOnly = () => {
             showOnlyChecked.value = !showOnlyChecked.value;
         };
-        const clearCheckedRows = () => {
-            Object.keys(checkedRowIds).forEach((id) => {
-                checkedRowIds[id] = false;
-            });
-            showOnlyChecked.value = false;
-        };
         onMounted(() => {
             loadBrief();
             loadRows();
@@ -1320,7 +1326,7 @@ createApp({
             IS_GLOBAL_ROSTER,
             openAdd, openEdit, openRosterDetail, formReadonly, saveForm, confirmDelete, cancelDelete, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, fieldInputType, markTouched, getFieldError,
-            isRowChecked, setRowChecked, toggleShowCheckedOnly, clearCheckedRows,
+            isRowChecked, setRowChecked, toggleShowCheckedOnly,
             clearDateField, displayAmountInteger, displayRosterDate,
         };
     },

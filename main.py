@@ -119,6 +119,9 @@ class RosterEntry(Base):
     zntx_staff_no = Column(String, default="")
     zntx_separation_type = Column(String, default="")
     zntx_compensation_amount = Column(String, default="")
+    delivery_communication = Column(String, default="")
+    business_action = Column(String, default="")
+    bp_involved = Column(String, default="")
     leave_reason = Column(String, default="")
     remarks = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.now)
@@ -264,6 +267,9 @@ def _ensure_roster_schema_compat():
             "zntx_attendance_makeup": "TEXT DEFAULT ''",
             "zntx_separation_type": "TEXT DEFAULT ''",
             "zntx_compensation_amount": "TEXT DEFAULT ''",
+            "delivery_communication": "TEXT DEFAULT ''",
+            "business_action": "TEXT DEFAULT ''",
+            "bp_involved": "TEXT DEFAULT ''",
         }
         for col, ddl in add_cols.items():
             if col not in existing:
@@ -294,6 +300,42 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
     return credentials.username
 
 
+def _roster_strip_amount_for_ratio(v: str) -> str:
+    return re.sub(r"[¥￥,\s\u00a0]", "", str(v or "").strip())
+
+
+def _format_roster_salary_quote_ratio(monthly_quote_tax: str, pre_tax_salary: str) -> str:
+    """薪资报价比 = 税前工资 / 月报价(含税)，百分比保留两位小数（与 GM% 展示风格一致）。"""
+    q = _roster_strip_amount_for_ratio(monthly_quote_tax)
+    p = _roster_strip_amount_for_ratio(pre_tax_salary)
+    if not q or not p:
+        return ""
+    if not re.fullmatch(r"\d{4,6}", q) or not re.fullmatch(r"\d{4,6}", p):
+        return ""
+    qf = float(q)
+    pf = float(p)
+    if qf <= 0:
+        return ""
+    return f"{(pf / qf) * 100:.2f}%"
+
+
+def _apply_roster_salary_quote_ratio(data: Dict[str, str]) -> None:
+    data["salary_quote_ratio"] = _format_roster_salary_quote_ratio(
+        data.get("monthly_quote_tax", ""),
+        data.get("pre_tax_salary", ""),
+    )
+
+
+def _roster_entries_union_of_all_clients(db: Session) -> List[RosterEntry]:
+    """整体花名册：各客户花名册的合集（仅含 client_id 对应 clients 表中存在的客户）。"""
+    return (
+        db.query(RosterEntry)
+        .join(Client, RosterEntry.client_id == Client.id)
+        .order_by(RosterEntry.id)
+        .all()
+    )
+
+
 def _roster_entry_to_dict(e: RosterEntry) -> dict:
     return {
         "id": e.id,
@@ -310,7 +352,10 @@ def _roster_entry_to_dict(e: RosterEntry) -> dict:
         "regularization_date": e.regularization_date or "",
         "monthly_quote_tax": e.monthly_quote_tax or "",
         "pre_tax_salary": e.pre_tax_salary or "",
-        "salary_quote_ratio": e.salary_quote_ratio or "",
+        "salary_quote_ratio": _format_roster_salary_quote_ratio(
+            e.monthly_quote_tax or "",
+            e.pre_tax_salary or "",
+        ),
         "gms": e.gms or "",
         "gm_pct": e.gm_pct or "",
         "employee_plus1": e.employee_plus1 or "",
@@ -324,6 +369,9 @@ def _roster_entry_to_dict(e: RosterEntry) -> dict:
         "zntx_staff_no": e.zntx_staff_no or "",
         "zntx_separation_type": e.zntx_separation_type or "",
         "zntx_compensation_amount": e.zntx_compensation_amount or "",
+        "delivery_communication": e.delivery_communication or "",
+        "business_action": e.business_action or "",
+        "bp_involved": e.bp_involved or "",
         "leave_reason": e.leave_reason or "",
         "remarks": e.remarks or "",
     }
@@ -357,6 +405,9 @@ def _normalize_roster_payload(d: Dict[str, Any]) -> Dict[str, str]:
         "zntx_staff_no",
         "zntx_separation_type",
         "zntx_compensation_amount",
+        "delivery_communication",
+        "business_action",
+        "bp_involved",
         "leave_reason",
         "remarks",
     ]
@@ -1033,6 +1084,9 @@ ROSTER_FIELD_KEYS = frozenset(
         "zntx_staff_no",
         "zntx_separation_type",
         "zntx_compensation_amount",
+        "delivery_communication",
+        "business_action",
+        "bp_involved",
         "leave_reason",
         "remarks",
     ]
@@ -1048,16 +1102,21 @@ _CHINESE_ROSTER_HEADER_MAP = {
     "工作地": "work_location",
     "岗位": "position_title",
     "业务线": "business_line",
+    "项目": "business_line",
     "入职日期": "entry_date",
     "入职时间": "entry_date",
     "转正时间": "regularization_date",
     "月报价(含税)": "monthly_quote_tax",
+    "报价（含税）": "monthly_quote_tax",
+    "报价": "monthly_quote_tax",
     "税前工资": "pre_tax_salary",
+    "薪资": "pre_tax_salary",
     "薪资报价比": "salary_quote_ratio",
     "GM$": "gms",
     "GMS": "gms",  # 旧表头兼容
     "GM%": "gm_pct",
     "员工+1": "employee_plus1",
+    "员工加1": "employee_plus1",
     "入职渠道": "zntx_onboarding_channel",
     "打卡": "zntx_attendance_checkin",
     "补卡": "zntx_attendance_makeup",
@@ -1067,12 +1126,23 @@ _CHINESE_ROSTER_HEADER_MAP = {
     "项目释放时间": "project_release_date",
     "公司离职日期": "company_resign_date",
     "离职时间": "company_resign_date",
+    "主动/被动": "zntx_separation_type",
+    "主动被动": "zntx_separation_type",
     "工号": "zntx_staff_no",
     "中诺工号": "zntx_staff_no",
     "中河工号": "zntx_staff_no",  # 兼容旧误写
     "离职类型": "zntx_separation_type",
     "补偿金": "zntx_compensation_amount",
+    "薪酬金": "zntx_compensation_amount",
+    "交付沟通": "delivery_communication",
+    "业务处理动作": "business_action",
+    "BP参与与否": "bp_involved",
+    "BP参与": "bp_involved",
+    "BP参与动作": "bp_involved",
+    "bp参与动作": "bp_involved",
     "离职或释放原因": "leave_reason",
+    "离职和离职原因": "leave_reason",
+    "释放/离职原因": "leave_reason",
     "释放成功离职原因": "leave_reason",
     "备注": "remarks",
 }
@@ -1386,6 +1456,38 @@ def _iter_roster_csv_data_rows(text: str):
         yield row_dict
 
 
+def _analyze_roster_csv_headers(text: str) -> Dict[str, Any]:
+    """返回 CSV 首行表头的识别情况，便于导入提示未识别列。"""
+    raw_lines = text.splitlines()
+    while raw_lines and not raw_lines[0].strip():
+        raw_lines.pop(0)
+    while raw_lines and not raw_lines[-1].strip():
+        raw_lines.pop()
+    if not raw_lines:
+        return {"headers": [], "matched_headers": [], "unmatched_headers": []}
+    delim = _best_csv_delimiter(raw_lines[0])
+    reader = csv.reader(io.StringIO(raw_lines[0]), delimiter=delim)
+    try:
+        headers = next(reader)
+    except StopIteration:
+        headers = []
+    matched_headers: List[str] = []
+    unmatched_headers: List[str] = []
+    for h in headers:
+        name = _strip_csv_header_noise(h or "")
+        if not name:
+            continue
+        if _map_roster_csv_header(name):
+            matched_headers.append(name)
+        else:
+            unmatched_headers.append(name)
+    return {
+        "headers": headers,
+        "matched_headers": matched_headers,
+        "unmatched_headers": unmatched_headers,
+    }
+
+
 def _strip_excel_sep_directive(text: str) -> str:
     """部分 Excel 导出首行为 sep=; 或 sep=,，需跳过再解析表头。"""
     lines = text.splitlines()
@@ -1417,6 +1519,9 @@ ROSTER_EXPORT_HEADERS = [
     "项目释放日期",
     "公司离职日期",
     "离职或释放原因",
+    "交付沟通",
+    "业务处理动作",
+    "BP参与与否",
     "备注",
 ]
 
@@ -1442,6 +1547,9 @@ ZNTX_ROSTER_EXPORT_HEADERS = [
     "打卡",
     "员工+2",
     "接口",
+    "交付沟通",
+    "业务处理动作",
+    "BP参与与否",
     "备注",
 ]
 
@@ -1661,7 +1769,7 @@ async def get_client_brief(client_id: int, db: Session = Depends(get_db), user: 
 
 @app.get("/api/roster")
 async def roster_list_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
-    rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
+    rows = _roster_entries_union_of_all_clients(db)
     return [_roster_entry_to_dict(r) for r in rows]
 
 
@@ -1677,11 +1785,16 @@ async def roster_create_row_all(
         labels = [ROSTER_REQUIRED_LABELS.get(k, k) for k in missing]
         raise HTTPException(status_code=400, detail=f"新增失败，以下必填项未填写：{'、'.join(labels)}")
     _validate_roster_business_fields(data)
+    _apply_roster_salary_quote_ratio(data)
     _assert_roster_contact_unique_global(db, data.get("contact_info", ""))
     mc, normalized_cn = _resolve_roster_customer_client(db, data.get("customer_name", ""))
-    if mc:
-        data["customer_name"] = normalized_cn
-    entry = RosterEntry(client_id=(mc.id if mc else 0), **data)
+    if not mc:
+        raise HTTPException(
+            status_code=400,
+            detail="整体花名册仅汇总各客户花名册：「客户」须能匹配到系统中的客户，或请到对应客户下的花名册中新增。",
+        )
+    data["customer_name"] = normalized_cn
+    entry = RosterEntry(client_id=mc.id, **data)
     db.add(entry)
     db.commit()
     db.refresh(entry)
@@ -1715,6 +1828,7 @@ async def roster_create_row(
         labels = [ROSTER_REQUIRED_LABELS.get(k, k) for k in missing]
         raise HTTPException(status_code=400, detail=f"新增失败，以下必填项未填写：{'、'.join(labels)}")
     _validate_roster_business_fields(data)
+    _apply_roster_salary_quote_ratio(data)
     _assert_roster_contact_unique(db, client_id, data.get("contact_info", ""))
     mc, normalized_cn = _resolve_roster_customer_client(db, data.get("customer_name", ""))
     if mc:
@@ -1743,8 +1857,13 @@ async def roster_update_row(
     entry = db.query(RosterEntry).filter(RosterEntry.id == row_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
-    data = _normalize_roster_payload(body if isinstance(body, dict) else {})
+    raw_body = body if isinstance(body, dict) else {}
+    data = _normalize_roster_payload(raw_body)
+    for k in list(data.keys()):
+        if k not in raw_body:
+            data[k] = getattr(entry, k) or ""
     _validate_roster_business_fields(data)
+    _apply_roster_salary_quote_ratio(data)
     mc, normalized_cn = _resolve_roster_customer_client(db, data.get("customer_name", ""))
     if mc:
         entry.client_id = mc.id
@@ -1795,6 +1914,7 @@ async def roster_import_csv_all(
     if str(confirm).strip().upper() != "CONFIRM":
         raise HTTPException(status_code=400, detail="导入前请确认覆盖操作（confirm=CONFIRM）")
     text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
+    header_info = _analyze_roster_csv_headers(text)
     existing_rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
     cleared_existing = len(existing_rows)
     backup_file = _write_roster_backup_csv_all(existing_rows) if cleared_existing else ""
@@ -1817,13 +1937,18 @@ async def roster_import_csv_all(
         if ck:
             if ck in seen_contact_keys:
                 skipped_duplicates += 1
-                skipped_details.append({"serial_no": _skip_serial_hint(merged, row_index), "reason": "联系方式重复（文件内去重）"})
+                skipped_details.append({
+                    "serial_no": _skip_serial_hint(merged, row_index),
+                    "reason": "联系方式重复（文件内去重）",
+                    "contact_info": merged.get("contact_info", ""),
+                })
                 continue
             seen_contact_keys.add(ck)
         mc, normalized_cn = _resolve_roster_customer_client(db, merged.get("customer_name", ""))
         if mc:
             merged["customer_name"] = normalized_cn
         mapped_client_id = mc.id if mc else 0
+        _apply_roster_salary_quote_ratio(merged)
         db.add(RosterEntry(client_id=mapped_client_id, **merged))
         imported += 1
     _resequence_roster_serial_no_all_clients(db)
@@ -1856,6 +1981,8 @@ async def roster_import_csv_all(
         "skipped_empty": skipped_empty,
         "skipped_total": skip_total,
         "skipped_details": skipped_details,
+        "matched_headers_count": len(header_info["matched_headers"]),
+        "unmatched_headers": header_info["unmatched_headers"],
     }
 
 
@@ -1882,6 +2009,7 @@ async def roster_import_csv(
     if str(confirm).strip().upper() != "CONFIRM":
         raise HTTPException(status_code=400, detail="导入前请确认覆盖操作（confirm=CONFIRM）")
     text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
+    header_info = _analyze_roster_csv_headers(text)
     # 按用户要求：导入前先清空当前客户花名册，再重建导入。
     existing_rows = db.query(RosterEntry).filter(RosterEntry.client_id == client_id).order_by(RosterEntry.id).all()
     cleared_existing = len(existing_rows)
@@ -1905,9 +2033,14 @@ async def roster_import_csv(
         if ck:
             if ck in seen_contact_keys:
                 skipped_duplicates += 1
-                skipped_details.append({"serial_no": _skip_serial_hint(merged, row_index), "reason": "联系方式重复（文件内去重）"})
+                skipped_details.append({
+                    "serial_no": _skip_serial_hint(merged, row_index),
+                    "reason": "联系方式重复（文件内去重）",
+                    "contact_info": merged.get("contact_info", ""),
+                })
                 continue
             seen_contact_keys.add(ck)
+        _apply_roster_salary_quote_ratio(merged)
         entry = RosterEntry(client_id=client_id, **merged)
         db.add(entry)
         imported += 1
@@ -1949,12 +2082,14 @@ async def roster_import_csv(
         "skipped_empty": skipped_empty,
         "skipped_total": skip_total,
         "skipped_details": skipped_details,
+        "matched_headers_count": len(header_info["matched_headers"]),
+        "unmatched_headers": header_info["unmatched_headers"],
     }
 
 
 @app.get("/api/roster/export")
 async def roster_export_csv_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
-    rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
+    rows = _roster_entries_union_of_all_clients(db)
     output = io.StringIO()
     output.write("\ufeff")
     writer = csv.writer(output)
@@ -2027,6 +2162,7 @@ async def roster_restore_latest_backup_all(db: Session = Depends(get_db), user: 
         if mc:
             merged["customer_name"] = normalized_cn
         mapped_client_id = mc.id if mc else 0
+        _apply_roster_salary_quote_ratio(merged)
         db.add(RosterEntry(client_id=mapped_client_id, **merged))
         restored_rows += 1
     _resequence_roster_serial_no_all_clients(db)
@@ -2063,6 +2199,7 @@ async def roster_restore_latest_backup(client_id: int, db: Session = Depends(get
         merged = _normalize_roster_payload(mapped)
         if not any(merged.values()):
             continue
+        _apply_roster_salary_quote_ratio(merged)
         db.add(RosterEntry(client_id=client_id, **merged))
         restored_rows += 1
     _resequence_roster_serial_no(db, client_id)
@@ -3623,6 +3760,13 @@ async def page_delivery_module_index(request: Request, module_key: str):
             module_key=module_key,
             module_title=title,
         )
+    if module_key == "turnover":
+        return _page(
+            "pages/delivery_turnover.html",
+            request,
+            module_key=module_key,
+            module_title=title,
+        )
     return _page(
         "pages/delivery_index.html",
         request,
@@ -3636,6 +3780,8 @@ async def page_delivery_module_detail(request: Request, module_key: str, client_
     title = _delivery_module_title(module_key)
     if module_key == "settlement":
         return RedirectResponse(url="/delivery/settlement", status_code=302)
+    if module_key == "turnover":
+        return RedirectResponse(url="/delivery/turnover", status_code=302)
     return _page(
         "pages/delivery_detail.html",
         request,

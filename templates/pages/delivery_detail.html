@@ -21,12 +21,12 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    .pipeline-table th:nth-child(3), .pipeline-table td:nth-child(3),   /* 岗位 */
+    .pipeline-table th:nth-child(4), .pipeline-table td:nth-child(4),   /* 岗位 */
     .pipeline-table th:nth-child(5), .pipeline-table td:nth-child(5) {  /* 领域 */
         text-align: right;
     }
     .pipeline-table th:nth-child(2), .pipeline-table td:nth-child(2),   /* 日期 */
-    .pipeline-table th:nth-child(4), .pipeline-table td:nth-child(4),   /* 姓名 */
+    .pipeline-table th:nth-child(3), .pipeline-table td:nth-child(3),   /* 姓名 */
     .pipeline-table th:nth-child(6), .pipeline-table td:nth-child(6),   /* 年限 */
     .pipeline-table th:nth-child(7), .pipeline-table td:nth-child(7),   /* 地域 */
     .pipeline-table th:nth-child(9), .pipeline-table td:nth-child(9),   /* 学历 */
@@ -39,8 +39,8 @@
     }
     .pipeline-table th:nth-child(1), .pipeline-table td:nth-child(1) { min-width: 8rem; }   /* 简历时间 */
     .pipeline-table th:nth-child(2), .pipeline-table td:nth-child(2) { min-width: 4em; }    /* 日期 */
-    .pipeline-table th:nth-child(3), .pipeline-table td:nth-child(3) { min-width: 8.5rem; } /* 岗位 */
-    .pipeline-table th:nth-child(4), .pipeline-table td:nth-child(4) { min-width: 5.5rem; }  /* 姓名 */
+    .pipeline-table th:nth-child(3), .pipeline-table td:nth-child(3) { min-width: 6.5rem; }  /* 姓名 */
+    .pipeline-table th:nth-child(4), .pipeline-table td:nth-child(4) { min-width: 8.5rem; } /* 岗位 */
     .pipeline-table th:nth-child(5), .pipeline-table td:nth-child(5) { min-width: 6.5rem; }  /* 领域 */
     .pipeline-table th:nth-child(6), .pipeline-table td:nth-child(6) { min-width: 5rem; }    /* 年限 */
     .pipeline-table th:nth-child(7), .pipeline-table td:nth-child(7) { min-width: 4em; }    /* 地域 */
@@ -62,6 +62,22 @@
         word-break: break-word;
     }
     .pipeline-table th:nth-child(20), .pipeline-table td:nth-child(20) { min-width: 6rem; } /* 操作 */
+    .pipeline-name-cell {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.45rem;
+        min-width: 0;
+    }
+    .pipeline-name-checkbox {
+        margin-top: 0.15rem;
+        flex: 0 0 auto;
+    }
+    .pipeline-name-text {
+        min-width: 0;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
     .pipeline-table tbody tr:last-child td,
     .settlement-table tbody tr:last-child td {
         border-bottom: 1px solid #d1d5db;
@@ -413,6 +429,13 @@
                 <div class="flex justify-end gap-2">
                 <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openPipelineAdd">新增</button>
                 <a :href="`/delivery/pipeline/${clientId}/insight`" class="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">数据透析</a>
+                <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100" @click="openPipelineBatchModal">批量操作</button>
+                <button
+                    type="button"
+                    class="rounded-lg border px-4 py-2 text-sm font-medium"
+                    :class="showOnlyCheckedPipeline ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50'"
+                    @click="toggleShowOnlyCheckedPipeline"
+                >仅显示勾选</button>
                 <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerPipelineImport">导入</button>
                 <input ref="pipelineFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onPipelineImportFile" />
                 <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportPipelineCsv">导出</button>
@@ -574,8 +597,8 @@
                     <tr>
                         <th class="crm-th">简历时间</th>
                         <th class="crm-th">日期</th>
-                        <th class="crm-th">岗位</th>
                         <th class="crm-th">姓名</th>
+                        <th class="crm-th">岗位</th>
                         <th class="crm-th">领域</th>
                         <th class="crm-th">年限</th>
                         <th class="crm-th">地域</th>
@@ -598,8 +621,18 @@
                     <tr v-for="row in filteredPipelineRows" :key="row.id">
                         <td class="crm-td">{{ displayDateSlash(row.resume_time) }}</td>
                         <td class="crm-td">{{ displayDateSlash(row.date) }}</td>
+                        <td class="crm-td">
+                            <label class="pipeline-name-cell">
+                                <input
+                                    type="checkbox"
+                                    class="pipeline-name-checkbox"
+                                    :checked="isPipelineRowChecked(row.id)"
+                                    @change="setPipelineRowChecked(row.id, $event.target.checked)"
+                                />
+                                <span class="pipeline-name-text">{{ row.full_name }}</span>
+                            </label>
+                        </td>
                         <td class="crm-td">{{ row.position }}</td>
-                        <td class="crm-td">{{ row.full_name }}</td>
                         <td class="crm-td">{{ row.domain }}</td>
                         <td class="crm-td">{{ row.years_experience }}</td>
                         <td class="crm-td">{{ row.region }}</td>
@@ -626,6 +659,37 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
+            <div v-if="showPipelineBatchModal" class="delivery-detail-modal-overlay">
+                <div class="delivery-detail-modal-panel max-w-xl">
+                    <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                        <h3 class="font-bold text-lg">批量操作</h3>
+                        <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="closePipelineBatchModal">&times;</button>
+                    </div>
+                    <div class="delivery-detail-modal-body">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                            <label class="flex flex-col gap-1">
+                                <span class="delivery-detail-modal-label">操作类型</span>
+                                <select v-model="pipelineBatchOperationType" class="crm-form-control" @change="pipelineBatchOperationValue = ''">
+                                    <option value="">请选择</option>
+                                    <option v-for="opt in PIPELINE_BATCH_OPERATION_TYPES" :key="opt.key" :value="opt.key">{{ opt.label }}</option>
+                                </select>
+                            </label>
+                            <label class="flex flex-col gap-1">
+                                <span class="delivery-detail-modal-label">目标状态</span>
+                                <select v-model="pipelineBatchOperationValue" class="crm-form-control" :disabled="!pipelineBatchValueOptions.length">
+                                    <option value="">{{ pipelineBatchValueOptions.length ? '请选择' : '请先选择操作类型' }}</option>
+                                    <option v-for="opt in pipelineBatchValueOptions" :key="`${pipelineBatchOperationType}-${opt}`" :value="opt">{{ opt }}</option>
+                                </select>
+                            </label>
+                        </div>
+                        <p class="mt-3 text-xs text-gray-500">已勾选 {{ checkedPipelineCount }} 条，执行后将批量覆盖对应字段。</p>
+                    </div>
+                    <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
+                        <button type="button" class="delivery-detail-modal-btn border border-gray-300" @click="closePipelineBatchModal">取消</button>
+                        <button type="button" class="delivery-detail-modal-btn bg-amber-600 text-white hover:bg-amber-700" @click="applyPipelineBatchOperation">执行</button>
+                    </div>
+                </div>
             </div>
         </div>
         <div v-else-if="moduleKey === 'interviews'" class="mt-2 flex flex-col flex-1 min-h-0 gap-2">
@@ -1333,6 +1397,12 @@ const PIPELINE_FIELDS = [
     { key: 'onboarded', label: '是否入职' },
     { key: 'status_note', label: '情况', type: 'textarea' },
 ];
+const PIPELINE_BATCH_OPERATION_TYPES = [
+    { key: 'resume_screening', label: '简历筛选状态' },
+    { key: 'interviewed', label: '是否面试状态' },
+    { key: 'result', label: '面试结果状态' },
+    { key: 'got_offer', label: '是否拿offer状态' },
+];
 const PIPELINE_PERIOD_MONTHS = Array.from({ length: 12 }, (_, idx) => idx + 1);
 const PIPELINE_PERIOD_WEEKS = ['W1', 'W2', 'W3', 'W4'];
 const PIPELINE_PERIOD_ROW_HEIGHT = 36;
@@ -1706,6 +1776,11 @@ createApp({
         const clientName = ref(`客户#${clientId}`);
         const returnToInsight = ref(false);
         const pipelineRows = ref([]);
+        const checkedPipelineRowIds = reactive({});
+        const showOnlyCheckedPipeline = ref(false);
+        const showPipelineBatchModal = ref(false);
+        const pipelineBatchOperationType = ref('');
+        const pipelineBatchOperationValue = ref('');
         const pipelineFilter = reactive(emptyPipelineFilter());
         const interviewFileInput = ref(null);
         const interviewRows = ref([]);
@@ -1954,6 +2029,27 @@ createApp({
             result: pipelineUniqueSorted(pipelineRows.value, 'result'),
             got_offer: pipelineUniqueSorted(pipelineRows.value, 'got_offer'),
         }));
+        const isPipelineRowChecked = (rowId) => !!checkedPipelineRowIds[String(rowId)];
+        const setPipelineRowChecked = (rowId, checked) => {
+            checkedPipelineRowIds[String(rowId)] = !!checked;
+        };
+        const syncCheckedPipelineRows = (nextRows) => {
+            const validIds = new Set((Array.isArray(nextRows) ? nextRows : []).map((row) => String(row.id)));
+            Object.keys(checkedPipelineRowIds).forEach((id) => {
+                if (!validIds.has(id)) delete checkedPipelineRowIds[id];
+            });
+            validIds.forEach((id) => {
+                if (typeof checkedPipelineRowIds[id] !== 'boolean') checkedPipelineRowIds[id] = false;
+            });
+        };
+        const checkedPipelineCount = computed(() => pipelineRows.value.filter((row) => isPipelineRowChecked(row.id)).length);
+        const pipelineBatchValueOptions = computed(() => {
+            const key = String(pipelineBatchOperationType.value || '').trim();
+            if (!key) return [];
+            const field = PIPELINE_FIELDS.find((f) => f.key === key);
+            if (!field || !Array.isArray(field.options)) return [];
+            return field.options.slice();
+        });
         const filteredPipelineRows = computed(() => {
             const f = pipelineFilter;
             return pipelineRows.value.filter((row) => {
@@ -1973,6 +2069,7 @@ createApp({
                 if (f.result && String(row.result || '').trim() !== f.result) return false;
                 if (f.got_offer && String(row.got_offer || '').trim() !== f.got_offer) return false;
                 if (!pipelineFuzzyMatch(row.onboarded, f.onboarded)) return false;
+                if (showOnlyCheckedPipeline.value && !isPipelineRowChecked(row.id)) return false;
                 return true;
             });
         });
@@ -1981,6 +2078,83 @@ createApp({
             resumeScreeningDropdownOpen.value = false;
             pipelineFilterPeriodHoverMonth.value = 1;
             pipelineFilterPeriodDropdownOpen.value = false;
+        };
+        const openPipelineBatchModal = () => {
+            if (!checkedPipelineCount.value) {
+                alert('请先勾选要批量操作的条目');
+                return;
+            }
+            showPipelineBatchModal.value = true;
+        };
+        const toggleShowOnlyCheckedPipeline = () => {
+            showOnlyCheckedPipeline.value = !showOnlyCheckedPipeline.value;
+        };
+        const closePipelineBatchModal = () => {
+            showPipelineBatchModal.value = false;
+            pipelineBatchOperationType.value = '';
+            pipelineBatchOperationValue.value = '';
+        };
+        const applyPipelineBatchOperation = async () => {
+            const key = String(pipelineBatchOperationType.value || '').trim();
+            const value = String(pipelineBatchOperationValue.value || '').trim();
+            if (!key) {
+                alert('请先选择操作类型');
+                return;
+            }
+            if (!value) {
+                alert('请选择目标状态');
+                return;
+            }
+            if (!pipelineBatchValueOptions.value.includes(value)) {
+                alert('目标状态无效，请重新选择');
+                return;
+            }
+            const targets = pipelineRows.value.filter((row) => isPipelineRowChecked(row.id));
+            if (!targets.length) {
+                alert('未找到已勾选条目，请重新选择');
+                return;
+            }
+            let successCount = 0;
+            let failCount = 0;
+            const failedDetails = [];
+            for (const row of targets) {
+                const payload = {};
+                PIPELINE_FIELDS.forEach((f) => {
+                    payload[f.key] = row[f.key] != null ? String(row[f.key]) : '';
+                });
+                payload.serial_no = row.serial_no != null ? String(row.serial_no) : '';
+                payload[key] = value;
+                const validationMsg = validatePipelinePayload(payload);
+                if (validationMsg) {
+                    failCount += 1;
+                    failedDetails.push(`${row.full_name || `ID ${row.id}`}: ${validationMsg}`);
+                    continue;
+                }
+                const r = await fetch(`/api/delivery/pipeline/row/${row.id}`, {
+                    method: 'PUT',
+                    headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!r.ok) {
+                    failCount += 1;
+                    const errMsg = await readApiErrorMessage(r, `保存失败（HTTP ${r.status}）`);
+                    failedDetails.push(`${row.full_name || `ID ${row.id}`}: ${errMsg}`);
+                    continue;
+                }
+                successCount += 1;
+            }
+            await loadPipelineRows();
+            closePipelineBatchModal();
+            const lines = [`批量操作完成：成功 ${successCount} 条，失败 ${failCount} 条`];
+            if (failedDetails.length) {
+                lines.push('');
+                lines.push('失败明细（最多前5条）：');
+                failedDetails.slice(0, 5).forEach((line, idx) => lines.push(`${idx + 1}. ${line}`));
+                if (failedDetails.length > 5) {
+                    lines.push(`...其余 ${failedDetails.length - 5} 条失败未展开`);
+                }
+            }
+            alert(lines.join('\n'));
         };
         const pipelineScrollWrap = ref(null);
         const interviewScrollWrap = ref(null);
@@ -2060,6 +2234,7 @@ createApp({
                 if (pb.week !== pa.week) return pb.week - pa.week;
                 return Number(b.id || 0) - Number(a.id || 0);
             }) : [];
+            syncCheckedPipelineRows(pipelineRows.value);
         };
         const loadInterviewRows = async () => {
             if (moduleKey !== 'interviews') return;
@@ -2855,6 +3030,10 @@ createApp({
             pipelineFilterPeriodPickerRef, pipelineFilterPeriodDropdownOpen, pipelineFilterPeriodHoverMonth,
             togglePipelineFilterPeriodDropdown, setPipelineFilterPeriodHoverMonth, selectPipelineFilterPeriod, clearPipelineFilterPeriod,
             toggleResumeScreeningDropdown, toggleResumeScreeningOption, clearResumeScreeningOption,
+            PIPELINE_BATCH_OPERATION_TYPES, showPipelineBatchModal, pipelineBatchOperationType, pipelineBatchOperationValue, pipelineBatchValueOptions,
+            checkedPipelineCount, openPipelineBatchModal, closePipelineBatchModal, applyPipelineBatchOperation,
+            showOnlyCheckedPipeline, toggleShowOnlyCheckedPipeline,
+            isPipelineRowChecked, setPipelineRowChecked,
             pipelineFields: PIPELINE_FIELDS, pipelineCompactFields: PIPELINE_COMPACT_FIELDS, pipelineTextareaFields: PIPELINE_TEXTAREA_FIELDS, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput, pipelineScrollWrap,
             PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,
             pipelinePeriodValue, pipelinePeriodDisplay, pipelinePeriodPanelStyle, togglePipelinePeriodDropdown, setPipelinePeriodHoverMonth, selectPipelinePeriod, clearPipelinePeriodField,

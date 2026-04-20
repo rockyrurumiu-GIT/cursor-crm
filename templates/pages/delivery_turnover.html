@@ -1,0 +1,593 @@
+{% extends "base.html" %}
+{% block title %}离职率分析 · 交付 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="delivery-turnover-app" class="container mx-auto max-w-[1320px] p-6 space-y-4">
+    <style>
+        .turnover-wrap.crm-h-scroll {
+            padding-bottom: 22px;
+        }
+        .crm-table.turnover-table {
+            table-layout: auto;
+            width: max-content;
+            max-width: none;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .turnover-sticky-left-name {
+            position: sticky;
+            left: 0 !important;
+            background: #fff;
+            border-right: 1px solid #e5e7eb;
+            box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
+            background-clip: padding-box;
+        }
+        .crm-table.turnover-table thead .turnover-sticky-left-name {
+            top: 0;
+            z-index: 30 !important;
+            background: #e6e2db;
+        }
+        .crm-table.turnover-table tbody .turnover-sticky-left-name {
+            z-index: 8 !important;
+        }
+        .crm-table.turnover-table tbody tr:hover .turnover-sticky-left-name {
+            background: #fafaf9;
+        }
+        .crm-table.turnover-table .crm-th.turnover-name-col,
+        .crm-table.turnover-table .crm-td.turnover-name-col {
+            min-width: max-content !important;
+            width: auto !important;
+            max-width: none !important;
+            padding-left: 0.4rem !important;
+            padding-right: 0.4rem !important;
+            white-space: nowrap !important;
+            word-break: normal !important;
+            overflow-wrap: normal !important;
+        }
+        .turnover-name-cell {
+            display: inline-block;
+            white-space: nowrap !important;
+            word-break: normal !important;
+            overflow-wrap: normal !important;
+            line-height: 1.25;
+            min-width: max-content;
+            width: max-content;
+        }
+        .crm-table.turnover-table .crm-th.turnover-tenure-col,
+        .crm-table.turnover-table .crm-td.turnover-tenure-col {
+            width: auto !important;
+            min-width: max-content !important;
+            max-width: none !important;
+            white-space: nowrap !important;
+            word-break: normal !important;
+            overflow-wrap: normal !important;
+        }
+    </style>
+    <div class="flex justify-between items-center flex-wrap gap-2">
+        <div>
+            <h1 class="font-bold text-gray-900 mt-2 text-2xl">
+                整体客户 <span class="text-gray-400 font-normal text-base">· 离职率分析</span>
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">总条目 {{ rows.length }} 条</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button" @click="openAddForm" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增行</button>
+            <button type="button" @click="openLogs" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">日志</button>
+            <button type="button" @click="triggerImport" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导入</button>
+            <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
+            <button type="button" @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导出</button>
+            <button type="button" @click="restoreLatestBackup" class="crm-btn-rollback">回滚</button>
+        </div>
+    </div>
+
+    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div class="crm-h-scroll crm-table-scroll turnover-wrap">
+            <table class="crm-table turnover-table min-w-[2200px]">
+                <thead>
+                    <tr>
+                        <th class="crm-th turnover-name-col turnover-sticky-left-name">姓名</th>
+                        <th class="crm-th">联系方式</th>
+                        <th class="crm-th">岗位</th>
+                        <th class="crm-th">员工加1</th>
+                        <th class="crm-th">客户</th>
+                        <th class="crm-th">工作地</th>
+                        <th class="crm-th">入职时间</th>
+                        <th class="crm-th">项目释放时间</th>
+                        <th class="crm-th">离职时间</th>
+                        <th class="crm-th turnover-tenure-col">司龄</th>
+                        <th class="crm-th">主动/被动</th>
+                        <th class="crm-th">释放/离职原因</th>
+                        <th class="crm-th">交付沟通</th>
+                        <th class="crm-th">业务处理动作</th>
+                        <th class="crm-th">BP参与动作</th>
+                        <th class="crm-th">补偿金</th>
+                        <th class="crm-th">报价</th>
+                        <th class="crm-th">薪资</th>
+                        <th class="crm-th">GM$</th>
+                        <th class="crm-th">GM%</th>
+                        <th class="crm-th">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in rows" :key="row.id">
+                        <td class="crm-td turnover-name-col turnover-sticky-left-name whitespace-nowrap">
+                            <span class="turnover-name-cell" style="white-space: nowrap; word-break: normal; overflow-wrap: normal;">{{ row.full_name }}</span>
+                        </td>
+                        <td class="crm-td">{{ row.contact_info }}</td>
+                        <td class="crm-td">{{ row.position_title }}</td>
+                        <td class="crm-td">{{ row.employee_plus1 }}</td>
+                        <td class="crm-td">{{ row.customer_name || row.business_line }}</td>
+                        <td class="crm-td">{{ row.work_location }}</td>
+                        <td class="crm-td">{{ row.entry_date }}</td>
+                        <td class="crm-td">{{ row.project_release_date }}</td>
+                        <td class="crm-td">{{ row.company_resign_date }}</td>
+                        <td class="crm-td turnover-tenure-col whitespace-nowrap">{{ row.tenure }}</td>
+                        <td class="crm-td">{{ row.zntx_separation_type }}</td>
+                        <td class="crm-td">{{ row.leave_reason }}</td>
+                        <td class="crm-td">{{ row.delivery_communication }}</td>
+                        <td class="crm-td">{{ row.business_action }}</td>
+                        <td class="crm-td">{{ row.bp_involved }}</td>
+                        <td class="crm-td">{{ row.zntx_compensation_amount }}</td>
+                        <td class="crm-td">{{ row.monthly_quote_tax }}</td>
+                        <td class="crm-td">{{ row.pre_tax_salary }}</td>
+                        <td class="crm-td">{{ row.gms }}</td>
+                        <td class="crm-td">{{ row.gm_pct }}</td>
+                        <td class="crm-td whitespace-nowrap">
+                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openDetail(row)">详情</button>
+                            <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
+                            <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
+                        </td>
+                    </tr>
+                    <tr v-if="!loading && !rows.length">
+                        <td colspan="21" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
+                    </tr>
+                    <tr v-if="loading">
+                        <td colspan="21" class="crm-td text-center text-gray-400 py-8">加载中...</td>
+                    </tr>
+                </tbody>
+                <tfoot v-if="!loading && rows.length" class="bg-gray-50">
+                    <tr>
+                        <td class="crm-td font-semibold text-gray-700" colspan="15">合计</td>
+                        <td class="crm-td font-semibold text-gray-700">{{ formatAmount(totalCompensation) }}</td>
+                        <td class="crm-td font-semibold text-gray-700">{{ formatAmount(totalQuote) }}</td>
+                        <td class="crm-td"></td>
+                        <td class="crm-td font-semibold text-gray-700">{{ formatAmount(totalProfit) }}</td>
+                        <td class="crm-td font-semibold text-gray-700">{{ totalProfitRate }}</td>
+                        <td class="crm-td"></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <div v-if="showLogs" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="text-lg font-bold text-gray-900">字段变更记录（审计）</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="closeLogs">&times;</button>
+            </div>
+            <div class="overflow-y-auto p-5">
+                <div v-if="logsLoading" class="text-sm text-gray-500 py-8 text-center">日志加载中...</div>
+                <div v-else-if="!logs.length" class="text-sm text-gray-400 py-8 text-center">暂无日志记录</div>
+                <div v-else class="text-sm space-y-4">
+                    <div v-for="log in logs" :key="log.id" class="flex items-start">
+                        <div class="w-2.5 h-2.5 bg-gray-300 rounded-full mt-1.5 mr-3 shrink-0"></div>
+                        <div class="min-w-0">
+                            <p class="text-gray-400">{{ formatDate(log.created_at) }} - {{ log.operator || '-' }}</p>
+                            <p class="text-gray-700 break-words whitespace-pre-line">{{ log.action }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex justify-end shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm" @click="closeLogs">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">{{ addFormReadonly ? '花名册详情' : (editingId ? '修改花名册行' : '新增花名册行') }}</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="closeAddForm">&times;</button>
+            </div>
+            <div class="overflow-y-auto p-5">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">姓名 *</span><input v-model.trim="addForm.full_name" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">联系方式 *</span><input v-model.trim="addForm.contact_info" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">客户 *</span><input v-model.trim="addForm.customer_name" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">岗位 *</span><input v-model.trim="addForm.position_title" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">员工加1</span><input v-model.trim="addForm.employee_plus1" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">客户业务线 *</span><input v-model.trim="addForm.business_line" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">工作地 *</span><input v-model.trim="addForm.work_location" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">入职时间 *</span><input v-model="addForm.entry_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">项目释放时间</span><input v-model="addForm.project_release_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">离职时间</span><input v-model="addForm.company_resign_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">司龄</span><input :value="addTenurePreview" disabled class="crm-form-control bg-gray-50 text-gray-600" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">主动/被动</span><input v-model.trim="addForm.zntx_separation_type" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">释放/离职原因</span><input v-model.trim="addForm.leave_reason" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">交付沟通</span><input v-model.trim="addForm.delivery_communication" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">业务处理动作</span><input v-model.trim="addForm.business_action" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">BP参与动作</span><input v-model.trim="addForm.bp_involved" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">补偿金</span><input v-model.trim="addForm.zntx_compensation_amount" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">报价 *</span><input v-model.trim="addForm.monthly_quote_tax" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">薪资 *</span><input v-model.trim="addForm.pre_tax_salary" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">GM$ *</span><input v-model.trim="addForm.gms" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">GM% *</span><input v-model.trim="addForm.gm_pct" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="closeAddForm">{{ addFormReadonly ? '关闭' : '取消' }}</button>
+                <button v-if="!addFormReadonly" type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300" :disabled="addSaving" @click="saveAddForm">{{ addSaving ? '保存中...' : '保存' }}</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted, computed, reactive } = Vue;
+
+function normalizeDate(raw) {
+    const s = String(raw || '').trim();
+    if (!s) return null;
+    const m = s.match(/(\d{4})\D?(\d{1,2})\D?(\d{1,2})/);
+    if (!m) return null;
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    const d = parseInt(m[3], 10);
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+    const dt = new Date(y, mo - 1, d);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function computeTenure(entryDate, resignDate) {
+    const start = normalizeDate(entryDate);
+    if (!start) return '';
+    const end = normalizeDate(resignDate) || new Date();
+    const diffMs = end.getTime() - start.getTime();
+    if (diffMs < 0) return '';
+    const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    return `${days}天`;
+}
+
+createApp({
+    setup() {
+        const rows = ref([]);
+        const loading = ref(true);
+        const fileInput = ref(null);
+        const showLogs = ref(false);
+        const logsLoading = ref(false);
+        const logs = ref([]);
+        const showAddModal = ref(false);
+        const addSaving = ref(false);
+        const addFormReadonly = ref(false);
+        const editingId = ref(null);
+        const addForm = reactive({
+            full_name: '',
+            contact_info: '',
+            customer_name: '',
+            work_location: '',
+            position_title: '',
+            business_line: '',
+            entry_date: '',
+            monthly_quote_tax: '',
+            pre_tax_salary: '',
+            gms: '',
+            gm_pct: '',
+            employee_plus1: '',
+            project_release_date: '',
+            company_resign_date: '',
+            zntx_separation_type: '',
+            leave_reason: '',
+            delivery_communication: '',
+            business_action: '',
+            bp_involved: '',
+            zntx_compensation_amount: '',
+        });
+        const parseAmount = (raw) => {
+            const s = String(raw || '').replace(/[¥￥,\s\u00a0]/g, '').trim();
+            if (!s) return NaN;
+            const n = parseFloat(s);
+            return Number.isFinite(n) ? n : NaN;
+        };
+        const formatAmount = (value) => {
+            if (!Number.isFinite(value)) return '';
+            return `¥${Math.round(value).toLocaleString('zh-CN')}`;
+        };
+        const totalCompensation = computed(() => rows.value.reduce((sum, row) => {
+            const n = parseAmount(row.zntx_compensation_amount);
+            return sum + (Number.isFinite(n) ? n : 0);
+        }, 0));
+        const totalQuote = computed(() => rows.value.reduce((sum, row) => {
+            const n = parseAmount(row.monthly_quote_tax);
+            return sum + (Number.isFinite(n) ? n : 0);
+        }, 0));
+        const totalProfit = computed(() => rows.value.reduce((sum, row) => {
+            const n = parseAmount(row.gms);
+            return sum + (Number.isFinite(n) ? n : 0);
+        }, 0));
+        const totalProfitRate = computed(() => {
+            if (!totalQuote.value) return '-';
+            return `${((totalProfit.value / totalQuote.value) * 100).toFixed(2)}%`;
+        });
+        const addTenurePreview = computed(() => computeTenure(addForm.entry_date, addForm.company_resign_date));
+
+        const loadRows = async () => {
+            loading.value = true;
+            try {
+                const r = await fetch('/api/roster', { headers: window.crmAuthHeader() });
+                const list = r.ok ? await r.json() : [];
+                const normalized = Array.isArray(list) ? list.map((row) => ({
+                    ...row,
+                    tenure: computeTenure(row.entry_date, row.company_resign_date),
+                    delivery_communication: String(row.delivery_communication || '').trim(),
+                    business_action: String(row.business_action || '').trim(),
+                    bp_involved: String(row.bp_involved || '').trim(),
+                })) : [];
+                rows.value = normalized;
+            } finally {
+                loading.value = false;
+            }
+        };
+
+        const resetAddForm = () => {
+            Object.assign(addForm, {
+                full_name: '',
+                contact_info: '',
+                customer_name: '',
+                work_location: '',
+                position_title: '',
+                business_line: '',
+                entry_date: '',
+                monthly_quote_tax: '',
+                pre_tax_salary: '',
+                gms: '',
+                gm_pct: '',
+                employee_plus1: '',
+                project_release_date: '',
+                company_resign_date: '',
+                zntx_separation_type: '',
+                leave_reason: '',
+                delivery_communication: '',
+                business_action: '',
+                bp_involved: '',
+                zntx_compensation_amount: '',
+            });
+        };
+        const openAddForm = () => {
+            resetAddForm();
+            editingId.value = null;
+            addFormReadonly.value = false;
+            showAddModal.value = true;
+        };
+        const fillAddFormFromRow = (row) => {
+            Object.assign(addForm, {
+                full_name: String(row.full_name || ''),
+                contact_info: String(row.contact_info || ''),
+                customer_name: String(row.customer_name || ''),
+                work_location: String(row.work_location || ''),
+                position_title: String(row.position_title || ''),
+                business_line: String(row.business_line || ''),
+                entry_date: String(row.entry_date || ''),
+                monthly_quote_tax: String(row.monthly_quote_tax || ''),
+                pre_tax_salary: String(row.pre_tax_salary || ''),
+                gms: String(row.gms || ''),
+                gm_pct: String(row.gm_pct || ''),
+                employee_plus1: String(row.employee_plus1 || ''),
+                project_release_date: String(row.project_release_date || ''),
+                company_resign_date: String(row.company_resign_date || ''),
+                zntx_separation_type: String(row.zntx_separation_type || ''),
+                leave_reason: String(row.leave_reason || ''),
+                delivery_communication: String(row.delivery_communication || ''),
+                business_action: String(row.business_action || ''),
+                bp_involved: String(row.bp_involved || ''),
+                zntx_compensation_amount: String(row.zntx_compensation_amount || ''),
+            });
+        };
+        const openDetail = (row) => {
+            fillAddFormFromRow(row);
+            editingId.value = Number(row.id || 0) || null;
+            addFormReadonly.value = true;
+            showAddModal.value = true;
+        };
+        const openEdit = (row) => {
+            fillAddFormFromRow(row);
+            editingId.value = Number(row.id || 0) || null;
+            addFormReadonly.value = false;
+            showAddModal.value = true;
+        };
+        const closeAddForm = () => {
+            showAddModal.value = false;
+            addFormReadonly.value = false;
+            editingId.value = null;
+        };
+        const saveAddForm = async () => {
+            if (addFormReadonly.value) return;
+            const required = [
+                ['full_name', '姓名'],
+                ['contact_info', '联系方式'],
+                ['customer_name', '客户'],
+                ['work_location', '工作地'],
+                ['position_title', '岗位'],
+                ['business_line', '项目'],
+                ['entry_date', '入职时间'],
+                ['monthly_quote_tax', '报价'],
+                ['pre_tax_salary', '薪资'],
+                ['gms', 'GM$'],
+                ['gm_pct', 'GM%'],
+            ];
+            const missing = required.filter(([key]) => !String(addForm[key] || '').trim()).map(([, label]) => label);
+            if (missing.length) {
+                alert(`请补全必填项：${missing.join('、')}`);
+                return;
+            }
+            addSaving.value = true;
+            try {
+                const payload = {
+                    ...addForm,
+                    employment_status: (String(addForm.company_resign_date || '').trim() || String(addForm.leave_reason || '').trim() || String(addForm.zntx_separation_type || '').trim())
+                        ? '离职'
+                        : '在职',
+                };
+                const isEdit = !!editingId.value;
+                const r = await fetch(isEdit ? `/api/roster/${editingId.value}` : '/api/roster', {
+                    method: isEdit ? 'PUT' : 'POST',
+                    headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!r.ok) {
+                    let msg = `保存失败（HTTP ${r.status}）`;
+                    try {
+                        const err = await r.json();
+                        if (typeof err.detail === 'string') msg = err.detail;
+                    } catch (err) {}
+                    alert(msg);
+                    return;
+                }
+                closeAddForm();
+                await loadRows();
+            } finally {
+                addSaving.value = false;
+            }
+        };
+        const removeRow = async (row) => {
+            if (!window.confirm('确定删除该条记录？')) return;
+            const r = await fetch(`/api/roster/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
+            if (!r.ok) {
+                alert('删除失败');
+                return;
+            }
+            await loadRows();
+        };
+        const triggerImport = () => {
+            if (fileInput.value) fileInput.value.click();
+        };
+        const onImportFile = async (e) => {
+            const f = e.target.files && e.target.files[0];
+            if (!f) return;
+            const token = window.prompt('该操作会先备份并清空整体花名册，再导入新 CSV。\n请输入 CONFIRM 继续：', '');
+            if (token == null) {
+                e.target.value = '';
+                return;
+            }
+            const fd = new FormData();
+            fd.append('file', f);
+            fd.append('confirm', token);
+            const r = await fetch('/api/roster/import', {
+                method: 'POST',
+                headers: window.crmAuthHeader(),
+                body: fd,
+            });
+            e.target.value = '';
+            if (!r.ok) {
+                let msg = `导入失败（HTTP ${r.status}）`;
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') msg = err.detail;
+                } catch (err) {}
+                alert(msg);
+                return;
+            }
+            const j = await r.json();
+            const lines = [
+                '导入完成',
+                `备份文件：${j.backup_file || '无（原数据为空）'}`,
+                `导入成功：${j.imported || 0} 行`,
+                `跳过重复：${j.skipped_duplicates || 0} 行`,
+                `跳过空行：${j.skipped_empty || 0} 行`,
+                `识别表头：${j.matched_headers_count || 0} 列`,
+            ];
+            const unmatchedHeaders = Array.isArray(j.unmatched_headers) ? j.unmatched_headers : [];
+            if (unmatchedHeaders.length) {
+                lines.push('');
+                lines.push(`未识别表头（${unmatchedHeaders.length}）：${unmatchedHeaders.join('、')}`);
+            }
+            const details = Array.isArray(j.skipped_details) ? j.skipped_details : [];
+            if (details.length) {
+                lines.push('');
+                lines.push('跳过明细（最多前8条）：');
+                details.slice(0, 8).forEach((item, idx) => {
+                    const serial = String(item && item.serial_no != null ? item.serial_no : `第${idx + 1}条`);
+                    const reason = String(item && item.reason != null ? item.reason : '');
+                    const contact = String(item && item.contact_info != null ? item.contact_info : '').trim();
+                    const contactPart = contact ? `，联系方式：${contact}` : '';
+                    lines.push(`${idx + 1}. ${serial}（${reason}${contactPart}）`);
+                });
+                if (details.length > 8) {
+                    lines.push(`...其余 ${details.length - 8} 条请查看日志`);
+                }
+            }
+            alert(lines.join('\n'));
+            await loadRows();
+        };
+        const exportCsv = async () => {
+            const r = await fetch('/api/roster/export', { headers: window.crmAuthHeader() });
+            if (!r.ok) {
+                alert('导出失败');
+                return;
+            }
+            const disposition = r.headers.get('Content-Disposition') || '';
+            const blob = await r.blob();
+            window.crmDownloadBlob(blob, disposition, `整体花名册_${Date.now()}.csv`);
+        };
+        const loadLogs = async () => {
+            logsLoading.value = true;
+            try {
+                const r = await fetch('/api/roster/logs', { headers: window.crmAuthHeader() });
+                logs.value = r.ok ? await r.json() : [];
+            } finally {
+                logsLoading.value = false;
+            }
+        };
+        const openLogs = async () => {
+            showLogs.value = true;
+            await loadLogs();
+        };
+        const closeLogs = () => {
+            showLogs.value = false;
+        };
+        const formatDate = (ds) => {
+            if (!ds) return '-';
+            const t = new Date(ds);
+            return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
+        };
+        const restoreLatestBackup = async () => {
+            const ok = window.confirm('将使用“最近一次花名册备份”覆盖整体花名册数据，是否继续？');
+            if (!ok) return;
+            const r = await fetch('/api/roster/restore/latest', {
+                method: 'POST',
+                headers: window.crmAuthHeader(),
+            });
+            if (!r.ok) {
+                let msg = '回滚失败';
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') msg = err.detail;
+                } catch (e) {}
+                alert(msg);
+                return;
+            }
+            const j = await r.json();
+            alert(`已从备份 ${j.backup_file} 回滚，清空 ${j.cleared_existing || 0} 行，恢复 ${j.restored_rows || 0} 行`);
+            await loadRows();
+            if (showLogs.value) await loadLogs();
+        };
+
+        onMounted(loadRows);
+        return {
+            rows, loading,
+            totalCompensation, totalQuote, totalProfit, totalProfitRate, formatAmount,
+            fileInput, triggerImport, onImportFile, exportCsv, restoreLatestBackup,
+            showAddModal, addForm, addSaving, addFormReadonly, addTenurePreview, openAddForm, closeAddForm, saveAddForm,
+            openDetail, openEdit, removeRow,
+            showLogs, logsLoading, logs, openLogs, closeLogs, formatDate,
+        };
+    }
+}).mount('#delivery-turnover-app');
+</script>
+{% endblock %}
