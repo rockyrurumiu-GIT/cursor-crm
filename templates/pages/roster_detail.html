@@ -1191,7 +1191,10 @@ createApp({
             const f = e.target.files && e.target.files[0];
             if (!f) return;
             const scopeLabel = IS_GLOBAL_ROSTER ? '整体花名册' : '当前客户花名册';
-            const token = window.prompt(`该操作会先备份并清空${scopeLabel}，再导入新 CSV。\n请输入 CONFIRM 继续：`, '');
+            const importHint = IS_GLOBAL_ROSTER
+                ? '该操作会先全量备份，再仅清空整体「在职花名册」并导入（已离职档案保留不删）。'
+                : `该操作会先备份${scopeLabel}全部行，再仅清空其中「在职池」并导入（该客户已离职档案保留）。`;
+            const token = window.prompt(`${importHint}\n请输入 CONFIRM 继续：`, '');
             if (token == null) {
                 e.target.value = '';
                 return;
@@ -1220,7 +1223,7 @@ createApp({
             const skip = j.skipped_duplicates != null ? j.skipped_duplicates : 0;
             const skipTotal = j.skipped_total != null ? j.skipped_total : skip;
             const skipDetails = Array.isArray(j.skipped_details) ? j.skipped_details : [];
-            let msg = `${backupFile ? `已备份到 ${backupFile}\n` : ''}已清空 ${cleared} 行，成功导入 ${imp} 行`;
+            let msg = `${backupFile ? `已备份到 ${backupFile}\n` : ''}已清空在职池 ${cleared} 行，成功导入 ${imp} 行`;
             if (skipTotal > 0) {
                 msg += `\n共跳过 ${skipTotal} 行（其中联系方式重复 ${skip} 行）`;
                 const lines = skipDetails.map((item) => {

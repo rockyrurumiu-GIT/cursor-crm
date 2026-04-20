@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Streamin
 from starlette.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Float, desc
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Float, desc, or_, not_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -326,14 +326,50 @@ def _apply_roster_salary_quote_ratio(data: Dict[str, str]) -> None:
     )
 
 
+def _sql_roster_employment_left():
+    """在职情况含「离职」即归入离职档案池（与离职率分析一致）。"""
+    return RosterEntry.employment_status.like("%离职%")
+
+
+def _sql_roster_employment_active_pool():
+    """花名册在职池：空/未填视为在岗；含「离职」则不在花名册中展示。"""
+    col = RosterEntry.employment_status
+    return or_(col.is_(None), col == "", not_(col.like("%离职%")))
+
+
 def _roster_entries_union_of_all_clients(db: Session) -> List[RosterEntry]:
-    """整体花名册：各客户花名册的合集（仅含 client_id 对应 clients 表中存在的客户）。"""
+    """整体花名册（在职池）：各客户已关联行，且不含离职档案。"""
     return (
         db.query(RosterEntry)
         .join(Client, RosterEntry.client_id == Client.id)
+        .filter(_sql_roster_employment_active_pool())
         .order_by(RosterEntry.id)
         .all()
     )
+
+
+def _roster_entries_turnover_pool(db: Session) -> List[RosterEntry]:
+    """离职率分析：全部为离职档案行（可与在职花名册并存于同一表，互不展示重叠）。"""
+    return db.query(RosterEntry).filter(_sql_roster_employment_left()).order_by(RosterEntry.id).all()
+
+
+def _write_roster_backup_turnover_csv_all(rows: List[RosterEntry]) -> str:
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    name = f"roster_backup_turnover_all__{ts}.csv"
+    path = os.path.join(BACKUP_DIR, name)
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(ROSTER_EXPORT_HEADERS)
+        for e in rows:
+            d = _roster_entry_to_dict(e)
+            w.writerow([d.get(_CHINESE_ROSTER_HEADER_MAP[h], "") for h in ROSTER_EXPORT_HEADERS])
+    return name
+
+
+def _ensure_merged_turnover_employment(merged: Dict[str, str]) -> None:
+    st = str(merged.get("employment_status", "")).strip()
+    if not st or "离职" not in st:
+        merged["employment_status"] = "离职"
 
 
 def _roster_entry_to_dict(e: RosterEntry) -> dict:
@@ -1808,7 +1844,19 @@ async def roster_list(client_id: int, db: Session = Depends(get_db), user: str =
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
-    rows = db.query(RosterEntry).filter(RosterEntry.client_id == client_id).order_by(RosterEntry.id).all()
+    rows = (
+        db.query(RosterEntry)
+        .filter(RosterEntry.client_id == client_id, _sql_roster_employment_active_pool())
+        .order_by(RosterEntry.id)
+        .all()
+    )
+    return [_roster_entry_to_dict(r) for r in rows]
+
+
+@app.get("/api/roster/turnover")
+async def roster_turnover_list(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    """离职率分析专用列表（仅 employment 含「离职」的行）。"""
+    rows = _roster_entries_turnover_pool(db)
     return [_roster_entry_to_dict(r) for r in rows]
 
 
@@ -1916,11 +1964,14 @@ async def roster_import_csv_all(
     text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
     header_info = _analyze_roster_csv_headers(text)
     existing_rows = db.query(RosterEntry).order_by(RosterEntry.id).all()
-    cleared_existing = len(existing_rows)
-    backup_file = _write_roster_backup_csv_all(existing_rows) if cleared_existing else ""
-    if cleared_existing:
-        db.query(RosterEntry).delete()
-        db.commit()
+    backup_file = _write_roster_backup_csv_all(existing_rows) if existing_rows else ""
+    active_cleared = (
+        db.query(RosterEntry)
+        .filter(_sql_roster_employment_active_pool())
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    cleared_existing = int(active_cleared or 0)
 
     imported = 0
     skipped_duplicates = 0
@@ -1965,8 +2016,101 @@ async def roster_import_csv_all(
             client_id=0,
             operator=user,
             action=(
-                f"整体花名册 CSV 导入前备份 {cleared_existing} 行到 {backup_file or '无备份'}，"
-                f"清空 {cleared_existing} 行，导入新增 {imported} 行"
+                f"整体花名册 CSV 导入前全量备份 {len(existing_rows)} 行到 {backup_file or '无备份'}，"
+                f"清空在职池 {cleared_existing} 行（已离职档案未删），导入新增 {imported} 行"
+                f"（文件内去重跳过 {skipped_duplicates} 行，空行跳过 {skipped_empty} 行）"
+                f"{skip_brief}"
+            ),
+        )
+    )
+    db.commit()
+    return {
+        "cleared_existing": cleared_existing,
+        "backup_file": backup_file,
+        "imported": imported,
+        "skipped_duplicates": skipped_duplicates,
+        "skipped_empty": skipped_empty,
+        "skipped_total": skip_total,
+        "skipped_details": skipped_details,
+        "matched_headers_count": len(header_info["matched_headers"]),
+        "unmatched_headers": header_info["unmatched_headers"],
+    }
+
+
+@app.post("/api/roster/turnover/import")
+async def roster_turnover_import_csv(
+    file: UploadFile = File(...),
+    confirm: str = Form(""),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    """仅替换「离职档案池」：不删在职花名册；导入行会强制标记为离职。"""
+
+    def _skip_serial_hint(merged_row: Dict[str, str], csv_line_no: int) -> str:
+        serial = (merged_row.get("serial_no") or "").strip()
+        if serial:
+            return serial
+        return f"CSV第{csv_line_no}行"
+
+    raw = await file.read()
+    if len(raw) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="文件超过大小限制")
+    if str(confirm).strip().upper() != "CONFIRM":
+        raise HTTPException(status_code=400, detail="导入前请确认覆盖操作（confirm=CONFIRM）")
+    text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
+    header_info = _analyze_roster_csv_headers(text)
+    left_rows = _roster_entries_turnover_pool(db)
+    backup_file = _write_roster_backup_turnover_csv_all(left_rows) if left_rows else ""
+    left_cleared = db.query(RosterEntry).filter(_sql_roster_employment_left()).delete(synchronize_session=False)
+    db.commit()
+    cleared_existing = int(left_cleared or 0)
+
+    imported = 0
+    skipped_duplicates = 0
+    skipped_empty = 0
+    skipped_details: List[Dict[str, str]] = []
+    seen_contact_keys: set = set()
+    for row_index, mapped in enumerate(_iter_roster_csv_data_rows(text), start=2):
+        merged = _normalize_roster_payload(mapped)
+        if not any(merged.values()):
+            skipped_empty += 1
+            skipped_details.append({"serial_no": _skip_serial_hint(merged, row_index), "reason": "空行或全部字段为空"})
+            continue
+        ck = _contact_dedup_key(merged.get("contact_info", ""))
+        if ck:
+            if ck in seen_contact_keys:
+                skipped_duplicates += 1
+                skipped_details.append({
+                    "serial_no": _skip_serial_hint(merged, row_index),
+                    "reason": "联系方式重复（文件内去重）",
+                    "contact_info": merged.get("contact_info", ""),
+                })
+                continue
+            seen_contact_keys.add(ck)
+        _ensure_merged_turnover_employment(merged)
+        mc, normalized_cn = _resolve_roster_customer_client(db, merged.get("customer_name", ""))
+        if mc:
+            merged["customer_name"] = normalized_cn
+        mapped_client_id = mc.id if mc else 0
+        _apply_roster_salary_quote_ratio(merged)
+        db.add(RosterEntry(client_id=mapped_client_id, **merged))
+        imported += 1
+    _resequence_roster_serial_no_all_clients(db)
+    db.commit()
+    skip_total = skipped_duplicates + skipped_empty
+    skip_brief = ""
+    if skip_total:
+        preview = "；".join([f"{x['serial_no']}({x['reason']})" for x in skipped_details[:8]])
+        skip_brief = f"；跳过 {skip_total} 行：{preview}"
+        if len(skipped_details) > 8:
+            skip_brief += f"；其余 {len(skipped_details) - 8} 行见导入提示"
+    db.add(
+        AuditLog(
+            client_id=0,
+            operator=user,
+            action=(
+                f"离职档案 CSV 导入前备份 {len(left_rows)} 行到 {backup_file or '无备份'}，"
+                f"清空离职池 {cleared_existing} 行，导入新增 {imported} 行"
                 f"（文件内去重跳过 {skipped_duplicates} 行，空行跳过 {skipped_empty} 行）"
                 f"{skip_brief}"
             ),
@@ -2010,13 +2154,15 @@ async def roster_import_csv(
         raise HTTPException(status_code=400, detail="导入前请确认覆盖操作（confirm=CONFIRM）")
     text = _strip_excel_sep_directive(_decode_roster_upload_bytes(raw))
     header_info = _analyze_roster_csv_headers(text)
-    # 按用户要求：导入前先清空当前客户花名册，再重建导入。
     existing_rows = db.query(RosterEntry).filter(RosterEntry.client_id == client_id).order_by(RosterEntry.id).all()
-    cleared_existing = len(existing_rows)
-    backup_file = _write_roster_backup_csv(c, existing_rows) if cleared_existing else ""
-    if cleared_existing:
-        db.query(RosterEntry).filter(RosterEntry.client_id == client_id).delete()
-        db.commit()
+    backup_file = _write_roster_backup_csv(c, existing_rows) if existing_rows else ""
+    active_cleared = (
+        db.query(RosterEntry)
+        .filter(RosterEntry.client_id == client_id, _sql_roster_employment_active_pool())
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    cleared_existing = int(active_cleared or 0)
 
     imported = 0
     skipped_duplicates = 0
@@ -2057,8 +2203,8 @@ async def roster_import_csv(
         client_id=client_id,
         operator=user,
         action=(
-            f"花名册 CSV 导入前备份 {cleared_existing} 行到 {backup_file or '无备份'}，"
-            f"清空 {cleared_existing} 行，导入新增 {imported} 行"
+            f"花名册 CSV 导入前全量备份 {len(existing_rows)} 行到 {backup_file or '无备份'}，"
+            f"清空在职池 {cleared_existing} 行（该客户已离职档案未删），导入新增 {imported} 行"
             f"（文件内去重跳过 {skipped_duplicates} 行，空行跳过 {skipped_empty} 行）"
             f"{skip_brief}"
         ),
@@ -2085,6 +2231,30 @@ async def roster_import_csv(
         "matched_headers_count": len(header_info["matched_headers"]),
         "unmatched_headers": header_info["unmatched_headers"],
     }
+
+
+@app.get("/api/roster/turnover/export")
+async def roster_turnover_export_csv_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    rows = _roster_entries_turnover_pool(db)
+    output = io.StringIO()
+    output.write("\ufeff")
+    writer = csv.writer(output)
+    writer.writerow(ROSTER_EXPORT_HEADERS)
+    for e in rows:
+        d = _roster_entry_to_dict(e)
+        line = []
+        for zh in ROSTER_EXPORT_HEADERS:
+            fn = _CHINESE_ROSTER_HEADER_MAP[zh]
+            line.append(d.get(fn, ""))
+        writer.writerow(line)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
+    _set_csv_download_headers(
+        response,
+        chinese_filename=f"离职率分析_离职档案_{ts}.csv",
+        ascii_base=f"roster_turnover_{ts}",
+    )
+    return response
 
 
 @app.get("/api/roster/export")
@@ -2116,7 +2286,12 @@ async def roster_export_csv(client_id: int, db: Session = Depends(get_db), user:
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
-    rows = db.query(RosterEntry).filter(RosterEntry.client_id == client_id).order_by(RosterEntry.id).all()
+    rows = (
+        db.query(RosterEntry)
+        .filter(RosterEntry.client_id == client_id, _sql_roster_employment_active_pool())
+        .order_by(RosterEntry.id)
+        .all()
+    )
     output = io.StringIO()
     output.write("\ufeff")
     writer = csv.writer(output)
@@ -2209,6 +2384,46 @@ async def roster_restore_latest_backup(client_id: int, db: Session = Depends(get
             client_id=client_id,
             operator=user,
             action=f"花名册从备份恢复：{latest}，清空 {cleared_existing} 行，恢复 {restored_rows} 行",
+        )
+    )
+    db.commit()
+    return {"backup_file": latest, "cleared_existing": cleared_existing, "restored_rows": restored_rows}
+
+
+@app.post("/api/roster/turnover/restore/latest")
+async def roster_turnover_restore_latest_backup_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    latest = _pick_latest_backup("roster_backup_turnover_all__")
+    if not latest:
+        raise HTTPException(status_code=404, detail="未找到离职档案备份文件")
+    backup_path = os.path.join(BACKUP_DIR, latest)
+    with open(backup_path, "r", encoding="utf-8-sig", newline="") as f:
+        text = f.read()
+    text = _strip_excel_sep_directive(text)
+    left_before = _roster_entries_turnover_pool(db)
+    cleared_existing = len(left_before)
+    if cleared_existing:
+        db.query(RosterEntry).filter(_sql_roster_employment_left()).delete(synchronize_session=False)
+        db.commit()
+    restored_rows = 0
+    for mapped in _iter_roster_csv_data_rows(text):
+        merged = _normalize_roster_payload(mapped)
+        if not any(merged.values()):
+            continue
+        _ensure_merged_turnover_employment(merged)
+        mc, normalized_cn = _resolve_roster_customer_client(db, merged.get("customer_name", ""))
+        if mc:
+            merged["customer_name"] = normalized_cn
+        mapped_client_id = mc.id if mc else 0
+        _apply_roster_salary_quote_ratio(merged)
+        db.add(RosterEntry(client_id=mapped_client_id, **merged))
+        restored_rows += 1
+    _resequence_roster_serial_no_all_clients(db)
+    db.commit()
+    db.add(
+        AuditLog(
+            client_id=0,
+            operator=user,
+            action=f"离职档案从备份恢复：{latest}，清空离职池 {cleared_existing} 行，恢复 {restored_rows} 行",
         )
     )
     db.commit()

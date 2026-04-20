@@ -2,79 +2,128 @@
 {% block title %}离职率分析 · 交付 · ITO CRM V8{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    /* 与花名册「姓名」列同一套：roster-col-name 宽 + roster-sticky-left-serial（首列 left:0） */
+    .turnover-wrap.crm-h-scroll {
+        padding-bottom: 22px;
+    }
+    .turnover-table-scroll-fill.crm-table-scroll {
+        flex: 1 1 0;
+        min-height: 0;
+        max-height: none !important;
+    }
+    .crm-table.turnover-table {
+        --roster-sticky-serial-width: 4.5rem;
+        --roster-sticky-name-width: 7.5rem;
+        table-layout: auto;
+        width: max-content;
+        max-width: none;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .crm-table.turnover-table .crm-th.roster-col-name,
+    .crm-table.turnover-table .crm-td.roster-col-name {
+        width: var(--roster-sticky-name-width);
+        min-width: var(--roster-sticky-name-width);
+        max-width: var(--roster-sticky-name-width);
+        box-sizing: border-box;
+    }
+    .crm-table.turnover-table .roster-sticky-left-serial {
+        position: sticky;
+        background: #fff;
+        border-right: 1px solid #e5e7eb;
+        box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
+        background-clip: padding-box;
+        left: 0;
+    }
+    .crm-table.turnover-table tbody .roster-sticky-left-serial {
+        z-index: 2;
+    }
+    .crm-table.turnover-table thead .roster-sticky-left-serial {
+        top: 0;
+        z-index: 30;
+        background: #e6e2db;
+    }
+    .crm-table.turnover-table tbody tr:hover .roster-sticky-left-serial {
+        background: #fafaf9;
+    }
+    .crm-table.turnover-table .crm-th.turnover-tenure-col,
+    .crm-table.turnover-table .crm-td.turnover-tenure-col {
+        width: auto !important;
+        min-width: max-content !important;
+        max-width: none !important;
+        white-space: nowrap !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+    }
+    /* 与花名册姓名列：复选框 + 姓名 */
+    .turnover-table-wrap .roster-name-cell {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.45rem;
+        min-width: 0;
+    }
+    .turnover-table-wrap .roster-name-checkbox {
+        margin-top: 0.15rem;
+        flex: 0 0 auto;
+    }
+    .turnover-table-wrap .roster-name-text {
+        min-width: 0;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
+    /* 与花名册筛选条同款 */
+    .turnover-filter-row {
+        overflow: hidden;
+    }
+    .turnover-filter-control {
+        min-width: 80px;
+    }
+    .turnover-filter-number {
+        min-width: 96px;
+        width: 96px;
+    }
+    .turnover-filter-checkbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        white-space: nowrap;
+        font-size: 0.75rem;
+        color: #374151;
+        padding: 0 0.25rem;
+    }
+    .turnover-filter-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .turnover-filter-reset {
+        white-space: nowrap;
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+</style>
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="delivery-turnover-app" class="container mx-auto max-w-[1320px] p-6 space-y-4">
-    <style>
-        .turnover-wrap.crm-h-scroll {
-            padding-bottom: 22px;
-        }
-        .crm-table.turnover-table {
-            table-layout: auto;
-            width: max-content;
-            max-width: none;
-            border-collapse: separate;
-            border-spacing: 0;
-        }
-        .turnover-sticky-left-name {
-            position: sticky;
-            left: 0 !important;
-            background: #fff;
-            border-right: 1px solid #e5e7eb;
-            box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
-            background-clip: padding-box;
-        }
-        .crm-table.turnover-table thead .turnover-sticky-left-name {
-            top: 0;
-            z-index: 30 !important;
-            background: #e6e2db;
-        }
-        .crm-table.turnover-table tbody .turnover-sticky-left-name {
-            z-index: 8 !important;
-        }
-        .crm-table.turnover-table tbody tr:hover .turnover-sticky-left-name {
-            background: #fafaf9;
-        }
-        .crm-table.turnover-table .crm-th.turnover-name-col,
-        .crm-table.turnover-table .crm-td.turnover-name-col {
-            min-width: max-content !important;
-            width: auto !important;
-            max-width: none !important;
-            padding-left: 0.4rem !important;
-            padding-right: 0.4rem !important;
-            white-space: nowrap !important;
-            word-break: normal !important;
-            overflow-wrap: normal !important;
-        }
-        .turnover-name-cell {
-            display: inline-block;
-            white-space: nowrap !important;
-            word-break: normal !important;
-            overflow-wrap: normal !important;
-            line-height: 1.25;
-            min-width: max-content;
-            width: max-content;
-        }
-        .crm-table.turnover-table .crm-th.turnover-tenure-col,
-        .crm-table.turnover-table .crm-td.turnover-tenure-col {
-            width: auto !important;
-            min-width: max-content !important;
-            max-width: none !important;
-            white-space: nowrap !important;
-            word-break: normal !important;
-            overflow-wrap: normal !important;
-        }
-    </style>
-    <div class="flex justify-between items-center flex-wrap gap-2">
+<div id="delivery-turnover-app" class="flex-1 min-h-0 flex flex-col w-full min-w-0">
+    <div class="w-full max-w-[1320px] mx-auto px-3 py-4 md:px-6 flex-1 min-h-0 flex flex-col min-w-0 gap-4">
+    <div class="flex justify-between items-center flex-wrap gap-2 shrink-0">
         <div>
             <h1 class="font-bold text-gray-900 mt-2 text-2xl">
                 整体客户 <span class="text-gray-400 font-normal text-base">· 离职率分析</span>
             </h1>
-            <p class="text-sm text-gray-500 mt-1">总条目 {{ rows.length }} 条</p>
+            <p class="text-sm text-gray-500 mt-1">总条目 {{ rows.length }} 条<span v-if="displayCountHint">{{ displayCountHint }}</span>（仅「在职情况」含离职的档案行；与花名册中的在职池互不展示重叠）</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
             <button type="button" @click="openAddForm" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增行</button>
+            <button
+                type="button"
+                @click="toggleShowCheckedOnly"
+                class="rounded-lg border px-4 py-2 text-sm font-medium"
+                :class="showOnlyChecked ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50'"
+            >只显示勾选</button>
             <button type="button" @click="openLogs" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">日志</button>
             <button type="button" @click="triggerImport" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导入</button>
             <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
@@ -83,13 +132,54 @@
         </div>
     </div>
 
-    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-        <div class="crm-h-scroll crm-table-scroll turnover-wrap">
-            <table class="crm-table turnover-table min-w-[2200px]">
+    <div class="mb-3 crm-filter-row turnover-filter-row text-sm shrink-0">
+        <input
+            v-model.trim="filters.fullName"
+            type="search"
+            placeholder="姓名（模糊）"
+            class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control min-w-[7rem]"
+        />
+        <select v-model="filters.positionTitle" class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control">
+            <option value="">岗位（全部）</option>
+            <option v-for="v in positionTitleOptions" :key="`pt-${v}`" :value="v">{{ v }}</option>
+        </select>
+        <select v-model="filters.workLocation" class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control">
+            <option value="">工作地（全部）</option>
+            <option v-for="v in workLocationOptions" :key="`wl-${v}`" :value="v">{{ v }}</option>
+        </select>
+        <select v-model="filters.customerName" class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control">
+            <option value="">客户（全部）</option>
+            <option v-for="v in customerNameOptions" :key="`cn-${v}`" :value="v">{{ v }}</option>
+        </select>
+        <input
+            v-model="filters.tenureDaysMax"
+            type="number"
+            min="0"
+            step="1"
+            placeholder="司龄小于（天）"
+            class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control turnover-filter-number"
+        />
+        <select v-model="filters.separationType" class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control">
+            <option value="">主动/被动（全部）</option>
+            <option v-for="v in separationTypeOptions" :key="`sep-${v}`" :value="v">{{ v }}</option>
+        </select>
+        <label class="crm-filter-item turnover-filter-item turnover-filter-checkbox">
+            <input type="checkbox" v-model="filters.hasCompensationOnly" />
+            <span>仅显示有补偿金</span>
+        </label>
+        <div class="crm-filter-item turnover-filter-item turnover-filter-actions">
+            <button type="button" class="crm-filter-reset turnover-filter-reset crm-filter-reset shrink-0" @click="clearFilters">重置</button>
+        </div>
+    </div>
+
+    <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col min-w-0">
+        <div class="crm-h-scroll crm-table-scroll turnover-wrap turnover-table-scroll-fill flex-1 min-h-0 min-w-0">
+            <table class="crm-table turnover-table turnover-table-wrap min-w-[2200px] text-sm text-gray-800">
                 <thead>
                     <tr>
-                        <th class="crm-th turnover-name-col turnover-sticky-left-name">姓名</th>
+                        <th class="crm-th roster-col-name roster-sticky-left-serial">姓名</th>
                         <th class="crm-th">联系方式</th>
+                        <th class="crm-th">在职情况</th>
                         <th class="crm-th">岗位</th>
                         <th class="crm-th">员工加1</th>
                         <th class="crm-th">客户</th>
@@ -112,11 +202,20 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in rows" :key="row.id">
-                        <td class="crm-td turnover-name-col turnover-sticky-left-name whitespace-nowrap">
-                            <span class="turnover-name-cell" style="white-space: nowrap; word-break: normal; overflow-wrap: normal;">{{ row.full_name }}</span>
+                    <tr v-for="row in filteredRows" :key="row.id">
+                        <td class="crm-td crm-name-cell px-3 py-3 align-top tracking-tight roster-col-name roster-sticky-left-serial">
+                            <label class="roster-name-cell">
+                                <input
+                                    type="checkbox"
+                                    class="roster-name-checkbox"
+                                    :checked="isRowChecked(row.id)"
+                                    @change="setRowChecked(row.id, $event.target.checked)"
+                                />
+                                <span class="roster-name-text">{{ row.full_name }}</span>
+                            </label>
                         </td>
                         <td class="crm-td">{{ row.contact_info }}</td>
+                        <td class="crm-td">{{ row.employment_status }}</td>
                         <td class="crm-td">{{ row.position_title }}</td>
                         <td class="crm-td">{{ row.employee_plus1 }}</td>
                         <td class="crm-td">{{ row.customer_name || row.business_line }}</td>
@@ -141,16 +240,16 @@
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
                         </td>
                     </tr>
-                    <tr v-if="!loading && !rows.length">
-                        <td colspan="21" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
+                    <tr v-if="!loading && !filteredRows.length">
+                        <td colspan="22" class="crm-td text-center text-gray-400 py-8">{{ emptyStateText }}</td>
                     </tr>
                     <tr v-if="loading">
-                        <td colspan="21" class="crm-td text-center text-gray-400 py-8">加载中...</td>
+                        <td colspan="22" class="crm-td text-center text-gray-400 py-8">加载中...</td>
                     </tr>
                 </tbody>
-                <tfoot v-if="!loading && rows.length" class="bg-gray-50">
+                <tfoot v-if="!loading && filteredRows.length" class="bg-gray-50">
                     <tr>
-                        <td class="crm-td font-semibold text-gray-700" colspan="15">合计</td>
+                        <td class="crm-td font-semibold text-gray-700" colspan="16">合计</td>
                         <td class="crm-td font-semibold text-gray-700">{{ formatAmount(totalCompensation) }}</td>
                         <td class="crm-td font-semibold text-gray-700">{{ formatAmount(totalQuote) }}</td>
                         <td class="crm-td"></td>
@@ -161,6 +260,8 @@
                 </tfoot>
             </table>
         </div>
+    </div>
+
     </div>
 
     <div v-if="showLogs" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
@@ -230,7 +331,7 @@
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, onMounted, computed, reactive } = Vue;
+const { createApp, ref, onMounted, computed, reactive, watch } = Vue;
 
 function normalizeDate(raw) {
     const s = String(raw || '').trim();
@@ -255,9 +356,21 @@ function computeTenure(entryDate, resignDate) {
     return `${days}天`;
 }
 
+/** 司龄天数（与 computeTenure 同口径），用于筛选 */
+function tenureDays(row) {
+    const start = normalizeDate(row.entry_date);
+    if (!start) return null;
+    const end = normalizeDate(row.company_resign_date) || new Date();
+    const diffMs = end.getTime() - start.getTime();
+    if (diffMs < 0) return null;
+    return Math.floor(diffMs / (24 * 60 * 60 * 1000));
+}
+
 createApp({
     setup() {
         const rows = ref([]);
+        const showOnlyChecked = ref(false);
+        const checkedRowIds = reactive({});
         const loading = ref(true);
         const fileInput = ref(null);
         const showLogs = ref(false);
@@ -289,6 +402,87 @@ createApp({
             bp_involved: '',
             zntx_compensation_amount: '',
         });
+        const filters = reactive({
+            fullName: '',
+            positionTitle: '',
+            workLocation: '',
+            customerName: '',
+            tenureDaysMax: '',
+            separationType: '',
+            hasCompensationOnly: false,
+        });
+        const uniqueOptions = (key, fallbackKey) => {
+            const set = new Set();
+            rows.value.forEach((r) => {
+                const raw = fallbackKey != null ? (r[key] || r[fallbackKey]) : r[key];
+                const v = String(raw || '').trim();
+                if (v) set.add(v);
+            });
+            return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        };
+        const positionTitleOptions = computed(() => uniqueOptions('position_title'));
+        const workLocationOptions = computed(() => uniqueOptions('work_location'));
+        const customerNameOptions = computed(() => uniqueOptions('customer_name', 'business_line'));
+        const separationTypeOptions = computed(() => uniqueOptions('zntx_separation_type'));
+        const hasActiveFilters = computed(() => {
+            if (String(filters.fullName || '').trim()) return true;
+            if (filters.positionTitle) return true;
+            if (filters.workLocation) return true;
+            if (filters.customerName) return true;
+            if (String(filters.tenureDaysMax ?? '').trim() !== '') return true;
+            if (filters.separationType) return true;
+            if (filters.hasCompensationOnly) return true;
+            return false;
+        });
+        const applyRowFilters = (list) => {
+            let out = list;
+            const nameQ = String(filters.fullName || '').trim().toLowerCase();
+            if (nameQ) {
+                out = out.filter((row) => String(row.full_name || '').toLowerCase().includes(nameQ));
+            }
+            const ci = (v) => String(v || '').trim().toLowerCase();
+            if (filters.positionTitle) {
+                out = out.filter((row) => ci(row.position_title) === ci(filters.positionTitle));
+            }
+            if (filters.workLocation) {
+                out = out.filter((row) => ci(row.work_location) === ci(filters.workLocation));
+            }
+            if (filters.customerName) {
+                out = out.filter((row) => {
+                    const disp = String(row.customer_name || row.business_line || '').trim();
+                    return ci(disp) === ci(filters.customerName);
+                });
+            }
+            const tenureRaw = String(filters.tenureDaysMax ?? '').trim();
+            if (tenureRaw !== '') {
+                const maxDays = parseInt(tenureRaw, 10);
+                if (Number.isFinite(maxDays)) {
+                    out = out.filter((row) => {
+                        const d = tenureDays(row);
+                        return d !== null && d < maxDays;
+                    });
+                }
+            }
+            if (filters.separationType) {
+                out = out.filter((row) => String(row.zntx_separation_type || '') === filters.separationType);
+            }
+            if (filters.hasCompensationOnly) {
+                out = out.filter((row) => {
+                    const n = parseAmount(row.zntx_compensation_amount);
+                    return Number.isFinite(n) && n > 0;
+                });
+            }
+            return out;
+        };
+        const clearFilters = () => {
+            filters.fullName = '';
+            filters.positionTitle = '';
+            filters.workLocation = '';
+            filters.customerName = '';
+            filters.tenureDaysMax = '';
+            filters.separationType = '';
+            filters.hasCompensationOnly = false;
+        };
         const parseAmount = (raw) => {
             const s = String(raw || '').replace(/[¥￥,\s\u00a0]/g, '').trim();
             if (!s) return NaN;
@@ -299,15 +493,58 @@ createApp({
             if (!Number.isFinite(value)) return '';
             return `¥${Math.round(value).toLocaleString('zh-CN')}`;
         };
-        const totalCompensation = computed(() => rows.value.reduce((sum, row) => {
+        const isRowChecked = (rowId) => !!checkedRowIds[String(rowId)];
+        const setRowChecked = (rowId, checked) => {
+            checkedRowIds[String(rowId)] = !!checked;
+        };
+        const syncCheckedRows = (nextRows) => {
+            const validIds = new Set((Array.isArray(nextRows) ? nextRows : []).map((row) => String(row.id)));
+            Object.keys(checkedRowIds).forEach((id) => {
+                if (!validIds.has(id)) delete checkedRowIds[id];
+            });
+            validIds.forEach((id) => {
+                if (typeof checkedRowIds[id] !== 'boolean') checkedRowIds[id] = false;
+            });
+        };
+        const checkedCount = computed(() => rows.value.filter((row) => isRowChecked(row.id)).length);
+        const filteredRows = computed(() => {
+            let list = applyRowFilters(rows.value);
+            if (showOnlyChecked.value) {
+                list = list.filter((row) => isRowChecked(row.id));
+            }
+            return list;
+        });
+        const displayCountHint = computed(() => {
+            const n = filteredRows.value.length;
+            const total = rows.value.length;
+            if (!total) return '';
+            const onlyChecked = showOnlyChecked.value;
+            const filtered = hasActiveFilters.value;
+            if (onlyChecked && filtered && n !== total) return `（勾选且筛选后 ${n} 条）`;
+            if (onlyChecked) return `（勾选显示 ${n} 条）`;
+            if (filtered && n !== total) return `（筛选后 ${n} 条）`;
+            return '';
+        });
+        const emptyStateText = computed(() => {
+            if (showOnlyChecked.value) {
+                if (!checkedCount.value) return '暂无勾选条目';
+                return hasActiveFilters.value ? '暂无符合筛选条件的勾选条目' : '暂无符合「只显示勾选」的条目';
+            }
+            if (hasActiveFilters.value) return '暂无符合筛选条件的数据';
+            return '暂无数据';
+        });
+        const toggleShowCheckedOnly = () => {
+            showOnlyChecked.value = !showOnlyChecked.value;
+        };
+        const totalCompensation = computed(() => filteredRows.value.reduce((sum, row) => {
             const n = parseAmount(row.zntx_compensation_amount);
             return sum + (Number.isFinite(n) ? n : 0);
         }, 0));
-        const totalQuote = computed(() => rows.value.reduce((sum, row) => {
+        const totalQuote = computed(() => filteredRows.value.reduce((sum, row) => {
             const n = parseAmount(row.monthly_quote_tax);
             return sum + (Number.isFinite(n) ? n : 0);
         }, 0));
-        const totalProfit = computed(() => rows.value.reduce((sum, row) => {
+        const totalProfit = computed(() => filteredRows.value.reduce((sum, row) => {
             const n = parseAmount(row.gms);
             return sum + (Number.isFinite(n) ? n : 0);
         }, 0));
@@ -320,7 +557,7 @@ createApp({
         const loadRows = async () => {
             loading.value = true;
             try {
-                const r = await fetch('/api/roster', { headers: window.crmAuthHeader() });
+                const r = await fetch('/api/roster/turnover', { headers: window.crmAuthHeader() });
                 const list = r.ok ? await r.json() : [];
                 const normalized = Array.isArray(list) ? list.map((row) => ({
                     ...row,
@@ -330,10 +567,13 @@ createApp({
                     bp_involved: String(row.bp_involved || '').trim(),
                 })) : [];
                 rows.value = normalized;
+                syncCheckedRows(normalized);
             } finally {
                 loading.value = false;
             }
         };
+
+        watch(rows, (v) => syncCheckedRows(v), { deep: true });
 
         const resetAddForm = () => {
             Object.assign(addForm, {
@@ -470,7 +710,7 @@ createApp({
         const onImportFile = async (e) => {
             const f = e.target.files && e.target.files[0];
             if (!f) return;
-            const token = window.prompt('该操作会先备份并清空整体花名册，再导入新 CSV。\n请输入 CONFIRM 继续：', '');
+            const token = window.prompt('该操作会先备份并清空「离职档案池」，再导入新 CSV（不会删除在职花名册）。\n请输入 CONFIRM 继续：', '');
             if (token == null) {
                 e.target.value = '';
                 return;
@@ -478,7 +718,7 @@ createApp({
             const fd = new FormData();
             fd.append('file', f);
             fd.append('confirm', token);
-            const r = await fetch('/api/roster/import', {
+            const r = await fetch('/api/roster/turnover/import', {
                 method: 'POST',
                 headers: window.crmAuthHeader(),
                 body: fd,
@@ -526,14 +766,14 @@ createApp({
             await loadRows();
         };
         const exportCsv = async () => {
-            const r = await fetch('/api/roster/export', { headers: window.crmAuthHeader() });
+            const r = await fetch('/api/roster/turnover/export', { headers: window.crmAuthHeader() });
             if (!r.ok) {
                 alert('导出失败');
                 return;
             }
             const disposition = r.headers.get('Content-Disposition') || '';
             const blob = await r.blob();
-            window.crmDownloadBlob(blob, disposition, `整体花名册_${Date.now()}.csv`);
+            window.crmDownloadBlob(blob, disposition, `离职率分析_离职档案_${Date.now()}.csv`);
         };
         const loadLogs = async () => {
             logsLoading.value = true;
@@ -557,9 +797,9 @@ createApp({
             return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
         };
         const restoreLatestBackup = async () => {
-            const ok = window.confirm('将使用“最近一次花名册备份”覆盖整体花名册数据，是否继续？');
+            const ok = window.confirm('将使用「最近一次离职档案备份」覆盖当前离职池，是否继续？（不影响在职花名册）');
             if (!ok) return;
-            const r = await fetch('/api/roster/restore/latest', {
+            const r = await fetch('/api/roster/turnover/restore/latest', {
                 method: 'POST',
                 headers: window.crmAuthHeader(),
             });
@@ -580,7 +820,11 @@ createApp({
 
         onMounted(loadRows);
         return {
-            rows, loading,
+            rows, filteredRows, loading,
+            filters, positionTitleOptions, workLocationOptions, customerNameOptions, separationTypeOptions,
+            clearFilters,
+            showOnlyChecked, displayCountHint, emptyStateText,
+            isRowChecked, setRowChecked, toggleShowCheckedOnly,
             totalCompensation, totalQuote, totalProfit, totalProfitRate, formatAmount,
             fileInput, triggerImport, onImportFile, exportCsv, restoreLatestBackup,
             showAddModal, addForm, addSaving, addFormReadonly, addTenurePreview, openAddForm, closeAddForm, saveAddForm,
