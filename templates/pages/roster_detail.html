@@ -113,6 +113,85 @@
         min-height: 0;
         max-height: none !important;
     }
+    .roster-detail-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        overflow-y: auto;
+        background: rgba(0, 0, 0, 0.45);
+        padding: 5.5rem 1rem 2.5rem;
+    }
+    .roster-detail-modal-panel {
+        width: 100%;
+        max-width: 84rem;
+        max-height: calc(100vh - 8rem);
+        border-radius: 0.75rem;
+        background: #fff;
+        box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
+        display: flex;
+        flex-direction: column;
+    }
+    .roster-detail-modal-body {
+        overflow-y: auto;
+        padding: 0.85rem 1.1rem 1rem;
+    }
+    .roster-detail-modal-label {
+        font-weight: 600;
+        color: #374151;
+    }
+    .roster-detail-modal-btn {
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+    .roster-detail-textarea {
+        width: 100%;
+        min-height: 4.2rem;
+        height: 4.2rem;
+        max-height: 4.2rem;
+        resize: vertical;
+        box-sizing: border-box;
+        font-size: 0.875rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        overflow-y: auto;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        padding: 0.45rem 0.65rem;
+        color: #111827;
+        background: #fff;
+    }
+    .roster-detail-textarea:disabled {
+        min-height: min(6rem, 18vh);
+        height: min(6rem, 18vh);
+        max-height: min(6rem, 18vh);
+        resize: none;
+        background: #f9fafb;
+        color: #374151;
+        cursor: default;
+    }
+    .roster-name-cell {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.45rem;
+        min-width: 0;
+    }
+    .roster-name-checkbox {
+        margin-top: 0.15rem;
+        flex: 0 0 auto;
+    }
+    .roster-name-text {
+        min-width: 0;
+        white-space: normal;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -127,10 +206,17 @@
                     <span class="text-gray-400 font-normal text-base">· 花名册</span>
                 </h1>
                 <p class="text-sm text-gray-500 mt-1" v-if="brief.owner">负责人 {{ brief.owner }}</p>
-                <p class="text-sm text-gray-500 mt-1">总条目 {{ rows.length }} 条<span v-if="filteredRows.length !== rows.length">（筛选后 {{ filteredRows.length }} 条）</span></p>
+                <p class="text-sm text-gray-500 mt-1">总条目 {{ rows.length }} 条<span v-if="displayCountHint">{{ displayCountHint }}</span></p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <button type="button" @click="openAdd" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增行</button>
+                <button
+                    type="button"
+                    @click="toggleShowCheckedOnly"
+                    class="rounded-lg border px-4 py-2 text-sm font-medium"
+                    :class="showOnlyChecked ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50'"
+                >只显示勾选</button>
+                <button type="button" @click="clearCheckedRows" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">取消勾选</button>
                 <button type="button" @click="openLogs" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">日志</button>
                 <button type="button" @click="triggerImport" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导入</button>
                 <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
@@ -208,7 +294,17 @@
                     <tbody>
                         <tr v-for="(row, idx) in filteredRows" :key="row.id" class="group border-b border-gray-100/90 bg-white transition-colors duration-150 hover:bg-stone-50/80">
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top tabular-nums roster-col-serial roster-sticky-left-serial">{{ IS_GLOBAL_ROSTER ? (idx + 1) : row.serial_no }}</td>
-                            <td class="crm-td crm-name-cell px-3 py-3 whitespace-nowrap align-top tracking-tight roster-col-name roster-sticky-left-key">{{ row.full_name }}</td>
+                            <td class="crm-td crm-name-cell px-3 py-3 align-top tracking-tight roster-col-name roster-sticky-left-key">
+                                <label class="roster-name-cell">
+                                    <input
+                                        type="checkbox"
+                                        class="roster-name-checkbox"
+                                        :checked="isRowChecked(row.id)"
+                                        @change="setRowChecked(row.id, $event.target.checked)"
+                                    />
+                                    <span class="roster-name-text">{{ row.full_name }}</span>
+                                </label>
+                            </td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top">{{ row.employment_status }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.zntx_staff_no }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.contact_info }}</td>
@@ -239,7 +335,7 @@
                             </td>
                         </tr>
                         <tr v-if="!loading && !filteredRows.length">
-                            <td :colspan="emptyRowColspan" class="px-6 py-12 text-center text-gray-400 text-sm">暂无数据，请点击「新增行」或「导入 CSV」</td>
+                            <td :colspan="emptyRowColspan" class="px-6 py-12 text-center text-gray-400 text-sm">{{ emptyStateText }}</td>
                         </tr>
                     </tbody>
                     <tfoot v-if="!loading && filteredRows.length">
@@ -312,16 +408,20 @@
     </div>
 
     <!-- 新增/编辑 -->
-    <div v-if="showForm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+    <div v-if="showForm" class="roster-detail-modal-overlay">
+        <div class="roster-detail-modal-panel">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ formReadonly ? '花名册详情' : (editingId ? '修改行' : '新增行') }}</h3>
                 <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false; formReadonly=false">&times;</button>
             </div>
-            <div class="overflow-y-auto p-5">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    <label v-for="f in formFields" :key="f.key" class="flex flex-col gap-1">
-                        <span class="text-gray-600">
+            <div class="roster-detail-modal-body">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-3 gap-y-2 text-[13px]">
+                    <label
+                        v-for="f in detailCompactFields"
+                        :key="f.key"
+                        class="flex flex-col gap-1 min-w-0"
+                    >
+                        <span class="roster-detail-modal-label">
                             {{ f.label }}
                             <span v-if="isRequiredField(f.key)" class="text-red-500">*</span>
                         </span>
@@ -373,13 +473,32 @@
                         <span v-if="getFieldError(f.key)" class="text-xs text-red-500">{{ getFieldError(f.key) }}</span>
                     </label>
                 </div>
+                <div v-if="detailTextareaFields.length" class="mt-3 space-y-2.5">
+                    <label v-for="f in detailTextareaFields" :key="f.key" class="flex flex-col gap-1 text-sm">
+                        <span class="roster-detail-modal-label">
+                            {{ f.label }}
+                            <span v-if="isRequiredField(f.key)" class="text-red-500">*</span>
+                        </span>
+                        <textarea
+                            v-model="form[f.key]"
+                            :disabled="formReadonly"
+                            @input="markTouched(f.key)"
+                            @change="markTouched(f.key)"
+                            :class="[
+                                'roster-detail-textarea',
+                                getFieldError(f.key) ? 'crm-form-control--error' : '',
+                            ]"
+                        ></textarea>
+                        <span v-if="getFieldError(f.key)" class="text-xs text-red-500">{{ getFieldError(f.key) }}</span>
+                    </label>
+                </div>
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
-                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showForm=false; formReadonly=false">{{ formReadonly ? '关闭' : '取消' }}</button>
+                <button type="button" class="roster-detail-modal-btn border border-gray-300" @click="showForm=false; formReadonly=false">{{ formReadonly ? '关闭' : '取消' }}</button>
                 <button
                     v-if="!formReadonly"
                     type="button"
-                    class="px-4 py-2 rounded-lg text-white"
+                    class="roster-detail-modal-btn text-white"
                     :class="hasBlockingErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
                     :disabled="hasBlockingErrors"
                     @click="saveForm"
@@ -489,6 +608,7 @@ const ZNTX_FORM_FIELDS = [
     { key: 'interface_contact', label: '接口' },
     { key: 'remarks', label: '备注' },
 ];
+const DETAIL_TEXTAREA_KEYS = new Set(['remarks', 'leave_reason']);
 const FORM_FIELDS = [
     ...STANDARD_FORM_FIELDS,
     { key: 'zntx_staff_no', label: '工号' },
@@ -602,6 +722,8 @@ createApp({
         const rows = ref([]);
         const brief = ref({ name: '', owner: '' });
         const loading = ref(true);
+        const showOnlyChecked = ref(false);
+        const checkedRowIds = reactive({});
         const showForm = ref(false);
         const editingId = ref(null);
         const formReadonly = ref(false);
@@ -652,6 +774,20 @@ createApp({
             if (isZNTX.value) return 23;
             return hideReleaseLeaveCols.value ? 20 : 23;
         });
+        const isRowChecked = (rowId) => !!checkedRowIds[String(rowId)];
+        const setRowChecked = (rowId, checked) => {
+            checkedRowIds[String(rowId)] = !!checked;
+        };
+        const syncCheckedRows = (nextRows) => {
+            const validIds = new Set((Array.isArray(nextRows) ? nextRows : []).map((row) => String(row.id)));
+            Object.keys(checkedRowIds).forEach((id) => {
+                if (!validIds.has(id)) delete checkedRowIds[id];
+            });
+            validIds.forEach((id) => {
+                if (typeof checkedRowIds[id] !== 'boolean') checkedRowIds[id] = false;
+            });
+        };
+        const checkedCount = computed(() => rows.value.filter((row) => isRowChecked(row.id)).length);
         /** 标准布局表尾「备注」占位：有离职三列时为 colspan 4，隐藏三列时为 1 */
         const rosterFooterRemarkColspan = computed(() => (hideReleaseLeaveCols.value ? 1 : 4));
         const hasFieldData = (key) => rows.value.some((r) => String(r[key] || '').trim() !== '');
@@ -764,8 +900,19 @@ createApp({
                 if (filters.positionTitle && hasFieldData('position_title')) {
                     if (ci(row.position_title) !== ci(filters.positionTitle)) return false;
                 }
+                if (showOnlyChecked.value && !isRowChecked(row.id)) return false;
                 return true;
             });
+        });
+        const displayCountHint = computed(() => {
+            if (showOnlyChecked.value) return `（勾选显示 ${filteredRows.value.length} 条）`;
+            if (filteredRows.value.length !== rows.value.length) return `（筛选后 ${filteredRows.value.length} 条）`;
+            return '';
+        });
+        const emptyStateText = computed(() => {
+            if (showOnlyChecked.value) return checkedCount.value ? '暂无符合筛选条件的勾选条目' : '暂无勾选条目';
+            if (Object.values(filters).some((value) => String(value || '').trim() !== '')) return '暂无符合筛选条件的数据';
+            return '暂无数据，请点击「新增行」或「导入 CSV」';
         });
         const rosterFooter = computed(() => {
             let sumQuote = 0;
@@ -819,6 +966,8 @@ createApp({
             if (hideReleaseLeaveCols.value) return standardFormFieldsWithoutReleaseLeave();
             return STANDARD_FORM_FIELDS;
         });
+        const detailCompactFields = computed(() => activeFormFields.value.filter((f) => !DETAIL_TEXTAREA_KEYS.has(f.key)));
+        const detailTextareaFields = computed(() => activeFormFields.value.filter((f) => DETAIL_TEXTAREA_KEYS.has(f.key)));
         const requiredFieldLabelMap = computed(() => {
             const map = {};
             activeFormFields.value.forEach((f) => { map[f.key] = f.label; });
@@ -926,7 +1075,10 @@ createApp({
             const url = IS_GLOBAL_ROSTER ? '/api/roster' : `/api/clients/${CLIENT_ID}/roster`;
             fetch(url, { headers: authHeader() })
                 .then((r) => r.json())
-                .then((d) => { rows.value = Array.isArray(d) ? d : []; })
+                .then((d) => {
+                    rows.value = Array.isArray(d) ? d : [];
+                    syncCheckedRows(rows.value);
+                })
                 .finally(() => { loading.value = false; });
         };
         const openAdd = () => {
@@ -1147,18 +1299,28 @@ createApp({
             filters.preTaxSalaryAbove = '';
             filters.preTaxSalaryBelow = '';
         };
+        const toggleShowCheckedOnly = () => {
+            showOnlyChecked.value = !showOnlyChecked.value;
+        };
+        const clearCheckedRows = () => {
+            Object.keys(checkedRowIds).forEach((id) => {
+                checkedRowIds[id] = false;
+            });
+            showOnlyChecked.value = false;
+        };
         onMounted(() => {
             loadBrief();
             loadRows();
         });
         return {
             rows, filteredRows, filters, employmentStatusOptions, workLocationOptions, customerNameOptions, positionTitleOptions,
-            brief, loading, showForm, editingId, form, formFields: activeFormFields,
+            brief, loading, showForm, editingId, form, formFields: activeFormFields, detailCompactFields, detailTextareaFields,
             showDel, fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
-            showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors,
+            showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors, showOnlyChecked, displayCountHint, emptyStateText,
             IS_GLOBAL_ROSTER,
             openAdd, openEdit, openRosterDetail, formReadonly, saveForm, confirmDelete, cancelDelete, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, fieldInputType, markTouched, getFieldError,
+            isRowChecked, setRowChecked, toggleShowCheckedOnly, clearCheckedRows,
             clearDateField, displayAmountInteger, displayRosterDate,
         };
     },

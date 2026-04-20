@@ -1078,7 +1078,8 @@ _CHINESE_ROSTER_HEADER_MAP = {
 }
 
 
-# 花名册「客户」：单元格中含左侧关键字即视为右侧 clients.name（须与客户管理中全称完全一致；左侧越长越优先匹配）
+# 花名册「客户」：单元格中含左侧关键字即视为右侧 clients.name；
+# 花名册内统一存左侧简称/展示名，右侧仅用于匹配客户主数据（须与客户管理中全称完全一致；左侧越长越优先匹配）
 ROSTER_CUSTOMER_ALIAS_RULES: Tuple[Tuple[str, str], ...] = (
     ("远景智能", "远景智能"),
     ("中诺", "中诺通讯"),
@@ -1089,18 +1090,18 @@ ROSTER_CUSTOMER_ALIAS_RULES: Tuple[Tuple[str, str], ...] = (
 
 
 def _resolve_roster_customer_client(db: Session, raw: str) -> Tuple[Optional[Client], str]:
-    """将简称/分子公司与 clients 表匹配；返回 (Client 或 None, 建议写入花名册的客户名字符串)。"""
+    """将简称/全称与 clients 表匹配；返回 (Client 或 None, 建议写入花名册的简称/展示名)。"""
     s = str(raw or "").strip()
     if not s:
         return None, ""
-    exact = db.query(Client).filter(Client.name == s).first()
-    if exact:
-        return exact, s
     for kw, canonical in ROSTER_CUSTOMER_ALIAS_RULES:
         if kw in s:
             c = db.query(Client).filter(Client.name == canonical).first()
             if c:
-                return c, canonical
+                return c, kw
+    exact = db.query(Client).filter(Client.name == s).first()
+    if exact:
+        return exact, s
     return None, s
 
 
