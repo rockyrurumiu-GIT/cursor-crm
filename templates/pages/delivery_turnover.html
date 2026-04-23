@@ -84,6 +84,9 @@
         min-width: 96px;
         width: 96px;
     }
+    .turnover-filter-date {
+        min-width: 128px;
+    }
     .turnover-filter-checkbox {
         display: inline-flex;
         align-items: center;
@@ -102,6 +105,162 @@
         white-space: nowrap;
         padding-left: 8px;
         padding-right: 8px;
+    }
+    /* 顶栏 z-100 盖在看板之上；白底总高须 = 100vh - 上下留白，避免贴 Dock；正文在 .turnover-dash-panel-body 内滚动 */
+    .turnover-dash-overlay {
+        z-index: 60;
+        --crm-dash-from-header: calc(3.5rem + 1.5rem);
+        --crm-dash-pad-top: max(var(--crm-dash-from-header), calc(env(safe-area-inset-top, 0px) + 3.5rem + 1.25rem));
+        --crm-dash-pad-bottom: max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem));
+        box-sizing: border-box;
+        padding-top: var(--crm-dash-pad-top);
+        padding-bottom: var(--crm-dash-pad-bottom);
+    }
+    .turnover-dash-panel {
+        box-sizing: border-box;
+        /* 与 overlay 上下留白一致，整块白底落在视口内；用固定高度保证 flex 子项可稳定出现内部滚动条 */
+        --crm-dash-panel-h: calc(100vh - var(--crm-dash-pad-top) - var(--crm-dash-pad-bottom));
+        height: var(--crm-dash-panel-h);
+        max-height: var(--crm-dash-panel-h);
+        min-height: 0;
+        overflow: hidden;
+    }
+    @supports (height: 100dvh) {
+        .turnover-dash-panel {
+            --crm-dash-panel-h: calc(100dvh - var(--crm-dash-pad-top) - var(--crm-dash-pad-bottom));
+        }
+    }
+    .turnover-dash-panel-body {
+        -webkit-overflow-scrolling: touch;
+    }
+    .turnover-dash-bar-track {
+        height: 0.5rem;
+        border-radius: 9999px;
+        background: #e5e7eb;
+        overflow: hidden;
+    }
+    .turnover-dash-bar-fill {
+        height: 100%;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, #2563eb, #7c3aed);
+        min-width: 2px;
+    }
+    /* 离职占比列：胶囊条 + 蓝紫渐变（与趋势条同系） */
+    .turnover-dash-share-bar-track {
+        height: 0.45rem;
+        border-radius: 9999px;
+        background: #e5e7eb;
+        overflow: hidden;
+        width: 7rem;
+        max-width: 100%;
+    }
+    .turnover-dash-share-bar-fill {
+        height: 100%;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, #1d4ed8, #3b82f6, #6366f1, #7c3aed);
+        min-width: 0;
+        transition: width 0.2s ease;
+    }
+    .turnover-dash-kpi {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: #fafafa;
+    }
+    /* 与管道数据透析「入职数」一致的悬停名单提示 */
+    .turnover-dash-metric-trigger {
+        cursor: help;
+        text-decoration: underline dotted transparent;
+        text-underline-offset: 2px;
+    }
+    .turnover-dash-metric-trigger:hover {
+        color: #1d4ed8;
+        text-decoration-color: currentColor;
+    }
+    .turnover-dash-hover-tooltip {
+        position: fixed;
+        z-index: 90;
+        min-width: 240px;
+        max-width: 380px;
+        max-height: min(420px, calc(100vh - 24px));
+        overflow-y: auto;
+        border: 1px solid #d1d5db;
+        border-radius: 0.75rem;
+        background: rgba(17, 24, 39, 0.96);
+        color: #f9fafb;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.28);
+        padding: 10px 12px;
+        pointer-events: auto;
+        overscroll-behavior: contain;
+    }
+    .turnover-dash-hover-tooltip-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: #bfdbfe;
+        margin-bottom: 6px;
+        position: sticky;
+        top: -10px;
+        padding-top: 2px;
+        padding-bottom: 6px;
+        background: rgba(17, 24, 39, 0.96);
+    }
+    .turnover-dash-hover-tooltip-list {
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: normal;
+        word-break: break-word;
+    }
+    .turnover-dash-hover-tooltip-list li + li {
+        margin-top: 4px;
+    }
+    .turnover-dash-tooltip-li {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .turnover-dash-tooltip-detail {
+        flex: 1;
+        min-width: 0;
+        word-break: break-word;
+    }
+    .turnover-dash-tooltip-sep {
+        flex-shrink: 0;
+        font-size: 11px;
+        font-weight: 600;
+        color: #7dd3fc;
+        white-space: nowrap;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: rgba(56, 189, 248, 0.15);
+    }
+    .turnover-dash-tooltip-sep--muted {
+        color: #9ca3af;
+        background: rgba(156, 163, 175, 0.12);
+        font-weight: 500;
+    }
+    /* 挂到 body，避免看板 modal 内 overflow/transform 裁切 fixed 浮层 */
+    .turnover-dash-hover-tooltip--portal {
+        z-index: 10050;
+    }
+    .turnover-dash-qmark {
+        font-size: 10px;
+        font-weight: 700;
+        color: #2563eb;
+        border: 1px solid #93c5fd;
+        border-radius: 9999px;
+        width: 0.95rem;
+        height: 0.95rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+    .turnover-form-required-star {
+        color: #dc2626;
+        font-weight: 700;
+        margin-left: 0.15em;
     }
 </style>
 {% endblock %}
@@ -128,6 +287,7 @@
             <button type="button" @click="triggerImport" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导入</button>
             <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
             <button type="button" @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导出</button>
+            <button type="button" @click="openDashboard" class="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-800 hover:bg-indigo-100">分析看板</button>
             <button type="button" @click="restoreLatestBackup" class="crm-btn-rollback">回滚</button>
         </div>
     </div>
@@ -151,6 +311,14 @@
             <option value="">客户（全部）</option>
             <option v-for="v in customerNameOptions" :key="`cn-${v}`" :value="v">{{ v }}</option>
         </select>
+        <div class="crm-filter-item turnover-filter-item crm-filter-date turnover-filter-date">
+            <span class="crm-filter-date-label turnover-filter-date-label">离职日起</span>
+            <input v-model="filters.resignDateStart" type="date" class="crm-filter-date-input turnover-filter-date-input" title="离职日期区间起点" />
+        </div>
+        <div class="crm-filter-item turnover-filter-item crm-filter-date turnover-filter-date">
+            <span class="crm-filter-date-label turnover-filter-date-label">离职日止</span>
+            <input v-model="filters.resignDateEnd" type="date" class="crm-filter-date-input turnover-filter-date-input" title="离职日期区间终点" />
+        </div>
         <input
             v-model="filters.tenureDaysMax"
             type="number"
@@ -289,6 +457,274 @@
         </div>
     </div>
 
+    <div v-if="showDashboard" class="fixed inset-0 turnover-dash-overlay flex items-start justify-center overflow-x-hidden overflow-y-hidden bg-black/45 px-3 sm:px-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl turnover-dash-panel flex flex-col">
+            <div class="px-4 sm:px-5 py-3 border-b border-gray-200 flex flex-wrap justify-between items-center gap-2 shrink-0">
+                <div>
+                    <h3 class="font-bold text-lg text-gray-900">离职率分析看板</h3>
+                    <p class="text-xs text-gray-500 mt-0.5" v-if="dashData">{{ dashData.scope_title }}</p>
+                </div>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none px-2" @click="closeDashboard">&times;</button>
+            </div>
+            <div class="px-4 sm:px-5 py-3 border-b border-gray-100 flex flex-wrap gap-2 items-end shrink-0 bg-gray-50/80">
+                <label class="flex flex-col gap-0.5 text-xs text-gray-600">
+                    <span>范围</span>
+                    <select v-model="dashScope" class="crm-form-control text-sm min-w-[7rem]" @change="onDashScopeChange">
+                        <option value="department">整体客户</option>
+                        <option value="business">单一业务</option>
+                    </select>
+                </label>
+                <label v-if="dashScope === 'business'" class="flex flex-col gap-0.5 text-xs text-gray-600">
+                    <span>业务</span>
+                    <select v-model="dashBusinessKey" class="crm-form-control text-sm min-w-[10rem]">
+                        <option v-for="b in businessOptions" :key="b.client_id" :value="b.short_key">{{ b.label }}</option>
+                    </select>
+                </label>
+                <label class="flex flex-col gap-0.5 text-xs text-gray-600">
+                    <span>趋势月数</span>
+                    <select v-model.number="dashTrendMonths" class="crm-form-control text-sm w-[5.5rem]">
+                        <option :value="6">6</option>
+                        <option :value="12">12</option>
+                        <option :value="18">18</option>
+                        <option :value="24">24</option>
+                    </select>
+                </label>
+                <label class="flex flex-col gap-0.5 text-xs text-gray-600">
+                    <span>分析期起</span>
+                    <input v-model="dashPeriodStart" type="date" class="crm-form-control text-sm" />
+                </label>
+                <label class="flex flex-col gap-0.5 text-xs text-gray-600">
+                    <span>分析期止</span>
+                    <input v-model="dashPeriodEnd" type="date" class="crm-form-control text-sm" />
+                </label>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button type="button" class="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" :disabled="dashLoading" @click="loadDashboard">
+                        {{ dashLoading ? '加载中…' : '应用' }}
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        :disabled="dashLoading"
+                        @click="resetDashboardFilters"
+                    >
+                        重置
+                    </button>
+                </div>
+            </div>
+            <div class="turnover-dash-panel-body overflow-y-auto flex-1 min-h-0 p-4 sm:p-5 text-sm">
+                <p v-if="dashError" class="text-red-600 mb-3">{{ dashError }}</p>
+                <p v-if="dashData && dashData.footnote" class="text-xs text-gray-500 mb-4 leading-relaxed">{{ dashData.footnote }}</p>
+                <template v-if="dashData && !dashLoading">
+                    <section class="mb-6">
+                        <h4 class="font-semibold text-gray-800 mb-2">分析周期内离职率（与下方主动/被动/转出、司龄、岗位/城市同周期）</h4>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 lg:grid-cols-3 xl:grid-cols-5">
+                            <div class="turnover-dash-kpi">
+                                <div class="text-xs text-gray-500">离职数</div>
+                                <div class="text-xl font-bold text-gray-900">
+                                    <span
+                                        v-if="Number(dashData.analysis_period.departures) > 0"
+                                        class="turnover-dash-metric-trigger inline-flex items-center gap-1"
+                                        @mouseenter="showTurnoverDashTTForAnalysisPeriod($event)"
+                                        @mousemove="moveTurnoverDashTT"
+                                        @mouseleave="hideTurnoverDashTT"
+                                    >{{ dashData.analysis_period.departures }}<span class="turnover-dash-qmark" aria-hidden="true">?</span></span>
+                                    <span v-else>{{ dashData.analysis_period.departures }}</span>
+                                </div>
+                            </div>
+                            <div class="turnover-dash-kpi">
+                                <div class="text-xs text-gray-500">入职数（同期）</div>
+                                <div class="text-xl font-bold text-gray-900">
+                                    <span
+                                        v-if="Number(dashData.analysis_period.onboardings) > 0"
+                                        class="turnover-dash-metric-trigger inline-flex items-center gap-1"
+                                        @mouseenter="showTurnoverDashTTForAnalysisOnboarding($event)"
+                                        @mousemove="moveTurnoverDashTT"
+                                        @mouseleave="hideTurnoverDashTT"
+                                    >{{ dashData.analysis_period.onboardings }}<span class="turnover-dash-qmark" aria-hidden="true">?</span></span>
+                                    <span v-else>{{ dashData.analysis_period.onboardings != null ? dashData.analysis_period.onboardings : '—' }}</span>
+                                </div>
+                            </div>
+                            <div class="turnover-dash-kpi">
+                                <div class="text-xs text-gray-500">平均在职</div>
+                                <div class="text-xl font-bold text-gray-900">{{ dashData.analysis_period.avg_headcount }}</div>
+                            </div>
+                            <div class="turnover-dash-kpi">
+                                <div class="text-xs text-gray-500">期初 / 期末在职</div>
+                                <div class="text-lg font-semibold text-gray-900">{{ dashData.analysis_period.headcount_start }} / {{ dashData.analysis_period.headcount_end }}</div>
+                            </div>
+                            <div class="turnover-dash-kpi">
+                                <div class="text-xs text-gray-500">离职率</div>
+                                <div class="text-xl font-bold text-indigo-700">{{ dashData.analysis_period.rate_pct != null ? dashData.analysis_period.rate_pct + '%' : '—' }}</div>
+                            </div>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1">{{ dashData.analysis_period.start }} ~ {{ dashData.analysis_period.end }}</p>
+                    </section>
+                    <section class="mb-6">
+                        <h4 class="font-semibold text-gray-800 mb-2">{{ dashScope === 'business' ? ('「' + dashData.scope_title + '」各月离职率') : '整体客户 · 各月离职率趋势' }}</h4>
+                        <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                            <table class="min-w-full text-xs sm:text-sm">
+                                <thead class="bg-gray-100 text-gray-700">
+                                    <tr>
+                                        <th class="text-left px-2 py-2">月份</th>
+                                        <th class="text-right px-2 py-2">离职</th>
+                                        <th v-if="dashScope === 'department'" class="text-right px-2 py-2">业务离职</th>
+                                        <th class="text-right px-2 py-2">入职</th>
+                                        <th class="text-right px-2 py-2">平均在职</th>
+                                        <th class="text-right px-2 py-2">离职率</th>
+                                        <th class="text-right px-2 py-2 min-w-[10rem]">离职占比</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(row, idx) in dashData.monthly_trend" :key="row.month_key" class="border-t border-gray-100">
+                                        <td class="px-2 py-1.5 whitespace-nowrap">{{ row.month_label }}</td>
+                                        <td class="px-2 py-1.5 text-right whitespace-nowrap">
+                                            <span
+                                                v-if="Number(row.departures) > 0"
+                                                class="turnover-dash-metric-trigger inline-flex items-center gap-0.5 justify-end"
+                                                @mouseenter="showTurnoverDashTTForMonthRow($event, row)"
+                                                @mousemove="moveTurnoverDashTT"
+                                                @mouseleave="hideTurnoverDashTT"
+                                            >{{ row.departures }}<span class="turnover-dash-qmark" aria-hidden="true">?</span></span>
+                                            <span v-else>{{ row.departures }}</span>
+                                        </td>
+                                        <td v-if="dashScope === 'department'" class="px-2 py-1.5 text-right whitespace-nowrap">
+                                            <span
+                                                v-if="Number(row.business_departures) > 0"
+                                                class="turnover-dash-metric-trigger inline-flex items-center gap-0.5 justify-end"
+                                                @mouseenter="showTurnoverDashTTForMonthBusinessDep($event, row)"
+                                                @mousemove="moveTurnoverDashTT"
+                                                @mouseleave="hideTurnoverDashTT"
+                                            >{{ row.business_departures }}<span class="turnover-dash-qmark" aria-hidden="true">?</span></span>
+                                            <span v-else>{{ row.business_departures != null ? row.business_departures : 0 }}</span>
+                                        </td>
+                                        <td class="px-2 py-1.5 text-right whitespace-nowrap">
+                                            <span
+                                                v-if="Number(row.onboardings) > 0"
+                                                class="turnover-dash-metric-trigger inline-flex items-center gap-0.5 justify-end"
+                                                @mouseenter="showTurnoverDashTTForOnboardMonth($event, row)"
+                                                @mousemove="moveTurnoverDashTT"
+                                                @mouseleave="hideTurnoverDashTT"
+                                            >{{ row.onboardings }}<span class="turnover-dash-qmark" aria-hidden="true">?</span></span>
+                                            <span v-else>{{ row.onboardings != null ? row.onboardings : '—' }}</span>
+                                        </td>
+                                        <td class="px-2 py-1.5 text-right">{{ row.avg_headcount }}</td>
+                                        <td class="px-2 py-1.5 text-right">{{ monthlyRateCell(row) }}</td>
+                                        <td class="px-2 py-1.5 text-right align-top">
+                                            <div class="inline-flex flex-col items-end gap-1">
+                                                <span class="text-xs tabular-nums whitespace-nowrap text-gray-800">{{ dashTrendRollingShareText(row, idx) }}</span>
+                                                <div
+                                                    v-if="dashTrendRollingShareBarStyle(row, idx)"
+                                                    class="turnover-dash-share-bar-track shrink-0"
+                                                >
+                                                    <div class="turnover-dash-share-bar-fill" :style="dashTrendRollingShareBarStyle(row, idx)"></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <p class="text-xs text-gray-400 mt-2 px-1 leading-relaxed">离职占比：当月离职人数 ÷ 本表各月「离职」列合计（各行分母相同，便于横向对比）。表内离职合计为 0 时显示「0%（期内无离职）」。</p>
+                        </div>
+                    </section>
+                    <section class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="font-semibold text-gray-800 mb-2">主动 / 被动 / 转出（占比）</h4>
+                            <ul class="space-y-2 text-sm">
+                                <li class="flex justify-between border-b border-gray-100 pb-1">
+                                    <span>主动</span>
+                                    <span>{{ dashData.separation.active.count }} 人 · {{ dashData.separation.active.rate_pct != null ? dashData.separation.active.rate_pct + '%' : '—' }}</span>
+                                </li>
+                                <li class="flex justify-between border-b border-gray-100 pb-1">
+                                    <span>被动</span>
+                                    <span>{{ dashData.separation.passive.count }} 人 · {{ dashData.separation.passive.rate_pct != null ? dashData.separation.passive.rate_pct + '%' : '—' }}</span>
+                                </li>
+                                <li class="flex justify-between border-b border-gray-100 pb-1">
+                                    <span>转出</span>
+                                    <span>{{ dashData.separation.transfer != null ? dashData.separation.transfer.count : 0 }} 人 · {{ (dashData.separation.transfer && dashData.separation.transfer.rate_pct != null) ? dashData.separation.transfer.rate_pct + '%' : '—' }}</span>
+                                </li>
+                                <li class="flex justify-between pb-1">
+                                    <span>未标注</span>
+                                    <span>{{ dashData.separation.unknown.count }} 人 · {{ dashData.separation.unknown.rate_pct != null ? dashData.separation.unknown.rate_pct + '%' : '—' }}</span>
+                                </li>
+                            </ul>
+                            <p class="text-xs text-gray-500 mt-1.5">各分类「占比」= 该分类人数 ÷ 分析期内总离职人数（与上方主 KPI「离职数」同一分母；主动/被动/转出/未标注四类互斥，占比合计 100%）。无离职时无法计算，占比均显示为 —。</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-800 mb-2">司龄分段（同期离职）</h4>
+                            <div class="space-y-1.5">
+                                <div v-for="tb in dashData.tenure_buckets" :key="tb.label" class="flex items-center gap-2">
+                                    <span class="text-gray-600 w-28 shrink-0 text-xs">{{ tb.label }}</span>
+                                    <div class="flex-1 turnover-dash-bar-track">
+                                        <div class="turnover-dash-bar-fill bg-gradient-to-r from-amber-500 to-rose-500" :style="{ width: dashTenureBarPct(tb.count) }"></div>
+                                    </div>
+                                    <span class="w-8 text-right text-xs font-medium">{{ tb.count }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    <section
+                        v-if="dashScope === 'department' && dashData.by_business && dashData.by_business.length"
+                        class="mb-6"
+                    >
+                        <h4 class="font-semibold text-gray-800 mb-2">按业务（客户）· 同期离职</h4>
+                        <div class="space-y-1.5 max-w-3xl">
+                            <div
+                                v-for="row in dashData.by_business"
+                                :key="'biz-' + row.dimension"
+                                class="flex items-center gap-2"
+                            >
+                                <span
+                                    class="text-gray-600 w-32 sm:w-40 shrink-0 text-xs truncate"
+                                    :title="row.dimension"
+                                >{{ row.dimension }}</span>
+                                <div class="flex-1 min-w-0 turnover-dash-bar-track">
+                                    <div
+                                        class="turnover-dash-bar-fill bg-gradient-to-r from-amber-500 to-rose-500"
+                                        :style="{ width: dashBusinessBarPct(row.departures) }"
+                                    ></div>
+                                </div>
+                                <span class="w-10 text-right text-xs font-medium tabular-nums">{{ row.departures }}</span>
+                            </div>
+                        </div>
+                    </section>
+                    <section v-if="dashScope === 'business' && (dashData.by_position.length || dashData.by_city.length)" class="mb-2">
+                        <h4 class="font-semibold text-gray-800 mb-2">同一业务内 · 岗位 / 工作地（同期）</h4>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <div class="overflow-x-auto border border-gray-200 rounded-lg" v-if="dashData.by_position.length">
+                                <table class="min-w-full text-xs">
+                                    <thead class="bg-gray-100"><tr><th class="text-left px-2 py-2">岗位</th><th class="text-right px-2 py-2">离职</th><th class="text-right px-2 py-2">平均在职</th><th class="text-right px-2 py-2">率</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="r in dashData.by_position" :key="'p-'+r.dimension" class="border-t border-gray-100">
+                                            <td class="px-2 py-1 max-w-[10rem] truncate" :title="r.dimension">{{ r.dimension }}</td>
+                                            <td class="px-2 py-1 text-right">{{ r.departures }}</td>
+                                            <td class="px-2 py-1 text-right">{{ r.avg_headcount }}</td>
+                                            <td class="px-2 py-1 text-right">{{ r.rate_pct != null ? r.rate_pct + '%' : '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="overflow-x-auto border border-gray-200 rounded-lg" v-if="dashData.by_city.length">
+                                <table class="min-w-full text-xs">
+                                    <thead class="bg-gray-100"><tr><th class="text-left px-2 py-2">工作地</th><th class="text-right px-2 py-2">离职</th><th class="text-right px-2 py-2">平均在职</th><th class="text-right px-2 py-2">率</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="r in dashData.by_city" :key="'c-'+r.dimension" class="border-t border-gray-100">
+                                            <td class="px-2 py-1 max-w-[10rem] truncate" :title="r.dimension">{{ r.dimension }}</td>
+                                            <td class="px-2 py-1 text-right">{{ r.departures }}</td>
+                                            <td class="px-2 py-1 text-right">{{ r.avg_headcount }}</td>
+                                            <td class="px-2 py-1 text-right">{{ r.rate_pct != null ? r.rate_pct + '%' : '—' }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                    <p v-else-if="dashScope === 'department'" class="text-xs text-gray-500 mb-4">岗位、工作地细分请在上方选择「单一业务」后查看。</p>
+                </template>
+                <div v-else-if="dashLoading" class="text-center text-gray-500 py-12">加载中…</div>
+            </div>
+        </div>
+    </div>
+
     <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
@@ -297,14 +733,14 @@
             </div>
             <div class="overflow-y-auto p-5">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">姓名 *</span><input v-model.trim="addForm.full_name" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">联系方式 *</span><input v-model.trim="addForm.contact_info" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">客户 *</span><input v-model.trim="addForm.customer_name" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">岗位 *</span><input v-model.trim="addForm.position_title" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">姓名<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.full_name" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">联系方式<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.contact_info" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">客户<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.customer_name" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">岗位<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.position_title" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">员工加1</span><input v-model.trim="addForm.employee_plus1" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">客户业务线 *</span><input v-model.trim="addForm.business_line" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">工作地 *</span><input v-model.trim="addForm.work_location" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">入职时间 *</span><input v-model="addForm.entry_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">客户业务线<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.business_line" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">工作地<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.work_location" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">入职时间<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model="addForm.entry_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">项目释放时间</span><input v-model="addForm.project_release_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">离职时间</span><input v-model="addForm.company_resign_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">司龄</span><input :value="addTenurePreview" disabled class="crm-form-control bg-gray-50 text-gray-600" /></label>
@@ -314,10 +750,10 @@
                     <label class="flex flex-col gap-1"><span class="text-gray-600">业务处理动作</span><input v-model.trim="addForm.business_action" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">BP参与动作</span><input v-model.trim="addForm.bp_involved" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">补偿金</span><input v-model.trim="addForm.zntx_compensation_amount" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">报价 *</span><input v-model.trim="addForm.monthly_quote_tax" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">薪资 *</span><input v-model.trim="addForm.pre_tax_salary" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">GM$ *</span><input v-model.trim="addForm.gms" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">GM% *</span><input v-model.trim="addForm.gm_pct" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">报价<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.monthly_quote_tax" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">薪资<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.pre_tax_salary" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">GM$<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.gms" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">GM%<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.gm_pct" class="crm-form-control" :disabled="addFormReadonly" /></label>
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
@@ -326,12 +762,49 @@
             </div>
         </div>
     </div>
+
+    <teleport to="body">
+        <div
+            v-if="turnoverDashTT.visible"
+            class="turnover-dash-hover-tooltip turnover-dash-hover-tooltip--portal"
+            :style="{ left: `${turnoverDashTT.x}px`, top: `${turnoverDashTT.y}px` }"
+            @mouseenter="onTurnoverDashTTEnter"
+            @mouseleave="onTurnoverDashTTLeave"
+        >
+            <div class="turnover-dash-hover-tooltip-title">{{ turnoverDashTT.title }}</div>
+            <ul class="turnover-dash-hover-tooltip-list">
+                <li
+                    v-for="(item, idx) in turnoverDashTT.items"
+                    :key="`${turnoverDashTT.title}-${idx}`"
+                    :class="item.separation ? 'turnover-dash-tooltip-li' : ''"
+                >
+                    <template v-if="item.separation">
+                        <span class="turnover-dash-tooltip-detail">{{ item.detail }}</span>
+                        <span
+                            class="turnover-dash-tooltip-sep"
+                            :class="{ 'turnover-dash-tooltip-sep--muted': item.separation === '未标注' }"
+                        >{{ item.separation }}</span>
+                    </template>
+                    <template v-else>{{ item.detail }}</template>
+                </li>
+            </ul>
+        </div>
+    </teleport>
 </div>
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
 <script>
 const { createApp, ref, onMounted, computed, reactive, watch } = Vue;
+
+function defaultDashboardAnalysisPeriod() {
+    const today = new Date();
+    const firstThis = new Date(today.getFullYear(), today.getMonth(), 1);
+    const endLast = new Date(firstThis.getTime() - 86400000);
+    const startLast = new Date(endLast.getFullYear(), endLast.getMonth(), 1);
+    const iso = (d) => d.toISOString().slice(0, 10);
+    return { start: iso(startLast), end: iso(endLast) };
+}
 
 function normalizeDate(raw) {
     const s = String(raw || '').trim();
@@ -366,6 +839,33 @@ function tenureDays(row) {
     return Math.floor(diffMs / (24 * 60 * 60 * 1000));
 }
 
+/** 与后端 _separation_detail_label 一致，用于看板悬停名单标签 */
+function separationDetailLabel(raw) {
+    const s = String(raw || '');
+    if (s.includes('转出')) return '转出';
+    if (s.includes('被动')) return '被动';
+    if (s.includes('主动')) return '主动';
+    return '未标注';
+}
+
+function normalizeOnboardingItemsForTooltip(arr) {
+    if (!Array.isArray(arr) || !arr.length) return [];
+    return arr
+        .map((x) => {
+            if (x != null && typeof x === 'object' && !Array.isArray(x)) {
+                const detail = String(x.detail ?? x.text ?? '').trim();
+                if (!detail) return null;
+                return { detail, separation: '' };
+            }
+            const s = String(x).trim();
+            if (!s) return null;
+            return { detail: s, separation: '' };
+        })
+        .filter(Boolean);
+}
+
+const TURNOVER_ONBOARD_PLACEHOLDER = '（暂无名单：请点「应用」刷新看板，或确认入职时间已填写）';
+
 createApp({
     setup() {
         const rows = ref([]);
@@ -376,6 +876,77 @@ createApp({
         const showLogs = ref(false);
         const logsLoading = ref(false);
         const logs = ref([]);
+        const showDashboard = ref(false);
+        const dashLoading = ref(false);
+        const dashError = ref('');
+        const dashData = ref(null);
+        const dashScope = ref('department');
+        const dashBusinessKey = ref('');
+        const dashTrendMonths = ref(12);
+        const dashPeriodStart = ref('');
+        const dashPeriodEnd = ref('');
+        const businessOptions = ref([]);
+
+        const turnoverDashTT = reactive({
+            visible: false,
+            x: 12,
+            y: 12,
+            title: '',
+            items: [],
+            hovering: false,
+            hideTimer: null,
+        });
+        const clearTurnoverDashTTHide = () => {
+            if (turnoverDashTT.hideTimer != null) {
+                window.clearTimeout(turnoverDashTT.hideTimer);
+                turnoverDashTT.hideTimer = null;
+            }
+        };
+        const showTurnoverDashTT = (ev, title, items, opts) => {
+            const useOnboarding = opts && opts.onboarding;
+            const normalized = useOnboarding
+                ? normalizeOnboardingItemsForTooltip(items)
+                : normalizeDepartureItemsForTooltip(items);
+            if (!normalized.length) return;
+            clearTurnoverDashTTHide();
+            turnoverDashTT.title = title || '';
+            turnoverDashTT.items = normalized;
+            turnoverDashTT.visible = true;
+            moveTurnoverDashTT(ev);
+        };
+        const moveTurnoverDashTT = (ev) => {
+            if (!turnoverDashTT.visible) return;
+            const pad = 14;
+            let x = ev.clientX + pad;
+            let y = ev.clientY + pad;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const estW = 340;
+            const estH = 300;
+            if (x + estW > vw - 8) x = Math.max(8, ev.clientX - estW - pad);
+            if (y + estH > vh - 8) y = Math.max(8, ev.clientY - estH - pad);
+            turnoverDashTT.x = x;
+            turnoverDashTT.y = y;
+        };
+        const hideTurnoverDashTT = () => {
+            clearTurnoverDashTTHide();
+            turnoverDashTT.hideTimer = window.setTimeout(() => {
+                if (turnoverDashTT.hovering) return;
+                turnoverDashTT.visible = false;
+                turnoverDashTT.items = [];
+                turnoverDashTT.title = '';
+                turnoverDashTT.hideTimer = null;
+            }, 120);
+        };
+        const onTurnoverDashTTEnter = () => {
+            turnoverDashTT.hovering = true;
+            clearTurnoverDashTTHide();
+        };
+        const onTurnoverDashTTLeave = () => {
+            turnoverDashTT.hovering = false;
+            hideTurnoverDashTT();
+        };
+
         const showAddModal = ref(false);
         const addSaving = ref(false);
         const addFormReadonly = ref(false);
@@ -407,6 +978,8 @@ createApp({
             positionTitle: '',
             workLocation: '',
             customerName: '',
+            resignDateStart: '',
+            resignDateEnd: '',
             tenureDaysMax: '',
             separationType: '',
             hasCompensationOnly: false,
@@ -429,6 +1002,8 @@ createApp({
             if (filters.positionTitle) return true;
             if (filters.workLocation) return true;
             if (filters.customerName) return true;
+            if (String(filters.resignDateStart || '').trim()) return true;
+            if (String(filters.resignDateEnd || '').trim()) return true;
             if (String(filters.tenureDaysMax ?? '').trim() !== '') return true;
             if (filters.separationType) return true;
             if (filters.hasCompensationOnly) return true;
@@ -451,6 +1026,20 @@ createApp({
                 out = out.filter((row) => {
                     const disp = String(row.customer_name || row.business_line || '').trim();
                     return ci(disp) === ci(filters.customerName);
+                });
+            }
+            const rs = String(filters.resignDateStart || '').trim();
+            const re = String(filters.resignDateEnd || '').trim();
+            if (rs || re) {
+                const startMs = rs ? new Date(`${rs}T00:00:00`).getTime() : null;
+                const endMs = re ? new Date(`${re}T23:59:59.999`).getTime() : null;
+                out = out.filter((row) => {
+                    const dt = normalizeDate(row.company_resign_date);
+                    if (!dt || Number.isNaN(dt.getTime())) return false;
+                    const t = dt.getTime();
+                    if (startMs != null && Number.isFinite(startMs) && t < startMs) return false;
+                    if (endMs != null && Number.isFinite(endMs) && t > endMs) return false;
+                    return true;
                 });
             }
             const tenureRaw = String(filters.tenureDaysMax ?? '').trim();
@@ -479,6 +1068,8 @@ createApp({
             filters.positionTitle = '';
             filters.workLocation = '';
             filters.customerName = '';
+            filters.resignDateStart = '';
+            filters.resignDateEnd = '';
             filters.tenureDaysMax = '';
             filters.separationType = '';
             filters.hasCompensationOnly = false;
@@ -553,6 +1144,330 @@ createApp({
             return `${((totalProfit.value / totalQuote.value) * 100).toFixed(2)}%`;
         });
         const addTenurePreview = computed(() => computeTenure(addForm.entry_date, addForm.company_resign_date));
+
+        /** 趋势表内各月离职人数之和（作「离职占比」固定分母，各行相同） */
+        const dashTrendMonthlyDepartureGrandTotal = () => {
+            const list = dashData.value?.monthly_trend;
+            if (!Array.isArray(list) || !list.length) return 0;
+            return list.reduce((acc, r) => acc + Number(r?.departures ?? 0), 0);
+        };
+        /** 当月离职数 / 表内离职合计（占比%）；分母为整表合计，不随行递进 */
+        const dashTrendRollingShareText = (row, index) => {
+            const num = Number(row?.departures ?? 0);
+            const den = dashTrendMonthlyDepartureGrandTotal();
+            if (!den) return '0%（期内无离职）';
+            const pct = ((num / den) * 100).toFixed(2);
+            return `${num} / ${den}（${pct}%）`;
+        };
+        /** 各月离职率：分母为 0 且无离职时后端已给 0.0，此处兼容旧数据 */
+        const monthlyRateCell = (row) => {
+            if (row == null) return '—';
+            const rp = row.rate_pct;
+            if (rp != null && rp !== '') return `${rp}%`;
+            if (Number(row.departures ?? 0) === 0) return '0%';
+            return '—';
+        };
+        /** 占表内离职合计的比例，用于渐变条宽度（0–100） */
+        const dashTrendRollingShareBarStyle = (row, index) => {
+            const num = Number(row?.departures ?? 0);
+            const den = dashTrendMonthlyDepartureGrandTotal();
+            if (!den) return null;
+            const w = Math.min(100, Math.max(0, (num / den) * 100));
+            return { width: `${w}%` };
+        };
+        const dashTenureBarPct = (count) => {
+            if (!dashData.value) return '0%';
+            const buckets = dashData.value.tenure_buckets || [];
+            let max = 0;
+            buckets.forEach((t) => {
+                if (t.count > max) max = t.count;
+            });
+            const base = max > 0 ? max : 1;
+            return `${Math.min(100, (count / base) * 100)}%`;
+        };
+        /** 花名册整体「按业务」条：宽度相对本表最大离职数 */
+        const dashBusinessBarPct = (departures) => {
+            const list = dashData.value?.by_business;
+            if (!Array.isArray(list) || !list.length) return '0%';
+            let max = 0;
+            list.forEach((b) => {
+                const n = Number(b?.departures ?? 0);
+                if (n > max) max = n;
+            });
+            const base = max > 0 ? max : 1;
+            return `${Math.min(100, (Number(departures) / base) * 100)}%`;
+        };
+
+        /** 与当前看板范围一致：整体=全部离职池行；单一业务=按 client_id 过滤 */
+        const dashboardContextRosterRows = () => {
+            const all = Array.isArray(rows.value) ? rows.value : [];
+            if (dashScope.value !== 'business') return all;
+            const k = String(dashBusinessKey.value ?? '').trim();
+            const opt = businessOptions.value.find((b) => String(b.short_key ?? '').trim() === k);
+            const bid = opt && opt.client_id != null ? opt.client_id : null;
+            // 未解析到 client 时不能用全量 rows 回退，否则单一业务格子里会混入其他客户的离职名单
+            if (bid == null) return [];
+            return all.filter((r) => Number(r.client_id) === Number(bid));
+        };
+        const _lineFromRosterRow = (row) => {
+            const nm = String(row.full_name || '').trim() || '（无姓名）';
+            const dt = normalizeDate(row.company_resign_date);
+            let ymd = String(row.company_resign_date || '').trim() || '—';
+            if (dt && !Number.isNaN(dt.getTime())) {
+                ymd = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+            }
+            const cust = String(row.customer_name || row.business_line || '').trim();
+            const suf = cust ? ` · ${cust}` : '';
+            const detail = `${nm} · 离职日 ${ymd}${suf}`;
+            return { detail, separation: separationDetailLabel(row.zntx_separation_type) };
+        };
+        const buildDepartureLinesFromRosterRows = (year, month) => {
+            const y = Number(year);
+            const m = Number(month);
+            if (!Number.isFinite(y) || !Number.isFinite(m)) return [];
+            const start = new Date(y, m - 1, 1);
+            const end = new Date(y, m, 0, 23, 59, 59, 999);
+            const out = [];
+            dashboardContextRosterRows().forEach((row) => {
+                const dt = normalizeDate(row.company_resign_date);
+                if (!dt || dt < start || dt > end) return;
+                out.push(_lineFromRosterRow(row));
+            });
+            out.sort((a, b) => a.detail.localeCompare(b.detail, 'zh-CN'));
+            return out;
+        };
+        const buildDepartureLinesFromRosterRange = (isoStart, isoEnd) => {
+            const d0 = normalizeDate(isoStart);
+            const d1 = normalizeDate(isoEnd);
+            if (!d0 || !d1) return [];
+            const startMs = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate()).getTime();
+            const endMs = new Date(d1.getFullYear(), d1.getMonth(), d1.getDate(), 23, 59, 59, 999).getTime();
+            const out = [];
+            dashboardContextRosterRows().forEach((row) => {
+                const dt = normalizeDate(row.company_resign_date);
+                if (!dt) return;
+                const t = dt.getTime();
+                if (t < startMs || t > endMs) return;
+                out.push(_lineFromRosterRow(row));
+            });
+            out.sort((a, b) => a.detail.localeCompare(b.detail, 'zh-CN'));
+            return out;
+        };
+        const TURNOVER_DASH_PLACEHOLDER = '（暂无名单：请点「应用」刷新看板，或确认离职日期已填写）';
+        const TURNOVER_BDEP_PLACEHOLDER = '（暂无名单：请点「应用」刷新看板，或确认「离职类型」含业务离职）';
+        const normalizeDepartureItemsForTooltip = (arr) => {
+            if (!Array.isArray(arr) || !arr.length) return [];
+            return arr
+                .map((x) => {
+                    if (x != null && typeof x === 'object' && !Array.isArray(x)) {
+                        const detail = String(x.detail ?? x.text ?? '').trim();
+                        let separation = String(x.separation ?? '').trim();
+                        if (!detail) return null;
+                        if (detail.startsWith('（暂无')) return { detail, separation: '' };
+                        if (!separation) separation = '未标注';
+                        return { detail, separation };
+                    }
+                    const s = String(x).trim();
+                    if (!s) return null;
+                    if (s.startsWith('（暂无')) return { detail: s, separation: '' };
+                    return { detail: s, separation: '未标注' };
+                })
+                .filter(Boolean);
+        };
+        const turnoverDepartureLinesForTooltip = (row) => {
+            const direct = row?.departure_details;
+            if (Array.isArray(direct) && direct.length) {
+                return normalizeDepartureItemsForTooltip(direct.slice());
+            }
+            if (row?.year != null && row?.month != null) {
+                const fb = buildDepartureLinesFromRosterRows(row.year, row.month);
+                if (fb.length) return normalizeDepartureItemsForTooltip(fb);
+            }
+            if (Number(row?.departures) > 0) {
+                return normalizeDepartureItemsForTooltip([TURNOVER_DASH_PLACEHOLDER]);
+            }
+            return [];
+        };
+        const analysisPeriodTooltipLines = () => {
+            const ap = dashData.value?.analysis_period;
+            if (!ap) return [];
+            const direct = ap.departure_details;
+            if (Array.isArray(direct) && direct.length) {
+                return normalizeDepartureItemsForTooltip(direct.slice());
+            }
+            const fb = buildDepartureLinesFromRosterRange(ap.start, ap.end);
+            if (fb.length) return normalizeDepartureItemsForTooltip(fb);
+            if (Number(ap.departures) > 0) {
+                return normalizeDepartureItemsForTooltip([TURNOVER_DASH_PLACEHOLDER]);
+            }
+            return [];
+        };
+        const turnoverOnboardingLinesForTooltip = (row) => {
+            const direct = row?.onboarding_details;
+            if (Array.isArray(direct) && direct.length) {
+                return direct.slice();
+            }
+            if (Number(row?.onboardings) > 0) {
+                return [TURNOVER_ONBOARD_PLACEHOLDER];
+            }
+            return [];
+        };
+        const analysisPeriodOnboardingTooltipLines = () => {
+            const ap = dashData.value?.analysis_period;
+            if (!ap) return [];
+            const direct = ap.onboarding_details;
+            if (Array.isArray(direct) && direct.length) {
+                return direct.slice();
+            }
+            if (Number(ap.onboardings) > 0) {
+                return [TURNOVER_ONBOARD_PLACEHOLDER];
+            }
+            return [];
+        };
+        const turnoverBusinessDepLinesForTooltip = (row) => {
+            const direct = row?.business_departure_details;
+            if (Array.isArray(direct) && direct.length) {
+                return normalizeDepartureItemsForTooltip(direct.slice());
+            }
+            if (Number(row?.business_departures) > 0) {
+                return normalizeDepartureItemsForTooltip([TURNOVER_BDEP_PLACEHOLDER]);
+            }
+            return [];
+        };
+        const isTurnoverDashPlaceholderOnly = (lines) =>
+            Array.isArray(lines)
+            && lines.length === 1
+            && String(lines[0]?.detail ?? lines[0] ?? '') === TURNOVER_DASH_PLACEHOLDER;
+        const isTurnoverOnboardPlaceholderOnly = (lines) =>
+            Array.isArray(lines)
+            && lines.length === 1
+            && String(lines[0]?.detail ?? lines[0] ?? '') === TURNOVER_ONBOARD_PLACEHOLDER;
+        const isTurnoverBdepPlaceholderOnly = (lines) =>
+            Array.isArray(lines)
+            && lines.length === 1
+            && String(lines[0]?.detail ?? lines[0] ?? '') === TURNOVER_BDEP_PLACEHOLDER;
+        const showTurnoverDashTTForMonthRow = (ev, row) => {
+            const lines = turnoverDepartureLinesForTooltip(row);
+            if (!lines.length) return;
+            const n = isTurnoverDashPlaceholderOnly(lines) ? Number(row.departures) || 0 : lines.length;
+            showTurnoverDashTT(ev, `${row.month_label} · 离职 ${n} 人`, lines);
+        };
+        const showTurnoverDashTTForOnboardMonth = (ev, row) => {
+            const lines = turnoverOnboardingLinesForTooltip(row);
+            if (!lines.length) return;
+            const n = isTurnoverOnboardPlaceholderOnly(lines) ? Number(row.onboardings) || 0 : lines.length;
+            showTurnoverDashTT(ev, `${row.month_label} · 入职 ${n} 人`, lines, { onboarding: true });
+        };
+        const showTurnoverDashTTForMonthBusinessDep = (ev, row) => {
+            const lines = turnoverBusinessDepLinesForTooltip(row);
+            if (!lines.length) return;
+            const n = isTurnoverBdepPlaceholderOnly(lines) ? Number(row.business_departures) || 0 : lines.length;
+            showTurnoverDashTT(ev, `${row.month_label} · 业务离职 ${n} 人`, lines);
+        };
+        const showTurnoverDashTTForAnalysisPeriod = (ev) => {
+            const lines = analysisPeriodTooltipLines();
+            if (!lines.length) return;
+            const ap = dashData.value?.analysis_period;
+            const n = isTurnoverDashPlaceholderOnly(lines) ? Number(ap?.departures) || 0 : lines.length;
+            showTurnoverDashTT(ev, `分析期内离职 ${n} 人`, lines);
+        };
+        const showTurnoverDashTTForAnalysisOnboarding = (ev) => {
+            const lines = analysisPeriodOnboardingTooltipLines();
+            if (!lines.length) return;
+            const ap = dashData.value?.analysis_period;
+            const n = isTurnoverOnboardPlaceholderOnly(lines) ? Number(ap?.onboardings) || 0 : lines.length;
+            showTurnoverDashTT(ev, `分析期内入职 ${n} 人`, lines, { onboarding: true });
+        };
+
+        const loadDashboard = async () => {
+            dashLoading.value = true;
+            dashError.value = '';
+            try {
+                await loadRows();
+                const params = new URLSearchParams();
+                params.set('scope', dashScope.value);
+                if (dashScope.value === 'business' && dashBusinessKey.value) {
+                    params.set('business_key', dashBusinessKey.value);
+                }
+                params.set('trend_months', String(dashTrendMonths.value));
+                if (dashPeriodStart.value) params.set('period_start', dashPeriodStart.value);
+                if (dashPeriodEnd.value) params.set('period_end', dashPeriodEnd.value);
+                const r = await fetch(`/api/roster/turnover/dashboard?${params.toString()}`, {
+                    headers: window.crmAuthHeader(),
+                });
+                if (!r.ok) {
+                    let msg = `加载失败（HTTP ${r.status}）`;
+                    try {
+                        const err = await r.json();
+                        if (typeof err.detail === 'string') msg = err.detail;
+                    } catch (e) {}
+                    dashError.value = msg;
+                    dashData.value = null;
+                    return;
+                }
+                const j = await r.json();
+                /** 兼容旧版 API 未带 separation.transfer 时，转出「占比」在 0 人、期内有离职时补 0%。占比分母为同期总离职数。 */
+                if (j && j.separation && typeof j.separation === 'object') {
+                    const depN = j.analysis_period && Number(j.analysis_period.departures);
+                    const canShare = Number.isFinite(depN) && depN > 0;
+                    if (j.separation.transfer == null) {
+                        j.separation.transfer = { count: 0, rate_pct: canShare ? 0 : null };
+                    } else if (
+                        j.separation.transfer.count === 0
+                        && j.separation.transfer.rate_pct == null
+                        && canShare
+                    ) {
+                        j.separation.transfer.rate_pct = 0;
+                    }
+                }
+                dashData.value = j;
+                if (Array.isArray(j.business_options) && j.business_options.length) {
+                    businessOptions.value = j.business_options;
+                    const keys = new Set(j.business_options.map((b) => b.short_key));
+                    if (!dashBusinessKey.value || !keys.has(dashBusinessKey.value)) {
+                        dashBusinessKey.value = j.business_options[0].short_key;
+                    }
+                }
+            } catch (e) {
+                dashError.value = '网络错误';
+                dashData.value = null;
+            } finally {
+                dashLoading.value = false;
+            }
+        };
+        const openDashboard = () => {
+            const { start, end } = defaultDashboardAnalysisPeriod();
+            dashPeriodStart.value = start;
+            dashPeriodEnd.value = end;
+            showDashboard.value = true;
+            loadDashboard();
+        };
+        const resetDashboardFilters = () => {
+            dashScope.value = 'department';
+            dashTrendMonths.value = 12;
+            const { start, end } = defaultDashboardAnalysisPeriod();
+            dashPeriodStart.value = start;
+            dashPeriodEnd.value = end;
+            if (Array.isArray(businessOptions.value) && businessOptions.value.length) {
+                dashBusinessKey.value = businessOptions.value[0].short_key;
+            } else {
+                dashBusinessKey.value = '';
+            }
+            loadDashboard();
+        };
+        const closeDashboard = () => {
+            showDashboard.value = false;
+            clearTurnoverDashTTHide();
+            turnoverDashTT.visible = false;
+            turnoverDashTT.items = [];
+            turnoverDashTT.title = '';
+            turnoverDashTT.hovering = false;
+        };
+        const onDashScopeChange = () => {
+            if (dashScope.value === 'business' && businessOptions.value.length && !dashBusinessKey.value) {
+                dashBusinessKey.value = businessOptions.value[0].short_key;
+            }
+        };
 
         const loadRows = async () => {
             loading.value = true;
@@ -827,6 +1742,13 @@ createApp({
             isRowChecked, setRowChecked, toggleShowCheckedOnly,
             totalCompensation, totalQuote, totalProfit, totalProfitRate, formatAmount,
             fileInput, triggerImport, onImportFile, exportCsv, restoreLatestBackup,
+            showDashboard, dashLoading, dashError, dashData, dashScope, dashBusinessKey, dashTrendMonths,
+            dashPeriodStart, dashPeriodEnd, businessOptions,
+            turnoverDashTT,
+            showTurnoverDashTT, showTurnoverDashTTForMonthRow, showTurnoverDashTTForOnboardMonth, showTurnoverDashTTForMonthBusinessDep, showTurnoverDashTTForAnalysisPeriod, showTurnoverDashTTForAnalysisOnboarding,
+            moveTurnoverDashTT, hideTurnoverDashTT, onTurnoverDashTTEnter, onTurnoverDashTTLeave,
+            openDashboard, closeDashboard, loadDashboard, resetDashboardFilters, onDashScopeChange, dashTrendRollingShareText, dashTrendRollingShareBarStyle, monthlyRateCell, dashTenureBarPct, dashBusinessBarPct,
+            turnoverDepartureLinesForTooltip, analysisPeriodTooltipLines,
             showAddModal, addForm, addSaving, addFormReadonly, addTenurePreview, openAddForm, closeAddForm, saveAddForm,
             openDetail, openEdit, removeRow,
             showLogs, logsLoading, logs, openLogs, closeLogs, formatDate,

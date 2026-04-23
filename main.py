@@ -7,15 +7,17 @@ import csv
 import io
 import socket
 import unicodedata
+from collections import Counter
 from urllib.parse import quote
-from datetime import datetime, timedelta
+from calendar import monthrange
+from datetime import datetime, timedelta, date
 from typing import List, Optional, Any, Dict, Tuple
 from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File, status, Body
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Float, desc, or_, not_
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Float, desc, or_, not_, and_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -1192,6 +1194,7 @@ ROSTER_CUSTOMER_ALIAS_RULES: Tuple[Tuple[str, str], ...] = (
     ("华勤", "华勤科技"),
     ("帷幄", "帷幄科技"),
     ("日产", "日产中国"),
+    ("元枢", "元枢智汇"),
 )
 
 
@@ -1858,6 +1861,541 @@ async def roster_turnover_list(db: Session = Depends(get_db), user: str = Depend
     """离职率分析专用列表（仅 employment 含「离职」的行）。"""
     rows = _roster_entries_turnover_pool(db)
     return [_roster_entry_to_dict(r) for r in rows]
+
+
+def _roster_distinct_client_ids(db: Session) -> List[int]:
+    """花名册中出现过的客户（roster_entries.client_id 去重），与整体/分客户花名册数据来源一致。"""
+    rows = (
+        db.query(RosterEntry.client_id)
+        .filter(RosterEntry.client_id.isnot(None), RosterEntry.client_id > 0)
+        .distinct()
+        .all()
+    )
+    return sorted({int(r[0]) for r in rows if r[0] is not None})
+
+
+def _dashboard_business_options(db: Session) -> List[Dict[str, Any]]:
+    opts: List[Dict[str, Any]] = []
+    for cid in _roster_distinct_client_ids(db):
+        c = db.query(Client).filter(Client.id == cid).first()
+        if not c:
+            continue
+        short = (c.name or "").strip()
+        for kw, full in ROSTER_CUSTOMER_ALIAS_RULES:
+            if full == c.name:
+                short = kw
+                break
+        opts.append({"client_id": cid, "label": (c.name or "").strip(), "short_key": short})
+    opts.sort(key=lambda x: x["label"])
+    return opts
+
+
+def _dashboard_scope_client_ids(
+    db: Session, scope: str, business_key: str
+) -> Tuple[List[int], str]:
+    roster_cids = _roster_distinct_client_ids(db)
+    sk = str(business_key or "").strip()
+    if str(scope or "").strip().lower() == "business" and sk:
+        c, _ = _resolve_roster_customer_client(db, sk)
+        if not c:
+            raise HTTPException(
+                status_code=400,
+                detail="未识别客户，请使用与花名册「客户」列一致的简称或「客户管理」中的全称",
+            )
+        if c.id not in set(roster_cids):
+            raise HTTPException(status_code=400, detail="花名册中尚无该客户的数据")
+        return [c.id], (c.name or "").strip() or sk
+    return roster_cids, "整体客户"
+
+
+def _roster_entries_for_client_ids(db: Session, client_ids: List[int]) -> List[RosterEntry]:
+    if not client_ids:
+        return []
+    return (
+        db.query(RosterEntry)
+        .filter(RosterEntry.client_id.in_(client_ids))
+        .order_by(RosterEntry.id)
+        .all()
+    )
+
+
+def _roster_entries_for_business_scope(db: Session, client_ids: List[int]) -> List[RosterEntry]:
+    """单一业务看板：该客户下全部行，加上 client 未绑但「客户」可解析为同一客户的离职档案行。
+
+    与整体看板类似，避免离职导入为 client_id=0 时，单一业务下分子恒为 0、分母却含已绑行。"""
+    if not client_ids:
+        return []
+    target_id = int(client_ids[0])
+    by_id: Dict[int, RosterEntry] = {e.id: e for e in _roster_entries_for_client_ids(db, client_ids)}
+    orphan_turnover = and_(
+        or_(RosterEntry.client_id.is_(None), RosterEntry.client_id == 0),
+        _sql_roster_employment_left(),
+    )
+    for r in db.query(RosterEntry).filter(orphan_turnover).order_by(RosterEntry.id).all():
+        if r.id in by_id:
+            continue
+        c, _ = _resolve_roster_customer_client(db, r.customer_name or "")
+        if c and c.id == target_id:
+            by_id[r.id] = r
+    return sorted(by_id.values(), key=lambda e: e.id)
+
+
+def _roster_entries_department_dashboard(db: Session) -> List[RosterEntry]:
+    """花名册整体看板：已关联客户的全部行 + client_id 未绑定的离职档案行。
+
+    ``_roster_distinct_client_ids`` 会排除 ``client_id`` 为空/0 的行；这些行仍会出现在
+    ``/api/roster/turnover`` 列表中，若不在此并入，会出现「整体看板离职数少于列表」。"""
+    roster_cids = _roster_distinct_client_ids(db)
+    orphan_turnover = and_(
+        or_(RosterEntry.client_id.is_(None), RosterEntry.client_id == 0),
+        _sql_roster_employment_left(),
+    )
+    filt = or_(RosterEntry.client_id.in_(roster_cids), orphan_turnover) if roster_cids else orphan_turnover
+    return db.query(RosterEntry).filter(filt).order_by(RosterEntry.id).all()
+
+
+def _row_is_turnover_pool(r: RosterEntry) -> bool:
+    st = str(r.employment_status or "")
+    return "离职" in st
+
+
+def _employed_on_date_row(r: RosterEntry, d: date) -> bool:
+    """某日是否计为在职（计头计尾：离职日当天仍计为在职）。无入职日期的行不计入分母。"""
+    entry_d = _parse_loose_date(str(r.entry_date or ""))
+    if not entry_d:
+        return False
+    if d < entry_d:
+        return False
+    resign_d = _parse_loose_date(str(r.company_resign_date or ""))
+    if resign_d and d > resign_d:
+        return False
+    return True
+
+
+def _headcount_on_date(rows: List[RosterEntry], d: date) -> int:
+    return sum(1 for r in rows if _employed_on_date_row(r, d))
+
+
+def _avg_headcount_period(rows: List[RosterEntry], d0: date, d1: date) -> Tuple[float, int, int]:
+    h0 = _headcount_on_date(rows, d0)
+    h1 = _headcount_on_date(rows, d1)
+    return (h0 + h1) / 2.0, h0, h1
+
+
+def _departure_events_in_range(rows: List[RosterEntry], d0: date, d1: date) -> List[RosterEntry]:
+    out: List[RosterEntry] = []
+    for r in rows:
+        if not _row_is_turnover_pool(r):
+            continue
+        rd = _parse_loose_date(str(r.company_resign_date or ""))
+        if not rd:
+            continue
+        if d0 <= rd <= d1:
+            out.append(r)
+    return out
+
+
+def _onboarding_events_in_range(rows: List[RosterEntry], d0: date, d1: date) -> List[RosterEntry]:
+    """按入职日期（entry_date）落在 [d0, d1] 内计数，与看板范围 rows_all 一致（含在职池与离职档案行）。"""
+    out: List[RosterEntry] = []
+    for r in rows:
+        ed = _parse_loose_date(str(r.entry_date or ""))
+        if not ed:
+            continue
+        if d0 <= ed <= d1:
+            out.append(r)
+    return out
+
+
+def _classify_separation_kind(raw: str) -> str:
+    """看板统计：主动 / 被动 / 转出 / 未标注（关键词顺序：转出、被动、主动）。"""
+    s = str(raw or "")
+    if "转出" in s:
+        return "transfer"
+    if "被动" in s:
+        return "passive"
+    if "主动" in s:
+        return "active"
+    return "unknown"
+
+
+def _zntx_is_business_termination_type(raw: Optional[str]) -> bool:
+    """花名册整体看板用：「离职类型」列含「业务离职」的离职事件（与主/被动/转出可并存、独立计数）。"""
+    return "业务离职" in str(raw or "")
+
+
+def _departure_business_termination_subset(rows: List[RosterEntry]) -> List[RosterEntry]:
+    return [r for r in rows if _zntx_is_business_termination_type(r.zntx_separation_type)]
+
+
+def _tenure_days_at_resign(r: RosterEntry) -> Optional[int]:
+    entry_d = _parse_loose_date(str(r.entry_date or ""))
+    resign_d = _parse_loose_date(str(r.company_resign_date or ""))
+    if not entry_d or not resign_d:
+        return None
+    return (resign_d - entry_d).days
+
+
+def _tenure_exclusive_bucket(days: Optional[int]) -> str:
+    if days is None:
+        return "入职/离职日期缺失"
+    if days < 0:
+        return "日期异常"
+    if days <= 7:
+        return "入职1周内"
+    if days <= 14:
+        return "入职2周内"
+    if days <= 30:
+        return "入职1月内"
+    if days <= 90:
+        return "入职3月内"
+    if days <= 180:
+        return "入职半年内"
+    if days <= 365:
+        return "入职1年内"
+    return "入职1年及以上"
+
+
+def _last_day_of_month(y: int, m: int) -> date:
+    return date(y, m, monthrange(y, m)[1])
+
+
+def _trend_month_row_is_idle(row: Dict[str, Any]) -> bool:
+    """各月无离职、无入职、平均在职为 0：可自趋势表首尾裁掉，减少成片的空行。"""
+    d = int(row.get("departures") or 0)
+    o = int(row.get("onboardings") or 0)
+    av = float(row.get("avg_headcount") or 0)
+    return d == 0 and o == 0 and av < 0.0001
+
+
+def _trim_trend_idle_edges(monthly: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if not monthly:
+        return monthly
+    n = len(monthly)
+    i, j = 0, n - 1
+    while i < n and _trend_month_row_is_idle(monthly[i]):
+        i += 1
+    while j >= i and _trend_month_row_is_idle(monthly[j]):
+        j -= 1
+    if i > j:
+        return [monthly[-1]]
+    return monthly[i : j + 1]
+
+
+def _first_day_n_months_before(today: date, months_back: int) -> date:
+    y, m = today.year, today.month
+    for _ in range(months_back):
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    return date(y, m, 1)
+
+
+def _parse_dashboard_date(raw: Optional[str]) -> Optional[date]:
+    if not raw:
+        return None
+    s = str(raw).strip()
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except Exception:
+            return None
+    pd = _parse_loose_date(s)
+    return pd if isinstance(pd, date) else None
+
+
+def _norm_pos_loc(val: str, fallback: str = "(未填)") -> str:
+    s = str(val or "").strip()
+    return s if s else fallback
+
+
+def _departures_by_business_department(
+    db: Session, deps_p: List[RosterEntry]
+) -> List[Dict[str, Any]]:
+    """花名册整体：按客户/业务名汇总同期离职人数。优先用 client_id 对应客户名，否则用「客户」列。"""
+    if not deps_p:
+        return []
+    cids = {int(r.client_id) for r in deps_p if r.client_id and int(r.client_id) > 0}
+    id_to_name: Dict[int, str] = {}
+    if cids:
+        for c in db.query(Client).filter(Client.id.in_(cids)).all():
+            id_to_name[c.id] = (c.name or "").strip() or f"客户#{c.id}"
+    cnt = Counter()
+    for r in deps_p:
+        cid = r.client_id
+        if cid and int(cid) > 0 and int(cid) in id_to_name:
+            label = id_to_name[int(cid)]
+        else:
+            cn = str(r.customer_name or "").strip()
+            label = cn if cn else "(未绑客户)"
+        cnt[label] += 1
+    return [
+        {"dimension": lab, "departures": n}
+        for lab, n in sorted(cnt.items(), key=lambda x: (-x[1], x[0]))
+    ]
+
+
+def _separation_detail_label(raw: Optional[str]) -> str:
+    """悬停名单右侧标签：转出 / 被动 / 主动 / 未标注（与统计口径分流可并存）。"""
+    s = str(raw or "")
+    if "转出" in s:
+        return "转出"
+    if "被动" in s:
+        return "被动"
+    if "主动" in s:
+        return "主动"
+    return "未标注"
+
+
+def _departure_detail_entries(rows: List[RosterEntry]) -> List[Dict[str, str]]:
+    """看板悬停展示：按离职日、姓名排序；每人含名单文案与主动/被动/转出标签。"""
+
+    def _sort_key(r: RosterEntry) -> Tuple[date, str]:
+        rd = _parse_loose_date(str(r.company_resign_date or ""))
+        return (rd if isinstance(rd, date) else date.min, str(r.full_name or ""))
+
+    out: List[Dict[str, str]] = []
+    for r in sorted(rows, key=_sort_key):
+        nm = str(r.full_name or "").strip() or "（无姓名）"
+        rd = _parse_loose_date(str(r.company_resign_date or ""))
+        ds = rd.isoformat() if isinstance(rd, date) else str(r.company_resign_date or "").strip() or "—"
+        cust = str(r.customer_name or r.business_line or "").strip()
+        suf = f" · {cust}" if cust else ""
+        out.append(
+            {
+                "detail": f"{nm} · 离职日 {ds}{suf}",
+                "separation": _separation_detail_label(r.zntx_separation_type),
+            }
+        )
+    return out
+
+
+def _onboarding_detail_entries(rows: List[RosterEntry]) -> List[Dict[str, str]]:
+    """看板悬停：按入职日、姓名排序。"""
+
+    def _sort_key(r: RosterEntry) -> Tuple[date, str]:
+        ed = _parse_loose_date(str(r.entry_date or ""))
+        return (ed if isinstance(ed, date) else date.min, str(r.full_name or ""))
+
+    out: List[Dict[str, str]] = []
+    for r in sorted(rows, key=_sort_key):
+        nm = str(r.full_name or "").strip() or "（无姓名）"
+        ed = _parse_loose_date(str(r.entry_date or ""))
+        ds = ed.isoformat() if isinstance(ed, date) else str(r.entry_date or "").strip() or "—"
+        cust = str(r.customer_name or r.business_line or "").strip()
+        suf = f" · {cust}" if cust else ""
+        out.append({"detail": f"{nm} · 入职日 {ds}{suf}", "separation": ""})
+    return out
+
+
+@app.get("/api/roster/turnover/dashboard")
+async def roster_turnover_dashboard(
+    scope: str = "department",
+    business_key: str = "",
+    trend_months: int = 12,
+    period_start: str = "",
+    period_end: str = "",
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    """
+    离职率分析看板：分子为期内离职人数（离职档案行且离职日期落在区间内）；
+    分母为（期初在职+期末在职）/2；在职按花名册行入职/离职日推断，无入职日期的行不计入分母。
+    """
+    tm = max(1, min(int(trend_months or 12), 36))
+    client_ids, scope_title = _dashboard_scope_client_ids(db, scope, business_key)
+    if str(scope or "").strip().lower() == "business":
+        rows_all = _roster_entries_for_business_scope(db, client_ids)
+    else:
+        rows_all = _roster_entries_department_dashboard(db)
+    today = date.today()
+
+    ps = _parse_dashboard_date(period_start)
+    pe = _parse_dashboard_date(period_end)
+    if not ps or not pe:
+        first_this = today.replace(day=1)
+        pe = first_this - timedelta(days=1)
+        ps = pe.replace(day=1)
+    if pe < ps:
+        raise HTTPException(status_code=400, detail="统计结束日期不能早于开始日期")
+
+    avg_p, h0_p, h1_p = _avg_headcount_period(rows_all, ps, pe)
+    deps_p = _departure_events_in_range(rows_all, ps, pe)
+    dep_n = len(deps_p)
+    bdeps_p = _departure_business_termination_subset(deps_p)
+    bdep_n = len(bdeps_p)
+    bdep_rate_p = round((bdep_n / avg_p) * 100, 2) if avg_p > 0 else None
+    onb_p = _onboarding_events_in_range(rows_all, ps, pe)
+    onb_n = len(onb_p)
+    rate_p = round((dep_n / avg_p) * 100, 2) if avg_p > 0 else None
+
+    sep_counts = {"active": 0, "passive": 0, "transfer": 0, "unknown": 0}
+    tenure_bucket_counts: Dict[str, int] = {}
+    for r in deps_p:
+        sep_counts[_classify_separation_kind(str(r.zntx_separation_type or ""))] += 1
+        b = _tenure_exclusive_bucket(_tenure_days_at_resign(r))
+        tenure_bucket_counts[b] = tenure_bucket_counts.get(b, 0) + 1
+
+    # 主动/被动/转出/未标注 占比分母 = 同期总离职人数 dep_n（与主 KPI「离职数」相同）
+    sep_rates = {
+        k: (round((v / dep_n) * 100, 2) if dep_n > 0 else None) for k, v in sep_counts.items()
+    }
+
+    tenure_order = [
+        "入职1周内",
+        "入职2周内",
+        "入职1月内",
+        "入职3月内",
+        "入职半年内",
+        "入职1年内",
+        "入职1年及以上",
+        "入职/离职日期缺失",
+        "日期异常",
+    ]
+    tenure_buckets = [{"label": lab, "count": tenure_bucket_counts.get(lab, 0)} for lab in tenure_order]
+
+    trend_start = _first_day_n_months_before(today, tm - 1)
+    monthly: List[Dict[str, Any]] = []
+    y, m = trend_start.year, trend_start.month
+    while date(y, m, 1) <= date(today.year, today.month, 1):
+        ms = date(y, m, 1)
+        me = _last_day_of_month(y, m)
+        avg_m, hs, he = _avg_headcount_period(rows_all, ms, me)
+        dm = _departure_events_in_range(rows_all, ms, me)
+        bdm = _departure_business_termination_subset(dm)
+        bdep_rate_m = round((len(bdm) / avg_m) * 100, 2) if avg_m > 0 else None
+        om = _onboarding_events_in_range(rows_all, ms, me)
+        if avg_m > 0:
+            rate_m = round((len(dm) / avg_m) * 100, 2)
+        else:
+            # 分母 0 且无离职时返回 0.0，前端不再成片「—」；有离职而仍无分母为异常保持 None
+            rate_m = 0.0 if len(dm) == 0 else None
+        monthly.append(
+            {
+                "year": y,
+                "month": m,
+                "month_key": f"{y:04d}-{m:02d}",
+                "month_label": f"{y}年{m}月",
+                "period_start": ms.isoformat(),
+                "period_end": me.isoformat(),
+                "departures": len(dm),
+                "departure_details": _departure_detail_entries(dm),
+                "business_departures": len(bdm),
+                "business_departure_details": _departure_detail_entries(bdm),
+                "business_departure_rate_pct": bdep_rate_m,
+                "onboardings": len(om),
+                "onboarding_details": _onboarding_detail_entries(om),
+                "headcount_start": hs,
+                "headcount_end": he,
+                "avg_headcount": round(avg_m, 2),
+                "rate_pct": rate_m,
+            }
+        )
+        if m == 12:
+            y, m = y + 1, 1
+        else:
+            m += 1
+
+    monthly = _trim_trend_idle_edges(monthly)
+
+    by_business: List[Dict[str, Any]] = []
+    if str(scope or "").strip().lower() == "department":
+        by_business = _departures_by_business_department(db, deps_p)
+
+    by_position: List[Dict[str, Any]] = []
+    by_city: List[Dict[str, Any]] = []
+    if str(scope or "").strip().lower() == "business" and client_ids:
+
+        def _norm_city(val: str) -> str:
+            return _norm_pos_loc(val, "(未填工作地)")
+
+        pos_keys: set = set()
+        for r in deps_p:
+            pos_keys.add(_norm_pos_loc(r.position_title))
+        for r in rows_all:
+            if _employed_on_date_row(r, ps) or _employed_on_date_row(r, pe):
+                pos_keys.add(_norm_pos_loc(r.position_title))
+        for pk in sorted(pos_keys, key=lambda x: (x == "(未填)", x)):
+            rows_p = [r for r in rows_all if _norm_pos_loc(r.position_title) == pk]
+            avg_x, _, _ = _avg_headcount_period(rows_p, ps, pe)
+            dep_x = [r for r in deps_p if _norm_pos_loc(r.position_title) == pk]
+            rate_x = round((len(dep_x) / avg_x) * 100, 2) if avg_x > 0 else None
+            by_position.append(
+                {
+                    "dimension": pk,
+                    "departures": len(dep_x),
+                    "avg_headcount": round(avg_x, 2),
+                    "rate_pct": rate_x,
+                }
+            )
+        city_keys: set = set()
+        for r in deps_p:
+            city_keys.add(_norm_city(r.work_location))
+        for r in rows_all:
+            if _employed_on_date_row(r, ps) or _employed_on_date_row(r, pe):
+                city_keys.add(_norm_city(r.work_location))
+        for ck in sorted(city_keys, key=lambda x: (x == "(未填工作地)", x)):
+            rows_c = [r for r in rows_all if _norm_city(r.work_location) == ck]
+            avg_c, _, _ = _avg_headcount_period(rows_c, ps, pe)
+            dep_c = [r for r in deps_p if _norm_city(r.work_location) == ck]
+            rate_c = round((len(dep_c) / avg_c) * 100, 2) if avg_c > 0 else None
+            by_city.append(
+                {
+                    "dimension": ck,
+                    "departures": len(dep_c),
+                    "avg_headcount": round(avg_c, 2),
+                    "rate_pct": rate_c,
+                }
+            )
+
+    rows_denominator_base = len([r for r in rows_all if _parse_loose_date(str(r.entry_date or ""))])
+    footnote = (
+        "离职率 = 期内离职人数（离职档案且离职日期落在区间内）÷ 期内平均在职人数；"
+        "平均在职 =（期初日在职 + 期末日在职）/2；在职按入职日、离职日推断，离职日当日仍计为在职；"
+        "各月「入职」= 当月内入职日期落在该自然月的花名册行数（与上方面向范围一致）；"
+        f"当前范围内花名册共 {len(rows_all)} 行，其中 {rows_denominator_base} 行有入职日期可参与分母。"
+    )
+    if str(scope or "").strip().lower() == "department":
+        footnote += (
+            " 整体客户看板中「业务离职」= 上述同期离职记录里，「离职类型」含「业务离职」者；"
+            "与主动/被动/转出分类独立展示，可重叠。"
+        )
+
+    return {
+        "scope": str(scope or "department"),
+        "scope_title": scope_title,
+        "business_options": _dashboard_business_options(db),
+        "footnote": footnote,
+        "analysis_period": {
+            "start": ps.isoformat(),
+            "end": pe.isoformat(),
+            "departures": dep_n,
+            "departure_details": _departure_detail_entries(deps_p),
+            "business_departures": bdep_n,
+            "business_departure_details": _departure_detail_entries(bdeps_p),
+            "business_departure_rate_pct": bdep_rate_p,
+            "onboardings": onb_n,
+            "onboarding_details": _onboarding_detail_entries(onb_p),
+            "headcount_start": h0_p,
+            "headcount_end": h1_p,
+            "avg_headcount": round(avg_p, 2),
+            "rate_pct": rate_p,
+        },
+        "separation": {
+            "active": {"count": sep_counts["active"], "rate_pct": sep_rates["active"]},
+            "passive": {"count": sep_counts["passive"], "rate_pct": sep_rates["passive"]},
+            "transfer": {"count": sep_counts["transfer"], "rate_pct": sep_rates["transfer"]},
+            "unknown": {"count": sep_counts["unknown"], "rate_pct": sep_rates["unknown"]},
+        },
+        "tenure_buckets": tenure_buckets,
+        "monthly_trend": monthly,
+        "trend_months": tm,
+        "by_business": by_business,
+        "by_position": by_position,
+        "by_city": by_city,
+    }
 
 
 @app.post("/api/clients/{client_id}/roster")

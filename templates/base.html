@@ -202,8 +202,8 @@
         select.crm-form-control {
             appearance: none;
         }
-        /* 兜底：未迁移到统一类的普通下拉框，也保持与单行文本框同高 */
-        select:not([multiple]):not([size]):not(.crm-form-control) {
+        /* 兜底：未迁移到统一类的普通下拉框，也保持与单行文本框同高（筛选用 .crm-filter-control 已由下方 2.25rem 约束） */
+        select:not([multiple]):not([size]):not(.crm-form-control):not(.crm-filter-control) {
             min-height: 2.5rem;
             line-height: 1.5rem;
             box-sizing: border-box;
@@ -280,6 +280,66 @@
             color: #1f2937;
             outline: none;
             text-align: right;
+        }
+        /*
+         * Tailwind CDN 的 Preflight 会在其后注入，易打乱表单控件高度。
+         * 筛选条内 select / input 统一为 2.25rem（与 .crm-filter-control 设计值一致）。
+         */
+        .crm-filter-row select.crm-filter-control {
+            height: 2.25rem !important;
+            min-height: 2.25rem !important;
+            max-height: 2.25rem !important;
+            line-height: 1.1 !important;
+            padding-top: 0.375rem !important;
+            padding-bottom: 0.375rem !important;
+            box-sizing: border-box !important;
+        }
+        .crm-filter-row input.crm-filter-control {
+            height: 2.25rem !important;
+            min-height: 2.25rem !important;
+            max-height: 2.25rem !important;
+            line-height: 1.1 !important;
+            padding-top: 0.375rem !important;
+            padding-bottom: 0.375rem !important;
+            box-sizing: border-box !important;
+        }
+        .crm-filter-row input.crm-filter-control[type='search']::-webkit-search-cancel-button {
+            -webkit-appearance: none;
+            appearance: none;
+            display: none;
+        }
+        .crm-filter-row input.crm-filter-control[type='number'] {
+            -moz-appearance: textfield;
+        }
+        .crm-filter-row input.crm-filter-control[type='number']::-webkit-outer-spin-button,
+        .crm-filter-row input.crm-filter-control[type='number']::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .crm-filter-row .crm-filter-date {
+            height: 2.25rem !important;
+            min-height: 2.25rem !important;
+            max-height: 2.25rem !important;
+            overflow: hidden;
+        }
+        .crm-filter-row .crm-filter-date-input[type='date'] {
+            height: 2.25rem !important;
+            max-height: 2.25rem !important;
+            min-height: 0 !important;
+            line-height: 1.1 !important;
+            padding-top: 0 !important;
+            padding-bottom: 0 !important;
+            flex: 1 1 0;
+            min-width: 0;
+            align-self: stretch;
+        }
+        .crm-filter-row .crm-filter-date-input[type='date']::-webkit-datetime-edit-fields-wrapper {
+            padding: 0;
+        }
+        .crm-filter-row .crm-filter-date-input[type='date']::-webkit-calendar-picker-indicator {
+            margin: 0 0 0 0.125rem;
+            padding: 0;
+            scale: 0.92;
         }
     </style>
 </head>
