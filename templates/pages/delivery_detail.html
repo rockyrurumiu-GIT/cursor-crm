@@ -2172,6 +2172,7 @@ createApp({
         const handbookMediaRef = ref(null);
         const handbookPlyrInstance = ref(null);
         const handbookReaderPipBrowseMode = ref(false);
+        const handbookPendingMediaSeek = ref(null);
         const handbookMetaModalOpen = ref(false);
         const handbookMetaForm = reactive({
             id: null,
@@ -3529,6 +3530,12 @@ createApp({
             }
             handbookPlyrInstance.value = inst;
         };
+        const flushHandbookPendingMediaSeek = () => {
+            const seconds = handbookPendingMediaSeek.value;
+            if (seconds === null || seconds === undefined) return;
+            handbookPendingMediaSeek.value = null;
+            setTimeout(() => seekHandbookMedia(seconds), 120);
+        };
         watch(handbookReaderRow, async (row) => {
             handbookReaderPipBrowseMode.value = false;
             destroyHandbookPlyr();
@@ -3536,6 +3543,7 @@ createApp({
             await nextTick();
             await nextTick();
             initHandbookPlyrForOpenRow();
+            flushHandbookPendingMediaSeek();
         });
         const restoreHandbookReaderFromPipBrowse = async () => {
             handbookReaderPipBrowseMode.value = false;
@@ -3551,9 +3559,12 @@ createApp({
             const x = Number(row && row.client_id);
             return Number.isFinite(x) && x > 0 ? x : clientId;
         };
-        const openHandbookReader = async (row) => {
+        const openHandbookReader = async (row, opts = {}) => {
             handbookReaderRow.value = row;
-            handbookReaderPdfPage.value = 1;
+            handbookReaderPdfPage.value = Math.max(1, Number(opts.page) || 1);
+            if ((row.media_kind === 'video' || row.media_kind === 'audio') && opts.seconds !== undefined && opts.seconds !== null) {
+                handbookPendingMediaSeek.value = Math.max(0, Number(opts.seconds) || 0);
+            }
             const po = row.pdf_outline;
             const cid = handbookRowClientId(row);
             if (row.media_kind === 'pdf' && (!Array.isArray(po) || !po.length)) {
@@ -3573,6 +3584,9 @@ createApp({
                         if (cid === clientId) await loadHandbooks();
                     }
                 } catch (e) { /* ignore */ }
+            }
+            if (row.media_kind === 'pdf' && opts.page) {
+                handbookReaderPdfPage.value = Math.max(1, Number(opts.page) || 1);
             }
         };
         const closeHandbookReader = () => {
@@ -3595,6 +3609,54 @@ createApp({
                 try {
                     el.play();
                 } catch (e) { /* ignore */ }
+            }
+        };
+        const openHandbookSource = async (source) => {
+            if (moduleKey !== 'handbook' || !source) return false;
+            const cid = Number(source.client_id);
+            if (Number.isFinite(cid) && cid > 0 && cid !== clientId) return false;
+            const hid = Number(source.handbook_id || source.id || source.handbook_id);
+            if (!Number.isFinite(hid) || hid <= 0) return false;
+            if (!handbookFiles.value.length) await loadHandbooks();
+            let row = handbookFiles.value.find((x) => Number(x.id) === hid);
+            if (!row) {
+                await loadHandbooks();
+                row = handbookFiles.value.find((x) => Number(x.id) === hid);
+            }
+            if (!row) return false;
+            await openHandbookReader(row, {
+                page: source.page,
+                seconds: source.seconds,
+            });
+            if (row.media_kind === 'pdf' && source.page) {
+                setHandbookPdfPage(source.page);
+            } else if ((row.media_kind === 'video' || row.media_kind === 'audio') && source.seconds !== undefined && source.seconds !== null) {
+                handbookPendingMediaSeek.value = Math.max(0, Number(source.seconds) || 0);
+                await nextTick();
+                await nextTick();
+                flushHandbookPendingMediaSeek();
+            }
+            return true;
+        };
+        const openHandbookSourceFromUrl = async () => {
+            if (moduleKey !== 'handbook') return;
+            const params = new URLSearchParams(window.location.search || '');
+            const hid = Number(params.get('handbook_id') || params.get('handbookId') || '');
+            if (!Number.isFinite(hid) || hid <= 0) return;
+            const opened = await openHandbookSource({
+                client_id: clientId,
+                handbook_id: hid,
+                page: params.get('page') || undefined,
+                seconds: params.get('seconds') || undefined,
+            });
+            if (opened) {
+                params.delete('handbook_id');
+                params.delete('handbookId');
+                params.delete('page');
+                params.delete('seconds');
+                const qs = params.toString();
+                const newUrl = window.location.pathname + (qs ? `?${qs}` : '') + (window.location.hash || '');
+                window.history.replaceState({}, '', newUrl);
             }
         };
         const openHandbookMetaModal = (f) => {
@@ -3841,12 +3903,17 @@ createApp({
             }
             if (moduleKey === 'handbook') {
                 await loadHandbooks();
+                window.crmOpenHandbookSource = openHandbookSource;
+                await openHandbookSourceFromUrl();
             }
         });
         onBeforeUnmount(() => {
             document.removeEventListener('click', handleDocumentClick);
             document.removeEventListener('focusin', handleDocumentFocusIn);
             document.removeEventListener('keydown', onHandbookReaderEscape);
+            if (window.crmOpenHandbookSource === openHandbookSource) {
+                delete window.crmOpenHandbookSource;
+            }
             destroyHandbookPlyr();
         });
         return {

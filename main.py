@@ -869,6 +869,67 @@ def _handbook_search_snippet(
     return frag
 
 
+def _handbook_query_terms(raw: str) -> List[str]:
+    s = (raw or "").strip()
+    if not s:
+        return []
+    terms = [s]
+    for m in re.finditer(r"[\w.]+|[\u4e00-\u9fff]+", s):
+        t = (m.group(0) or "").strip()
+        if t and t not in terms:
+            terms.append(t)
+    return terms[:24]
+
+
+def _handbook_text_matches(text_value: Optional[str], terms: List[str]) -> bool:
+    hay = (text_value or "").casefold()
+    return bool(hay and any(t.casefold() in hay for t in terms if t))
+
+
+def _handbook_locate_pdf_page(row: DeliveryHandbookFile, query: str) -> int:
+    """Best-effort source page for a PDF hit; fallback to page 1."""
+    terms = _handbook_query_terms(query)
+    if not terms:
+        return 1
+    abs_path = os.path.join(UPLOAD_DIR, (row.stored_path or "").strip())
+    if not os.path.isfile(abs_path):
+        return 1
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return 1
+    doc = None
+    try:
+        doc = fitz.open(abs_path)
+        for i in range(len(doc)):
+            try:
+                page_text = doc.load_page(i).get_text() or ""
+            except Exception:
+                page_text = ""
+            if _handbook_text_matches(page_text, terms):
+                return i + 1
+    except Exception:
+        return 1
+    finally:
+        if doc is not None:
+            try:
+                doc.close()
+            except Exception:
+                pass
+    return 1
+
+
+def _handbook_locate_media_seconds(row: DeliveryHandbookFile, query: str) -> Optional[float]:
+    terms = _handbook_query_terms(query)
+    cues = _handbook_cues_from_json_string(getattr(row, "media_cues_json", None))
+    if not cues:
+        return None
+    for c in cues:
+        if _handbook_text_matches(str(c.get("label") or ""), terms):
+            return float(c.get("seconds") or 0)
+    return None
+
+
 def _pdf_plain_text_and_pagecount(data: bytes) -> Tuple[str, int]:
     try:
         import fitz  # PyMuPDF
@@ -3051,6 +3112,122 @@ async def delivery_handbooks_search_cross_client(
 
     out_list = list(seen.values())[:lim]
     return {"query": q_strip, "results": out_list}
+
+
+@app.post("/api/handbook-assistant/chat")
+async def handbook_assistant_chat(
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate_admin),
+):
+    """全局悬浮问答第一版：检索式回答 + 可点击来源；后续可替换为 LLM RAG。"""
+    q_strip = str((body or {}).get("q") or (body or {}).get("query") or "").strip()
+    if not q_strip:
+        raise HTTPException(status_code=400, detail="请输入问题或检索词")
+    lim = max(1, min(int((body or {}).get("limit") or 6), 12))
+    fq = _handbook_build_fts_query(q_strip)
+    terms = _handbook_query_terms(q_strip)
+    seen: Dict[int, DeliveryHandbookFile] = {}
+
+    if fq:
+        try:
+            with engine.connect() as conn:
+                frows = (
+                    conn.execute(
+                        text(
+                            "SELECT handbook_fts.rowid AS id, bm25(handbook_fts) AS rk "
+                            "FROM handbook_fts WHERE handbook_fts MATCH :match ORDER BY rk LIMIT :lim"
+                        ),
+                        {"match": fq, "lim": lim},
+                    )
+                    .mappings()
+                    .all()
+                )
+            for m in frows:
+                hid = int(m["id"])
+                if hid in seen:
+                    continue
+                hrow = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == hid).first()
+                if (
+                    hrow
+                    and hrow.search_status == "indexed"
+                    and (
+                        _handbook_text_matches(hrow.search_body, terms)
+                        or _handbook_text_matches(hrow.original_filename, terms)
+                    )
+                ):
+                    seen[hid] = hrow
+        except Exception:
+            pass
+
+    if len(seen) < lim:
+        tail = lim - len(seen)
+        sub_rows = (
+            db.query(DeliveryHandbookFile)
+            .filter(
+                DeliveryHandbookFile.media_kind.in_(["pdf", "video", "audio", "document"]),
+                DeliveryHandbookFile.search_status == "indexed",
+                or_(
+                    func.instr(DeliveryHandbookFile.search_body, q_strip) > 0,
+                    func.instr(DeliveryHandbookFile.original_filename, q_strip) > 0,
+                ),
+            )
+            .order_by(desc(DeliveryHandbookFile.updated_at))
+            .limit(max(tail * 4, 8))
+            .all()
+        )
+        for hrow in sub_rows:
+            if len(seen) >= lim:
+                break
+            seen.setdefault(int(hrow.id), hrow)
+
+    sources: List[Dict[str, Any]] = []
+    for hrow in list(seen.values())[:lim]:
+        if not (
+            _handbook_text_matches(hrow.search_body, terms)
+            or _handbook_text_matches(hrow.original_filename, terms)
+        ):
+            continue
+        c = db.query(Client).filter(Client.id == hrow.client_id).first()
+        mk = (hrow.media_kind or "").strip() or _handbook_suffix_to_media_kind(
+            os.path.splitext(hrow.original_filename or "")[1].lower()
+        )
+        summary = _handbook_search_snippet(
+            hrow.search_body, q_strip, max_len=760, collapse_ws=True
+        )
+        source: Dict[str, Any] = {
+            "client_id": int(hrow.client_id),
+            "client_name": (c.name if c else "") or "",
+            "handbook_id": int(hrow.id),
+            "filename": hrow.original_filename or "",
+            "media_kind": mk,
+            "snippet": summary,
+            "summary": summary,
+            "matched_terms": terms,
+            "search_method": (hrow.search_method or "").strip(),
+        }
+        params = f"handbook_id={int(hrow.id)}"
+        if mk == "pdf":
+            page = _handbook_locate_pdf_page(hrow, q_strip)
+            source["page"] = page
+            params += f"&page={page}"
+        elif mk in ("video", "audio"):
+            seconds = _handbook_locate_media_seconds(hrow, q_strip)
+            if seconds is not None:
+                source["seconds"] = seconds
+                params += f"&seconds={seconds:g}"
+        source["url"] = f"/delivery/handbook/{int(hrow.client_id)}?{params}"
+        sources.append(source)
+
+    if sources:
+        client_names = [s.get("client_name") or f"客户#{s.get('client_id')}" for s in sources[:3]]
+        answer = (
+            f"找到 {len(sources)} 条相关来源，主要来自 {'、'.join(client_names)}。"
+            "下面的来源参考可直接打开对应手册位置。"
+        )
+    else:
+        answer = "暂未找到相关手册来源。可尝试换一个关键词，或先在手册页同步 FTS / 重排索引。"
+    return {"query": q_strip, "answer": answer, "sources": sources, "mode": "retrieval"}
 
 
 @app.post("/api/delivery/handbooks/sync-fts-indexed")
