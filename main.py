@@ -12,12 +12,12 @@ from urllib.parse import quote
 from calendar import monthrange
 from datetime import datetime, timedelta, date
 from typing import List, Optional, Any, Dict, Tuple
-from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File, status, Body
+from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File, status, Body, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Float, desc, or_, not_, and_
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Float, desc, or_, not_, and_, func, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -238,6 +238,10 @@ class DeliveryHandbookFile(Base):
     media_kind = Column(String, default="")
     pdf_outline_json = Column(Text, default="[]")
     media_cues_json = Column(Text, default="[]")
+    search_status = Column(String, default="pending")
+    search_method = Column(String, default="")
+    search_error = Column(Text, default="")
+    search_body = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -749,16 +753,407 @@ def _ensure_handbook_schema_compat():
             "pdf_outline_json": "TEXT DEFAULT '[]'",
             "media_cues_json": "TEXT DEFAULT '[]'",
             "updated_at": "TEXT DEFAULT ''",
+            "search_status": "TEXT DEFAULT 'pending'",
+            "search_method": "TEXT DEFAULT ''",
+            "search_error": "TEXT DEFAULT ''",
+            "search_body": "TEXT DEFAULT ''",
         }
         for col, ddl in add_cols.items():
             if col not in existing:
                 conn.exec_driver_sql(f"ALTER TABLE delivery_handbook_files ADD COLUMN {col} {ddl}")
 
 
+def _ensure_handbook_fts_schema():
+    with engine.begin() as conn:
+        conn.exec_driver_sql(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS handbook_fts USING fts5(
+              original_filename,
+              body,
+              handbook_id UNINDEXED,
+              client_id UNINDEXED,
+              tokenize = 'unicode61'
+            );
+            """
+        )
+
+
 _ensure_roster_schema_compat()
 _ensure_interview_schema_compat()
 _ensure_handbook_schema_compat()
+_ensure_handbook_fts_schema()
+HANDBOOK_SEARCH_BODY_MAX = 2_000_000
+HANDBOOK_SEARCH_SNIPPET_LIST = 780
+HANDBOOK_SEARCH_SNIPPET_MODAL = min(32_000, HANDBOOK_SEARCH_BODY_MAX)
+HANDBOOK_OCR_MAX_PAGES = 120
+HANDBOOK_OCR_ZOOM = 2.0
 
+
+def _handbook_fts_delete_row(row_id: int) -> None:
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM handbook_fts WHERE rowid = :rid"), {"rid": row_id})
+
+
+def _handbook_fts_upsert_row(row_id: int, client_id: int, filename: str, body: str) -> None:
+    fn = (filename or "")[:2000]
+    bd = (body or "")[:HANDBOOK_SEARCH_BODY_MAX]
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM handbook_fts WHERE rowid = :rid"), {"rid": row_id})
+        conn.execute(
+            text(
+                "INSERT INTO handbook_fts (rowid, original_filename, body, handbook_id, client_id) "
+                "VALUES (:rid, :fn, :body, :hid, :cid)"
+            ),
+            {"rid": row_id, "fn": fn, "body": bd, "hid": row_id, "cid": client_id},
+        )
+
+
+def _handbook_build_fts_query(raw: str) -> str:
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    s = re.sub(r'["\']', " ", s)
+    tokens: List[str] = []
+    for m in re.finditer(r"[\w.]+|[\u4e00-\u9fff]+", s):
+        t = m.group(0)
+        if t:
+            tokens.append(t)
+    if not tokens:
+        return ""
+    tokens = tokens[:24]
+    return " OR ".join(f'"{t}"' for t in tokens)
+
+
+def _handbook_search_snippet(
+    haystack: Optional[str],
+    needle: str,
+    max_len: int = 680,
+    *,
+    collapse_ws: bool = True,
+) -> str:
+    """围绕首次命中截取摘录；列表用 collapse_ws 压成单行，详情保留换行。"""
+    hay = haystack or ""
+    nd = (needle or "").strip()
+
+    def pack(s: str) -> str:
+        s = (s or "").strip()
+        if collapse_ws:
+            return re.sub(r"\s+", " ", s).strip()
+        return s
+
+    if not hay:
+        return ""
+    if not nd:
+        s0 = pack(hay[:max_len])
+        return s0 + ("…" if len(hay) > max_len else "")
+    i = hay.find(nd)
+    if i < 0:
+        lh = hay.casefold()
+        ln = nd.casefold()
+        if ln and lh != hay:
+            j = lh.find(ln)
+            i = int(j) if j >= 0 else -1
+    if i < 0:
+        s0 = pack(hay[:max_len])
+        return s0 + ("…" if len(hay) > max_len else "")
+    half = max_len // 2
+    start = max(0, i - half)
+    end = min(len(hay), start + max_len)
+    start = max(0, end - max_len)
+    frag = hay[start:end]
+    frag = pack(frag)
+    if start > 0:
+        frag = "…" + frag
+    if end < len(hay):
+        frag = frag + "…"
+    return frag
+
+
+def _pdf_plain_text_and_pagecount(data: bytes) -> Tuple[str, int]:
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return "", 0
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+    except Exception:
+        return "", 0
+    try:
+        n = len(doc)
+        parts: List[str] = []
+        for i in range(n):
+            try:
+                parts.append(doc.load_page(i).get_text() or "")
+            except Exception:
+                parts.append("")
+        return "\n".join(parts), n
+    finally:
+        try:
+            doc.close()
+        except Exception:
+            pass
+
+
+def _pdf_text_suggests_ocr(plain: str, page_count: int) -> bool:
+    t = (plain or "").strip()
+    if page_count <= 0:
+        return False
+    if len(t) < 80:
+        return True
+    avg = len(t) / max(page_count, 1)
+    return avg < 35
+
+
+def _pdf_ocr_tesseract(data: bytes) -> Tuple[str, str]:
+    """
+    returns (text, detail) detail empty if ok else error hint
+    Requires: tesseract on PATH + tessdata chi_sim (+eng recommended).
+    """
+    try:
+        import fitz  # PyMuPDF
+        import pytesseract
+        from PIL import Image
+        import io
+    except ImportError as e:
+        return "", f"Python 依赖未安装（{e}）"
+    if os.environ.get("TESSERACT_CMD"):
+        pytesseract.pytesseract.tesseract_cmd = os.environ["TESSERACT_CMD"]
+    doc = None
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+    except Exception as e:
+        return "", str(e)
+    mat = fitz.Matrix(HANDBOOK_OCR_ZOOM, HANDBOOK_OCR_ZOOM)
+    parts: List[str] = []
+    try:
+        n = min(len(doc), HANDBOOK_OCR_MAX_PAGES)
+        ocr_fatal = ""
+        for i in range(n):
+            try:
+                pix = doc.load_page(i).get_pixmap(matrix=mat, alpha=False)
+                img_bytes = pix.tobytes("png")
+                img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+                txt = pytesseract.image_to_string(img, lang="chi_sim+eng") or ""
+                parts.append(txt)
+            except pytesseract.TesseractNotFoundError:
+                ocr_fatal = (
+                    "未检测到 Tesseract 可执行程序，请安装并把 tesseract 加入 PATH，或设置环境变量 TESSERACT_CMD"
+                )
+                break
+            except Exception:
+                parts.append("")
+        if ocr_fatal:
+            return "", ocr_fatal
+        return "\n".join(parts), ""
+    finally:
+        if doc is not None:
+            try:
+                doc.close()
+            except Exception:
+                pass
+
+
+
+def _handbook_manual_search_blob(r: DeliveryHandbookFile) -> str:
+    """音视频 / Word：在无语义转写时，用语义化元数据与时间戳锚点文案拼接可检索文本。"""
+    lines: List[str] = []
+    fn = (r.original_filename or "").strip()
+    if fn:
+        lines.append(fn)
+        base = os.path.splitext(fn)[0].strip()
+        if base and base != fn:
+            lines.append(base)
+    vl = str(getattr(r, "version_label", None) or "").strip()
+    if vl:
+        lines.append(vl)
+    for lst, prefix in (
+        (_handbook_parse_json_list(getattr(r, "tags_json", None)), "标签"),
+        (_handbook_parse_json_list(getattr(r, "permission_departments_json", None)), "部门"),
+        (_handbook_parse_json_list(getattr(r, "permission_levels_json", None)), "级别"),
+    ):
+        for x in lst:
+            sx = str(x).strip()
+            if sx:
+                lines.append(f"{prefix} {sx}")
+                lines.append(sx)
+    mk = (getattr(r, "media_kind", None) or "").strip()
+    if mk == "video":
+        lines.append("视频")
+    elif mk == "audio":
+        lines.append("音频")
+    elif mk == "document":
+        lines.append("文档")
+    try:
+        cues = json.loads(getattr(r, "media_cues_json", None) or "[]")
+    except Exception:
+        cues = []
+    if isinstance(cues, list):
+        for c in cues:
+            if not isinstance(c, dict):
+                continue
+            label = str(c.get("label") or "").strip()
+            if not label:
+                continue
+            lines.append(label)
+            sec = c.get("seconds")
+            if sec is not None:
+                try:
+                    lines.append(f"{label} {float(sec)}秒")
+                except (TypeError, ValueError):
+                    lines.append(f"{label} {sec}秒")
+    return "\n".join(x for x in lines if str(x).strip())
+
+
+def _handbook_background_index_manual_meta(row_id: int) -> None:
+    """为非 PDF 手册建立元数据检索（音视频不包含自动语音识别转正文）。"""
+    db = SessionLocal()
+    try:
+        row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
+        if not row:
+            return
+        mk = (row.media_kind or "").strip() or _handbook_suffix_to_media_kind(
+            os.path.splitext(row.original_filename or "")[1].lower()
+        )
+        if mk == "pdf":
+            return
+        if mk not in ("video", "audio", "document"):
+            row.search_status = "skipped"
+            row.search_method = "none"
+            row.search_body = ""
+            row.search_error = ""
+            row.updated_at = datetime.now()
+            db.commit()
+            try:
+                _handbook_fts_delete_row(row_id)
+            except Exception:
+                pass
+            return
+        blob = _handbook_manual_search_blob(row).strip()
+        row.search_body = blob[:HANDBOOK_SEARCH_BODY_MAX]
+        row.search_method = "meta"
+        row.search_status = "indexed" if blob else "skipped"
+        row.search_error = ""
+        row.updated_at = datetime.now()
+        db.commit()
+        if blob:
+            _handbook_fts_upsert_row(int(row.id), int(row.client_id), row.original_filename or "", row.search_body)
+        else:
+            try:
+                _handbook_fts_delete_row(row_id)
+            except Exception:
+                pass
+    except Exception as e:
+        try:
+            r2 = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
+            if r2 and (r2.media_kind or "").strip() in ("video", "audio", "document"):
+                r2.search_status = "failed"
+                r2.search_error = str(e)[:500]
+                r2.updated_at = datetime.now()
+                db.commit()
+        except Exception:
+            db.rollback()
+        try:
+            _handbook_fts_delete_row(row_id)
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+def _handbook_background_index_pdf(row_id: int) -> None:
+    db = SessionLocal()
+    try:
+        row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
+        if not row:
+            return
+        mk = (row.media_kind or "").strip() or _handbook_suffix_to_media_kind(
+            os.path.splitext(row.original_filename or "")[1].lower()
+        )
+        if mk != "pdf":
+            row.search_status = "skipped"
+            row.search_method = "none"
+            row.search_error = ""
+            row.search_body = ""
+            row.updated_at = datetime.now()
+            db.commit()
+            _handbook_fts_delete_row(row_id)
+            return
+        abs_path = os.path.join(UPLOAD_DIR, (row.stored_path or "").strip())
+        if not os.path.isfile(abs_path):
+            row.search_status = "failed"
+            row.search_method = ""
+            row.search_error = "文件不存在"
+            row.search_body = ""
+            row.updated_at = datetime.now()
+            db.commit()
+            _handbook_fts_delete_row(row_id)
+            return
+        row.search_status = "indexing"
+        row.search_error = ""
+        db.commit()
+
+        try:
+            with open(abs_path, "rb") as fp:
+                data = fp.read()
+        except OSError as e:
+            row.search_status = "failed"
+            row.search_error = str(e)
+            row.search_body = ""
+            row.updated_at = datetime.now()
+            db.commit()
+            _handbook_fts_delete_row(row_id)
+            return
+
+        extracted, pg = _pdf_plain_text_and_pagecount(data)
+        method = "text_extract"
+        final_text = extracted
+        if _pdf_text_suggests_ocr(extracted, max(pg, 1)):
+            ocr_txt, err = _pdf_ocr_tesseract(data)
+            if err:
+                row.search_body = extracted[:HANDBOOK_SEARCH_BODY_MAX]
+                row.updated_at = datetime.now()
+                ext_ok = bool((extracted or "").strip())
+                if ext_ok:
+                    row.search_status = "indexed"
+                    row.search_method = "text_extract"
+                    row.search_error = f"OCR 未执行（{err[:400]}）"
+                    db.commit()
+                    _handbook_fts_upsert_row(row.id, row.client_id, row.original_filename or "", row.search_body)
+                    return
+                row.search_status = "failed"
+                row.search_method = ""
+                row.search_error = err
+                db.commit()
+                _handbook_fts_delete_row(row_id)
+                return
+            merged = ((ocr_txt or "").strip())
+            final_text = merged if merged else extracted
+            method = "ocr" if merged else method
+        trimmed = final_text.strip()
+        row.search_body = final_text[:HANDBOOK_SEARCH_BODY_MAX]
+        row.search_method = method
+        row.search_status = "indexed" if trimmed else "failed"
+        row.search_error = "" if trimmed else "未识别到可读文本（可检查是否为加密 PDF）"
+        row.updated_at = datetime.now()
+        db.commit()
+        if trimmed:
+            _handbook_fts_upsert_row(row.id, row.client_id, row.original_filename or "", row.search_body)
+        else:
+            _handbook_fts_delete_row(row_id)
+    except Exception as e:
+        try:
+            r2 = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
+            if r2:
+                r2.search_status = "failed"
+                r2.search_error = str(e)[:500]
+                r2.updated_at = datetime.now()
+                db.commit()
+        except Exception:
+            db.rollback()
+        try:
+            _handbook_fts_delete_row(row_id)
+        except Exception:
+            pass
 # --- 3. 后端核心逻辑 ---
 app = FastAPI(title="ITO CRM Ultimate")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -778,6 +1173,13 @@ def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
     if credentials.username != ADMIN_USER["username"] or credentials.password != ADMIN_USER["password"]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号或密码错误")
     return credentials.username
+
+
+def authenticate_admin(user: str = Depends(authenticate)):
+    """跨客户手册全文检索等能力：仅管理员。当前仅 admin 账号，后续多用户时在此扩展。"""
+    if user != ADMIN_USER["username"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
+    return user
 
 
 def _roster_strip_amount_for_ratio(v: str) -> str:
@@ -2349,6 +2751,10 @@ def _handbook_row_to_dict(r: DeliveryHandbookFile) -> Dict[str, Any]:
         "media_kind": mk,
         "pdf_outline": outline,
         "media_cues": _handbook_cues_from_json_string(getattr(r, "media_cues_json", None)),
+        "search_status": ("pending" if getattr(r, "search_status", None) is None else str(r.search_status).strip())
+        or "pending",
+        "search_method": (getattr(r, "search_method", None) or "").strip(),
+        "search_error": (getattr(r, "search_error", None) or "").strip(),
         "created_at": r.created_at.isoformat() if r.created_at else "",
         "updated_at": _handbook_dt_iso(getattr(r, "updated_at", None)),
     }
@@ -2371,6 +2777,7 @@ async def list_delivery_handbooks(client_id: int, db: Session = Depends(get_db),
 @app.post("/api/clients/{client_id}/delivery/handbooks")
 async def upload_delivery_handbooks(
     client_id: int,
+    background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(default=[]),
     version_label: str = Form(default=""),
     status: str = Form(default="draft"),
@@ -2436,6 +2843,10 @@ async def upload_delivery_handbooks(
             media_kind=mk,
             pdf_outline_json=outline_js,
             media_cues_json="[]",
+            search_status=("pending" if mk in ("pdf", "video", "audio", "document") else "skipped"),
+            search_method=("none" if mk not in ("pdf", "video", "audio", "document") else ""),
+            search_error="",
+            search_body="",
             updated_at=now,
         )
         db.add(row)
@@ -2443,6 +2854,10 @@ async def upload_delivery_handbooks(
     db.commit()
     for row in saved:
         db.refresh(row)
+        if row.media_kind == "pdf":
+            background_tasks.add_task(_handbook_background_index_pdf, int(row.id))
+        elif row.media_kind in ("video", "audio", "document"):
+            background_tasks.add_task(_handbook_background_index_manual_meta, int(row.id))
     return [_handbook_row_to_dict(r) for r in saved]
 
 
@@ -2450,6 +2865,7 @@ async def upload_delivery_handbooks(
 async def patch_delivery_handbook(
     client_id: int,
     row_id: int,
+    background_tasks: BackgroundTasks,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
     user: str = Depends(authenticate),
@@ -2492,6 +2908,11 @@ async def patch_delivery_handbook(
     row.updated_at = datetime.now()
     db.commit()
     db.refresh(row)
+    mk = (row.media_kind or "").strip() or _handbook_suffix_to_media_kind(
+        os.path.splitext(row.original_filename or "")[1].lower()
+    )
+    if mk in ("video", "audio", "document"):
+        background_tasks.add_task(_handbook_background_index_manual_meta, int(row.id))
     return _handbook_row_to_dict(row)
 
 
@@ -2539,9 +2960,179 @@ async def delete_delivery_handbook(
             os.remove(path)
         except OSError:
             pass
+    rid = int(row.id)
     db.delete(row)
     db.commit()
+    try:
+        _handbook_fts_delete_row(rid)
+    except Exception:
+        pass
     return {"status": "ok"}
+
+
+@app.get("/api/delivery/handbooks/search")
+async def delivery_handbooks_search_cross_client(
+    q: str,
+    limit: int = 40,
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate_admin),
+):
+    """跨客户检索手册：PDF 为正文+OCR；音视频/Word 为元数据+锚点文案。FTS5 + 子串回退。"""
+    q_strip = (q or "").strip()
+    if not q_strip:
+        raise HTTPException(status_code=400, detail="请输入检索词")
+    lim = max(1, min(int(limit or 40), 100))
+    fq = _handbook_build_fts_query(q_strip)
+    seen: Dict[int, Dict[str, Any]] = {}
+
+    def row_to_hit(hrow: DeliveryHandbookFile) -> Dict[str, Any]:
+        c = db.query(Client).filter(Client.id == hrow.client_id).first()
+        d = _handbook_row_to_dict(hrow)
+        d["client_name"] = (c.name if c else "") or ""
+        d["snippet"] = _handbook_search_snippet(
+            hrow.search_body, q_strip, max_len=HANDBOOK_SEARCH_SNIPPET_LIST, collapse_ws=True
+        )
+        d["excerpt_detail"] = _handbook_search_snippet(
+            hrow.search_body, q_strip, max_len=HANDBOOK_SEARCH_SNIPPET_MODAL, collapse_ws=False
+        )
+        return d
+
+    # ① FTS（排序优；部分中文 QUERY 可能与分词不符导致零结果）
+    if fq:
+        try:
+            with engine.connect() as conn:
+                frows = (
+                    conn.execute(
+                        text(
+                            "SELECT handbook_fts.rowid AS id, handbook_fts.client_id AS client_id, "
+                            "bm25(handbook_fts) AS rk FROM handbook_fts "
+                            "WHERE handbook_fts MATCH :match ORDER BY rk LIMIT :lim"
+                        ),
+                        {"match": fq, "lim": lim},
+                    )
+                    .mappings()
+                    .all()
+                )
+            for m in frows:
+                hid = int(m["id"])
+                if hid in seen or len(seen) >= lim:
+                    continue
+                hrow = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == hid).first()
+                if not hrow or hrow.search_status != "indexed":
+                    continue
+                seen[hid] = row_to_hit(hrow)
+        except Exception:
+            pass
+
+    # ② 子串检索（与用户可见「已索引」正文一致）
+    if len(seen) < lim:
+        needle = q_strip
+        tail = lim - len(seen)
+        sub_rows = (
+            db.query(DeliveryHandbookFile)
+            .filter(
+                DeliveryHandbookFile.media_kind.in_(["pdf", "video", "audio", "document"]),
+                DeliveryHandbookFile.search_status == "indexed",
+                or_(
+                    func.instr(DeliveryHandbookFile.search_body, needle) > 0,
+                    func.instr(DeliveryHandbookFile.original_filename, needle) > 0,
+                ),
+            )
+            .order_by(desc(DeliveryHandbookFile.updated_at))
+            .limit(max(tail * 4, 8))
+            .all()
+        )
+        for hrow in sub_rows:
+            if len(seen) >= lim:
+                break
+            if int(hrow.id) in seen:
+                continue
+            seen[int(hrow.id)] = row_to_hit(hrow)
+
+    out_list = list(seen.values())[:lim]
+    return {"query": q_strip, "results": out_list}
+
+
+@app.post("/api/delivery/handbooks/sync-fts-indexed")
+async def delivery_handbooks_sync_fts_from_body(
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate_admin),
+):
+    """重写 FTS：PDF 用已索引正文；音视频/文档用元数据摘录。"""
+    rows = (
+        db.query(DeliveryHandbookFile)
+        .filter(
+            DeliveryHandbookFile.media_kind == "pdf",
+            DeliveryHandbookFile.search_status == "indexed",
+            DeliveryHandbookFile.search_body.isnot(None),
+            DeliveryHandbookFile.search_body != "",
+        )
+        .all()
+    )
+    synced = 0
+    for r in rows:
+        try:
+            _handbook_fts_upsert_row(int(r.id), int(r.client_id), r.original_filename or "", r.search_body or "")
+            synced += 1
+        except Exception:
+            continue
+    media_rows = (
+        db.query(DeliveryHandbookFile)
+        .filter(DeliveryHandbookFile.media_kind.in_(["video", "audio", "document"]))
+        .all()
+    )
+    for r in media_rows:
+        blob = _handbook_manual_search_blob(r).strip()
+        if not blob:
+            try:
+                _handbook_fts_delete_row(int(r.id))
+            except Exception:
+                pass
+            continue
+        r.search_body = blob[:HANDBOOK_SEARCH_BODY_MAX]
+        r.search_method = "meta"
+        r.search_status = "indexed"
+        r.search_error = ""
+        r.updated_at = datetime.now()
+        try:
+            db.commit()
+            _handbook_fts_upsert_row(int(r.id), int(r.client_id), r.original_filename or "", r.search_body or "")
+            synced += 1
+        except Exception:
+            db.rollback()
+            continue
+    return {"synced": synced}
+
+
+@app.post("/api/delivery/handbooks/reindex-stale")
+async def delivery_handbooks_reindex_stale(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate_admin),
+):
+    """将未完成索引的条目重新排队（PDF 抽正文；音视频/Word 建元数据索引）。"""
+    rows = (
+        db.query(DeliveryHandbookFile)
+        .filter(
+            or_(
+                and_(
+                    DeliveryHandbookFile.media_kind == "pdf",
+                    DeliveryHandbookFile.search_status.in_(["pending", "failed", "indexing"]),
+                ),
+                and_(
+                    DeliveryHandbookFile.media_kind.in_(["video", "audio", "document"]),
+                    DeliveryHandbookFile.search_status.in_(["pending", "failed", "indexing"]),
+                ),
+            )
+        )
+        .all()
+    )
+    for r in rows:
+        if r.media_kind == "pdf":
+            background_tasks.add_task(_handbook_background_index_pdf, int(r.id))
+        else:
+            background_tasks.add_task(_handbook_background_index_manual_meta, int(r.id))
+    return {"queued": len(rows)}
 
 
 @app.get("/api/roster")
@@ -5279,6 +5870,7 @@ async def page_delivery_module_detail(request: Request, module_key: str, client_
         module_key=module_key,
         module_title=title,
         client_id=client_id,
+        handbook_admin_cross_search=(module_key == "handbook"),
     )
 
 

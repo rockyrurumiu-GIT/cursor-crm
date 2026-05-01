@@ -2,6 +2,8 @@
 {% block title %}{{ module_title }} · 交付 · ITO CRM V8{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/plyr@3.7.8/dist/plyr.css" crossorigin="anonymous" />
+<script src="https://unpkg.com/plyr@3.7.8/dist/plyr.polyfilled.min.js" crossorigin="anonymous"></script>
 <style>
     .delivery-table-wrap.crm-table-scroll {
         padding-bottom: 22px;
@@ -411,6 +413,30 @@
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-date,
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-customer {
         background: #fafaf9;
+    }
+    /* 手册音视频：Plyr 极简条 + indigo 主色（与站内强调色一致） */
+    .handbook-plyr-audio-wrap .plyr--audio .plyr__controls {
+        padding: 8px 10px;
+        border-radius: 0.5rem;
+        background: rgba(15, 23, 42, 0.88);
+    }
+    .handbook-video-plyr-wrap .plyr {
+        width: 100%;
+        height: 100%;
+        min-height: 10rem;
+    }
+    .handbook-video-plyr-wrap .plyr video {
+        object-fit: contain;
+    }
+    .handbook-plyr,
+    .handbook-plyr .plyr__control--overlaid,
+    .handbook-plyr .plyr__controls {
+        --plyr-color-main: #4f46e5;
+        --plyr-video-controls-background: linear-gradient(transparent, rgba(0, 0, 0, 0.82));
+        --plyr-badge-border-radius: 4px;
+    }
+    .crm-fs-hit {
+        font-weight: inherit;
     }
 </style>
 {% endblock %}
@@ -1084,7 +1110,7 @@
         </div>
         <div v-else-if="moduleKey === 'handbook'" class="mt-4 flex flex-col flex-1 min-h-0 gap-4">
             <div class="rounded-lg border border-gray-200 bg-slate-50/80 p-4 space-y-3 shrink-0">
-                <p class="text-sm text-gray-600">上传时填写元数据（同一批文件共用）。PDF 阅读器左侧目录来自文件书签；音视频可内嵌播放并在「锚点」中维护时间戳。单文件 ≤ 20MB。部门 / 级别权限当前仅存档。</p>
+                <p class="text-sm text-gray-600">上传时填写元数据（同一批文件共用）。PDF 阅读器左侧目录来自文件书签；音视频可内嵌播放并在「锚点」中维护时间戳。<strong class="font-medium text-gray-800">PDF</strong> 上传后会在后台异步<strong>抽取全文</strong>，扫描件将按需走 <strong>OCR</strong>（需服务器安装 Tesseract 与 chi_sim 语言包）。单文件 ≤ 20MB。部门 / 级别权限当前仅存档。</p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 text-xs">
                     <label class="flex flex-col gap-1"><span class="text-gray-600">版本号</span><input v-model="handbookUploadMeta.version_label" type="text" class="crm-form-control" placeholder="如 V2.0" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">状态</span>
@@ -1102,6 +1128,45 @@
                     </div>
                 </div>
                 <input ref="handbookFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookFilesSelected" />
+            </div>
+            <div v-if="handbookAdminCrossSearch" class="rounded-lg border border-indigo-100 bg-white p-4 shadow-sm shrink-0 space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-indigo-900">管理员 · 交付手册全文检索（跨客户）</p>
+                    <button type="button" class="text-xs text-indigo-600 hover:underline" @click="handbookFsPanelOpen = !handbookFsPanelOpen">{{ handbookFsPanelOpen ? '收起' : '展开' }}</button>
+                </div>
+                <p v-show="!handbookFsPanelOpen" class="text-xs text-gray-500">展开后可在<strong>所有客户</strong>下检索已编入索引的内容：<strong>PDF</strong> 为正文（含 OCR）；<strong>音视频、Word</strong> 为文件名、版本、标签、权限与时间戳<strong>锚点文案</strong>——不含自动语音转文字。若显示「已索引」仍搜不到，可先<strong>同步 FTS</strong>；未完成索引用<strong>重排队列</strong>。</p>
+                <div v-show="handbookFsPanelOpen" class="space-y-2">
+                    <div class="flex flex-wrap gap-2 items-center">
+                        <input v-model.trim="handbookFsQuery" type="search" placeholder="例如：报销、试用期、保密协议" class="crm-form-control flex-1 min-w-[12rem]" @keydown.enter.prevent="runHandbookGlobalSearch" />
+                        <button type="button" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-45" :disabled="handbookFsBusy" @click="runHandbookGlobalSearch">{{ handbookFsBusy ? '检索中…' : '检索' }}</button>
+                        <button type="button" class="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 hover:bg-indigo-100 disabled:opacity-45" :disabled="handbookFtsSyncBusy" title="重建 SQLite FTS：PDF 用已索引正文；音视频/Word 用元数据摘录" @click="syncHandbookFtsFromBody">{{ handbookFtsSyncBusy ? '同步中…' : '同步 FTS' }}</button>
+                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-45" :disabled="handbookReindexBusy" title="将待处理/失败/卡住的条目重新排队：PDF 抽正文；音视频/Word 建元数据索引" @click="queueHandbookReindexStale">{{ handbookReindexBusy ? '排队中…' : '重排队列' }}</button>
+                    </div>
+                    <p v-if="handbookFsError" class="text-xs text-red-700">{{ handbookFsError }}</p>
+        <div v-if="handbookFsResults.length" class="max-h-[min(28rem,55vh)] overflow-y-auto border border-gray-100 rounded-md divide-y divide-gray-100 text-sm">
+                            <div v-for="hit in handbookFsResults" :key="hit.id + '-' + hit.client_id" class="px-3 py-3">
+                                <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+                                    <p class="font-medium text-gray-900 min-w-0 flex-1">
+                                        <span class="text-indigo-700">{{ hit.client_name || ('客户#' + hit.client_id) }}</span>
+                                        <span class="text-gray-600"> · {{ hit.original_filename }}</span>
+                                    </p>
+                                    <div class="flex flex-wrap gap-2 shrink-0 text-xs">
+                                        <button v-if="hit.media_kind === 'pdf' || hit.media_kind === 'video' || hit.media_kind === 'audio'" type="button" class="rounded border border-indigo-200 bg-white px-2 py-1 text-indigo-700 hover:bg-indigo-50" @click="openHandbookReader(hit)">打开阅读</button>
+                                        <button type="button" class="rounded border border-slate-200 bg-white px-2 py-1 text-gray-800 hover:bg-slate-50" @click="openHandbookFsExcerptDetail(hit)">摘录详情</button>
+                                        <a :href="'/delivery/handbook/' + hit.client_id" class="rounded border border-slate-200 bg-white px-2 py-1 text-blue-700 hover:bg-slate-50">客户主页</a>
+                                    </div>
+                                </div>
+                                <div
+                                    v-if="hit.snippet"
+                                    class="max-h-44 overflow-y-auto rounded-md bg-slate-50 px-2.5 py-2 text-xs text-gray-800 whitespace-pre-wrap border border-slate-100 leading-relaxed"
+                                    v-html="highlightHandbookSearchHtml(hit.snippet)"
+                                ></div>
+                                <div v-else class="max-h-44 rounded-md bg-slate-50 px-2.5 py-2 text-xs text-gray-500 border border-slate-100">（无摘要）</div>
+                                <p v-if="hit.excerpt_detail && hit.excerpt_detail.length > (hit.snippet || '').length" class="text-[11px] text-gray-400 mt-1">摘录较长时已截断预览，点此条「摘录详情」查看上下文。</p>
+                            </div>
+                        </div>
+                    <p v-else-if="handbookFsSearched && !handbookFsBusy && !handbookFsError" class="text-xs text-gray-400">无匹配条目：可能正文中不包含该词（仅搜已抽取的文本层），或可先点<strong>同步 FTS</strong> 再试。</p>
+                </div>
             </div>
             <div v-if="handbookUploadError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shrink-0">{{ handbookUploadError }}</div>
             <div class="flex flex-wrap items-center gap-3 shrink-0">
@@ -1124,6 +1189,7 @@
                                 <th class="px-3 py-2 font-medium">版本</th>
                                 <th class="px-3 py-2 font-medium">状态</th>
                                 <th class="px-3 py-2 font-medium">类型</th>
+                                <th class="px-3 py-2 font-medium">全文索引</th>
                                 <th class="px-3 py-2 font-medium">标签 / 权限</th>
                                 <th class="px-3 py-2 font-medium">时间</th>
                                 <th class="px-3 py-2 font-medium text-right">操作</th>
@@ -1135,6 +1201,11 @@
                                 <td class="px-3 py-2 text-gray-700">{{ f.version_label || '—' }}</td>
                                 <td class="px-3 py-2"><span class="rounded-full px-2 py-0.5 text-xs" :class="handbookStatusClass(f.status)">{{ handbookStatusLabel(f.status) }}</span></td>
                                 <td class="px-3 py-2 text-gray-600">{{ handbookMediaLabel(f) }}</td>
+                                <td class="px-3 py-2 text-xs">
+                                    <span class="rounded px-1.5 py-0.5" :class="handbookSearchStatusClass(f)">{{ handbookSearchStatusLabel(f) }}</span>
+                                    <span v-if="f.search_method && f.search_status === 'indexed'" class="text-gray-400 ml-1">{{ f.search_method === 'ocr' ? 'OCR' : f.search_method === 'meta' ? '元数据' : '文本层' }}</span>
+                                    <span v-if="f.search_error" class="block text-amber-700 mt-0.5" :title="f.search_error">{{ f.search_error.length > 48 ? f.search_error.slice(0,48)+'…' : f.search_error }}</span>
+                                </td>
                                 <td class="px-3 py-2 text-xs text-gray-500 max-w-[14rem]">
                                     <span v-if="(f.tags||[]).length">标：{{ (f.tags||[]).join('、') }}<br /></span>
                                     <span v-if="(f.permission_departments||[]).length">部：{{ (f.permission_departments||[]).join('、') }}</span>
@@ -1162,14 +1233,16 @@
     <Teleport to="body">
     <div
         v-if="handbookReaderRow"
-        class="fixed inset-0 z-[110] box-border flex flex-col bg-black/50 p-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"
+        class="fixed inset-0 z-[110] box-border flex flex-col p-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"
+        :class="handbookReaderPipBrowseMode ? 'pointer-events-none bg-transparent' : 'bg-black/50'"
         role="dialog"
         aria-modal="true"
         aria-label="手册阅读"
-        @click.self="closeHandbookReader"
+        @click.self="handbookReaderBackdropClick"
     >
         <div
-            class="relative flex flex-col flex-1 min-h-0 w-full overflow-hidden rounded-none border border-slate-200/90 bg-white shadow-2xl sm:rounded-xl"
+            class="relative flex flex-col flex-1 min-h-0 w-full overflow-hidden rounded-none border shadow-2xl sm:rounded-xl"
+            :class="handbookReaderPipBrowseMode ? 'opacity-0 border-transparent shadow-none pointer-events-none' : 'border-slate-200/90 bg-white'"
             @click.stop
         >
             <div class="relative z-10 flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-indigo-50/60 px-4 py-3.5">
@@ -1177,7 +1250,10 @@
                     <p class="text-sm font-semibold text-gray-900 truncate">{{ handbookReaderRow.original_filename }}</p>
                     <p class="text-xs text-gray-500">{{ handbookMediaLabel(handbookReaderRow) }} · {{ handbookReaderRow.version_label || '无版本号' }}</p>
                 </div>
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 shrink-0" @click="closeHandbookReader">关闭</button>
+                <div class="flex items-center gap-2 shrink-0">
+                    <p v-if="handbookReaderRow.media_kind === 'video'" class="hidden sm:block text-[11px] text-gray-500 max-w-[11rem] text-right leading-tight pointer-events-none" title="使用播放器上的画中画按钮，遮罩会变透明以便操作手册列表">画中画后可操作背景页面</p>
+                    <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="closeHandbookReader">关闭</button>
+                </div>
             </div>
             <div v-if="handbookReaderRow.media_kind === 'pdf'" class="flex flex-1 min-h-0 divide-x divide-gray-200">
                 <aside class="w-52 sm:w-60 shrink-0 min-h-0 overflow-y-auto bg-slate-50 p-2 text-sm">
@@ -1200,8 +1276,8 @@
                 </div>
             </div>
             <div v-else-if="handbookReaderRow.media_kind === 'video'" class="flex flex-1 min-h-0 flex-col sm:flex-row gap-3 p-3 overflow-hidden">
-                <div class="flex-1 min-w-0 min-h-0 flex items-center justify-center bg-black rounded-lg overflow-hidden">
-                    <video ref="handbookMediaRef" class="w-full h-full object-contain" controls :src="handbookReaderRow.preview_url" />
+                <div class="handbook-video-plyr-wrap flex-1 min-w-0 min-h-0 flex items-center justify-center bg-black rounded-lg overflow-hidden handbook-plyr">
+                    <video ref="handbookMediaRef" class="handbook-video-native w-full max-h-full" playsinline :src="handbookReaderRow.preview_url"></video>
                 </div>
                 <aside class="w-full sm:w-52 shrink-0 min-h-0 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
                     <p class="text-xs font-semibold text-gray-600 mb-2">时间戳索引</p>
@@ -1212,8 +1288,8 @@
                 </aside>
             </div>
             <div v-else-if="handbookReaderRow.media_kind === 'audio'" class="flex flex-1 min-h-0 flex-col sm:flex-row gap-3 p-3 overflow-hidden">
-                <div class="flex-1 min-w-0 min-h-0 flex flex-col justify-center">
-                    <audio ref="handbookMediaRef" class="w-full" controls :src="handbookReaderRow.preview_url" />
+                <div class="handbook-plyr-audio-wrap flex-1 min-w-0 min-h-0 flex flex-col justify-center handbook-plyr">
+                    <audio ref="handbookMediaRef" class="w-full" :src="handbookReaderRow.preview_url"></audio>
                 </div>
                 <aside class="w-full sm:w-52 shrink-0 min-h-0 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
                     <p class="text-xs font-semibold text-gray-600 mb-2">时间戳索引</p>
@@ -1225,7 +1301,53 @@
             </div>
             <div v-else class="p-6 text-sm text-gray-600 shrink-0">该类型请使用「下载」后本地查看。</div>
         </div>
+        <div
+            v-if="handbookReaderRow && handbookReaderPipBrowseMode"
+            class="fixed bottom-5 right-5 z-[120] flex flex-col gap-2 pointer-events-auto max-w-[14rem]"
+        >
+            <div class="rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-lg backdrop-blur-sm">
+                画中画已开启，可在下方继续操作手册列表；需要重新看到完整窗口请点击「恢复」。
+            </div>
+            <div class="flex flex-wrap justify-end gap-2">
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 shadow-sm hover:bg-gray-50" @click="restoreHandbookReaderFromPipBrowse">恢复窗口</button>
+                <button type="button" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700" @click="closeHandbookReader">结束播放</button>
+            </div>
+        </div>
     </div>
+    </Teleport>
+
+    <Teleport to="body">
+        <div
+            v-if="handbookFsDetailOpen && handbookFsDetailHit"
+            class="fixed inset-0 z-[115] flex items-center justify-center bg-black/45 p-3 sm:p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-label="检索摘录详情"
+            @click.self="closeHandbookFsDetail"
+        >
+            <div class="relative flex flex-col max-w-3xl w-full max-h-[88vh] rounded-xl bg-white shadow-2xl border border-gray-200 overflow-hidden" @click.stop>
+                <div class="shrink-0 flex items-start justify-between gap-2 px-4 py-3 border-b border-gray-200 bg-indigo-50/50">
+                    <div class="min-w-0">
+                        <p class="text-sm font-semibold text-gray-900 truncate">{{ handbookFsDetailHit.original_filename }}</p>
+                        <p class="text-xs text-gray-600 mt-0.5">{{ handbookFsDetailHit.client_name || ('客户#' + handbookFsDetailHit.client_id) }} · 检索词：{{ handbookFsQuery.trim() }}</p>
+                    </div>
+                    <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closeHandbookFsDetail" aria-label="关闭">&times;</button>
+                </div>
+                <div class="flex-1 min-h-0 overflow-y-auto px-4 py-3 bg-slate-50/40">
+                    <div
+                        v-if="handbookFsDetailHit && (handbookFsDetailHit.excerpt_detail || handbookFsDetailHit.snippet)"
+                        class="whitespace-pre-wrap break-words text-xs text-gray-800 font-sans leading-relaxed"
+                        v-html="highlightHandbookSearchHtml(handbookFsDetailHit.excerpt_detail || handbookFsDetailHit.snippet || '')"
+                    ></div>
+                    <p v-else class="text-sm text-gray-500 m-0">（无摘录）</p>
+                </div>
+                <div class="shrink-0 flex flex-wrap justify-end gap-2 px-4 py-3 border-t border-gray-200 bg-white">
+                    <button v-if="handbookFsDetailHit && (handbookFsDetailHit.media_kind === 'pdf' || handbookFsDetailHit.media_kind === 'video' || handbookFsDetailHit.media_kind === 'audio')" type="button" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700" @click="openHandbookReaderFromFsDetail">打开阅读</button>
+                    <a :href="handbookFsDetailHit ? '/delivery/handbook/' + handbookFsDetailHit.client_id : '#'" class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 hover:bg-gray-50">客户主页</a>
+                    <button type="button" class="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-800 hover:bg-gray-50" @click="closeHandbookFsDetail">关闭</button>
+                </div>
+            </div>
+        </div>
     </Teleport>
 
     <div v-if="handbookMetaModalOpen" class="fixed inset-0 z-[58] flex items-center justify-center bg-black/45 p-4">
@@ -1557,11 +1679,12 @@
 window.__DELIVERY_MODULE_KEY__ = "{{ module_key }}";
 window.__DELIVERY_MODULE_TITLE__ = "{{ module_title }}";
 window.__DELIVERY_CLIENT_ID__ = Number("{{ client_id }}");
+window.__HANDBOOK_ADMIN_CROSS_SEARCH__ = {{ handbook_admin_cross_search|default(false)|tojson }};
 </script>
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } = Vue;
+const { createApp, ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } = Vue;
 const PIPELINE_FIELDS = [
     { key: 'resume_time', label: '简历时间', type: 'date' },
     { key: 'date', label: '日期', type: 'period' },
@@ -1971,6 +2094,40 @@ function multiSelectSummary(selected) {
 function interviewTextLength(raw) {
     return String(raw || '').trim().length;
 }
+function crmEscapeHtml(s) {
+    return String(s || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+/** 检索摘录高亮：escape 后包 mark；空格分隔多词均匹配（英文不区分大小写）。 */
+function crmHighlightSearchQuery(raw, query) {
+    const t = raw == null ? '' : String(raw);
+    const parts = String(query || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return crmEscapeHtml(t);
+    const pattern = parts.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    if (!pattern) return crmEscapeHtml(t);
+    let re;
+    try {
+        re = new RegExp(`(${pattern})`, 'gi');
+    } catch (_) {
+        return crmEscapeHtml(t);
+    }
+    let out = '';
+    let last = 0;
+    let m;
+    while ((m = re.exec(t)) !== null) {
+        out += crmEscapeHtml(t.slice(last, m.index));
+        out += '<mark class="crm-fs-hit rounded bg-amber-200 px-0.5 text-gray-900 ring-1 ring-amber-400/70">';
+        out += crmEscapeHtml(m[0]);
+        out += '</mark>';
+        last = m.index + m[0].length;
+        if (last === re.lastIndex) re.lastIndex++;
+    }
+    out += crmEscapeHtml(t.slice(last));
+    return out;
+}
 createApp({
     setup() {
         const moduleKey = window.__DELIVERY_MODULE_KEY__;
@@ -1998,9 +2155,23 @@ createApp({
         const handbookFileInput = ref(null);
         const handbookUploading = ref(false);
         const handbookUploadError = ref('');
+        const handbookAdminCrossSearch = !!window.__HANDBOOK_ADMIN_CROSS_SEARCH__;
+        const handbookFsPanelOpen = ref(false);
+        const handbookFsQuery = ref('');
+        const handbookFsResults = ref([]);
+        const handbookFsBusy = ref(false);
+        const handbookFsError = ref('');
+        const handbookFsSearched = ref(false);
+        const handbookReindexBusy = ref(false);
+        const handbookFtsSyncBusy = ref(false);
+        const handbookFsDetailOpen = ref(false);
+        const handbookFsDetailHit = ref(null);
+        const highlightHandbookSearchHtml = (text) => crmHighlightSearchQuery(text, handbookFsQuery.value);
         const handbookReaderRow = ref(null);
         const handbookReaderPdfPage = ref(1);
         const handbookMediaRef = ref(null);
+        const handbookPlyrInstance = ref(null);
+        const handbookReaderPipBrowseMode = ref(false);
         const handbookMetaModalOpen = ref(false);
         const handbookMetaForm = reactive({
             id: null,
@@ -3199,11 +3370,109 @@ createApp({
             if (mk === 'document') return '文档';
             return '文件';
         };
+        const handbookSearchStatusLabel = (f) => {
+            if (!f || f.media_kind !== 'pdf') return '—';
+            const s = f.search_status || 'pending';
+            const map = {
+                pending: '待索引',
+                indexing: '索引中…',
+                indexed: '已索引',
+                failed: '失败',
+                skipped: '跳过',
+            };
+            return map[s] || s || '—';
+        };
+        const handbookSearchStatusClass = (f) => {
+            if (!f || f.media_kind !== 'pdf') return 'text-gray-400';
+            const s = f.search_status || 'pending';
+            if (s === 'indexed') return 'bg-emerald-50 text-emerald-800';
+            if (s === 'failed') return 'bg-red-50 text-red-800';
+            if (s === 'indexing') return 'bg-blue-50 text-blue-800';
+            if (s === 'skipped') return 'bg-gray-100 text-gray-600';
+            return 'bg-amber-50 text-amber-900';
+        };
         const formatHandbookSeconds = (sec) => {
             const s = Math.max(0, Number(sec) || 0);
             const m = Math.floor(s / 60);
             const r = Math.floor(s % 60);
             return `${m}:${String(r).padStart(2, '0')}`;
+        };
+        const runHandbookGlobalSearch = async () => {
+            handbookFsError.value = '';
+            const q = handbookFsQuery.value.trim();
+            if (!q) {
+                handbookFsError.value = '请输入检索词';
+                return;
+            }
+            handbookFsBusy.value = true;
+            handbookFsSearched.value = true;
+            try {
+                const u = new URL(`${window.location.origin}/api/delivery/handbooks/search`);
+                u.searchParams.set('q', q);
+                const r = await fetch(u.toString(), { headers: window.crmAuthHeader() });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    const d = data.detail;
+                    handbookFsError.value = Array.isArray(d) ? d.map((x) => x.msg || '').filter(Boolean).join('；') : (d || `检索失败（${r.status}）`);
+                    handbookFsResults.value = [];
+                    return;
+                }
+                handbookFsResults.value = Array.isArray(data.results) ? data.results : [];
+            } catch (e) {
+                handbookFsError.value = '网络错误';
+                handbookFsResults.value = [];
+            } finally {
+                handbookFsBusy.value = false;
+            }
+        };
+        const closeHandbookFsDetail = () => {
+            handbookFsDetailOpen.value = false;
+            handbookFsDetailHit.value = null;
+        };
+        const openHandbookFsExcerptDetail = (hit) => {
+            handbookFsDetailHit.value = hit;
+            handbookFsDetailOpen.value = true;
+        };
+        const openHandbookReaderFromFsDetail = async () => {
+            const h = handbookFsDetailHit.value;
+            closeHandbookFsDetail();
+            if (h) await openHandbookReader(h);
+        };
+        const queueHandbookReindexStale = async () => {
+            handbookReindexBusy.value = true;
+            try {
+                const r = await fetch(`${window.location.origin}/api/delivery/handbooks/reindex-stale`, {
+                    method: 'POST',
+                    headers: window.crmAuthHeader(),
+                });
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    const d = j.detail;
+                    alert(Array.isArray(d) ? d.map((x) => x.msg || '').join('；') : (d || '排队失败'));
+                    return;
+                }
+                alert(`已加入后台队列：${j.queued || 0} 条 PDF`);
+            } finally {
+                handbookReindexBusy.value = false;
+            }
+        };
+        const syncHandbookFtsFromBody = async () => {
+            handbookFtsSyncBusy.value = true;
+            try {
+                const r = await fetch(`${window.location.origin}/api/delivery/handbooks/sync-fts-indexed`, {
+                    method: 'POST',
+                    headers: window.crmAuthHeader(),
+                });
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    const d = j.detail;
+                    alert(Array.isArray(d) ? d.map((x) => x.msg || '').join('；') : (d || '同步失败'));
+                    return;
+                }
+                alert(`已根据正文重建 FTS：${j.synced || 0} 条`);
+            } finally {
+                handbookFtsSyncBusy.value = false;
+            }
         };
         const syncHandbookReaderFromList = () => {
             const cur = handbookReaderRow.value;
@@ -3211,13 +3480,85 @@ createApp({
             const found = handbookFiles.value.find((x) => Number(x.id) === Number(cur.id));
             if (found) handbookReaderRow.value = found;
         };
+        const destroyHandbookPlyr = () => {
+            const inst = handbookPlyrInstance.value;
+            if (inst) {
+                try {
+                    inst.destroy();
+                } catch (_) { /* ignore */ }
+                handbookPlyrInstance.value = null;
+            }
+        };
+        const initHandbookPlyrForOpenRow = () => {
+            destroyHandbookPlyr();
+            const row = handbookReaderRow.value;
+            if (!row || (row.media_kind !== 'video' && row.media_kind !== 'audio')) return;
+            if (typeof window.Plyr === 'undefined') {
+                const el = handbookMediaRef.value;
+                if (el && el.setAttribute) el.setAttribute('controls', 'controls');
+                return;
+            }
+            const el = handbookMediaRef.value;
+            if (!el) return;
+            const isVideo = row.media_kind === 'video';
+            const plyrOpts = {
+                iconUrl: 'https://unpkg.com/plyr@3.7.8/dist/plyr.svg',
+                controls: isVideo
+                    ? ['play', 'progress', 'current-time', 'mute', 'volume', 'pip', 'fullscreen']
+                    : ['play', 'progress', 'current-time', 'mute', 'volume'],
+                keyboard: { focused: true, global: false },
+                tooltips: { controls: false, seek: true },
+                hideControlsOnPause: true,
+                resetOnEnd: false,
+                fullscreen: { enabled: true, fallback: true, iosNative: true },
+            };
+            let inst;
+            try {
+                inst = new window.Plyr(el, plyrOpts);
+            } catch (_) {
+                if (el.setAttribute) el.setAttribute('controls', 'controls');
+                return;
+            }
+            if (typeof inst.on === 'function') {
+                inst.on('enterpip', () => {
+                    handbookReaderPipBrowseMode.value = true;
+                });
+                inst.on('leavepip', () => {
+                    handbookReaderPipBrowseMode.value = false;
+                });
+            }
+            handbookPlyrInstance.value = inst;
+        };
+        watch(handbookReaderRow, async (row) => {
+            handbookReaderPipBrowseMode.value = false;
+            destroyHandbookPlyr();
+            if (!row || (row.media_kind !== 'video' && row.media_kind !== 'audio')) return;
+            await nextTick();
+            await nextTick();
+            initHandbookPlyrForOpenRow();
+        });
+        const restoreHandbookReaderFromPipBrowse = async () => {
+            handbookReaderPipBrowseMode.value = false;
+            const inst = handbookPlyrInstance.value;
+            const media = inst && inst.media;
+            if (media && document.pictureInPictureElement === media) {
+                try {
+                    await document.exitPictureInPicture();
+                } catch (_) { /* ignore */ }
+            }
+        };
+        const handbookRowClientId = (row) => {
+            const x = Number(row && row.client_id);
+            return Number.isFinite(x) && x > 0 ? x : clientId;
+        };
         const openHandbookReader = async (row) => {
             handbookReaderRow.value = row;
             handbookReaderPdfPage.value = 1;
             const po = row.pdf_outline;
+            const cid = handbookRowClientId(row);
             if (row.media_kind === 'pdf' && (!Array.isArray(po) || !po.length)) {
                 try {
-                    const r = await fetch(`/api/clients/${clientId}/delivery/handbooks/${row.id}/rebuild-pdf-outline`, {
+                    const r = await fetch(`/api/clients/${cid}/delivery/handbooks/${row.id}/rebuild-pdf-outline`, {
                         method: 'POST',
                         headers: window.crmAuthHeader(),
                     });
@@ -3229,19 +3570,26 @@ createApp({
                         ) {
                             handbookReaderRow.value = updated;
                         }
-                        await loadHandbooks();
+                        if (cid === clientId) await loadHandbooks();
                     }
                 } catch (e) { /* ignore */ }
             }
         };
         const closeHandbookReader = () => {
+            handbookReaderPipBrowseMode.value = false;
+            destroyHandbookPlyr();
             handbookReaderRow.value = null;
+        };
+        const handbookReaderBackdropClick = () => {
+            if (handbookReaderPipBrowseMode.value) return;
+            closeHandbookReader();
         };
         const setHandbookPdfPage = (page) => {
             handbookReaderPdfPage.value = Math.max(1, Number(page) || 1);
         };
         const seekHandbookMedia = (seconds) => {
-            const el = handbookMediaRef.value;
+            const inst = handbookPlyrInstance.value;
+            const el = (inst && inst.media) || handbookMediaRef.value;
             if (el && Number.isFinite(Number(seconds))) {
                 el.currentTime = Math.max(0, Number(seconds));
                 try {
@@ -3319,7 +3667,8 @@ createApp({
         const rebuildHandbookOutline = async () => {
             const row = handbookReaderRow.value;
             if (!row || row.media_kind !== 'pdf') return;
-            const r = await fetch(`/api/clients/${clientId}/delivery/handbooks/${row.id}/rebuild-pdf-outline`, {
+            const cid = handbookRowClientId(row);
+            const r = await fetch(`/api/clients/${cid}/delivery/handbooks/${row.id}/rebuild-pdf-outline`, {
                 method: 'POST',
                 headers: window.crmAuthHeader(),
             });
@@ -3334,7 +3683,7 @@ createApp({
             }
             const updated = await r.json();
             handbookReaderRow.value = updated;
-            await loadHandbooks();
+            if (cid === clientId) await loadHandbooks();
         };
         const loadHandbooks = async () => {
             if (moduleKey !== 'handbook') return;
@@ -3464,8 +3813,16 @@ createApp({
             }
             await loadSettlementRows();
         };
-        const onHandbookReaderEscape = (e) => {
+        const onHandbookReaderEscape = async (e) => {
             if (e.key !== 'Escape') return;
+            if (handbookFsDetailOpen.value) {
+                closeHandbookFsDetail();
+                return;
+            }
+            if (handbookReaderPipBrowseMode.value) {
+                await restoreHandbookReaderFromPipBrowse();
+                return;
+            }
             if (handbookReaderRow.value) closeHandbookReader();
         };
         onMounted(async () => {
@@ -3490,6 +3847,7 @@ createApp({
             document.removeEventListener('click', handleDocumentClick);
             document.removeEventListener('focusin', handleDocumentFocusIn);
             document.removeEventListener('keydown', onHandbookReaderEscape);
+            destroyHandbookPlyr();
         });
         return {
             moduleKey, moduleTitle, clientId, clientName,
@@ -3504,10 +3862,15 @@ createApp({
             isPipelineRowChecked, setPipelineRowChecked,
             pipelineFields: PIPELINE_FIELDS, pipelineCompactFields: PIPELINE_COMPACT_FIELDS, pipelineTextareaFields: PIPELINE_TEXTAREA_FIELDS, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput,
             handbookUploadMeta, handbookStatusFilter, filteredHandbookFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
+            handbookAdminCrossSearch,             handbookFsPanelOpen, handbookFsQuery, handbookFsResults, handbookFsBusy, handbookFsError, handbookFsSearched,
+            handbookFsDetailOpen, handbookFsDetailHit, closeHandbookFsDetail, openHandbookFsExcerptDetail, openHandbookReaderFromFsDetail,
+            handbookReindexBusy, handbookFtsSyncBusy, runHandbookGlobalSearch, queueHandbookReindexStale, syncHandbookFtsFromBody,
+            highlightHandbookSearchHtml,
             handbookFiles, handbookFileInput, handbookUploading, handbookUploadError, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
+            handbookReaderPipBrowseMode, restoreHandbookReaderFromPipBrowse,
             handbookMetaModalOpen, handbookMetaForm, handbookCuesModalOpen, handbookCuesEdit,
-            handbookStatusLabel, handbookStatusClass, handbookMediaLabel, formatHandbookSeconds,
-            loadHandbooks, onHandbookFilesSelected, removeHandbook, openHandbookReader, closeHandbookReader, setHandbookPdfPage, seekHandbookMedia,
+            handbookStatusLabel, handbookStatusClass, handbookMediaLabel, handbookSearchStatusLabel, handbookSearchStatusClass, formatHandbookSeconds,
+            loadHandbooks, onHandbookFilesSelected, removeHandbook, openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
             openHandbookMetaModal, saveHandbookMeta, openHandbookCuesModal, saveHandbookCues, rebuildHandbookOutline,
             pipelineScrollWrap,
             PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,
