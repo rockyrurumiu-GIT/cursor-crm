@@ -222,6 +222,460 @@ class DeliveryInterviewEntry(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class DeliveryHandbookFile(Base):
+    """客户交付手册：元数据 + 文件；PDF 存书签树；音视频可配时间锚点。"""
+
+    __tablename__ = "delivery_handbook_files"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    original_filename = Column(String, default="")
+    stored_path = Column(String, default="")
+    version_label = Column(String, default="")
+    status = Column(String, default="draft")
+    tags_json = Column(Text, default="[]")
+    permission_departments_json = Column(Text, default="[]")
+    permission_levels_json = Column(Text, default="[]")
+    media_kind = Column(String, default="")
+    pdf_outline_json = Column(Text, default="[]")
+    media_cues_json = Column(Text, default="[]")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+HANDBOOK_ALLOWED_SUFFIXES = {
+    ".pdf",
+    ".docx",
+    ".doc",
+    ".mp4",
+    ".webm",
+    ".ogg",
+    ".mov",
+    ".mp3",
+    ".wav",
+    ".m4a",
+    ".aac",
+    ".flac",
+}
+
+HANDBOOK_STATUS_SET = frozenset({"draft", "published", "deprecated"})
+
+
+def _handbook_split_comma_labels(s: str) -> List[str]:
+    return [x.strip() for x in str(s or "").replace("，", ",").split(",") if x.strip()]
+
+
+def _handbook_labels_to_json_array(s: str) -> str:
+    return json.dumps(_handbook_split_comma_labels(s), ensure_ascii=False)
+
+
+def _handbook_normalize_status(raw: str) -> str:
+    v = str(raw or "").strip().lower()
+    if v in HANDBOOK_STATUS_SET:
+        return v
+    return "draft"
+
+
+def _handbook_suffix_to_media_kind(ext: str) -> str:
+    e = str(ext or "").lower()
+    if e == ".pdf":
+        return "pdf"
+    if e in (".mp4", ".webm", ".ogg", ".mov"):
+        return "video"
+    if e in (".mp3", ".wav", ".m4a", ".aac", ".flac"):
+        return "audio"
+    if e in (".doc", ".docx"):
+        return "document"
+    return "document"
+
+
+def _handbook_parse_json_list(raw: Optional[str], default: Optional[List[Any]] = None) -> List[Any]:
+    default = default if default is not None else []
+    if not raw or not str(raw).strip():
+        return list(default)
+    try:
+        v = json.loads(raw)
+        return v if isinstance(v, list) else list(default)
+    except Exception:
+        return list(default)
+
+
+def _toc_levels_to_tree(toc: List[List[Any]]) -> List[Dict[str, Any]]:
+    if not toc:
+        return []
+    root: List[Dict[str, Any]] = []
+    stack: List[Tuple[int, Dict[str, Any]]] = []
+    for entry in toc:
+        if not entry or len(entry) < 3:
+            continue
+        try:
+            lvl = int(entry[0])
+            title = str(entry[1] or "").strip() or "未命名"
+            page = int(entry[2])
+        except (TypeError, ValueError):
+            continue
+        node = {"title": title, "page": max(1, page), "children": []}
+        while stack and stack[-1][0] >= lvl:
+            stack.pop()
+        if not stack:
+            root.append(node)
+        else:
+            stack[-1][1]["children"].append(node)
+        stack.append((lvl, node))
+    return root
+
+
+def _pdf_outline_fitz(data: bytes) -> List[Dict[str, Any]]:
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return []
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+        toc = doc.get_toc(simple=False) or doc.get_toc(simple=True)
+        doc.close()
+    except Exception:
+        return []
+    return _toc_levels_to_tree(toc) if toc else []
+
+
+def _pypdf_outline_aux(items: Any, reader: Any) -> List[Dict[str, Any]]:
+    """将 pypdf 嵌套 outline（Destination 与 list 混排）转为树。"""
+    if not items:
+        return []
+    if not isinstance(items, list):
+        items = [items]
+    tree: List[Dict[str, Any]] = []
+    i = 0
+    while i < len(items):
+        el = items[i]
+        if isinstance(el, list):
+            if tree:
+                tree[-1]["children"] = _pypdf_outline_aux(el, reader)
+            else:
+                tree.extend(_pypdf_outline_aux(el, reader))
+            i += 1
+            continue
+        try:
+            title = str(getattr(el, "title", "") or "").strip() or "未命名"
+            page = int(reader.get_destination_page_number(el)) + 1
+        except Exception:
+            i += 1
+            continue
+        node = {"title": title, "page": max(1, page), "children": []}
+        tree.append(node)
+        i += 1
+        if i < len(items) and isinstance(items[i], list):
+            node["children"] = _pypdf_outline_aux(items[i], reader)
+            i += 1
+    return tree
+
+
+def _pdf_outline_pypdf(data: bytes) -> List[Dict[str, Any]]:
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return []
+    try:
+        reader = PdfReader(io.BytesIO(data), strict=False)
+    except Exception:
+        return []
+    try:
+        outline = reader.outline
+    except Exception:
+        return []
+    if not outline:
+        return []
+    try:
+        tree = _pypdf_outline_aux(outline, reader)
+    except Exception:
+        return []
+    return tree if tree else []
+
+
+_HANDBOOK_TOC_LINE = re.compile(
+    r"^\s*(\d+(?:\.\d+)*)\s+(.+?)\s*(?:\.{2,}|…{1,}|·{2,}|＊{2,}|\s{3,})\s*(\d{1,4})\s*$"
+)
+
+_HANDBOOK_TOC_INLINE = re.compile(
+    r"(\d+(?:\.\d+)*)\s+(.+?)\s*(?:\.{2,}|…{1,}|·{2,}|\s{2,})\s*(\d{1,4})"
+)
+
+
+def _handbook_normalize_toc_text(s: str) -> str:
+    """全角数字/空格归一化，便于匹配目录行。"""
+    trans = str.maketrans(
+        "０１２３４５６７８９　．，",
+        "0123456789 .,",
+    )
+    return (s or "").translate(trans)
+
+
+def _section_key_depth(sec: str) -> int:
+    parts = str(sec or "").strip().split(".")
+    return max(0, len([p for p in parts if p]) - 1)
+
+
+def _fitz_link_target_page_1based(doc: Any, link: Dict[str, Any]) -> Optional[int]:
+    """Resolve PyMuPDF link destination to a 1-based page number, or None."""
+    raw = link.get("page")
+    if raw is not None:
+        try:
+            return int(raw) + 1
+        except (TypeError, ValueError):
+            pass
+    uri = str(link.get("uri") or "").strip()
+    if uri and not re.match(r"^https?://", uri, re.I):
+        m = re.search(r"(?:[#&?]|^)(?:page|pg)\s*=\s*(\d+)", uri, re.I)
+        if m:
+            try:
+                return max(1, int(m.group(1)))
+            except ValueError:
+                pass
+    dest = link.get("dest")
+    if dest is not None:
+        try:
+            p = getattr(dest, "page", None)
+            if p is not None:
+                pi = int(p)
+                if pi >= 0:
+                    return pi + 1
+        except (TypeError, ValueError, AttributeError):
+            pass
+    rslv = getattr(doc, "resolve_link", None)
+    if callable(rslv):
+        try:
+            loc = rslv(link)
+            if loc is not None:
+                if isinstance(loc, (list, tuple)) and len(loc) > 0:
+                    try:
+                        pi = int(loc[0])
+                        if pi >= 0:
+                            return pi + 1
+                    except (TypeError, ValueError):
+                        pass
+                elif isinstance(loc, int) and loc >= 0:
+                    return loc + 1
+        except Exception:
+            pass
+    return None
+
+
+def _pdf_outline_from_internal_links(data: bytes) -> List[Dict[str, Any]]:
+    """从前几页收集「正文里可点的目录」：LINK_GOTO 区域文字 + 目标页（与 PDF 内点击行为一致）。"""
+    try:
+        import fitz
+    except ImportError:
+        return []
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+    except Exception:
+        return []
+    LINK_GOTO = getattr(fitz, "LINK_GOTO", 1)
+    LINK_GOTOR = getattr(fitz, "LINK_GOTOR", 5)
+    candidates: List[Tuple[float, float, str, int]] = []
+    max_scan = min(24, doc.page_count)
+    for pno in range(max_scan):
+        page = doc.load_page(pno)
+        for link in page.get_links() or []:
+            kind = link.get("kind")
+            if kind not in (LINK_GOTO, LINK_GOTOR):
+                continue
+            dest_1 = _fitz_link_target_page_1based(doc, link)
+            if dest_1 is None:
+                continue
+            rect = link.get("from")
+            title = ""
+            if rect:
+                try:
+                    r = fitz.Rect(rect)
+                    title = page.get_textbox(r).strip()
+                    if not title:
+                        title = (page.get_text("text", clip=r) or "").strip()
+                except Exception:
+                    title = ""
+            title = re.sub(r"\s+", " ", title).strip()
+            if len(title) > 160:
+                title = title[:160].rstrip()
+            if not title:
+                if dest_1 != pno + 1:
+                    title = f"· 第{dest_1}页"
+                else:
+                    continue
+            if rect:
+                r = fitz.Rect(rect)
+                candidates.append((float(r.y0), float(r.x0), title, dest_1))
+            else:
+                candidates.append((0.0, 0.0, title, dest_1))
+    doc.close()
+    if len(candidates) < 1:
+        return []
+    candidates.sort(key=lambda t: (round(t[0], 2), round(t[1], 2)))
+    found: List[Tuple[int, str, int]] = []
+    seen: set = set()
+    for _, _, title, pg in candidates:
+        key = (title, pg)
+        if key in seen:
+            continue
+        seen.add(key)
+        raw_t = title.strip()
+        m = re.match(r"^(\d+(?:\.\d+)*)", raw_t)
+        sec = m.group(1) if m else ""
+        depth = _section_key_depth(sec) if sec else 0
+        found.append((depth, raw_t, max(1, pg)))
+    if len(found) < 2:
+        return []
+    root: List[Dict[str, Any]] = []
+    stack: List[Tuple[int, Dict[str, Any]]] = []
+    for depth, title, page in found:
+        node = {"title": title, "page": max(1, page), "children": []}
+        while stack and stack[-1][0] >= depth:
+            stack.pop()
+        if not stack:
+            root.append(node)
+        else:
+            stack[-1][1]["children"].append(node)
+        stack.append((depth, node))
+    return root
+
+
+def _pdf_outline_heuristic_text(data: bytes) -> List[Dict[str, Any]]:
+    """从正文前几页识别「1.1 标题 … 3」式目录行（无 PDF 书签时）。"""
+    try:
+        import fitz
+    except ImportError:
+        return []
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+    except Exception:
+        return []
+    found: List[Tuple[int, str, int]] = []
+    max_pages = min(16, doc.page_count)
+    for pno in range(max_pages):
+        page = doc.load_page(pno)
+        try:
+            text = page.get_text("text", sort=True) or page.get_text("text") or ""
+        except Exception:
+            text = page.get_text("text") or ""
+        text = _handbook_normalize_toc_text(text)
+        # 目录页：截取「目录」后一段，减少误匹配正文
+        chunk = text
+        if "目录" in chunk:
+            idx = chunk.find("目录")
+            chunk_after = chunk[idx : idx + 6000]
+        else:
+            chunk_after = chunk
+        for m in _HANDBOOK_TOC_INLINE.finditer(chunk_after):
+            sec, title, pstr = m.group(1), m.group(2).strip(), m.group(3)
+            title = re.sub(r"\s+", " ", title).strip(" .,，")
+            if not title or len(title) > 120:
+                continue
+            try:
+                pg = int(pstr)
+            except ValueError:
+                continue
+            depth = _section_key_depth(sec)
+            found.append((depth, f"{sec} {title}", pg))
+        for line in text.splitlines():
+            raw = _handbook_normalize_toc_text(line.strip())
+            if not raw:
+                continue
+            m = _HANDBOOK_TOC_LINE.match(raw)
+            if not m and len(raw) < 140:
+                m = re.match(
+                    r"^\s*(\d+(?:\.\d+)*)\s+(.+?)\s{2,}(\d{1,4})\s*$",
+                    raw,
+                )
+            if not m and len(raw) < 140:
+                m = re.match(
+                    r"^\s*(\d+(?:\.\d+)*)\s+(.+?)\s+(\d{1,4})\s*$",
+                    raw,
+                )
+            if not m:
+                continue
+            sec, title, pstr = m.group(1), m.group(2).strip(), m.group(3)
+            title = re.sub(r"\s+", " ", title).strip(" .,，")
+            if not title or len(title) > 120:
+                continue
+            try:
+                pg = int(pstr)
+            except ValueError:
+                continue
+            depth = _section_key_depth(sec)
+            found.append((depth, f"{sec} {title}", pg))
+    doc.close()
+    if not found:
+        return []
+    # 去重，保留首次出现
+    uniq: List[Tuple[int, str, int]] = []
+    seen_line: set = set()
+    for item in found:
+        k = (item[1], item[2])
+        if k in seen_line:
+            continue
+        seen_line.add(k)
+        uniq.append(item)
+    found = uniq
+    root: List[Dict[str, Any]] = []
+    stack: List[Tuple[int, Dict[str, Any]]] = []
+    for depth, title, page in found:
+        node = {"title": title, "page": max(1, page), "children": []}
+        while stack and stack[-1][0] >= depth:
+            stack.pop()
+        if not stack:
+            root.append(node)
+        else:
+            stack[-1][1]["children"].append(node)
+        stack.append((depth, node))
+    return root
+
+
+def _pdf_bytes_to_outline_tree(data: bytes) -> List[Dict[str, Any]]:
+    tree = _pdf_outline_fitz(data)
+    if tree:
+        return tree
+    tree = _pdf_outline_pypdf(data)
+    if tree:
+        return tree
+    tree = _pdf_outline_from_internal_links(data)
+    if tree:
+        return tree
+    return _pdf_outline_heuristic_text(data)
+
+
+def _handbook_normalize_media_cues(raw: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    if not isinstance(raw, list):
+        return out
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label", "")).strip() or "锚点"
+        try:
+            sec = float(item.get("seconds", 0))
+        except (TypeError, ValueError):
+            sec = 0.0
+        if sec < 0:
+            sec = 0.0
+        out.append({"label": label, "seconds": sec})
+    return out
+
+
+def _client_upload_folder_name(client: Client) -> str:
+    return f"{client.name}_{client.id}"
+
+
+def _handbook_client_dir_rel(client: Client) -> str:
+    return f"handbooks/{_client_upload_folder_name(client)}"
+
+
+def _safe_handbook_filename(name: str) -> str:
+    base = os.path.basename(str(name or "")).strip()
+    if not base:
+        base = "handbook.bin"
+    base = re.sub(r"[^\w\-. \u4e00-\u9fff]", "_", base)
+    return (base[:200] if len(base) > 200 else base) or "handbook.bin"
+
+
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base.metadata.create_all(bind=engine)
@@ -278,8 +732,32 @@ def _ensure_roster_schema_compat():
                 conn.exec_driver_sql(f"ALTER TABLE roster_entries ADD COLUMN {col} {ddl}")
 
 
+def _ensure_handbook_schema_compat():
+    """旧库 delivery_handbook_files 仅含路径字段时补齐元数据列。"""
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(delivery_handbook_files)").fetchall()}
+        except Exception:
+            return
+        add_cols = {
+            "version_label": "TEXT DEFAULT ''",
+            "status": "TEXT DEFAULT 'draft'",
+            "tags_json": "TEXT DEFAULT '[]'",
+            "permission_departments_json": "TEXT DEFAULT '[]'",
+            "permission_levels_json": "TEXT DEFAULT '[]'",
+            "media_kind": "TEXT DEFAULT ''",
+            "pdf_outline_json": "TEXT DEFAULT '[]'",
+            "media_cues_json": "TEXT DEFAULT '[]'",
+            "updated_at": "TEXT DEFAULT ''",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE delivery_handbook_files ADD COLUMN {col} {ddl}")
+
+
 _ensure_roster_schema_compat()
 _ensure_interview_schema_compat()
+_ensure_handbook_schema_compat()
 
 # --- 3. 后端核心逻辑 ---
 app = FastAPI(title="ITO CRM Ultimate")
@@ -1721,6 +2199,18 @@ async def update_client(
             if visit.attachment and visit.attachment.startswith(f"{old_folder}/"):
                 visit.attachment = visit.attachment.replace(f"{old_folder}/", f"{new_folder}/", 1)
 
+        old_hb_prefix = f"handbooks/{old_folder}/"
+        new_hb_prefix = f"handbooks/{new_folder}/"
+        old_hb_dir = os.path.join(UPLOAD_DIR, "handbooks", old_folder)
+        new_hb_dir = os.path.join(UPLOAD_DIR, "handbooks", new_folder)
+        if old_folder != new_folder and os.path.isdir(old_hb_dir) and not os.path.exists(new_hb_dir):
+            os.makedirs(os.path.join(UPLOAD_DIR, "handbooks"), exist_ok=True)
+            shutil.move(old_hb_dir, new_hb_dir)
+            hb_rows = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.client_id == client_id).all()
+            for hb in hb_rows:
+                if (hb.stored_path or "").startswith(old_hb_prefix):
+                    hb.stored_path = hb.stored_path.replace(old_hb_prefix, new_hb_prefix, 1)
+
     if updates:
         log = AuditLog(client_id=client_id, operator=user, action="; ".join(updates))
         db.add(log)
@@ -1731,10 +2221,16 @@ async def update_client(
 @app.delete("/api/clients/{client_id}")
 async def delete_client(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
     client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="客户不存在")
     client_folder = f"{client.name}_{client.id}"
     src_path = os.path.join(UPLOAD_DIR, client_folder)
     if os.path.exists(src_path):
         shutil.move(src_path, os.path.join(TRASH_DIR, f"{client_folder}_{int(time.time())}"))
+    hb_dir = os.path.join(UPLOAD_DIR, "handbooks", client_folder)
+    if os.path.isdir(hb_dir):
+        shutil.move(hb_dir, os.path.join(TRASH_DIR, f"handbooks_{client_folder}_{int(time.time())}"))
+    db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.client_id == client_id).delete()
 
     db.delete(client)
     db.commit()
@@ -1804,6 +2300,248 @@ async def get_client_brief(client_id: int, db: Session = Depends(get_db), user: 
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
     return {"id": c.id, "name": c.name, "owner": c.owner or "", "phase": c.phase or ""}
+
+
+def _handbook_outline_coerce(raw: Optional[str]) -> List[Dict[str, Any]]:
+    try:
+        v = json.loads(raw or "[]")
+    except Exception:
+        return []
+    return v if isinstance(v, list) else []
+
+
+def _handbook_cues_from_json_string(raw: Optional[str]) -> List[Dict[str, Any]]:
+    try:
+        v = json.loads(raw or "[]")
+    except Exception:
+        return []
+    return _handbook_normalize_media_cues(v if isinstance(v, list) else [])
+
+
+def _handbook_dt_iso(val: Any) -> str:
+    if val is None or val == "":
+        return ""
+    if isinstance(val, datetime):
+        return val.isoformat()
+    try:
+        return str(val)
+    except Exception:
+        return ""
+
+
+def _handbook_row_to_dict(r: DeliveryHandbookFile) -> Dict[str, Any]:
+    sp = (r.stored_path or "").strip()
+    mk = (getattr(r, "media_kind", None) or "").strip()
+    if not mk:
+        mk = _handbook_suffix_to_media_kind(os.path.splitext(r.original_filename or "")[1].lower())
+    outline = _handbook_outline_coerce(getattr(r, "pdf_outline_json", None))
+    return {
+        "id": r.id,
+        "client_id": r.client_id,
+        "original_filename": r.original_filename or "",
+        "stored_path": sp,
+        "preview_url": f"/previews/{sp}" if sp else "",
+        "version_label": (getattr(r, "version_label", None) or "") or "",
+        "status": _handbook_normalize_status(getattr(r, "status", None) or "draft"),
+        "tags": _handbook_parse_json_list(getattr(r, "tags_json", None)),
+        "permission_departments": _handbook_parse_json_list(getattr(r, "permission_departments_json", None)),
+        "permission_levels": _handbook_parse_json_list(getattr(r, "permission_levels_json", None)),
+        "media_kind": mk,
+        "pdf_outline": outline,
+        "media_cues": _handbook_cues_from_json_string(getattr(r, "media_cues_json", None)),
+        "created_at": r.created_at.isoformat() if r.created_at else "",
+        "updated_at": _handbook_dt_iso(getattr(r, "updated_at", None)),
+    }
+
+
+@app.get("/api/clients/{client_id}/delivery/handbooks")
+async def list_delivery_handbooks(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    rows = (
+        db.query(DeliveryHandbookFile)
+        .filter(DeliveryHandbookFile.client_id == client_id)
+        .order_by(desc(DeliveryHandbookFile.created_at))
+        .all()
+    )
+    return [_handbook_row_to_dict(r) for r in rows]
+
+
+@app.post("/api/clients/{client_id}/delivery/handbooks")
+async def upload_delivery_handbooks(
+    client_id: int,
+    files: List[UploadFile] = File(default=[]),
+    version_label: str = Form(default=""),
+    status: str = Form(default="draft"),
+    tags: str = Form(default=""),
+    permission_departments: str = Form(default=""),
+    permission_levels: str = Form(default=""),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    if not files:
+        raise HTTPException(status_code=400, detail="请选择文件")
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    rel_dir = _handbook_client_dir_rel(client)
+    abs_dir = os.path.join(UPLOAD_DIR, rel_dir)
+    os.makedirs(abs_dir, exist_ok=True)
+    ts_base = int(time.time() * 1000000)
+    st = _handbook_normalize_status(status)
+    tags_js = _handbook_labels_to_json_array(tags)
+    pd_js = _handbook_labels_to_json_array(permission_departments)
+    pl_js = _handbook_labels_to_json_array(permission_levels)
+    vlabel = str(version_label or "").strip()
+    payloads: List[Tuple[str, bytes, str, str, str]] = []
+    for idx, up in enumerate(files):
+        raw_name = up.filename or ""
+        ext = os.path.splitext(raw_name)[1].lower()
+        if ext not in HANDBOOK_ALLOWED_SUFFIXES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"不支持的文件类型：{raw_name or '（未命名）'}，"
+                    "允许：PDF、Word、常见音视频（mp4/webm/mp3 等）"
+                ),
+            )
+        content_bytes = await up.read()
+        if len(content_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=400, detail=f"文件超过20MB限制：{raw_name or '未命名'}")
+        safe = _safe_handbook_filename(raw_name)
+        if not os.path.splitext(safe)[1]:
+            safe = safe + ext
+        stored_rel = f"{rel_dir}/{ts_base}_{idx}_{safe}"
+        mk = _handbook_suffix_to_media_kind(ext)
+        payloads.append((stored_rel, content_bytes, raw_name, safe, mk))
+    saved: List[DeliveryHandbookFile] = []
+    now = datetime.now()
+    for stored_rel, content_bytes, raw_name, safe, mk in payloads:
+        with open(os.path.join(UPLOAD_DIR, stored_rel), "wb") as f:
+            f.write(content_bytes)
+        outline_js = "[]"
+        if mk == "pdf":
+            tree = _pdf_bytes_to_outline_tree(content_bytes)
+            outline_js = json.dumps(tree, ensure_ascii=False)
+        row = DeliveryHandbookFile(
+            client_id=client_id,
+            original_filename=raw_name or safe,
+            stored_path=stored_rel,
+            version_label=vlabel,
+            status=st,
+            tags_json=tags_js,
+            permission_departments_json=pd_js,
+            permission_levels_json=pl_js,
+            media_kind=mk,
+            pdf_outline_json=outline_js,
+            media_cues_json="[]",
+            updated_at=now,
+        )
+        db.add(row)
+        saved.append(row)
+    db.commit()
+    for row in saved:
+        db.refresh(row)
+    return [_handbook_row_to_dict(r) for r in saved]
+
+
+@app.patch("/api/clients/{client_id}/delivery/handbooks/{row_id}")
+async def patch_delivery_handbook(
+    client_id: int,
+    row_id: int,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
+    if not row or row.client_id != client_id:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    if not isinstance(body, dict):
+        body = {}
+    if "version_label" in body:
+        row.version_label = str(body.get("version_label") or "").strip()
+    if "status" in body:
+        row.status = _handbook_normalize_status(str(body.get("status") or ""))
+    if "tags" in body:
+        t = body.get("tags")
+        if isinstance(t, list):
+            row.tags_json = json.dumps([str(x).strip() for x in t if str(x).strip()], ensure_ascii=False)
+        else:
+            row.tags_json = _handbook_labels_to_json_array(str(t or ""))
+    if "permission_departments" in body:
+        t = body.get("permission_departments")
+        if isinstance(t, list):
+            row.permission_departments_json = json.dumps(
+                [str(x).strip() for x in t if str(x).strip()], ensure_ascii=False
+            )
+        else:
+            row.permission_departments_json = _handbook_labels_to_json_array(str(t or ""))
+    if "permission_levels" in body:
+        t = body.get("permission_levels")
+        if isinstance(t, list):
+            row.permission_levels_json = json.dumps(
+                [str(x).strip() for x in t if str(x).strip()], ensure_ascii=False
+            )
+        else:
+            row.permission_levels_json = _handbook_labels_to_json_array(str(t or ""))
+    if "media_cues" in body:
+        row.media_cues_json = json.dumps(
+            _handbook_normalize_media_cues(body.get("media_cues")), ensure_ascii=False
+        )
+    row.updated_at = datetime.now()
+    db.commit()
+    db.refresh(row)
+    return _handbook_row_to_dict(row)
+
+
+@app.post("/api/clients/{client_id}/delivery/handbooks/{row_id}/rebuild-pdf-outline")
+async def rebuild_handbook_pdf_outline(
+    client_id: int,
+    row_id: int,
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
+    if not row or row.client_id != client_id:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    mk = (row.media_kind or "").strip() or _handbook_suffix_to_media_kind(
+        os.path.splitext(row.original_filename or "")[1].lower()
+    )
+    if mk != "pdf":
+        raise HTTPException(status_code=400, detail="仅支持 PDF 重新提取目录")
+    path = os.path.join(UPLOAD_DIR, row.stored_path)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="文件不存在")
+    with open(path, "rb") as f:
+        data = f.read()
+    tree = _pdf_bytes_to_outline_tree(data)
+    row.pdf_outline_json = json.dumps(tree, ensure_ascii=False)
+    row.updated_at = datetime.now()
+    db.commit()
+    db.refresh(row)
+    return _handbook_row_to_dict(row)
+
+
+@app.delete("/api/clients/{client_id}/delivery/handbooks/{row_id}")
+async def delete_delivery_handbook(
+    client_id: int,
+    row_id: int,
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
+    if not row or row.client_id != client_id:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    path = os.path.join(UPLOAD_DIR, row.stored_path)
+    if os.path.isfile(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    db.delete(row)
+    db.commit()
+    return {"status": "ok"}
 
 
 @app.get("/api/roster")

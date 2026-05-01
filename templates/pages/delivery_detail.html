@@ -1082,7 +1082,198 @@
             </table>
             </div>
         </div>
+        <div v-else-if="moduleKey === 'handbook'" class="mt-4 flex flex-col flex-1 min-h-0 gap-4">
+            <div class="rounded-lg border border-gray-200 bg-slate-50/80 p-4 space-y-3 shrink-0">
+                <p class="text-sm text-gray-600">上传时填写元数据（同一批文件共用）。PDF 阅读器左侧目录来自文件书签；音视频可内嵌播放并在「锚点」中维护时间戳。单文件 ≤ 20MB。部门 / 级别权限当前仅存档。</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 text-xs">
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">版本号</span><input v-model="handbookUploadMeta.version_label" type="text" class="crm-form-control" placeholder="如 V2.0" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">状态</span>
+                        <select v-model="handbookUploadMeta.status" class="crm-form-control">
+                            <option value="draft">草稿</option>
+                            <option value="published">已发布</option>
+                            <option value="deprecated">已作废</option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">标签（逗号分隔）</span><input v-model="handbookUploadMeta.tags" type="text" class="crm-form-control" placeholder="招聘流程, 财务报销" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">阅读·部门</span><input v-model="handbookUploadMeta.permission_departments" type="text" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">阅读·级别</span><input v-model="handbookUploadMeta.permission_levels" type="text" class="crm-form-control" /></label>
+                    <div class="flex items-end">
+                        <button type="button" class="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50" :disabled="handbookUploading" @click="handbookFileInput && handbookFileInput.click()">{{ handbookUploading ? '上传中…' : '选择文件上传' }}</button>
+                    </div>
+                </div>
+                <input ref="handbookFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookFilesSelected" />
+            </div>
+            <div v-if="handbookUploadError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shrink-0">{{ handbookUploadError }}</div>
+            <div class="flex flex-wrap items-center gap-3 shrink-0">
+                <label class="text-xs text-gray-600 flex items-center gap-2">列表筛选
+                    <select v-model="handbookStatusFilter" class="crm-form-control w-32">
+                        <option value="">全部状态</option>
+                        <option value="draft">草稿</option>
+                        <option value="published">已发布</option>
+                        <option value="deprecated">已作废</option>
+                    </select>
+                </label>
+            </div>
+            <div class="border border-gray-200 rounded-lg overflow-hidden flex flex-col flex-1 min-h-0 bg-white">
+                <div v-if="!filteredHandbookFiles.length" class="p-10 text-center text-gray-400 text-sm">暂无手册，请上传。</div>
+                <div v-else class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-50 text-left text-xs text-gray-600">
+                            <tr>
+                                <th class="px-3 py-2 font-medium">文件</th>
+                                <th class="px-3 py-2 font-medium">版本</th>
+                                <th class="px-3 py-2 font-medium">状态</th>
+                                <th class="px-3 py-2 font-medium">类型</th>
+                                <th class="px-3 py-2 font-medium">标签 / 权限</th>
+                                <th class="px-3 py-2 font-medium">时间</th>
+                                <th class="px-3 py-2 font-medium text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            <tr v-for="f in filteredHandbookFiles" :key="f.id" class="hover:bg-gray-50/80">
+                                <td class="px-3 py-2 font-medium text-gray-900 max-w-[14rem] truncate" :title="f.original_filename">{{ f.original_filename }}</td>
+                                <td class="px-3 py-2 text-gray-700">{{ f.version_label || '—' }}</td>
+                                <td class="px-3 py-2"><span class="rounded-full px-2 py-0.5 text-xs" :class="handbookStatusClass(f.status)">{{ handbookStatusLabel(f.status) }}</span></td>
+                                <td class="px-3 py-2 text-gray-600">{{ handbookMediaLabel(f) }}</td>
+                                <td class="px-3 py-2 text-xs text-gray-500 max-w-[14rem]">
+                                    <span v-if="(f.tags||[]).length">标：{{ (f.tags||[]).join('、') }}<br /></span>
+                                    <span v-if="(f.permission_departments||[]).length">部：{{ (f.permission_departments||[]).join('、') }}</span>
+                                    <span v-if="(f.permission_levels||[]).length"><br />级：{{ (f.permission_levels||[]).join('、') }}</span>
+                                    <span v-if="!(f.tags||[]).length && !(f.permission_departments||[]).length && !(f.permission_levels||[]).length">—</span>
+                                </td>
+                                <td class="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{{ formatDate(f.created_at) }}</td>
+                                <td class="px-3 py-2 text-right whitespace-nowrap space-x-2">
+                                    <button v-if="f.media_kind === 'pdf'" type="button" class="text-indigo-600 hover:underline" @click="openHandbookReader(f)">阅读</button>
+                                    <button v-else-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="text-indigo-600 hover:underline" @click="openHandbookReader(f)">播放</button>
+                                    <button type="button" class="text-gray-700 hover:underline" @click="openHandbookMetaModal(f)">元数据</button>
+                                    <button v-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="text-gray-700 hover:underline" @click="openHandbookCuesModal(f)">锚点</button>
+                                    <a :href="f.preview_url" target="_blank" rel="noopener" class="text-blue-600 hover:underline">下载</a>
+                                    <button type="button" class="text-red-600 hover:underline" @click="removeHandbook(f)">删除</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
         <p v-else class="text-gray-600 mt-2">当前为该客户的{{ moduleTitle }}页面占位，可在此接入该模块的业务表单、列表与图表。</p>
+    </div>
+
+    <Teleport to="body">
+    <div
+        v-if="handbookReaderRow"
+        class="fixed inset-0 z-[110] box-border flex flex-col bg-black/50 p-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="手册阅读"
+        @click.self="closeHandbookReader"
+    >
+        <div
+            class="relative flex flex-col flex-1 min-h-0 w-full overflow-hidden rounded-none border border-slate-200/90 bg-white shadow-2xl sm:rounded-xl"
+            @click.stop
+        >
+            <div class="relative z-10 flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 bg-indigo-50/60 px-4 py-3.5">
+                <div class="min-w-0">
+                    <p class="text-sm font-semibold text-gray-900 truncate">{{ handbookReaderRow.original_filename }}</p>
+                    <p class="text-xs text-gray-500">{{ handbookMediaLabel(handbookReaderRow) }} · {{ handbookReaderRow.version_label || '无版本号' }}</p>
+                </div>
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 shrink-0" @click="closeHandbookReader">关闭</button>
+            </div>
+            <div v-if="handbookReaderRow.media_kind === 'pdf'" class="flex flex-1 min-h-0 divide-x divide-gray-200">
+                <aside class="w-52 sm:w-60 shrink-0 min-h-0 overflow-y-auto bg-slate-50 p-2 text-sm">
+                    <div class="flex items-center justify-between gap-1 px-2 py-1">
+                        <p class="text-xs font-semibold text-gray-500">目录</p>
+                        <button type="button" class="text-[11px] text-blue-600 hover:underline shrink-0" title="从书签或正文再次识别目录" @click="rebuildHandbookOutline">刷新</button>
+                    </div>
+                    <button
+                        v-for="(item, idx) in handbookPdfOutlineFlat"
+                        :key="'toc-'+idx"
+                        type="button"
+                        class="w-full text-left rounded px-2 py-1.5 hover:bg-white hover:text-indigo-700"
+                        :class="handbookReaderPdfPage === item.page ? 'bg-white text-indigo-700 font-medium shadow-sm' : 'text-gray-700'"
+                        :style="{ paddingLeft: (8 + item.depth * 12) + 'px' }"
+                        @click="setHandbookPdfPage(item.page)"
+                    >{{ item.title }}</button>
+                </aside>
+                <div class="flex-1 min-w-0 min-h-0 bg-neutral-200 flex flex-col">
+                    <iframe class="w-full flex-1 min-h-0 border-0" title="PDF 预览" :src="handbookPdfIframeSrc"></iframe>
+                </div>
+            </div>
+            <div v-else-if="handbookReaderRow.media_kind === 'video'" class="flex flex-1 min-h-0 flex-col sm:flex-row gap-3 p-3 overflow-hidden">
+                <div class="flex-1 min-w-0 min-h-0 flex items-center justify-center bg-black rounded-lg overflow-hidden">
+                    <video ref="handbookMediaRef" class="w-full h-full object-contain" controls :src="handbookReaderRow.preview_url" />
+                </div>
+                <aside class="w-full sm:w-52 shrink-0 min-h-0 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
+                    <p class="text-xs font-semibold text-gray-600 mb-2">时间戳索引</p>
+                    <button v-for="(c, i) in (handbookReaderRow.media_cues || [])" :key="'cue-v-'+i" type="button" class="block w-full text-left text-xs py-1.5 px-2 rounded hover:bg-white text-indigo-700" @click="seekHandbookMedia(c.seconds)">
+                        <span class="font-mono text-gray-500">{{ formatHandbookSeconds(c.seconds) }}</span> {{ c.label }}
+                    </button>
+                    <p v-if="!(handbookReaderRow.media_cues || []).length" class="text-xs text-gray-400">暂无锚点，可在列表「锚点」中编辑。</p>
+                </aside>
+            </div>
+            <div v-else-if="handbookReaderRow.media_kind === 'audio'" class="flex flex-1 min-h-0 flex-col sm:flex-row gap-3 p-3 overflow-hidden">
+                <div class="flex-1 min-w-0 min-h-0 flex flex-col justify-center">
+                    <audio ref="handbookMediaRef" class="w-full" controls :src="handbookReaderRow.preview_url" />
+                </div>
+                <aside class="w-full sm:w-52 shrink-0 min-h-0 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
+                    <p class="text-xs font-semibold text-gray-600 mb-2">时间戳索引</p>
+                    <button v-for="(c, i) in (handbookReaderRow.media_cues || [])" :key="'cue-a-'+i" type="button" class="block w-full text-left text-xs py-1.5 px-2 rounded hover:bg-white text-indigo-700" @click="seekHandbookMedia(c.seconds)">
+                        <span class="font-mono text-gray-500">{{ formatHandbookSeconds(c.seconds) }}</span> {{ c.label }}
+                    </button>
+                    <p v-if="!(handbookReaderRow.media_cues || []).length" class="text-xs text-gray-400">暂无锚点。</p>
+                </aside>
+            </div>
+            <div v-else class="p-6 text-sm text-gray-600 shrink-0">该类型请使用「下载」后本地查看。</div>
+        </div>
+    </div>
+    </Teleport>
+
+    <div v-if="handbookMetaModalOpen" class="fixed inset-0 z-[58] flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg text-gray-900">编辑手册元数据</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="handbookMetaModalOpen=false">&times;</button>
+            </div>
+            <div class="p-5 space-y-3 text-sm shrink-0">
+                <label class="flex flex-col gap-1"><span class="text-gray-600 text-xs">版本号</span><input v-model="handbookMetaForm.version_label" type="text" class="crm-form-control" /></label>
+                <label class="flex flex-col gap-1"><span class="text-gray-600 text-xs">状态</span>
+                    <select v-model="handbookMetaForm.status" class="crm-form-control">
+                        <option value="draft">草稿</option>
+                        <option value="published">已发布</option>
+                        <option value="deprecated">已作废</option>
+                    </select>
+                </label>
+                <label class="flex flex-col gap-1"><span class="text-gray-600 text-xs">标签（逗号分隔）</span><input v-model="handbookMetaForm.tags" type="text" class="crm-form-control" /></label>
+                <label class="flex flex-col gap-1"><span class="text-gray-600 text-xs">阅读·部门</span><input v-model="handbookMetaForm.permission_departments" type="text" class="crm-form-control" /></label>
+                <label class="flex flex-col gap-1"><span class="text-gray-600 text-xs">阅读·级别</span><input v-model="handbookMetaForm.permission_levels" type="text" class="crm-form-control" /></label>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
+                <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm" @click="handbookMetaModalOpen=false">取消</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="saveHandbookMeta">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="handbookCuesModalOpen" class="fixed inset-0 z-[58] flex items-center justify-center bg-black/45 p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg text-gray-900">时间戳锚点</h3>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="handbookCuesModalOpen=false">&times;</button>
+            </div>
+            <div class="p-5 overflow-y-auto flex-1 min-h-0 space-y-2 text-sm">
+                <p class="text-xs text-gray-500">秒数可为小数；示例：面试环节 → 200 表示跳转到 3:20。</p>
+                <div v-for="(c, i) in handbookCuesEdit" :key="'cue-e-'+i" class="flex gap-2 items-center">
+                    <input v-model="c.label" type="text" placeholder="标题" class="crm-form-control flex-1 min-w-0" />
+                    <input v-model.number="c.seconds" type="number" min="0" step="0.1" class="crm-form-control w-24" placeholder="秒" />
+                    <button type="button" class="text-red-600 text-xs shrink-0" @click="handbookCuesEdit.splice(i,1)">删</button>
+                </div>
+                <button type="button" class="text-sm text-blue-600 hover:underline" @click="handbookCuesEdit.push({ label: '', seconds: 0 })">+ 添加锚点</button>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
+                <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm" @click="handbookCuesModalOpen=false">取消</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="saveHandbookCues">保存</button>
+            </div>
+        </div>
     </div>
 
     <div v-if="showPipelineForm && moduleKey === 'pipeline'" class="delivery-detail-modal-overlay">
@@ -1505,6 +1696,18 @@ const INTERVIEW_DATE_FIELD_KEYS = new Set(
     INTERVIEW_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
 );
 
+function flattenHandbookOutline(nodes, depth = 0) {
+    const out = [];
+    (nodes || []).forEach((n) => {
+        const page = Number(n.page) > 0 ? Number(n.page) : 1;
+        out.push({ title: n.title || '未命名', page, depth });
+        if (n.children && n.children.length) {
+            out.push(...flattenHandbookOutline(n.children, depth + 1));
+        }
+    });
+    return out;
+}
+
 function emptySettlementForm() {
     const f = {};
     SETTLEMENT_FIELDS.forEach((x) => { f[x.key] = ''; });
@@ -1783,12 +1986,59 @@ createApp({
         const pipelineBatchOperationValue = ref('');
         const pipelineFilter = reactive(emptyPipelineFilter());
         const interviewFileInput = ref(null);
+        const handbookUploadMeta = reactive({
+            version_label: '',
+            status: 'draft',
+            tags: '',
+            permission_departments: '',
+            permission_levels: '',
+        });
+        const handbookStatusFilter = ref('');
+        const handbookFiles = ref([]);
+        const handbookFileInput = ref(null);
+        const handbookUploading = ref(false);
+        const handbookUploadError = ref('');
+        const handbookReaderRow = ref(null);
+        const handbookReaderPdfPage = ref(1);
+        const handbookMediaRef = ref(null);
+        const handbookMetaModalOpen = ref(false);
+        const handbookMetaForm = reactive({
+            id: null,
+            version_label: '',
+            status: 'draft',
+            tags: '',
+            permission_departments: '',
+            permission_levels: '',
+        });
+        const handbookCuesModalOpen = ref(false);
+        const handbookCuesEdit = ref([]);
+        const handbookCuesEditingId = ref(null);
         const interviewRows = ref([]);
         const interviewFilter = reactive(emptyInterviewFilter());
         const rosterRows = ref([]);
         const interviewHints = ref(emptyInterviewRosterHints());
         const interviewHintRan = ref(false);
         const interviewHintBannerRef = ref(null);
+        const filteredHandbookFiles = computed(() => {
+            let rows = Array.isArray(handbookFiles.value) ? [...handbookFiles.value] : [];
+            const st = handbookStatusFilter.value;
+            if (st) rows = rows.filter((r) => r.status === st);
+            return rows;
+        });
+        const handbookPdfOutlineFlat = computed(() => {
+            const row = handbookReaderRow.value;
+            if (!row || row.media_kind !== 'pdf') return [];
+            const o = row.pdf_outline;
+            if (o && o.length) return flattenHandbookOutline(o);
+            return [{ title: '文档首页', page: 1, depth: 0 }];
+        });
+        const handbookPdfIframeSrc = computed(() => {
+            const row = handbookReaderRow.value;
+            if (!row || row.media_kind !== 'pdf') return '';
+            const p = handbookReaderPdfPage.value || 1;
+            const base = row.preview_url || '';
+            return base ? `${base}#page=${p}` : '';
+        });
         const interviewHintTotal = computed(() => {
             const h = interviewHints.value;
             return (
@@ -2935,6 +3185,215 @@ createApp({
             const t = new Date(ds);
             return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
         };
+        const handbookStatusLabel = (s) => ({ draft: '草稿', published: '已发布', deprecated: '已作废' }[s] || s || '—');
+        const handbookStatusClass = (s) => {
+            if (s === 'published') return 'bg-green-100 text-green-800';
+            if (s === 'deprecated') return 'bg-gray-200 text-gray-600';
+            return 'bg-amber-50 text-amber-800';
+        };
+        const handbookMediaLabel = (row) => {
+            const mk = row && row.media_kind ? row.media_kind : '';
+            if (mk === 'pdf') return 'PDF';
+            if (mk === 'video') return '视频';
+            if (mk === 'audio') return '音频';
+            if (mk === 'document') return '文档';
+            return '文件';
+        };
+        const formatHandbookSeconds = (sec) => {
+            const s = Math.max(0, Number(sec) || 0);
+            const m = Math.floor(s / 60);
+            const r = Math.floor(s % 60);
+            return `${m}:${String(r).padStart(2, '0')}`;
+        };
+        const syncHandbookReaderFromList = () => {
+            const cur = handbookReaderRow.value;
+            if (!cur || !cur.id) return;
+            const found = handbookFiles.value.find((x) => Number(x.id) === Number(cur.id));
+            if (found) handbookReaderRow.value = found;
+        };
+        const openHandbookReader = async (row) => {
+            handbookReaderRow.value = row;
+            handbookReaderPdfPage.value = 1;
+            const po = row.pdf_outline;
+            if (row.media_kind === 'pdf' && (!Array.isArray(po) || !po.length)) {
+                try {
+                    const r = await fetch(`/api/clients/${clientId}/delivery/handbooks/${row.id}/rebuild-pdf-outline`, {
+                        method: 'POST',
+                        headers: window.crmAuthHeader(),
+                    });
+                    if (r.ok) {
+                        const updated = await r.json();
+                        if (
+                            handbookReaderRow.value &&
+                            Number(handbookReaderRow.value.id) === Number(row.id)
+                        ) {
+                            handbookReaderRow.value = updated;
+                        }
+                        await loadHandbooks();
+                    }
+                } catch (e) { /* ignore */ }
+            }
+        };
+        const closeHandbookReader = () => {
+            handbookReaderRow.value = null;
+        };
+        const setHandbookPdfPage = (page) => {
+            handbookReaderPdfPage.value = Math.max(1, Number(page) || 1);
+        };
+        const seekHandbookMedia = (seconds) => {
+            const el = handbookMediaRef.value;
+            if (el && Number.isFinite(Number(seconds))) {
+                el.currentTime = Math.max(0, Number(seconds));
+                try {
+                    el.play();
+                } catch (e) { /* ignore */ }
+            }
+        };
+        const openHandbookMetaModal = (f) => {
+            handbookMetaForm.id = f.id;
+            handbookMetaForm.version_label = f.version_label || '';
+            handbookMetaForm.status = f.status || 'draft';
+            handbookMetaForm.tags = Array.isArray(f.tags) ? f.tags.join(', ') : '';
+            handbookMetaForm.permission_departments = Array.isArray(f.permission_departments)
+                ? f.permission_departments.join(', ')
+                : '';
+            handbookMetaForm.permission_levels = Array.isArray(f.permission_levels) ? f.permission_levels.join(', ') : '';
+            handbookMetaModalOpen.value = true;
+        };
+        const saveHandbookMeta = async () => {
+            const id = handbookMetaForm.id;
+            if (!id) return;
+            const body = {
+                version_label: handbookMetaForm.version_label,
+                status: handbookMetaForm.status,
+                tags: handbookMetaForm.tags,
+                permission_departments: handbookMetaForm.permission_departments,
+                permission_levels: handbookMetaForm.permission_levels,
+            };
+            const r = await fetch(`/api/clients/${clientId}/delivery/handbooks/${id}`, {
+                method: 'PATCH',
+                headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            if (!r.ok) {
+                alert('保存失败');
+                return;
+            }
+            handbookMetaModalOpen.value = false;
+            await loadHandbooks();
+            syncHandbookReaderFromList();
+        };
+        const openHandbookCuesModal = (f) => {
+            handbookCuesEditingId.value = f.id;
+            handbookCuesEdit.value = (f.media_cues || []).map((c) => ({
+                label: c.label || '',
+                seconds: Number(c.seconds) || 0,
+            }));
+            if (!handbookCuesEdit.value.length) {
+                handbookCuesEdit.value = [{ label: '', seconds: 0 }];
+            }
+            handbookCuesModalOpen.value = true;
+        };
+        const saveHandbookCues = async () => {
+            const id = handbookCuesEditingId.value;
+            if (!id) return;
+            const cues = handbookCuesEdit.value
+                .filter((c) => String(c.label || '').trim() || Number(c.seconds) > 0)
+                .map((c) => ({
+                    label: String(c.label || '').trim() || '锚点',
+                    seconds: Math.max(0, Number(c.seconds) || 0),
+                }));
+            const r = await fetch(`/api/clients/${clientId}/delivery/handbooks/${id}`, {
+                method: 'PATCH',
+                headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ media_cues: cues }),
+            });
+            if (!r.ok) {
+                alert('保存失败');
+                return;
+            }
+            handbookCuesModalOpen.value = false;
+            await loadHandbooks();
+            syncHandbookReaderFromList();
+        };
+        const rebuildHandbookOutline = async () => {
+            const row = handbookReaderRow.value;
+            if (!row || row.media_kind !== 'pdf') return;
+            const r = await fetch(`/api/clients/${clientId}/delivery/handbooks/${row.id}/rebuild-pdf-outline`, {
+                method: 'POST',
+                headers: window.crmAuthHeader(),
+            });
+            if (!r.ok) {
+                let msg = '目录提取失败';
+                try {
+                    const j = await r.json();
+                    if (typeof j.detail === 'string') msg = j.detail;
+                } catch (e) { /* ignore */ }
+                alert(msg);
+                return;
+            }
+            const updated = await r.json();
+            handbookReaderRow.value = updated;
+            await loadHandbooks();
+        };
+        const loadHandbooks = async () => {
+            if (moduleKey !== 'handbook') return;
+            handbookUploadError.value = '';
+            const r = await fetch(`/api/clients/${clientId}/delivery/handbooks`, { headers: window.crmAuthHeader() });
+            handbookFiles.value = r.ok ? await r.json() : [];
+        };
+        const onHandbookFilesSelected = async (ev) => {
+            const input = ev.target;
+            const list = input && input.files ? Array.from(input.files) : [];
+            if (input) input.value = '';
+            if (!list.length) return;
+            handbookUploadError.value = '';
+            handbookUploading.value = true;
+            try {
+                const fd = new FormData();
+                list.forEach((file) => fd.append('files', file));
+                fd.append('version_label', handbookUploadMeta.version_label || '');
+                fd.append('status', handbookUploadMeta.status || 'draft');
+                fd.append('tags', handbookUploadMeta.tags || '');
+                fd.append('permission_departments', handbookUploadMeta.permission_departments || '');
+                fd.append('permission_levels', handbookUploadMeta.permission_levels || '');
+                const r = await fetch(`/api/clients/${clientId}/delivery/handbooks`, {
+                    method: 'POST',
+                    headers: window.crmAuthHeader(),
+                    body: fd,
+                });
+                if (!r.ok) {
+                    let msg = '上传失败';
+                    try {
+                        const j = await r.json();
+                        const d = j.detail;
+                        if (typeof d === 'string') msg = d;
+                        else if (Array.isArray(d) && d.length) msg = d.map((x) => x.msg || JSON.stringify(x)).join('；');
+                        else if (d) msg = JSON.stringify(d);
+                    } catch (err) { /* ignore */ }
+                    handbookUploadError.value = msg;
+                    return;
+                }
+                await loadHandbooks();
+            } finally {
+                handbookUploading.value = false;
+            }
+        };
+        const removeHandbook = async (row) => {
+            if (!confirm(`确定删除「${row.original_filename || '该文件'}」？`)) return;
+            if (handbookReaderRow.value && Number(handbookReaderRow.value.id) === Number(row.id)) {
+                handbookReaderRow.value = null;
+            }
+            const r = await fetch(`/api/clients/${clientId}/delivery/handbooks/${row.id}`, {
+                method: 'DELETE',
+                headers: window.crmAuthHeader(),
+            });
+            if (!r.ok) {
+                alert('删除失败');
+                return;
+            }
+            await loadHandbooks();
+        };
         const scrollToTop = () => {
             if (moduleKey === 'pipeline' && pipelineScrollWrap.value && typeof pipelineScrollWrap.value.scrollTo === 'function') {
                 pipelineScrollWrap.value.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3005,9 +3464,14 @@ createApp({
             }
             await loadSettlementRows();
         };
+        const onHandbookReaderEscape = (e) => {
+            if (e.key !== 'Escape') return;
+            if (handbookReaderRow.value) closeHandbookReader();
+        };
         onMounted(async () => {
             document.addEventListener('click', handleDocumentClick);
             document.addEventListener('focusin', handleDocumentFocusIn);
+            document.addEventListener('keydown', onHandbookReaderEscape);
             await loadBrief();
             await loadSettlementRows();
             await loadPipelineRows();
@@ -3018,10 +3482,14 @@ createApp({
             if (moduleKey === 'interviews') {
                 openInterviewEditByQuery();
             }
+            if (moduleKey === 'handbook') {
+                await loadHandbooks();
+            }
         });
         onBeforeUnmount(() => {
             document.removeEventListener('click', handleDocumentClick);
             document.removeEventListener('focusin', handleDocumentFocusIn);
+            document.removeEventListener('keydown', onHandbookReaderEscape);
         });
         return {
             moduleKey, moduleTitle, clientId, clientName,
@@ -3034,7 +3502,14 @@ createApp({
             checkedPipelineCount, openPipelineBatchModal, closePipelineBatchModal, applyPipelineBatchOperation,
             showOnlyCheckedPipeline, toggleShowOnlyCheckedPipeline,
             isPipelineRowChecked, setPipelineRowChecked,
-            pipelineFields: PIPELINE_FIELDS, pipelineCompactFields: PIPELINE_COMPACT_FIELDS, pipelineTextareaFields: PIPELINE_TEXTAREA_FIELDS, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput, pipelineScrollWrap,
+            pipelineFields: PIPELINE_FIELDS, pipelineCompactFields: PIPELINE_COMPACT_FIELDS, pipelineTextareaFields: PIPELINE_TEXTAREA_FIELDS, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput,
+            handbookUploadMeta, handbookStatusFilter, filteredHandbookFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
+            handbookFiles, handbookFileInput, handbookUploading, handbookUploadError, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
+            handbookMetaModalOpen, handbookMetaForm, handbookCuesModalOpen, handbookCuesEdit,
+            handbookStatusLabel, handbookStatusClass, handbookMediaLabel, formatHandbookSeconds,
+            loadHandbooks, onHandbookFilesSelected, removeHandbook, openHandbookReader, closeHandbookReader, setHandbookPdfPage, seekHandbookMedia,
+            openHandbookMetaModal, saveHandbookMeta, openHandbookCuesModal, saveHandbookCues, rebuildHandbookOutline,
+            pipelineScrollWrap,
             PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,
             pipelinePeriodValue, pipelinePeriodDisplay, pipelinePeriodPanelStyle, togglePipelinePeriodDropdown, setPipelinePeriodHoverMonth, selectPipelinePeriod, clearPipelinePeriodField,
             showPipelineForm, pipelineEditingId, pipelineFormReadonly, pipelineForm, returnToInsight,
