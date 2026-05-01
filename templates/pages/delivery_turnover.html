@@ -106,7 +106,7 @@
         padding-left: 8px;
         padding-right: 8px;
     }
-    /* 顶栏 z-100 盖在看板之上；白底总高须 = 100vh - 上下留白，避免贴 Dock；正文在 .turnover-dash-panel-body 内滚动 */
+    /* 顶栏约 3.5rem：看板上沿留白对齐；正文在 .turnover-dash-panel-body 内滚动。Glass 主题为 z-index:110，覆盖全局顶栏。 */
     .turnover-dash-overlay {
         z-index: 60;
         --crm-dash-from-header: calc(3.5rem + 1.5rem);
@@ -261,6 +261,248 @@
         color: #dc2626;
         font-weight: 700;
         margin-left: 0.15em;
+    }
+
+    /* —— 离职率分析看板：FlowMail / Soft UI 浅色 · 白卡片 + 紫蓝强调 —— */
+    .turnover-dash-glass.turnover-dash-overlay {
+        z-index: 110;
+        background-color: #eef0f6;
+        background-image:
+            radial-gradient(ellipse 120% 80% at 10% -20%, rgba(99, 102, 241, 0.07), transparent 55%),
+            radial-gradient(ellipse 90% 50% at 100% 0%, rgba(139, 92, 246, 0.05), transparent 50%);
+        padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
+        padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
+    }
+    .turnover-dash-glass .turnover-dash-panel-shell {
+        border-radius: 1.25rem;
+        background: #ffffff;
+        border: 1px solid rgba(226, 232, 240, 0.95);
+        box-shadow:
+            0 4px 6px -1px rgba(15, 23, 42, 0.05),
+            0 10px 40px -12px rgba(15, 23, 42, 0.08),
+            0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+        color: #1e293b;
+    }
+    .turnover-dash-glass .turnover-dash-head {
+        border-bottom: 1px solid #eef0f6;
+    }
+    .turnover-dash-glass .turnover-dash-filter-strip {
+        background: #f8fafc;
+        border-bottom: 1px solid #eef0f6;
+    }
+    .turnover-dash-glass .turnover-dash-filter-strip label span {
+        color: #64748b;
+        font-weight: 500;
+    }
+    .turnover-dash-glass .turnover-dash-filter-strip .crm-form-control {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        color: #0f172a;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+    .turnover-dash-glass .turnover-dash-filter-strip .crm-form-control:focus {
+        border-color: #a5b4fc;
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+    }
+    .turnover-dash-glass .turnover-dash-btn-primary {
+        background: linear-gradient(135deg, #6366f1 0%, #7c3aed 55%, #8b5cf6 100%);
+        color: #ffffff;
+        border: 1px solid rgba(99, 102, 241, 0.35);
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.28), 0 1px 2px rgba(15, 23, 42, 0.04);
+        border-radius: 0.75rem;
+        font-weight: 600;
+    }
+    .turnover-dash-glass .turnover-dash-btn-primary:hover:not(:disabled) {
+        filter: brightness(1.04);
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35);
+    }
+    .turnover-dash-glass .turnover-dash-btn-ghost {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        color: #475569;
+        border-radius: 0.75rem;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    }
+    .turnover-dash-glass .turnover-dash-btn-ghost:hover:not(:disabled) {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+        color: #334155;
+    }
+    .turnover-dash-glass .turnover-dash-close {
+        color: #94a3b8;
+    }
+    .turnover-dash-glass .turnover-dash-btn-primary:disabled,
+    .turnover-dash-glass .turnover-dash-btn-ghost:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .turnover-dash-glass .turnover-dash-scope-subtitle {
+        color: #6366f1 !important;
+        font-weight: 500;
+    }
+    .turnover-dash-glass .turnover-dash-share-label {
+        color: #334155 !important;
+    }
+    .turnover-dash-glass .turnover-dash-period-range {
+        color: #94a3b8 !important;
+    }
+    .turnover-dash-glass .turnover-dash-panel-body {
+        background: #f8fafc;
+    }
+    .turnover-dash-glass .turnover-dash-kpi {
+        border: 1px solid #eef0f6;
+        border-radius: 1rem;
+        padding: 0.875rem 1rem;
+        background: #ffffff;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.03);
+    }
+    .turnover-dash-glass .turnover-dash-kpi .text-xs.text-gray-500 {
+        color: #64748b !important;
+        font-weight: 500;
+    }
+    .turnover-dash-glass .turnover-dash-kpi .text-xl,
+    .turnover-dash-glass .turnover-dash-kpi .text-lg {
+        color: #0f172a !important;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    .turnover-dash-glass .turnover-dash-kpi-rate {
+        color: #4f46e5 !important;
+        font-weight: 800;
+        text-shadow: none;
+    }
+    .turnover-dash-glass .turnover-dash-section-title {
+        color: #0f172a;
+        font-weight: 600;
+        letter-spacing: -0.015em;
+    }
+    .turnover-dash-glass .turnover-dash-footnote,
+    .turnover-dash-glass .turnover-dash-panel-body > p.text-xs.text-gray-400,
+    .turnover-dash-glass .turnover-dash-panel-body > p.text-xs.text-gray-500 {
+        color: #64748b !important;
+    }
+    .turnover-dash-glass .turnover-dash-panel-body .text-red-600 {
+        color: #dc2626 !important;
+    }
+    .turnover-dash-glass .turnover-dash-bar-track {
+        height: 0.5rem;
+        border-radius: 9999px;
+        background: #f1f5f9;
+        box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+        overflow: hidden;
+    }
+    .turnover-dash-glass .turnover-dash-bar-fill.turnover-dash-bar-fill--lavender {
+        background: linear-gradient(90deg, #818cf8, #6366f1, #7c3aed) !important;
+        box-shadow: none;
+        border-radius: 9999px;
+    }
+    .turnover-dash-glass .turnover-dash-share-bar-track {
+        height: 0.5rem;
+        background: #f1f5f9;
+        border: 1px solid #eef0f6;
+        border-radius: 9999px;
+        overflow: hidden;
+    }
+    .turnover-dash-glass .turnover-dash-share-bar-fill {
+        background: linear-gradient(90deg, #a5b4fc, #6366f1, #7c3aed) !important;
+        border-radius: 9999px;
+        box-shadow: none;
+    }
+    .turnover-dash-glass .turnover-dash-metric-trigger:hover {
+        color: #4f46e5 !important;
+    }
+    .turnover-dash-glass .turnover-dash-qmark {
+        color: #6366f1;
+        border-color: #c7d2fe;
+        background: #eef2ff;
+    }
+    .turnover-dash-glass .turnover-dash-table-wrap {
+        border: 1px solid #eef0f6;
+        background: #ffffff;
+        border-radius: 1rem;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
+    .turnover-dash-glass .turnover-dash-table-wrap table {
+        border-collapse: collapse;
+    }
+    .turnover-dash-glass .turnover-dash-table-wrap table thead {
+        background: #f8fafc !important;
+    }
+    .turnover-dash-glass .turnover-dash-table-wrap table thead th {
+        color: #64748b !important;
+        font-weight: 600;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        border-bottom: 1px solid #eef0f6;
+    }
+    .turnover-dash-glass .turnover-dash-table-wrap table tbody td {
+        color: #334155 !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+    }
+    .turnover-dash-glass .turnover-dash-table-wrap table tbody tr:last-child td {
+        border-bottom: none !important;
+    }
+    .turnover-dash-glass .turnover-dash-table-wrap table tbody tr {
+        border: none !important;
+    }
+    .turnover-dash-glass .turnover-dash-table-wrap + p.text-xs {
+        color: #94a3b8 !important;
+    }
+    .turnover-dash-glass .turnover-dash-split-card {
+        border: 1px solid #eef0f6;
+        border-radius: 1rem;
+        background: #ffffff;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+    }
+    .turnover-dash-glass .turnover-dash-split-card li {
+        border-color: #f1f5f9 !important;
+        color: #334155;
+    }
+    .turnover-dash-glass .turnover-dash-split-card h4 + ul + p {
+        color: #64748b !important;
+    }
+    .turnover-dash-glass .turnover-dash-mini-table-wrap {
+        border: 1px solid #eef0f6 !important;
+        background: #ffffff;
+        border-radius: 1rem;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+        overflow: hidden;
+    }
+    .turnover-dash-glass .turnover-dash-mini-table-wrap thead {
+        background: #f8fafc !important;
+    }
+    .turnover-dash-glass .turnover-dash-mini-table-wrap thead th {
+        color: #64748b !important;
+        border-bottom: 1px solid #eef0f6;
+    }
+    .turnover-dash-glass .turnover-dash-mini-table-wrap tbody td {
+        color: #334155 !important;
+        border-bottom: 1px solid #f1f5f9 !important;
+    }
+    .turnover-dash-glass .turnover-dash-mini-table-wrap tbody tr:last-child td {
+        border-bottom: none !important;
+    }
+    .turnover-dash-glass .turnover-dash-mini-table-wrap tbody tr {
+        border-color: transparent !important;
+    }
+    .turnover-dash-glass .turnover-dash-close:hover {
+        color: #475569;
+    }
+    /* 正文内恢复原浅色语义（取消深色主题的强制浅色字） */
+    .turnover-dash-glass .turnover-dash-panel-body .text-gray-900,
+    .turnover-dash-glass .turnover-dash-panel-body .text-gray-800 {
+        color: #0f172a !important;
+    }
+    .turnover-dash-glass .turnover-dash-panel-body .text-gray-700,
+    .turnover-dash-glass .turnover-dash-panel-body .text-gray-600 {
+        color: #475569 !important;
+    }
+    .turnover-dash-glass .turnover-dash-panel-body .text-gray-500,
+    .turnover-dash-glass .turnover-dash-panel-body .text-gray-400 {
+        color: #94a3b8 !important;
     }
 </style>
 {% endblock %}
@@ -457,16 +699,16 @@
         </div>
     </div>
 
-    <div v-if="showDashboard" class="fixed inset-0 turnover-dash-overlay flex items-start justify-center overflow-x-hidden overflow-y-hidden bg-black/45 px-3 sm:px-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl turnover-dash-panel flex flex-col">
-            <div class="px-4 sm:px-5 py-3 border-b border-gray-200 flex flex-wrap justify-between items-center gap-2 shrink-0">
+    <div v-if="showDashboard" class="fixed inset-0 turnover-dash-overlay turnover-dash-glass flex items-start justify-center overflow-x-hidden overflow-y-hidden px-3 sm:px-4">
+        <div class="rounded-2xl shadow-2xl w-full max-w-6xl turnover-dash-panel turnover-dash-panel-shell flex flex-col">
+            <div class="turnover-dash-head px-4 sm:px-5 py-3.5 border-b border-gray-100 flex flex-wrap justify-between items-center gap-2 shrink-0 bg-white">
                 <div>
-                    <h3 class="font-bold text-lg text-gray-900">离职率分析看板</h3>
-                    <p class="text-xs text-gray-500 mt-0.5" v-if="dashData">{{ dashData.scope_title }}</p>
+                    <h3 class="font-bold text-lg turnover-dash-title-main text-gray-900 tracking-tight">离职率分析看板</h3>
+                    <p class="text-xs text-gray-500 mt-0.5 turnover-dash-scope-subtitle" v-if="dashData">{{ dashData.scope_title }}</p>
                 </div>
-                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none px-2" @click="closeDashboard">&times;</button>
+                <button type="button" class="text-2xl leading-none px-2 py-1 turnover-dash-close rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors" @click="closeDashboard" aria-label="关闭">&times;</button>
             </div>
-            <div class="px-4 sm:px-5 py-3 border-b border-gray-100 flex flex-wrap gap-2 items-end shrink-0 bg-gray-50/80">
+            <div class="turnover-dash-filter-strip px-4 sm:px-5 py-3 flex flex-wrap gap-2 items-end shrink-0">
                 <label class="flex flex-col gap-0.5 text-xs text-gray-600">
                     <span>范围</span>
                     <select v-model="dashScope" class="crm-form-control text-sm min-w-[7rem]" @change="onDashScopeChange">
@@ -498,12 +740,12 @@
                     <input v-model="dashPeriodEnd" type="date" class="crm-form-control text-sm" />
                 </label>
                 <div class="flex items-center gap-2 shrink-0">
-                    <button type="button" class="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700" :disabled="dashLoading" @click="loadDashboard">
+                    <button type="button" class="px-3 py-2 text-sm font-semibold turnover-dash-btn-primary" :disabled="dashLoading" @click="loadDashboard">
                         {{ dashLoading ? '加载中…' : '应用' }}
                     </button>
                     <button
                         type="button"
-                        class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        class="px-3 py-2 text-sm font-medium turnover-dash-btn-ghost"
                         :disabled="dashLoading"
                         @click="resetDashboardFilters"
                     >
@@ -511,12 +753,12 @@
                     </button>
                 </div>
             </div>
-            <div class="turnover-dash-panel-body overflow-y-auto flex-1 min-h-0 p-4 sm:p-5 text-sm">
+            <div class="turnover-dash-panel-body overflow-y-auto flex-1 min-h-0 p-4 sm:p-5 text-sm rounded-b-2xl">
                 <p v-if="dashError" class="text-red-600 mb-3">{{ dashError }}</p>
                 <p v-if="dashData && dashData.footnote" class="text-xs text-gray-500 mb-4 leading-relaxed">{{ dashData.footnote }}</p>
                 <template v-if="dashData && !dashLoading">
                     <section class="mb-6">
-                        <h4 class="font-semibold text-gray-800 mb-2">分析周期内离职率（与下方主动/被动/转出、司龄、岗位/城市同周期）</h4>
+                        <h4 class="turnover-dash-section-title text-base mb-2">分析周期内离职率（与下方主动/被动/转出、司龄、岗位/城市同周期）</h4>
                         <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 lg:grid-cols-3 xl:grid-cols-5">
                             <div class="turnover-dash-kpi">
                                 <div class="text-xs text-gray-500">离职数</div>
@@ -554,14 +796,14 @@
                             </div>
                             <div class="turnover-dash-kpi">
                                 <div class="text-xs text-gray-500">离职率</div>
-                                <div class="text-xl font-bold text-indigo-700">{{ dashData.analysis_period.rate_pct != null ? dashData.analysis_period.rate_pct + '%' : '—' }}</div>
+                                <div class="text-xl font-bold turnover-dash-kpi-rate">{{ dashData.analysis_period.rate_pct != null ? dashData.analysis_period.rate_pct + '%' : '—' }}</div>
                             </div>
                         </div>
-                        <p class="text-xs text-gray-400 mt-1">{{ dashData.analysis_period.start }} ~ {{ dashData.analysis_period.end }}</p>
+                        <p class="text-xs text-gray-400 mt-1 turnover-dash-period-range">{{ dashData.analysis_period.start }} ~ {{ dashData.analysis_period.end }}</p>
                     </section>
                     <section class="mb-6">
-                        <h4 class="font-semibold text-gray-800 mb-2">{{ dashScope === 'business' ? ('「' + dashData.scope_title + '」各月离职率') : '整体客户 · 各月离职率趋势' }}</h4>
-                        <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                        <h4 class="turnover-dash-section-title text-base mb-2">{{ dashScope === 'business' ? ('「' + dashData.scope_title + '」各月离职率') : '整体客户 · 各月离职率趋势' }}</h4>
+                        <div class="overflow-x-auto border border-gray-200 rounded-xl turnover-dash-table-wrap">
                             <table class="min-w-full text-xs sm:text-sm">
                                 <thead class="bg-gray-100 text-gray-700">
                                     <tr>
@@ -611,7 +853,7 @@
                                         <td class="px-2 py-1.5 text-right">{{ monthlyRateCell(row) }}</td>
                                         <td class="px-2 py-1.5 text-right align-top">
                                             <div class="inline-flex flex-col items-end gap-1">
-                                                <span class="text-xs tabular-nums whitespace-nowrap text-gray-800">{{ dashTrendRollingShareText(row, idx) }}</span>
+                                                <span class="text-xs tabular-nums whitespace-nowrap text-gray-800 turnover-dash-share-label">{{ dashTrendRollingShareText(row, idx) }}</span>
                                                 <div
                                                     v-if="dashTrendRollingShareBarStyle(row, idx)"
                                                     class="turnover-dash-share-bar-track shrink-0"
@@ -627,8 +869,8 @@
                         </div>
                     </section>
                     <section class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <h4 class="font-semibold text-gray-800 mb-2">主动 / 被动 / 转出（占比）</h4>
+                        <div class="turnover-dash-split-card p-4">
+                            <h4 class="turnover-dash-section-title text-base mb-2">主动 / 被动 / 转出（占比）</h4>
                             <ul class="space-y-2 text-sm">
                                 <li class="flex justify-between border-b border-gray-100 pb-1">
                                     <span>主动</span>
@@ -647,15 +889,15 @@
                                     <span>{{ dashData.separation.unknown.count }} 人 · {{ dashData.separation.unknown.rate_pct != null ? dashData.separation.unknown.rate_pct + '%' : '—' }}</span>
                                 </li>
                             </ul>
-                            <p class="text-xs text-gray-500 mt-1.5">各分类「占比」= 该分类人数 ÷ 分析期内总离职人数（与上方主 KPI「离职数」同一分母；主动/被动/转出/未标注四类互斥，占比合计 100%）。无离职时无法计算，占比均显示为 —。</p>
+                            <p class="text-xs text-gray-500 mt-1.5 turnover-dash-muted-p">各分类「占比」= 该分类人数 ÷ 分析期内总离职人数（与上方主 KPI「离职数」同一分母；主动/被动/转出/未标注四类互斥，占比合计 100%）。无离职时无法计算，占比均显示为 —。</p>
                         </div>
-                        <div>
-                            <h4 class="font-semibold text-gray-800 mb-2">司龄分段（同期离职）</h4>
+                        <div class="turnover-dash-split-card p-4">
+                            <h4 class="turnover-dash-section-title text-base mb-2">司龄分段（同期离职）</h4>
                             <div class="space-y-1.5">
                                 <div v-for="tb in dashData.tenure_buckets" :key="tb.label" class="flex items-center gap-2">
                                     <span class="text-gray-600 w-28 shrink-0 text-xs">{{ tb.label }}</span>
                                     <div class="flex-1 turnover-dash-bar-track">
-                                        <div class="turnover-dash-bar-fill bg-gradient-to-r from-amber-500 to-rose-500" :style="{ width: dashTenureBarPct(tb.count) }"></div>
+                                        <div class="turnover-dash-bar-fill turnover-dash-bar-fill--lavender" :style="{ width: dashTenureBarPct(tb.count) }"></div>
                                     </div>
                                     <span class="w-8 text-right text-xs font-medium">{{ tb.count }}</span>
                                 </div>
@@ -664,9 +906,9 @@
                     </section>
                     <section
                         v-if="dashScope === 'department' && dashData.by_business && dashData.by_business.length"
-                        class="mb-6"
+                        class="mb-6 turnover-dash-split-card p-4"
                     >
-                        <h4 class="font-semibold text-gray-800 mb-2">按业务（客户）· 同期离职</h4>
+                        <h4 class="turnover-dash-section-title text-base mb-2">按业务（客户）· 同期离职</h4>
                         <div class="space-y-1.5 max-w-3xl">
                             <div
                                 v-for="row in dashData.by_business"
@@ -679,7 +921,7 @@
                                 >{{ row.dimension }}</span>
                                 <div class="flex-1 min-w-0 turnover-dash-bar-track">
                                     <div
-                                        class="turnover-dash-bar-fill bg-gradient-to-r from-amber-500 to-rose-500"
+                                        class="turnover-dash-bar-fill turnover-dash-bar-fill--lavender"
                                         :style="{ width: dashBusinessBarPct(row.departures) }"
                                     ></div>
                                 </div>
@@ -688,9 +930,9 @@
                         </div>
                     </section>
                     <section v-if="dashScope === 'business' && (dashData.by_position.length || dashData.by_city.length)" class="mb-2">
-                        <h4 class="font-semibold text-gray-800 mb-2">同一业务内 · 岗位 / 工作地（同期）</h4>
+                        <h4 class="turnover-dash-section-title text-base mb-2">同一业务内 · 岗位 / 工作地（同期）</h4>
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                            <div class="overflow-x-auto border border-gray-200 rounded-lg" v-if="dashData.by_position.length">
+                            <div class="overflow-x-auto border border-gray-200 rounded-xl turnover-dash-mini-table-wrap" v-if="dashData.by_position.length">
                                 <table class="min-w-full text-xs">
                                     <thead class="bg-gray-100"><tr><th class="text-left px-2 py-2">岗位</th><th class="text-right px-2 py-2">离职</th><th class="text-right px-2 py-2">平均在职</th><th class="text-right px-2 py-2">率</th></tr></thead>
                                     <tbody>
@@ -703,7 +945,7 @@
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="overflow-x-auto border border-gray-200 rounded-lg" v-if="dashData.by_city.length">
+                            <div class="overflow-x-auto border border-gray-200 rounded-xl turnover-dash-mini-table-wrap" v-if="dashData.by_city.length">
                                 <table class="min-w-full text-xs">
                                     <thead class="bg-gray-100"><tr><th class="text-left px-2 py-2">工作地</th><th class="text-right px-2 py-2">离职</th><th class="text-right px-2 py-2">平均在职</th><th class="text-right px-2 py-2">率</th></tr></thead>
                                     <tbody>

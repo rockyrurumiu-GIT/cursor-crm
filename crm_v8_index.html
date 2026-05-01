@@ -6,6 +6,9 @@
     <title>ITO CRM 终极版 V8</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         .funnel-layer:hover { filter: brightness(1.1); cursor: pointer; }
         /* GitHub 风格顶栏下拉：悬停展开 */
@@ -32,16 +35,159 @@
         .gh-dd-hint { font-size: 0.75rem; color: #8b949e; padding: 0 1rem 0.35rem; }
         html { scroll-behavior: smooth; }
         .section-card { scroll-margin-top: 5rem; }
+        /* 登录：玻璃拟态深色 + 紫调光晕 */
+        .crm-login-overlay {
+            background-color: #0a0a14;
+            background-image:
+                radial-gradient(ellipse 130% 70% at 50% -25%, rgba(88, 28, 135, 0.38), transparent 55%),
+                radial-gradient(ellipse 90% 55% at 100% 45%, rgba(168, 85, 247, 0.14), transparent 50%),
+                radial-gradient(ellipse 75% 45% at 0% 85%, rgba(99, 102, 241, 0.14), transparent 45%);
+        }
+        .crm-login-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            pointer-events: none;
+        }
+        .crm-login-blob--a {
+            width: min(52vw, 30rem);
+            height: min(52vw, 30rem);
+            background: rgba(168, 85, 247, 0.32);
+            top: -18%;
+            right: -12%;
+            opacity: 0.85;
+        }
+        .crm-login-blob--b {
+            width: min(48vw, 26rem);
+            height: min(48vw, 26rem);
+            background: rgba(79, 70, 229, 0.22);
+            bottom: -20%;
+            left: -10%;
+            opacity: 0.75;
+        }
+        .crm-login-input:-webkit-autofill,
+        .crm-login-input:-webkit-autofill:hover,
+        .crm-login-input:-webkit-autofill:focus {
+            -webkit-box-shadow: 0 0 0 40px rgba(12, 12, 24, 0.92) inset;
+            -webkit-text-fill-color: #f1f5f9;
+            caret-color: #e9d5ff;
+            transition: background-color 5000s ease-in-out 0s;
+        }
+        .crm-login-brand {
+            margin: 0;
+            font-size: clamp(1.125rem, 3.25vw, 1.625rem);
+            font-weight: 500;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: rgba(252, 252, 255, 0.98);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+        }
+        .crm-login-title {
+            margin: 0.625rem 0 0;
+            font-family: "Plus Jakarta Sans", ui-rounded, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", sans-serif;
+            font-size: 1.25rem;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            color: rgba(237, 230, 255, 0.88);
+            text-shadow:
+                0 0 20px rgba(237, 230, 255, 0.18),
+                0 2px 10px rgba(15, 10, 35, 0.55);
+        }
+        .crm-login-btn {
+            width: 100%;
+            margin-top: 0.25rem;
+            padding: 0.8125rem 1rem;
+            border-radius: 9999px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            background: rgba(91, 65, 145, 0.82);
+            box-shadow:
+                0 10px 28px rgba(61, 40, 110, 0.45),
+                inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            color: #ffffff;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            cursor: pointer;
+            transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+        }
+        .crm-login-btn:hover {
+            background: rgba(105, 75, 165, 0.9);
+            box-shadow:
+                0 12px 34px rgba(71, 48, 125, 0.5),
+                inset 0 1px 0 rgba(255, 255, 255, 0.22);
+        }
+        .crm-login-btn:active {
+            transform: scale(0.99);
+        }
+        .crm-login-btn:focus-visible {
+            outline: 2px solid rgba(167, 139, 250, 0.45);
+            outline-offset: 2px;
+        }
+        .crm-login-panel {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 26rem;
+            padding: 2.25rem 1.85rem 2rem;
+            border-radius: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(
+                168deg,
+                rgba(58, 46, 98, 0.97) 0%,
+                rgba(32, 26, 54, 0.98) 38%,
+                rgba(14, 11, 22, 0.99) 72%,
+                rgba(8, 7, 14, 1) 100%
+            );
+            box-shadow:
+                0 0 0 1px rgba(177, 151, 226, 0.06),
+                0 28px 72px rgba(0, 0, 0, 0.52),
+                inset 0 1px 0 rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+        .crm-login-panel-head {
+            padding-bottom: 1.25rem;
+        }
+        .crm-login-divider {
+            height: 1px;
+            margin: 0 0 1.125rem;
+            border: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+        }
+        .crm-login-lead {
+            margin: 0 0 0.25rem;
+            font-size: 0.8125rem;
+            line-height: 1.55;
+            letter-spacing: 0.02em;
+            color: rgba(255, 255, 255, 0.58);
+            text-align: center;
+        }
+        .crm-login-form {
+            margin-top: 1.35rem;
+        }
     </style>
 </head>
 <body class="bg-[#f6f8fa] text-gray-800">
     <div id="app" class="min-h-screen flex flex-col">
-        <div v-if="!isLoggedIn" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div class="bg-white p-8 rounded-lg shadow-xl w-96">
-                <h2 class="text-2xl font-bold mb-6 text-center text-blue-600">ITO CRM 登录</h2>
-                <input v-model="loginForm.user" type="text" placeholder="用户名" class="w-full p-2 border rounded mb-4">
-                <input v-model="loginForm.pwd" type="password" placeholder="密码" class="w-full p-2 border rounded mb-6">
-                <button @click="login" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">进入系统</button>
+        <div v-if="!isLoggedIn" class="crm-login-overlay fixed inset-0 z-50 flex items-center justify-center px-4 py-8 overflow-hidden">
+            <div class="crm-login-blob crm-login-blob--a" aria-hidden="true"></div>
+            <div class="crm-login-blob crm-login-blob--b" aria-hidden="true"></div>
+            <div class="crm-login-panel">
+                <div class="crm-login-panel-head text-center">
+                    <p class="crm-login-brand">ITO CRM</p>
+                    <h2 class="crm-login-title">登录</h2>
+                </div>
+                <div class="crm-login-divider" role="presentation"></div>
+                <p class="crm-login-lead">使用已有账号进入系统</p>
+                <div class="crm-login-form flex flex-col gap-4">
+                    <input v-model="loginForm.user" type="text" name="username" placeholder="用户名" autocomplete="username"
+                        class="crm-login-input w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[0.9375rem] text-slate-100 placeholder:text-violet-200/35 outline-none transition focus:border-violet-400/50 focus:ring-2 focus:ring-violet-500/25">
+                    <input v-model="loginForm.pwd" type="password" name="password" placeholder="密码" autocomplete="current-password"
+                        class="crm-login-input w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[0.9375rem] text-slate-100 placeholder:text-violet-200/35 outline-none transition focus:border-violet-400/50 focus:ring-2 focus:ring-violet-500/25">
+                    <button type="button" class="crm-login-btn" @click="login">
+                        进入系统
+                    </button>
+                </div>
             </div>
         </div>
 
