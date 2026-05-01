@@ -955,6 +955,71 @@ def _pdf_plain_text_and_pagecount(data: bytes) -> Tuple[str, int]:
             pass
 
 
+def _pdf_plain_text_pages(data: bytes) -> List[Dict[str, Any]]:
+    try:
+        import fitz  # PyMuPDF
+    except ImportError:
+        return []
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+    except Exception:
+        return []
+    try:
+        pages: List[Dict[str, Any]] = []
+        for i in range(len(doc)):
+            try:
+                text_value = doc.load_page(i).get_text() or ""
+            except Exception:
+                text_value = ""
+            pages.append({"page": i + 1, "text": text_value})
+        return pages
+    finally:
+        try:
+            doc.close()
+        except Exception:
+            pass
+
+
+def _pdf_render_page_png(data: bytes, page_no: int, query: str = "") -> bytes:
+    try:
+        import fitz  # PyMuPDF
+    except ImportError as e:
+        raise HTTPException(status_code=500, detail=f"PDF 渲染依赖未安装（{e}）")
+    try:
+        doc = fitz.open(stream=data, filetype="pdf")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"PDF 打开失败（{e}）")
+    try:
+        if len(doc) <= 0:
+            raise HTTPException(status_code=400, detail="PDF 无页面")
+        idx = max(0, min(int(page_no or 1) - 1, len(doc) - 1))
+        page = doc.load_page(idx)
+        for term in _handbook_query_terms(query):
+            try:
+                rects = page.search_for(term)
+            except Exception:
+                rects = []
+            for rect in rects:
+                try:
+                    page.draw_rect(
+                        rect,
+                        color=(0.95, 0.58, 0.0),
+                        fill=(1.0, 0.86, 0.1),
+                        fill_opacity=0.38,
+                        width=0.8,
+                        overlay=True,
+                    )
+                except Exception:
+                    pass
+        pix = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), alpha=False)
+        return pix.tobytes("png")
+    finally:
+        try:
+            doc.close()
+        except Exception:
+            pass
+
+
 def _pdf_text_suggests_ocr(plain: str, page_count: int) -> bool:
     t = (plain or "").strip()
     if page_count <= 0:
@@ -3003,6 +3068,54 @@ async def rebuild_handbook_pdf_outline(
     db.commit()
     db.refresh(row)
     return _handbook_row_to_dict(row)
+
+
+@app.get("/api/clients/{client_id}/delivery/handbooks/{row_id}/pdf-text")
+async def get_handbook_pdf_text(
+    client_id: int,
+    row_id: int,
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
+    if not row or row.client_id != client_id:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    mk = (row.media_kind or "").strip() or _handbook_suffix_to_media_kind(
+        os.path.splitext(row.original_filename or "")[1].lower()
+    )
+    if mk != "pdf":
+        raise HTTPException(status_code=400, detail="仅支持 PDF 正文检索")
+    path = os.path.join(UPLOAD_DIR, row.stored_path)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="文件不存在")
+    with open(path, "rb") as f:
+        pages = _pdf_plain_text_pages(f.read())
+    return {"id": row.id, "pages": pages}
+
+
+@app.get("/api/clients/{client_id}/delivery/handbooks/{row_id}/pdf-page.png")
+async def get_handbook_pdf_page_png(
+    client_id: int,
+    row_id: int,
+    page: int = 1,
+    q: str = "",
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
+    if not row or row.client_id != client_id:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    mk = (row.media_kind or "").strip() or _handbook_suffix_to_media_kind(
+        os.path.splitext(row.original_filename or "")[1].lower()
+    )
+    if mk != "pdf":
+        raise HTTPException(status_code=400, detail="仅支持 PDF 页面渲染")
+    path = os.path.join(UPLOAD_DIR, row.stored_path)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="文件不存在")
+    with open(path, "rb") as f:
+        png = _pdf_render_page_png(f.read(), page, q)
+    return StreamingResponse(io.BytesIO(png), media_type="image/png")
 
 
 @app.delete("/api/clients/{client_id}/delivery/handbooks/{row_id}")

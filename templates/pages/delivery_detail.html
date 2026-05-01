@@ -1110,7 +1110,6 @@
         </div>
         <div v-else-if="moduleKey === 'handbook'" class="mt-4 flex flex-col flex-1 min-h-0 gap-4">
             <div class="rounded-lg border border-gray-200 bg-slate-50/80 p-4 space-y-3 shrink-0">
-                <p class="text-sm text-gray-600">上传时填写元数据（同一批文件共用）。PDF 阅读器左侧目录来自文件书签；音视频可内嵌播放并在「锚点」中维护时间戳。<strong class="font-medium text-gray-800">PDF</strong> 上传后会在后台异步<strong>抽取全文</strong>，扫描件将按需走 <strong>OCR</strong>（需服务器安装 Tesseract 与 chi_sim 语言包）。单文件 ≤ 20MB。部门 / 级别权限当前仅存档。</p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 text-xs">
                     <label class="flex flex-col gap-1"><span class="text-gray-600">版本号</span><input v-model="handbookUploadMeta.version_label" type="text" class="crm-form-control" placeholder="如 V2.0" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">状态</span>
@@ -1128,45 +1127,6 @@
                     </div>
                 </div>
                 <input ref="handbookFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookFilesSelected" />
-            </div>
-            <div v-if="handbookAdminCrossSearch" class="rounded-lg border border-indigo-100 bg-white p-4 shadow-sm shrink-0 space-y-3">
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-sm font-semibold text-indigo-900">管理员 · 交付手册全文检索（跨客户）</p>
-                    <button type="button" class="text-xs text-indigo-600 hover:underline" @click="handbookFsPanelOpen = !handbookFsPanelOpen">{{ handbookFsPanelOpen ? '收起' : '展开' }}</button>
-                </div>
-                <p v-show="!handbookFsPanelOpen" class="text-xs text-gray-500">展开后可在<strong>所有客户</strong>下检索已编入索引的内容：<strong>PDF</strong> 为正文（含 OCR）；<strong>音视频、Word</strong> 为文件名、版本、标签、权限与时间戳<strong>锚点文案</strong>——不含自动语音转文字。若显示「已索引」仍搜不到，可先<strong>同步 FTS</strong>；未完成索引用<strong>重排队列</strong>。</p>
-                <div v-show="handbookFsPanelOpen" class="space-y-2">
-                    <div class="flex flex-wrap gap-2 items-center">
-                        <input v-model.trim="handbookFsQuery" type="search" placeholder="例如：报销、试用期、保密协议" class="crm-form-control flex-1 min-w-[12rem]" @keydown.enter.prevent="runHandbookGlobalSearch" />
-                        <button type="button" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-45" :disabled="handbookFsBusy" @click="runHandbookGlobalSearch">{{ handbookFsBusy ? '检索中…' : '检索' }}</button>
-                        <button type="button" class="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-900 hover:bg-indigo-100 disabled:opacity-45" :disabled="handbookFtsSyncBusy" title="重建 SQLite FTS：PDF 用已索引正文；音视频/Word 用元数据摘录" @click="syncHandbookFtsFromBody">{{ handbookFtsSyncBusy ? '同步中…' : '同步 FTS' }}</button>
-                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-45" :disabled="handbookReindexBusy" title="将待处理/失败/卡住的条目重新排队：PDF 抽正文；音视频/Word 建元数据索引" @click="queueHandbookReindexStale">{{ handbookReindexBusy ? '排队中…' : '重排队列' }}</button>
-                    </div>
-                    <p v-if="handbookFsError" class="text-xs text-red-700">{{ handbookFsError }}</p>
-        <div v-if="handbookFsResults.length" class="max-h-[min(28rem,55vh)] overflow-y-auto border border-gray-100 rounded-md divide-y divide-gray-100 text-sm">
-                            <div v-for="hit in handbookFsResults" :key="hit.id + '-' + hit.client_id" class="px-3 py-3">
-                                <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
-                                    <p class="font-medium text-gray-900 min-w-0 flex-1">
-                                        <span class="text-indigo-700">{{ hit.client_name || ('客户#' + hit.client_id) }}</span>
-                                        <span class="text-gray-600"> · {{ hit.original_filename }}</span>
-                                    </p>
-                                    <div class="flex flex-wrap gap-2 shrink-0 text-xs">
-                                        <button v-if="hit.media_kind === 'pdf' || hit.media_kind === 'video' || hit.media_kind === 'audio'" type="button" class="rounded border border-indigo-200 bg-white px-2 py-1 text-indigo-700 hover:bg-indigo-50" @click="openHandbookReader(hit)">打开阅读</button>
-                                        <button type="button" class="rounded border border-slate-200 bg-white px-2 py-1 text-gray-800 hover:bg-slate-50" @click="openHandbookFsExcerptDetail(hit)">摘录详情</button>
-                                        <a :href="'/delivery/handbook/' + hit.client_id" class="rounded border border-slate-200 bg-white px-2 py-1 text-blue-700 hover:bg-slate-50">客户主页</a>
-                                    </div>
-                                </div>
-                                <div
-                                    v-if="hit.snippet"
-                                    class="max-h-44 overflow-y-auto rounded-md bg-slate-50 px-2.5 py-2 text-xs text-gray-800 whitespace-pre-wrap border border-slate-100 leading-relaxed"
-                                    v-html="highlightHandbookSearchHtml(hit.snippet)"
-                                ></div>
-                                <div v-else class="max-h-44 rounded-md bg-slate-50 px-2.5 py-2 text-xs text-gray-500 border border-slate-100">（无摘要）</div>
-                                <p v-if="hit.excerpt_detail && hit.excerpt_detail.length > (hit.snippet || '').length" class="text-[11px] text-gray-400 mt-1">摘录较长时已截断预览，点此条「摘录详情」查看上下文。</p>
-                            </div>
-                        </div>
-                    <p v-else-if="handbookFsSearched && !handbookFsBusy && !handbookFsError" class="text-xs text-gray-400">无匹配条目：可能正文中不包含该词（仅搜已抽取的文本层），或可先点<strong>同步 FTS</strong> 再试。</p>
-                </div>
             </div>
             <div v-if="handbookUploadError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shrink-0">{{ handbookUploadError }}</div>
             <div class="flex flex-wrap items-center gap-3 shrink-0">
@@ -1251,6 +1211,19 @@
                     <p class="text-xs text-gray-500">{{ handbookMediaLabel(handbookReaderRow) }} · {{ handbookReaderRow.version_label || '无版本号' }}</p>
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
+                    <div v-if="handbookReaderRow.media_kind === 'pdf'" class="hidden md:flex items-center gap-1 rounded-lg border border-indigo-100 bg-white px-2 py-1 shadow-sm">
+                        <input
+                            id="handbook-pdf-search-input"
+                            v-model.trim="handbookPdfSearchQuery"
+                            type="search"
+                            class="w-44 border-0 bg-transparent px-1 py-0.5 text-xs text-gray-800 outline-none placeholder:text-gray-400"
+                            placeholder="搜索 PDF 正文"
+                            @focus="loadHandbookPdfText(handbookReaderRow)"
+                            @keydown.enter.prevent="handbookPdfSearchResults[0] && setHandbookPdfPage(handbookPdfSearchResults[0].page)"
+                        />
+                        <span class="min-w-[3rem] text-right text-[11px] text-gray-500">{{ handbookPdfSearchActive ? (handbookPdfSearchCount + ' 页') : 'Ctrl+F' }}</span>
+                        <button v-if="handbookPdfSearchQuery" type="button" class="rounded px-1 text-xs text-gray-400 hover:bg-slate-100 hover:text-gray-700" @click="clearHandbookPdfSearch">×</button>
+                    </div>
                     <p v-if="handbookReaderRow.media_kind === 'video'" class="hidden sm:block text-[11px] text-gray-500 max-w-[11rem] text-right leading-tight pointer-events-none" title="使用播放器上的画中画按钮，遮罩会变透明以便操作手册列表">画中画后可操作背景页面</p>
                     <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="closeHandbookReader">关闭</button>
                 </div>
@@ -1266,13 +1239,58 @@
                         :key="'toc-'+idx"
                         type="button"
                         class="w-full text-left rounded px-2 py-1.5 hover:bg-white hover:text-indigo-700"
-                        :class="handbookReaderPdfPage === item.page ? 'bg-white text-indigo-700 font-medium shadow-sm' : 'text-gray-700'"
+                        :class="[
+                            handbookReaderPdfPage === item.page ? 'bg-white text-indigo-700 font-medium shadow-sm' : 'text-gray-700',
+                            handbookPdfOutlineMatches(item) ? 'ring-1 ring-amber-300 bg-amber-50 text-amber-900' : ''
+                        ]"
                         :style="{ paddingLeft: (8 + item.depth * 12) + 'px' }"
                         @click="setHandbookPdfPage(item.page)"
-                    >{{ item.title }}</button>
+                        v-html="highlightHandbookPdfHtml(item.title)"
+                    ></button>
                 </aside>
                 <div class="flex-1 min-w-0 min-h-0 bg-neutral-200 flex flex-col">
-                    <iframe class="w-full flex-1 min-h-0 border-0" title="PDF 预览" :src="handbookPdfIframeSrc"></iframe>
+                    <div v-if="handbookPdfSearchActive" class="shrink-0 border-b border-slate-200 bg-white px-3 py-2 md:hidden">
+                        <input
+                            v-model.trim="handbookPdfSearchQuery"
+                            type="search"
+                            class="crm-form-control w-full text-sm"
+                            placeholder="搜索 PDF 正文"
+                            @focus="loadHandbookPdfText(handbookReaderRow)"
+                        />
+                    </div>
+                    <div v-if="handbookPdfSearchActive" class="shrink-0 border-b border-slate-200 bg-white px-3 py-2 text-xs">
+                        <div class="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+                            <span class="shrink-0 font-semibold text-slate-700">正文命中</span>
+                            <span class="shrink-0 text-slate-500">{{ handbookPdfTextBusy ? '读取中…' : (handbookPdfSearchCount + ' 页') }}</span>
+                            <span v-if="handbookPdfTextError" class="shrink-0 rounded bg-red-50 px-2 py-1 text-red-700">{{ handbookPdfTextError }}</span>
+                            <span v-else-if="!handbookPdfTextBusy && !handbookPdfSearchResults.length" class="shrink-0 rounded bg-slate-50 px-2 py-1 text-slate-500">未在已提取正文中找到关键词。</span>
+                            <button
+                                v-for="page in handbookPdfSearchResults"
+                                :key="'pdf-hit-'+page.page"
+                                type="button"
+                                class="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-indigo-700 hover:border-indigo-200 hover:bg-indigo-50"
+                                :class="handbookReaderPdfPage === page.page ? 'border-indigo-300 bg-indigo-50 font-semibold' : ''"
+                                :title="handbookPdfTextSnippet(page.text)"
+                                @click="setHandbookPdfPage(page.page)"
+                            >
+                                第 {{ page.page }} 页
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex flex-1 min-h-0">
+                        <div v-if="handbookPdfSearchActive" class="flex-1 min-h-0 overflow-auto bg-neutral-500 p-6">
+                            <p v-if="handbookPdfRenderBusy" class="mx-auto mb-3 w-fit rounded bg-white/90 px-3 py-1 text-xs text-slate-600 shadow">正在生成高亮页…</p>
+                            <img
+                                v-if="handbookPdfRenderedPageUrl"
+                                :key="handbookPdfRenderedPageUrl"
+                                :src="handbookPdfRenderedPageUrl"
+                                alt="PDF 当前页预览"
+                                class="mx-auto block max-w-full bg-white shadow-2xl"
+                                decoding="async"
+                            />
+                        </div>
+                        <iframe v-else :key="handbookPdfIframeSrc" class="w-full flex-1 min-h-0 border-0" title="PDF 预览" :src="handbookPdfIframeSrc"></iframe>
+                    </div>
                 </div>
             </div>
             <div v-else-if="handbookReaderRow.media_kind === 'video'" class="flex flex-1 min-h-0 flex-col sm:flex-row gap-3 p-3 overflow-hidden">
@@ -2169,6 +2187,13 @@ createApp({
         const highlightHandbookSearchHtml = (text) => crmHighlightSearchQuery(text, handbookFsQuery.value);
         const handbookReaderRow = ref(null);
         const handbookReaderPdfPage = ref(1);
+        const handbookPdfSearchQuery = ref('');
+        const handbookPdfTextPages = ref([]);
+        const handbookPdfTextLoadedId = ref(null);
+        const handbookPdfTextBusy = ref(false);
+        const handbookPdfTextError = ref('');
+        const handbookPdfRenderedPageUrl = ref('');
+        const handbookPdfRenderBusy = ref(false);
         const handbookMediaRef = ref(null);
         const handbookPlyrInstance = ref(null);
         const handbookReaderPipBrowseMode = ref(false);
@@ -2209,8 +2234,35 @@ createApp({
             if (!row || row.media_kind !== 'pdf') return '';
             const p = handbookReaderPdfPage.value || 1;
             const base = row.preview_url || '';
-            return base ? `${base}#page=${p}` : '';
+            if (!base) return '';
+            const q = String(handbookPdfSearchQuery.value || '').trim();
+            const parts = [`page=${encodeURIComponent(String(p))}`];
+            if (q) parts.push(`search=${encodeURIComponent(q)}`);
+            return `${base}#${parts.join('&')}`;
         });
+        const handbookPdfRenderedPageSrc = computed(() => {
+            const row = handbookReaderRow.value;
+            if (!row || row.media_kind !== 'pdf' || !handbookPdfSearchActive.value) return '';
+            const cid = handbookRowClientId(row);
+            const id = Number(row.id);
+            if (!Number.isFinite(id) || id <= 0) return '';
+            const page = Math.max(1, Number(handbookReaderPdfPage.value) || 1);
+            const q = String(handbookPdfSearchQuery.value || '').trim();
+            return `/api/clients/${cid}/delivery/handbooks/${id}/pdf-page.png?page=${encodeURIComponent(String(page))}&q=${encodeURIComponent(q)}`;
+        });
+        const handbookPdfSearchTerms = computed(() => (
+            String(handbookPdfSearchQuery.value || '').trim().split(/\s+/).filter(Boolean)
+        ));
+        const handbookPdfSearchResults = computed(() => {
+            const terms = handbookPdfSearchTerms.value;
+            if (!terms.length) return [];
+            return handbookPdfTextPages.value.filter((p) => {
+                const text = String(p && p.text != null ? p.text : '').toLowerCase();
+                return terms.some((term) => text.includes(String(term).toLowerCase()));
+            });
+        });
+        const handbookPdfSearchCount = computed(() => handbookPdfSearchResults.value.length);
+        const handbookPdfSearchActive = computed(() => !!handbookPdfSearchTerms.value.length);
         const interviewHintTotal = computed(() => {
             const h = interviewHints.value;
             return (
@@ -3545,6 +3597,9 @@ createApp({
             initHandbookPlyrForOpenRow();
             flushHandbookPendingMediaSeek();
         });
+        watch(handbookPdfRenderedPageSrc, () => {
+            loadHandbookPdfRenderedPage();
+        });
         const restoreHandbookReaderFromPipBrowse = async () => {
             handbookReaderPipBrowseMode.value = false;
             const inst = handbookPlyrInstance.value;
@@ -3562,6 +3617,10 @@ createApp({
         const openHandbookReader = async (row, opts = {}) => {
             handbookReaderRow.value = row;
             handbookReaderPdfPage.value = Math.max(1, Number(opts.page) || 1);
+            if (row.media_kind === 'pdf') {
+                handbookPdfSearchQuery.value = '';
+                loadHandbookPdfText(row);
+            }
             if ((row.media_kind === 'video' || row.media_kind === 'audio') && opts.seconds !== undefined && opts.seconds !== null) {
                 handbookPendingMediaSeek.value = Math.max(0, Number(opts.seconds) || 0);
             }
@@ -3591,6 +3650,8 @@ createApp({
         };
         const closeHandbookReader = () => {
             handbookReaderPipBrowseMode.value = false;
+            handbookPdfSearchQuery.value = '';
+            clearHandbookPdfRenderedPage();
             destroyHandbookPlyr();
             handbookReaderRow.value = null;
         };
@@ -3600,6 +3661,86 @@ createApp({
         };
         const setHandbookPdfPage = (page) => {
             handbookReaderPdfPage.value = Math.max(1, Number(page) || 1);
+        };
+        const handbookPdfTextSnippet = (raw) => {
+            const text = String(raw || '').replace(/\s+/g, ' ').trim();
+            if (text.length <= 900) return text;
+            const terms = handbookPdfSearchTerms.value;
+            const lower = text.toLowerCase();
+            let hit = -1;
+            for (const term of terms) {
+                const pos = lower.indexOf(String(term).toLowerCase());
+                if (pos >= 0 && (hit < 0 || pos < hit)) hit = pos;
+            }
+            const start = hit >= 0 ? Math.max(0, hit - 260) : 0;
+            const end = Math.min(text.length, start + 900);
+            return `${start > 0 ? '…' : ''}${text.slice(start, end)}${end < text.length ? '…' : ''}`;
+        };
+        const highlightHandbookPdfHtml = (text) => crmHighlightSearchQuery(text, handbookPdfSearchQuery.value);
+        const handbookPdfOutlineMatches = (item) => {
+            const terms = handbookPdfSearchTerms.value;
+            if (!terms.length || !item) return false;
+            const title = String(item.title || '').toLowerCase();
+            return terms.some((term) => title.includes(String(term).toLowerCase()));
+        };
+        let handbookPdfRenderSeq = 0;
+        const clearHandbookPdfRenderedPage = () => {
+            if (handbookPdfRenderedPageUrl.value) {
+                URL.revokeObjectURL(handbookPdfRenderedPageUrl.value);
+                handbookPdfRenderedPageUrl.value = '';
+            }
+        };
+        const loadHandbookPdfRenderedPage = async () => {
+            const src = handbookPdfRenderedPageSrc.value;
+            const seq = ++handbookPdfRenderSeq;
+            clearHandbookPdfRenderedPage();
+            if (!src) return;
+            handbookPdfRenderBusy.value = true;
+            try {
+                const r = await fetch(src, { headers: window.crmAuthHeader() });
+                if (!r.ok) return;
+                const blob = await r.blob();
+                if (seq !== handbookPdfRenderSeq) return;
+                handbookPdfRenderedPageUrl.value = URL.createObjectURL(blob);
+            } finally {
+                if (seq === handbookPdfRenderSeq) handbookPdfRenderBusy.value = false;
+            }
+        };
+        const loadHandbookPdfText = async (row) => {
+            const target = row || handbookReaderRow.value;
+            if (!target || target.media_kind !== 'pdf') return;
+            const id = Number(target.id);
+            if (handbookPdfTextLoadedId.value === id) return;
+            handbookPdfTextBusy.value = true;
+            handbookPdfTextError.value = '';
+            try {
+                const cid = handbookRowClientId(target);
+                const r = await fetch(`/api/clients/${cid}/delivery/handbooks/${id}/pdf-text`, {
+                    headers: window.crmAuthHeader(),
+                });
+                const data = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    const d = data.detail;
+                    throw new Error(Array.isArray(d) ? d.map((x) => x.msg || '').join('；') : (d || '读取 PDF 正文失败'));
+                }
+                handbookPdfTextPages.value = Array.isArray(data.pages) ? data.pages : [];
+                handbookPdfTextLoadedId.value = id;
+            } catch (e) {
+                handbookPdfTextPages.value = [];
+                handbookPdfTextLoadedId.value = id;
+                handbookPdfTextError.value = e && e.message ? e.message : '读取 PDF 正文失败';
+            } finally {
+                handbookPdfTextBusy.value = false;
+            }
+        };
+        const focusHandbookPdfSearch = async () => {
+            await loadHandbookPdfText();
+            await nextTick();
+            const el = document.getElementById('handbook-pdf-search-input');
+            if (el && typeof el.focus === 'function') el.focus();
+        };
+        const clearHandbookPdfSearch = () => {
+            handbookPdfSearchQuery.value = '';
         };
         const seekHandbookMedia = (seconds) => {
             const inst = handbookPlyrInstance.value;
@@ -3876,6 +4017,11 @@ createApp({
             await loadSettlementRows();
         };
         const onHandbookReaderEscape = async (e) => {
+            if ((e.ctrlKey || e.metaKey) && String(e.key || '').toLowerCase() === 'f' && handbookReaderRow.value && handbookReaderRow.value.media_kind === 'pdf') {
+                e.preventDefault();
+                await focusHandbookPdfSearch();
+                return;
+            }
             if (e.key !== 'Escape') return;
             if (handbookFsDetailOpen.value) {
                 closeHandbookFsDetail();
@@ -3914,6 +4060,7 @@ createApp({
             if (window.crmOpenHandbookSource === openHandbookSource) {
                 delete window.crmOpenHandbookSource;
             }
+            clearHandbookPdfRenderedPage();
             destroyHandbookPlyr();
         });
         return {
@@ -3929,6 +4076,10 @@ createApp({
             isPipelineRowChecked, setPipelineRowChecked,
             pipelineFields: PIPELINE_FIELDS, pipelineCompactFields: PIPELINE_COMPACT_FIELDS, pipelineTextareaFields: PIPELINE_TEXTAREA_FIELDS, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput,
             handbookUploadMeta, handbookStatusFilter, filteredHandbookFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
+            handbookPdfSearchQuery, handbookPdfSearchResults, handbookPdfSearchCount, handbookPdfSearchActive,
+            handbookPdfRenderedPageSrc, handbookPdfRenderedPageUrl, handbookPdfRenderBusy,
+            handbookPdfTextBusy, handbookPdfTextError, loadHandbookPdfText, clearHandbookPdfSearch,
+            handbookPdfTextSnippet, highlightHandbookPdfHtml, handbookPdfOutlineMatches,
             handbookAdminCrossSearch,             handbookFsPanelOpen, handbookFsQuery, handbookFsResults, handbookFsBusy, handbookFsError, handbookFsSearched,
             handbookFsDetailOpen, handbookFsDetailHit, closeHandbookFsDetail, openHandbookFsExcerptDetail, openHandbookReaderFromFsDetail,
             handbookReindexBusy, handbookFtsSyncBusy, runHandbookGlobalSearch, queueHandbookReindexStale, syncHandbookFtsFromBody,
