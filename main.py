@@ -2906,7 +2906,7 @@ async def upload_delivery_handbooks(
     background_tasks: BackgroundTasks,
     files: List[UploadFile] = File(default=[]),
     version_label: str = Form(default=""),
-    status: str = Form(default="draft"),
+    status: str = Form(default=""),
     tags: str = Form(default=""),
     permission_departments: str = Form(default=""),
     permission_levels: str = Form(default=""),
@@ -2922,7 +2922,17 @@ async def upload_delivery_handbooks(
     abs_dir = os.path.join(UPLOAD_DIR, rel_dir)
     os.makedirs(abs_dir, exist_ok=True)
     ts_base = int(time.time() * 1000000)
-    st = _handbook_normalize_status(status)
+    status_raw = str(status or "").strip().lower()
+    if status_raw not in HANDBOOK_STATUS_SET:
+        raise HTTPException(status_code=400, detail="请选择状态")
+    if not _handbook_split_comma_labels(tags):
+        raise HTTPException(status_code=400, detail="请填写标签")
+    if not _handbook_split_comma_labels(permission_departments):
+        raise HTTPException(status_code=400, detail="请填写阅读部门")
+    level_values = _handbook_split_comma_labels(permission_levels)
+    if len(level_values) != 1 or level_values[0] not in {"1", "2", "3", "4", "5"}:
+        raise HTTPException(status_code=400, detail="请选择阅读级别（1-5）")
+    st = _handbook_normalize_status(status_raw)
     tags_js = _handbook_labels_to_json_array(tags)
     pd_js = _handbook_labels_to_json_array(permission_departments)
     pl_js = _handbook_labels_to_json_array(permission_levels)

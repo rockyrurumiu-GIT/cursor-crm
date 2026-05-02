@@ -1111,19 +1111,33 @@
         <div v-else-if="moduleKey === 'handbook'" class="mt-4 flex flex-col flex-1 min-h-0 gap-4">
             <div class="rounded-lg border border-gray-200 bg-slate-50/80 p-4 space-y-3 shrink-0">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 text-xs">
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">版本号</span><input v-model="handbookUploadMeta.version_label" type="text" class="crm-form-control" placeholder="如 V2.0" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">状态</span>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">版本号（选填）</span><input v-model="handbookUploadMeta.version_label" type="text" class="crm-form-control" placeholder="如 V2.0" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">状态 <span class="text-red-500">*</span></span>
                         <select v-model="handbookUploadMeta.status" class="crm-form-control">
+                            <option value="">请选择状态</option>
                             <option value="draft">草稿</option>
                             <option value="published">已发布</option>
                             <option value="deprecated">已作废</option>
                         </select>
                     </label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">标签（逗号分隔）</span><input v-model="handbookUploadMeta.tags" type="text" class="crm-form-control" placeholder="招聘流程, 财务报销" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">阅读·部门</span><input v-model="handbookUploadMeta.permission_departments" type="text" class="crm-form-control" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">阅读·级别</span><input v-model="handbookUploadMeta.permission_levels" type="text" class="crm-form-control" /></label>
-                    <div class="flex items-end">
-                        <button type="button" class="w-full rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50" :disabled="handbookUploading" @click="handbookFileInput && handbookFileInput.click()">{{ handbookUploading ? '上传中…' : '选择文件上传' }}</button>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">标签（必填，逗号分隔） <span class="text-red-500">*</span></span><input v-model="handbookUploadMeta.tags" type="text" class="crm-form-control" placeholder="招聘流程, 财务报销" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">阅读·部门 <span class="text-red-500">*</span></span><input v-model="handbookUploadMeta.permission_departments" type="text" class="crm-form-control" placeholder="如 交付部" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">阅读·级别 <span class="text-red-500">*</span></span>
+                        <select v-model="handbookUploadMeta.permission_levels" class="crm-form-control">
+                            <option value="">请选择级别</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                        </select>
+                    </label>
+                    <div class="flex flex-col gap-1">
+                        <span class="truncate text-gray-600" :title="handbookSelectedFileSummary">{{ handbookSelectedFileSummary || '未选择文件' }}</span>
+                        <div class="flex gap-2">
+                            <button type="button" class="min-h-[2.5rem] flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50" :disabled="handbookUploading" @click="handbookFileInput && handbookFileInput.click()">选择文件</button>
+                            <button type="button" class="min-h-[2.5rem] flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50" :disabled="handbookUploading || !handbookSelectedFiles.length" @click="uploadSelectedHandbookFiles">{{ handbookUploading ? '上传中…' : '上传' }}</button>
+                        </div>
                     </div>
                 </div>
                 <input ref="handbookFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookFilesSelected" />
@@ -1385,7 +1399,16 @@
                 </label>
                 <label class="flex flex-col gap-1"><span class="text-gray-600 text-xs">标签（逗号分隔）</span><input v-model="handbookMetaForm.tags" type="text" class="crm-form-control" /></label>
                 <label class="flex flex-col gap-1"><span class="text-gray-600 text-xs">阅读·部门</span><input v-model="handbookMetaForm.permission_departments" type="text" class="crm-form-control" /></label>
-                <label class="flex flex-col gap-1"><span class="text-gray-600 text-xs">阅读·级别</span><input v-model="handbookMetaForm.permission_levels" type="text" class="crm-form-control" /></label>
+                <label class="flex flex-col gap-1"><span class="text-gray-600 text-xs">阅读·级别</span>
+                    <select v-model="handbookMetaForm.permission_levels" class="crm-form-control">
+                        <option value="">请选择级别</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                        <option value="5">5</option>
+                    </select>
+                </label>
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
                 <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm" @click="handbookMetaModalOpen=false">取消</button>
@@ -2163,7 +2186,7 @@ createApp({
         const interviewFileInput = ref(null);
         const handbookUploadMeta = reactive({
             version_label: '',
-            status: 'draft',
+            status: '',
             tags: '',
             permission_departments: '',
             permission_levels: '',
@@ -2173,6 +2196,7 @@ createApp({
         const handbookFileInput = ref(null);
         const handbookUploading = ref(false);
         const handbookUploadError = ref('');
+        const handbookSelectedFiles = ref([]);
         const handbookAdminCrossSearch = !!window.__HANDBOOK_ADMIN_CROSS_SEARCH__;
         const handbookFsPanelOpen = ref(false);
         const handbookFsQuery = ref('');
@@ -2221,6 +2245,12 @@ createApp({
             const st = handbookStatusFilter.value;
             if (st) rows = rows.filter((r) => r.status === st);
             return rows;
+        });
+        const handbookSelectedFileSummary = computed(() => {
+            const files = Array.isArray(handbookSelectedFiles.value) ? handbookSelectedFiles.value : [];
+            if (!files.length) return '';
+            if (files.length === 1) return files[0].name || '已选择 1 个文件';
+            return `已选择 ${files.length} 个文件：${files.map((f) => f.name || '未命名').join('、')}`;
         });
         const handbookPdfOutlineFlat = computed(() => {
             const row = handbookReaderRow.value;
@@ -3898,14 +3928,31 @@ createApp({
             const input = ev.target;
             const list = input && input.files ? Array.from(input.files) : [];
             if (input) input.value = '';
-            if (!list.length) return;
+            handbookSelectedFiles.value = list;
+            handbookUploadError.value = '';
+        };
+        const validateHandbookUploadMeta = () => {
+            if (!handbookSelectedFiles.value.length) return '请选择文件';
+            if (!String(handbookUploadMeta.status || '').trim()) return '请选择状态';
+            if (!String(handbookUploadMeta.tags || '').trim()) return '请填写标签';
+            if (!String(handbookUploadMeta.permission_departments || '').trim()) return '请填写阅读部门';
+            if (!String(handbookUploadMeta.permission_levels || '').trim()) return '请选择阅读级别';
+            return '';
+        };
+        const uploadSelectedHandbookFiles = async () => {
+            const list = Array.isArray(handbookSelectedFiles.value) ? handbookSelectedFiles.value : [];
+            const validationMsg = validateHandbookUploadMeta();
+            if (validationMsg) {
+                handbookUploadError.value = validationMsg;
+                return;
+            }
             handbookUploadError.value = '';
             handbookUploading.value = true;
             try {
                 const fd = new FormData();
                 list.forEach((file) => fd.append('files', file));
                 fd.append('version_label', handbookUploadMeta.version_label || '');
-                fd.append('status', handbookUploadMeta.status || 'draft');
+                fd.append('status', handbookUploadMeta.status || '');
                 fd.append('tags', handbookUploadMeta.tags || '');
                 fd.append('permission_departments', handbookUploadMeta.permission_departments || '');
                 fd.append('permission_levels', handbookUploadMeta.permission_levels || '');
@@ -3927,6 +3974,7 @@ createApp({
                     return;
                 }
                 await loadHandbooks();
+                handbookSelectedFiles.value = [];
             } finally {
                 handbookUploading.value = false;
             }
@@ -4084,11 +4132,11 @@ createApp({
             handbookFsDetailOpen, handbookFsDetailHit, closeHandbookFsDetail, openHandbookFsExcerptDetail, openHandbookReaderFromFsDetail,
             handbookReindexBusy, handbookFtsSyncBusy, runHandbookGlobalSearch, queueHandbookReindexStale, syncHandbookFtsFromBody,
             highlightHandbookSearchHtml,
-            handbookFiles, handbookFileInput, handbookUploading, handbookUploadError, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
+            handbookFiles, handbookFileInput, handbookUploading, handbookUploadError, handbookSelectedFiles, handbookSelectedFileSummary, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
             handbookReaderPipBrowseMode, restoreHandbookReaderFromPipBrowse,
             handbookMetaModalOpen, handbookMetaForm, handbookCuesModalOpen, handbookCuesEdit,
             handbookStatusLabel, handbookStatusClass, handbookMediaLabel, handbookSearchStatusLabel, handbookSearchStatusClass, formatHandbookSeconds,
-            loadHandbooks, onHandbookFilesSelected, removeHandbook, openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
+            loadHandbooks, onHandbookFilesSelected, uploadSelectedHandbookFiles, removeHandbook, openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
             openHandbookMetaModal, saveHandbookMeta, openHandbookCuesModal, saveHandbookCues, rebuildHandbookOutline,
             pipelineScrollWrap,
             PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,
