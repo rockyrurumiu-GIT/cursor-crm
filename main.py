@@ -5123,7 +5123,13 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
                     "地点": region,
                 }
             )
-        if onboarding_date and ("已入职" in onboarded):
+        count_weekly_onboard = False
+        if onboarding_date:
+            if "已入职" in onboarded:
+                count_weekly_onboard = True
+            elif onboarded == "是" and onboarding_date <= today:
+                count_weekly_onboard = True
+        if count_weekly_onboard:
             onboard_week = _week_label_from_date(onboarding_date)
             onboard_key = (onboard_week, position, region)
             weekly_onboard_counts[onboard_key] = int(weekly_onboard_counts.get(onboard_key, 0)) + 1
@@ -5133,6 +5139,13 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
         period_month = _extract_period_month(period)
         if period_month is not None:
             if re.search(rf"{int(period_month)}\s*月\s*已入职", onboarded):
+                item["本月入职人数"] += 1
+            elif (
+                onboarded == "是"
+                and onboarding_date
+                and onboarding_date <= today
+                and int(onboarding_date.month) == int(period_month)
+            ):
                 item["本月入职人数"] += 1
 
     supplemental_keys: Dict[tuple, bool] = {}
