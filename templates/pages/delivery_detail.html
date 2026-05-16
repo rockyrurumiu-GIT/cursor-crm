@@ -921,11 +921,18 @@
                     <div class="max-h-32 overflow-y-auto text-sm text-amber-900 space-y-1">
                         <div v-for="(item, idx) in interviewHints.activeInterviewNotInRoster" :key="'anr-'+idx" class="flex items-start justify-between gap-2">
                             <span>{{ item.name }}：{{ item.text }}</span>
-                            <a
-                                v-if="item.rowId"
-                                :href="`/delivery/interviews/${clientId}?edit_row_id=${item.rowId}`"
-                                class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
-                            >去修改</a>
+                            <div class="shrink-0 flex flex-wrap items-center gap-1 justify-end">
+                                <button
+                                    type="button"
+                                    class="rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
+                                    @click="goRosterAddForInterviewHint(item.name)"
+                                >在职</button>
+                                <button
+                                    type="button"
+                                    class="rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
+                                    @click="markInterviewHintLeftForName(item.name)"
+                                >已离职</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1611,6 +1618,7 @@
                             :type="f.type || 'text'"
                             :disabled="interviewFormReadonly"
                             @input="clearInterviewFieldErrorKey(f.key)"
+                            @blur="onInterviewFormCompactBlur(f.key)"
                             :inputmode="f.key === 'contact' ? 'numeric' : null"
                             :maxlength="f.key === 'contact' ? 11 : null"
                             :class="[
@@ -2003,7 +2011,7 @@ function flattenInterviewHintItems(hints) {
         });
     };
     pushItems(hints.activeMissing, '在职·花名册有而访谈无', '新建访谈', '本页点击“新建访谈”补录', (item) => item.text || '');
-    pushItems(hints.activeInterviewNotInRoster, '在职·访谈有而花名册无', '核实并修改/补录花名册', '优先核实状态，必要时去花名册补录', (item) => item.text || '');
+    pushItems(hints.activeInterviewNotInRoster, '在职·访谈有而花名册无', '在职 / 已离职', '「在职」跳转花名册新建；「已离职」批量将访谈标为离职', (item) => item.text || '');
     pushItems(hints.pendingInInterview, '待入职异常', '去修改', '本页点击“去修改”更新访谈状态', (item) => item.text || '');
     pushItems(hints.leftOnRoster, '离职但花名册仍有记录', '去花名册', '进入花名册页更新在职状态', (item) => `${item.rosterStatus ? `花名册状态：${item.rosterStatus}；` : ''}${item.text || ''}`);
     pushItems(hints.overdueFollowups, '1D/7D/30D/90D 超期未完成', '新建访谈', '本页点击“新建访谈”完成补访谈', (item) => item.text || '');
@@ -2755,6 +2763,27 @@ createApp({
             const n = normalizePersonName(raw);
             return n ? n : '';
         };
+        /** 与提示比对逻辑一致：按访谈日期（及 id 平局）取该姓名最新一条访谈 */
+        const pickLatestInterviewRowForNormKey = (normKey, rows) => {
+            let latest = null;
+            let latestRank = 0;
+            let latestId = 0;
+            (Array.isArray(rows) ? rows : []).forEach((row) => {
+                if (interviewNameKey(row.full_name) !== normKey) return;
+                const rowId = Number(row.id || 0);
+                const rowDateRank = interviewDateRank(row.interview_date != null ? String(row.interview_date) : '');
+                const shouldReplace =
+                    !latest ||
+                    rowDateRank > latestRank ||
+                    (rowDateRank === latestRank && rowId >= latestId);
+                if (shouldReplace) {
+                    latest = row;
+                    latestRank = rowDateRank;
+                    latestId = rowId;
+                }
+            });
+            return latest;
+        };
         const firstInterviewDisplayName = (rows, normKey) => {
             const row = rows.find((x) => interviewNameKey(x.full_name) === normKey);
             const s = row && row.full_name != null ? String(row.full_name).trim() : '';
@@ -2922,6 +2951,83 @@ createApp({
                 interviewHintBannerRef.value.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         };
+        const goRosterAddForInterviewHint = (displayName) => {
+            const n = displayName != null ? String(displayName).trim() : '';
+            const q = n ? `?roster_add=1&prefill_full_name=${encodeURIComponent(n)}` : '?roster_add=1';
+            window.location.href = `/customers/roster/${clientId}${q}`;
+        };
+        const markInterviewHintLeftForName = async (displayName) => {
+            const n = displayName != null ? String(displayName).trim() : '';
+            if (!n) {
+                alert('无法识别员工姓名');
+                return;
+            }
+            const r = await fetch(`/api/clients/${clientId}/delivery/interviews/mark-employment-left`, {
+                method: 'POST',
+                headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ full_name: n }),
+            });
+            if (!r.ok) {
+                let msg = '操作失败';
+                try {
+                    const err = await r.json();
+                    if (typeof err.detail === 'string') msg = err.detail;
+                } catch (e) { /* ignore */ }
+                alert(msg);
+                return;
+            }
+            let updated = 0;
+            try {
+                const j = await r.json();
+                if (j && j.updated != null) updated = Number(j.updated) || 0;
+            } catch (e) { /* ignore */ }
+            await loadInterviewRows();
+            if (interviewHintRan.value) {
+                await runInterviewRosterHints();
+            }
+            alert(updated ? `已将 ${updated} 条访谈记录标记为离职` : '未找到匹配的访谈记录');
+        };
+        /** 按姓名匹配最近一条访谈，预填可继承字段（不改写当前姓名）；无匹配返回 false */
+        const applyInterviewFormPrefillFromLatestRow = (displayName) => {
+            const n = displayName != null ? String(displayName).trim() : '';
+            const nk = interviewNameKey(n);
+            if (!nk) return false;
+            const latest = pickLatestInterviewRowForNormKey(nk, interviewRows.value);
+            if (!latest) return false;
+            const st = latest.employment_status != null ? String(latest.employment_status).trim() : '';
+            interviewForm.employment_status = st || '在职';
+            interviewForm.contact = latest.contact != null ? String(latest.contact).trim() : '';
+            interviewForm.project_name = latest.project_name != null ? String(latest.project_name).trim() : '';
+            interviewForm.position = latest.position != null ? String(latest.position).trim() : '';
+            interviewForm.employee_q1 = latest.employee_q1 != null ? String(latest.employee_q1).trim() : '';
+            interviewForm.onboarding_time = normalizeDateForInput(
+                latest.onboarding_time != null ? String(latest.onboarding_time) : '',
+                false,
+            );
+            interviewForm.work_location = latest.work_location != null ? String(latest.work_location).trim() : '';
+            interviewForm.hometown = latest.hometown != null ? String(latest.hometown).trim() : '';
+            const d1 = String(latest.followup_1d || '').trim().toUpperCase();
+            const d7 = String(latest.followup_7d || '').trim().toUpperCase();
+            if (d1 === 'Y' && d7 === 'Y' && isEmptyOrNoValue(latest.followup_30d)) {
+                interviewForm.followup_1d = 'Y';
+                interviewForm.followup_7d = 'Y';
+                interviewForm.followup_30d = '';
+                interviewForm.followup_90d = '';
+            } else {
+                ['followup_1d', 'followup_7d', 'followup_30d', 'followup_90d'].forEach((k) => {
+                    const v = latest[k] != null ? String(latest[k]).trim() : '';
+                    const u = v.toUpperCase();
+                    interviewForm[k] = u === 'Y' || u === 'N' ? u : '';
+                });
+            }
+            return true;
+        };
+        /** 新增员工访谈：输入姓名并离开输入框后，与提示「新建访谈」相同的预填逻辑 */
+        const onInterviewFormCompactBlur = (key) => {
+            if (key !== 'full_name') return;
+            if (!showInterviewForm.value || interviewEditingId.value || interviewFormReadonly.value) return;
+            applyInterviewFormPrefillFromLatestRow(interviewForm.full_name);
+        };
         const openInterviewAdd = () => {
             interviewEditingId.value = null;
             interviewFormReadonly.value = false;
@@ -2929,7 +3035,8 @@ createApp({
             resetInterviewFieldErrors();
             showInterviewForm.value = true;
         };
-        /** 花名册有而访谈无：直接打开新增并预填姓名（缺访谈应补录访谈，而非跳转花名册） */
+        /** 花名册有而访谈无：直接打开新增并预填姓名（缺访谈应补录访谈，而非跳转花名册）；
+         * 若已有历史访谈，则按最近一条预填可继承字段（含工作地、老家；历史为空则留空）；阶段项在「1D/7D 已完成、30D 未做」时继承 1D/7D=Y 并清空 30D/90D 供本次补录。 */
         const openInterviewAddForHintName = (displayName) => {
             interviewEditingId.value = null;
             interviewFormReadonly.value = false;
@@ -2938,6 +3045,9 @@ createApp({
             const n = displayName != null ? String(displayName).trim() : '';
             if (n) {
                 interviewForm.full_name = n;
+            }
+            const hadLatest = n ? applyInterviewFormPrefillFromLatestRow(n) : false;
+            if (n && !hadLatest) {
                 interviewForm.employment_status = '在职';
             }
             showInterviewForm.value = true;
@@ -4158,11 +4268,11 @@ createApp({
             toggleInterviewPositionDropdown, toggleInterviewQ1Dropdown, toggleInterviewSatisfactionDropdown,
             toggleInterviewMultiOption, clearInterviewMultiOption, resetInterviewFilter,
             rosterRows, interviewHints, interviewHintRan, interviewHintTotal, interviewHintBannerRef, interviewScrollWrap,
-            runInterviewRosterHints,
+            runInterviewRosterHints, goRosterAddForInterviewHint, markInterviewHintLeftForName,
             showInterviewForm, interviewEditingId, interviewFormReadonly, interviewForm,
             interviewFieldErrors, interviewFieldRequired, clearInterviewFieldErrorKey, interviewTextLength, deliveryJudgmentDuplicate,
             showInterviewLogs, interviewLogsLoading, interviewLogs,
-            openInterviewAdd, openInterviewAddForHintName, openInterviewEdit, openInterviewDetail, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
+            openInterviewAdd, openInterviewAddForHintName, onInterviewFormCompactBlur, openInterviewEdit, openInterviewDetail, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
             triggerInterviewImport, onInterviewImportFile,
             exportInterviewCsv, openInterviewLogs, restoreInterviewLatestBackup, copyInterviewHints, exportInterviewHintsCsv,
             triggerPipelineImport, onPipelineImportFile, exportPipelineCsv, openPipelineLogs, restorePipelineLatestBackup, formatDate,

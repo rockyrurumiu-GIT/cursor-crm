@@ -47,6 +47,30 @@
     .crm-table.turnover-table tbody tr:hover .roster-sticky-left-serial {
         background: #fafaf9;
     }
+    /* 末列「操作」：横向滚动时固定在最右侧 */
+    .crm-table.turnover-table .turnover-sticky-right-actions {
+        position: sticky;
+        right: 0;
+        background: #fff;
+        border-left: 1px solid #e5e7eb;
+        box-shadow: -8px 0 16px -10px rgba(15, 23, 42, 0.18);
+        background-clip: padding-box;
+    }
+    .crm-table.turnover-table tbody .turnover-sticky-right-actions {
+        z-index: 2;
+    }
+    .crm-table.turnover-table thead .turnover-sticky-right-actions {
+        top: 0;
+        z-index: 30;
+        background: #e6e2db;
+    }
+    .crm-table.turnover-table tbody tr:hover .turnover-sticky-right-actions {
+        background: #fafaf9;
+    }
+    .crm-table.turnover-table tfoot .turnover-sticky-right-actions {
+        z-index: 2;
+        background: #f9fafb;
+    }
     .crm-table.turnover-table .crm-th.turnover-tenure-col,
     .crm-table.turnover-table .crm-td.turnover-tenure-col {
         width: auto !important;
@@ -105,6 +129,43 @@
         white-space: nowrap;
         padding-left: 8px;
         padding-right: 8px;
+    }
+    /* 日期：显式清除（部分浏览器 type=date 不易清空） */
+    .turnover-filter-row .crm-filter-date .turnover-date-clear-btn {
+        flex-shrink: 0;
+        margin-right: 0.25rem;
+        padding: 0 0.3rem;
+        font-size: 0.625rem;
+        line-height: 1.2;
+        color: #6b7280;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .turnover-filter-row .crm-filter-date .turnover-date-clear-btn:hover {
+        color: #2563eb;
+    }
+    .turnover-date-input-row {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+    .turnover-date-input-row .turnover-date-clear-btn--field {
+        flex-shrink: 0;
+        padding: 0.15rem 0.4rem;
+        font-size: 0.6875rem;
+        color: #6b7280;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.25rem;
+        background: #f9fafb;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .turnover-date-input-row .turnover-date-clear-btn--field:hover {
+        color: #2563eb;
+        border-color: #bfdbfe;
+        background: #eff6ff;
     }
     /* 顶栏约 3.5rem：看板上沿留白对齐；正文在 .turnover-dash-panel-body 内滚动。Glass 主题为 z-index:110，覆盖全局顶栏。 */
     .turnover-dash-overlay {
@@ -556,10 +617,12 @@
         <div class="crm-filter-item turnover-filter-item crm-filter-date turnover-filter-date">
             <span class="crm-filter-date-label turnover-filter-date-label">离职日起</span>
             <input v-model="filters.resignDateStart" type="date" class="crm-filter-date-input turnover-filter-date-input" title="离职日期区间起点" />
+            <button type="button" class="turnover-date-clear-btn" title="清空" @click="filters.resignDateStart = ''">清除</button>
         </div>
         <div class="crm-filter-item turnover-filter-item crm-filter-date turnover-filter-date">
             <span class="crm-filter-date-label turnover-filter-date-label">离职日止</span>
             <input v-model="filters.resignDateEnd" type="date" class="crm-filter-date-input turnover-filter-date-input" title="离职日期区间终点" />
+            <button type="button" class="turnover-date-clear-btn" title="清空" @click="filters.resignDateEnd = ''">清除</button>
         </div>
         <input
             v-model="filters.tenureDaysMax"
@@ -608,7 +671,7 @@
                         <th class="crm-th">薪资</th>
                         <th class="crm-th">GM$</th>
                         <th class="crm-th">GM%</th>
-                        <th class="crm-th">操作</th>
+                        <th class="crm-th turnover-sticky-right-actions">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -644,7 +707,7 @@
                         <td class="crm-td">{{ row.pre_tax_salary }}</td>
                         <td class="crm-td">{{ row.gms }}</td>
                         <td class="crm-td">{{ row.gm_pct }}</td>
-                        <td class="crm-td whitespace-nowrap">
+                        <td class="crm-td whitespace-nowrap turnover-sticky-right-actions">
                             <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openDetail(row)">详情</button>
                             <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
@@ -665,7 +728,7 @@
                         <td class="crm-td"></td>
                         <td class="crm-td font-semibold text-gray-700">{{ formatAmount(totalProfit) }}</td>
                         <td class="crm-td font-semibold text-gray-700">{{ totalProfitRate }}</td>
-                        <td class="crm-td"></td>
+                        <td class="crm-td turnover-sticky-right-actions"></td>
                     </tr>
                 </tfoot>
             </table>
@@ -733,11 +796,17 @@
                 </label>
                 <label class="flex flex-col gap-0.5 text-xs text-gray-600">
                     <span>分析期起</span>
-                    <input v-model="dashPeriodStart" type="date" class="crm-form-control text-sm" />
+                    <div class="turnover-date-input-row">
+                        <input v-model="dashPeriodStart" type="date" class="crm-form-control text-sm flex-1 min-w-0" />
+                        <button type="button" class="turnover-date-clear-btn--field" title="清空" @click="dashPeriodStart = ''">清除</button>
+                    </div>
                 </label>
                 <label class="flex flex-col gap-0.5 text-xs text-gray-600">
                     <span>分析期止</span>
-                    <input v-model="dashPeriodEnd" type="date" class="crm-form-control text-sm" />
+                    <div class="turnover-date-input-row">
+                        <input v-model="dashPeriodEnd" type="date" class="crm-form-control text-sm flex-1 min-w-0" />
+                        <button type="button" class="turnover-date-clear-btn--field" title="清空" @click="dashPeriodEnd = ''">清除</button>
+                    </div>
                 </label>
                 <div class="flex items-center gap-2 shrink-0">
                     <button type="button" class="px-3 py-2 text-sm font-semibold turnover-dash-btn-primary" :disabled="dashLoading" @click="loadDashboard">
@@ -970,7 +1039,7 @@
     <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">{{ addFormReadonly ? '花名册详情' : (editingId ? '修改花名册行' : '新增花名册行') }}</h3>
+                <h3 class="font-bold text-lg">{{ addFormReadonly ? '离职档案详情' : (editingId != null ? '修改离职档案' : '新增离职档案行') }}</h3>
                 <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="closeAddForm">&times;</button>
             </div>
             <div class="overflow-y-auto p-5">
@@ -982,9 +1051,9 @@
                     <label class="flex flex-col gap-1"><span class="text-gray-600">员工加1</span><input v-model.trim="addForm.employee_plus1" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">客户业务线<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.business_line" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">工作地<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.work_location" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">入职时间<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model="addForm.entry_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">项目释放时间</span><input v-model="addForm.project_release_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">离职时间</span><input v-model="addForm.company_resign_date" type="date" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">入职时间<span class="turnover-form-required-star" aria-hidden="true">*</span></span><div class="turnover-date-input-row"><input v-model="addForm.entry_date" type="date" class="crm-form-control flex-1 min-w-0" :disabled="addFormReadonly" /><button v-if="!addFormReadonly" type="button" class="turnover-date-clear-btn--field" title="清空" @click="addForm.entry_date = ''">清除</button></div></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">项目释放时间</span><div class="turnover-date-input-row"><input v-model="addForm.project_release_date" type="date" class="crm-form-control flex-1 min-w-0" :disabled="addFormReadonly" /><button v-if="!addFormReadonly" type="button" class="turnover-date-clear-btn--field" title="清空" @click="addForm.project_release_date = ''">清除</button></div></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">离职时间</span><div class="turnover-date-input-row"><input v-model="addForm.company_resign_date" type="date" class="crm-form-control flex-1 min-w-0" :disabled="addFormReadonly" /><button v-if="!addFormReadonly" type="button" class="turnover-date-clear-btn--field" title="清空" @click="addForm.company_resign_date = ''">清除</button></div></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">司龄</span><input :value="addTenurePreview" disabled class="crm-form-control bg-gray-50 text-gray-600" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">主动/被动</span><input v-model.trim="addForm.zntx_separation_type" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">释放/离职原因</span><input v-model.trim="addForm.leave_reason" class="crm-form-control" :disabled="addFormReadonly" /></label>
@@ -1059,6 +1128,14 @@ function normalizeDate(raw) {
     if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
     const dt = new Date(y, mo - 1, d);
     return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+/** 解析花名册行 id；避免 id 为 0 时被 `|| null` 误判为「新增」模式 */
+function parseRosterRowId(row) {
+    const raw = row?.id;
+    if (raw == null || raw === '') return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
 }
 
 function computeTenure(entryDate, resignDate) {
@@ -1788,13 +1865,13 @@ createApp({
         };
         const openDetail = (row) => {
             fillAddFormFromRow(row);
-            editingId.value = Number(row.id || 0) || null;
+            editingId.value = parseRosterRowId(row);
             addFormReadonly.value = true;
             showAddModal.value = true;
         };
         const openEdit = (row) => {
             fillAddFormFromRow(row);
-            editingId.value = Number(row.id || 0) || null;
+            editingId.value = parseRosterRowId(row);
             addFormReadonly.value = false;
             showAddModal.value = true;
         };
@@ -1831,7 +1908,7 @@ createApp({
                         ? '离职'
                         : '在职',
                 };
-                const isEdit = !!editingId.value;
+                const isEdit = editingId.value != null;
                 const r = await fetch(isEdit ? `/api/roster/${editingId.value}` : '/api/roster', {
                     method: isEdit ? 'PUT' : 'POST',
                     headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
@@ -1991,7 +2068,7 @@ createApp({
             moveTurnoverDashTT, hideTurnoverDashTT, onTurnoverDashTTEnter, onTurnoverDashTTLeave,
             openDashboard, closeDashboard, loadDashboard, resetDashboardFilters, onDashScopeChange, dashTrendRollingShareText, dashTrendRollingShareBarStyle, monthlyRateCell, dashTenureBarPct, dashBusinessBarPct,
             turnoverDepartureLinesForTooltip, analysisPeriodTooltipLines,
-            showAddModal, addForm, addSaving, addFormReadonly, addTenurePreview, openAddForm, closeAddForm, saveAddForm,
+            showAddModal, addForm, addSaving, addFormReadonly, editingId, addTenurePreview, openAddForm, closeAddForm, saveAddForm,
             openDetail, openEdit, removeRow,
             showLogs, logsLoading, logs, openLogs, closeLogs, formatDate,
         };

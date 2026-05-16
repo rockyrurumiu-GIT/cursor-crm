@@ -225,7 +225,10 @@
                         <td class="crm-td">{{ row['推送简历量'] }}</td>
                         <td class="crm-td">{{ row['内筛通过'] }}</td>
                         <td class="crm-td">{{ row['重复'] }}</td>
-                        <td class="crm-td">{{ row['待客户筛选'] }}</td>
+                        <td class="crm-td">
+                            <span v-if="shouldShowMetricTooltip(row, '待客户筛选')" class="insight-metric-trigger" @mouseenter="showMetricTooltip($event, row, '待客户筛选', '待客户筛选')" @mousemove="moveMetricTooltip" @mouseleave="hideMetricTooltip">{{ row['待客户筛选'] }}</span>
+                            <span v-else>{{ row['待客户筛选'] }}</span>
+                        </td>
                         <td class="crm-td">{{ row['客筛通过'] }}</td>
                         <td class="crm-td">{{ row['放弃面试'] }}</td>
                         <td class="crm-td">
@@ -321,6 +324,7 @@ createApp({
         const authHeader = () => window.crmAuthHeader();
         const rowKey = (row) => `${row['时间'] || ''}|${row['岗位'] || ''}|${row['地点'] || ''}`;
         const tooltipMetricFieldKeys = [
+            '待客户筛选',
             '待面试',
             '已面试',
             '面试通过',

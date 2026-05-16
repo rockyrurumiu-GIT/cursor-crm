@@ -4,7 +4,8 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
     .settlement-filter-row {
-        overflow: hidden;
+        /* 不使用 overflow:hidden，否则「筛选客户」下拉复选框会被裁剪 */
+        overflow-x: auto;
     }
     .settlement-filter-text {
         width: 110px;
@@ -28,6 +29,14 @@
         white-space: nowrap;
     }
     .settlement-filter-date-input {
+    }
+    .settlement-customer-filter-btn.crm-filter-control {
+        cursor: pointer;
+        text-align: left;
+    }
+    .settlement-customer-filter-panel {
+        min-width: 12rem;
+        max-height: 14rem;
     }
     /* 与 delivery_detail 结算模块一致：前三列冻结 + 客户高亮（crm-name-cell） */
     .crm-table.settlement-table {
@@ -211,7 +220,36 @@
             <button type="button" class="crm-btn-rollback" @click="restoreLatestBackup">回滚</button>
         </div>
         <div class="crm-filter-row settlement-filter-row shrink-0">
-            <input v-model="filters.customer" type="text" placeholder="筛选客户" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-text" />
+            <div ref="customerFilterRoot" class="crm-filter-item settlement-filter-item relative settlement-filter-text">
+                <button
+                    type="button"
+                    class="crm-filter-control settlement-filter-text settlement-customer-filter-btn w-full truncate"
+                    @click.stop="customerFilterOpen = !customerFilterOpen"
+                >
+                    {{ customerFilterSummary }}
+                </button>
+                <div
+                    v-show="customerFilterOpen"
+                    class="settlement-customer-filter-panel absolute left-0 top-full z-50 mt-1 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+                    @click.stop
+                >
+                    <template v-if="settlementCustomerNames.length">
+                        <label class="flex cursor-pointer items-center gap-2 border-b border-gray-100 bg-gray-50 px-2 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-100">
+                            <input v-model="customerFilterSelectAll" type="checkbox" class="rounded border-gray-300" />
+                            <span>全选</span>
+                        </label>
+                        <label
+                            v-for="name in settlementCustomerNames"
+                            :key="name"
+                            class="flex cursor-pointer items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50"
+                        >
+                            <input v-model="filters.selectedCustomers" type="checkbox" class="rounded border-gray-300" :value="name" />
+                            <span class="min-w-0 truncate" :title="name">{{ name }}</span>
+                        </label>
+                    </template>
+                    <div v-else class="px-2 py-2 text-sm text-gray-400">暂无结算客户</div>
+                </div>
+            </div>
             <input v-model="filters.feeMonth" type="text" placeholder="筛选费用月份" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-text" />
             <select v-model="filters.invoiced" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
                 <option value="">是否开票（全部）</option>
@@ -232,14 +270,31 @@
             </select>
             <div class="crm-filter-item settlement-filter-item crm-filter-date settlement-filter-date">
                 <span class="crm-filter-date-label settlement-filter-date-label">预计回款起点</span>
-                <input v-model="filters.expectedPaymentStart" type="date" class="crm-filter-date-input settlement-filter-date-input" title="预计回款时间起点" />
+                <input
+                    type="date"
+                    class="crm-filter-date-input settlement-filter-date-input"
+                    title="预计回款时间起点"
+                    :value="filters.expectedPaymentStart"
+                    @change="onExpectedPaymentFilterStartDateInput"
+                    @input="onExpectedPaymentFilterStartDateInput"
+                    @blur="onExpectedPaymentFilterStartDateInput"
+                />
             </div>
             <div class="crm-filter-item settlement-filter-item crm-filter-date settlement-filter-date">
                 <span class="crm-filter-date-label settlement-filter-date-label">预计回款终点</span>
-                <input v-model="filters.expectedPaymentEnd" type="date" class="crm-filter-date-input settlement-filter-date-input" title="预计回款时间终点" />
+                <input
+                    type="date"
+                    class="crm-filter-date-input settlement-filter-date-input"
+                    title="预计回款时间终点"
+                    :value="filters.expectedPaymentEnd"
+                    @change="onExpectedPaymentFilterEndDateInput"
+                    @input="onExpectedPaymentFilterEndDateInput"
+                    @blur="onExpectedPaymentFilterEndDateInput"
+                />
             </div>
             <button type="button" class="crm-filter-item settlement-filter-item crm-filter-reset settlement-filter-reset" @click="clearFilters">重置</button>
         </div>
+        <p v-if="expectedPaymentFilterWarning" class="text-sm text-amber-700 shrink-0">{{ expectedPaymentFilterWarning }}</p>
         <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-scroll-fill flex-1 min-h-0">
             <table class="crm-table settlement-table min-w-[1900px]">
                 <thead>
@@ -386,7 +441,7 @@
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, reactive, computed, onMounted } = Vue;
+const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } = Vue;
 const FIELDS = [
     { key: 'serial_no', label: '序号', readonly: true },
     { key: 'progress_updated_at', label: '结算进度更新日期', type: 'date' },
@@ -429,7 +484,9 @@ function todayInputDate() {
 function extractLooseDateParts(raw) {
     const s = String(raw || '').trim();
     if (!s) return null;
-    const m = s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    let m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (m) return [m[1], m[2], m[3]];
+    m = s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
     if (!m) return null;
     return [m[1], m[2], m[3]];
 }
@@ -461,6 +518,16 @@ function dateKey(raw) {
     const d = parseInt(parts[2], 10);
     if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
     return y * 10000 + mo * 100 + d;
+}
+function dateKeyNormalized(raw) {
+    const trimmed = String(raw || '').trim();
+    if (!trimmed) return null;
+    const normalized = normalizeDateForInput(trimmed, false);
+    if (!normalized) return null;
+    let k = dateKey(normalized);
+    if (k != null) return k;
+    k = dateKey(trimmed);
+    return k;
 }
 function paymentReminderLabel(row) {
     const customer = String(row && row.customer_name != null ? row.customer_name : '').trim() || '客户';
@@ -528,8 +595,10 @@ function endOfMonthAfterOffset(raw, monthOffset) {
 createApp({
     setup() {
         const rows = ref([]);
+        const customerFilterOpen = ref(false);
+        const customerFilterRoot = ref(null);
         const filters = reactive({
-            customer: '',
+            selectedCustomers: [],
             feeMonth: '',
             invoiced: '',
             paid: '',
@@ -537,6 +606,9 @@ createApp({
             expectedPaymentStart: '',
             expectedPaymentEnd: '',
         });
+        const expectedPaymentFilterWarning = ref('');
+        let lastInvalidExpectedPaymentStart = '';
+        let lastInvalidExpectedPaymentEnd = '';
         const fileInput = ref(null);
         const showLogs = ref(false);
         const logsLoading = ref(false);
@@ -558,23 +630,73 @@ createApp({
             const requiredKeys = ['customer_name', 'fee_month', 'amount', 'internal_attendance_confirm', 'client_confirm', 'invoiced', 'paid', 'payment_cycle'];
             return requiredKeys.some((k) => !String(form[k] || '').trim());
         });
+        const settlementCustomerNames = computed(() => {
+            const set = new Set();
+            for (const row of rows.value) {
+                const n = String(row.customer_name != null ? row.customer_name : '').trim();
+                if (n) set.add(n);
+            }
+            return [...set].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        });
+        const customerFilterSelectAll = computed({
+            get() {
+                const all = settlementCustomerNames.value;
+                if (!all.length) return false;
+                const selSet = new Set(
+                    (Array.isArray(filters.selectedCustomers) ? filters.selectedCustomers : [])
+                        .map((s) => String(s || '').trim())
+                        .filter(Boolean),
+                );
+                if (!selSet.size) return false;
+                return all.every((name) => selSet.has(name));
+            },
+            set(checked) {
+                if (checked) {
+                    const all = settlementCustomerNames.value;
+                    filters.selectedCustomers.splice(0, filters.selectedCustomers.length, ...all);
+                } else {
+                    filters.selectedCustomers.splice(0);
+                }
+            },
+        });
+        const customerFilterSummary = computed(() => {
+            const names = filters.selectedCustomers;
+            const n = Array.isArray(names) ? names.length : 0;
+            if (!n) return '筛选客户';
+            if (n === 1) return String(names[0] || '').trim() || '筛选客户';
+            return `已选 ${n} 个客户`;
+        });
         const filteredRows = computed(() => {
             const ci = (v) => String(v || '').toLowerCase();
+            const startRaw = String(filters.expectedPaymentStart || '').trim();
+            const endRaw = String(filters.expectedPaymentEnd || '').trim();
+            const selectedNames = Array.isArray(filters.selectedCustomers) ? filters.selectedCustomers : [];
+            const selectedSet =
+                selectedNames.length > 0
+                    ? new Set(selectedNames.map((s) => String(s || '').trim()).filter(Boolean))
+                    : null;
             return rows.value.filter((row) => {
-                if (filters.customer && !ci(row.customer_name).includes(ci(filters.customer))) return false;
+                if (selectedSet && selectedSet.size) {
+                    const name = String(row.customer_name || '').trim();
+                    if (!selectedSet.has(name)) return false;
+                }
                 if (filters.feeMonth && !ci(row.fee_month).includes(ci(filters.feeMonth))) return false;
                 if (filters.invoiced && String(row.invoiced || '') !== filters.invoiced) return false;
                 if (filters.paid && String(row.paid || '') !== filters.paid) return false;
                 if (filters.paymentCycle && ci(row.payment_cycle) !== ci(filters.paymentCycle)) return false;
-                if (filters.expectedPaymentStart) {
-                    const rowDate = dateKey(row.expected_payment_date);
-                    const startDate = dateKey(filters.expectedPaymentStart);
-                    if (startDate && (!rowDate || rowDate < startDate)) return false;
+                if (startRaw) {
+                    const startDate = dateKeyNormalized(startRaw);
+                    if (startDate != null) {
+                        const rowDate = dateKeyNormalized(row.expected_payment_date);
+                        if (!rowDate || rowDate < startDate) return false;
+                    }
                 }
-                if (filters.expectedPaymentEnd) {
-                    const rowDate = dateKey(row.expected_payment_date);
-                    const endDate = dateKey(filters.expectedPaymentEnd);
-                    if (endDate && (!rowDate || rowDate > endDate)) return false;
+                if (endRaw) {
+                    const endDate = dateKeyNormalized(endRaw);
+                    if (endDate != null) {
+                        const rowDate = dateKeyNormalized(row.expected_payment_date);
+                        if (!rowDate || rowDate > endDate) return false;
+                    }
                 }
                 return true;
             });
@@ -685,6 +807,11 @@ createApp({
             const r = await fetch('/api/delivery/settlement', { headers: window.crmAuthHeader() });
             rows.value = r.ok ? await r.json() : [];
         };
+        const onDocClickCloseCustomerFilter = (e) => {
+            if (!customerFilterOpen.value) return;
+            const root = customerFilterRoot.value;
+            if (root && !root.contains(e.target)) customerFilterOpen.value = false;
+        };
         const triggerImport = () => {
             if (fileInput.value) fileInput.value.click();
         };
@@ -772,7 +899,7 @@ createApp({
             await loadRows();
         };
         const clearFilters = () => {
-            filters.customer = '';
+            filters.selectedCustomers.splice(0);
             filters.feeMonth = '';
             filters.invoiced = '';
             filters.paid = '';
@@ -780,6 +907,57 @@ createApp({
             filters.expectedPaymentStart = '';
             filters.expectedPaymentEnd = '';
         };
+        const onExpectedPaymentFilterStartDateInput = (e) => {
+            const el = e && e.target;
+            const v = el && el.value != null ? String(el.value).trim() : '';
+            filters.expectedPaymentStart = v;
+        };
+        const onExpectedPaymentFilterEndDateInput = (e) => {
+            const el = e && e.target;
+            const v = el && el.value != null ? String(el.value).trim() : '';
+            filters.expectedPaymentEnd = v;
+        };
+        watch(
+            () => rows.value,
+            () => {
+                const allowed = new Set(
+                    rows.value
+                        .map((r) => String(r.customer_name != null ? r.customer_name : '').trim())
+                        .filter(Boolean),
+                );
+                const sel = filters.selectedCustomers;
+                if (!Array.isArray(sel) || !sel.length) return;
+                const next = sel.filter((s) => allowed.has(String(s || '').trim()));
+                if (next.length !== sel.length) sel.splice(0, sel.length, ...next);
+            },
+            { deep: true },
+        );
+        watch(
+            () => [String(filters.expectedPaymentStart || '').trim(), String(filters.expectedPaymentEnd || '').trim()],
+            ([st, en]) => {
+                const parts = [];
+                if (st && dateKeyNormalized(st) == null) {
+                    parts.push('「预计回款起点」日期无法识别，起点筛选未生效。');
+                    if (lastInvalidExpectedPaymentStart !== st) {
+                        console.warn('[结算回款] 预计回款起点无法解析:', st);
+                        lastInvalidExpectedPaymentStart = st;
+                    }
+                } else {
+                    lastInvalidExpectedPaymentStart = '';
+                }
+                if (en && dateKeyNormalized(en) == null) {
+                    parts.push('「预计回款终点」日期无法识别，终点筛选未生效。');
+                    if (lastInvalidExpectedPaymentEnd !== en) {
+                        console.warn('[结算回款] 预计回款终点无法解析:', en);
+                        lastInvalidExpectedPaymentEnd = en;
+                    }
+                } else {
+                    lastInvalidExpectedPaymentEnd = '';
+                }
+                expectedPaymentFilterWarning.value = parts.join(' ');
+            },
+            { immediate: true },
+        );
         const clearDateField = (key) => {
             form[key] = '';
         };
@@ -953,11 +1131,17 @@ createApp({
             await loadRows();
         };
         onMounted(async () => {
+            document.addEventListener('click', onDocClickCloseCustomerFilter);
             await loadRows();
         });
+        onUnmounted(() => {
+            document.removeEventListener('click', onDocClickCloseCustomerFilter);
+        });
         return {
-            rows, filters, filteredRows, fields, detailCompactFields: DETAIL_COMPACT_FIELDS, detailTextareaFields: DETAIL_TEXTAREA_FIELDS, fileInput, showLogs, logsLoading, logs,
+            rows, settlementCustomerNames, customerFilterSelectAll, customerFilterOpen, customerFilterRoot, customerFilterSummary,
+            filters, filteredRows, fields, detailCompactFields: DETAIL_COMPACT_FIELDS, detailTextareaFields: DETAIL_TEXTAREA_FIELDS, fileInput, showLogs, logsLoading, logs,
             totalAmountDisplay, totalAmountAllDisplay,
+            expectedPaymentFilterWarning, onExpectedPaymentFilterStartDateInput, onExpectedPaymentFilterEndDateInput,
             showForm, editingId, formDetailReadonly, form, hasErrors,
             openAdd, openEdit, openDetail, saveForm, removeRow, showPaymentReminders,
             triggerImport, onImportFile, exportCsv, restoreLatestBackup, openLogs, formatDate, clearFilters, clearDateField, fillPaymentDaysByDates, onSettlementFieldChange, displayAmountInteger, displayDateSlash,

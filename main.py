@@ -6,12 +6,16 @@ import json
 import csv
 import io
 import socket
+import tempfile
+import hashlib
+import secrets
+import base64
 import unicodedata
 from collections import Counter
 from urllib.parse import quote
 from calendar import monthrange
 from datetime import datetime, timedelta, date
-from typing import List, Optional, Any, Dict, Tuple
+from typing import List, Optional, Any, Dict, Tuple, Set
 from fastapi import FastAPI, Request, Depends, HTTPException, Form, UploadFile, File, status, Body, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, StreamingResponse, RedirectResponse
 from starlette.templating import Jinja2Templates
@@ -20,6 +24,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Float, desc, or_, not_, and_, func, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
+from pydantic import BaseModel, Field
 
 # --- 1. 配置与初始化 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -30,8 +35,83 @@ TRASH_DIR = os.path.join(BASE_DIR, "deleted_files")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 DB_URL = "sqlite:///./crm_v8.db"
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
-ADMIN_USER = {"username": "admin", "password": "admin123"}
+ADMIN_USER = {
+    "username": os.environ.get("CRM_ADMIN_USERNAME", "admin"),
+    "password": os.environ.get("CRM_ADMIN_PASSWORD", "admin123"),
+}
+ADMIN_CREDENTIALS_STORE = os.path.join(BASE_DIR, ".crm_admin_credentials.json")
+ADMIN_PBKDF2_ITERATIONS = 390000
 
+
+def _admin_credentials_store_read() -> Optional[Dict[str, Any]]:
+    if not os.path.isfile(ADMIN_CREDENTIALS_STORE):
+        return None
+    try:
+        with open(ADMIN_CREDENTIALS_STORE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return None
+        for key in ("username", "salt_b64", "hash_b64"):
+            if key not in data or not isinstance(data[key], str):
+                return None
+        return data
+    except (OSError, json.JSONDecodeError, TypeError):
+        return None
+
+
+def _effective_admin_username() -> str:
+    data = _admin_credentials_store_read()
+    if data:
+        return data["username"]
+    return ADMIN_USER["username"]
+
+
+def _pbkdf2_verify(password: str, salt_b64: str, hash_b64: str, iterations: int) -> bool:
+    try:
+        salt = base64.b64decode(salt_b64)
+        expected = base64.b64decode(hash_b64)
+    except Exception:
+        return False
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+    return secrets.compare_digest(dk, expected)
+
+
+def _verify_admin_login(username: str, password: str) -> bool:
+    if username != _effective_admin_username():
+        return False
+    data = _admin_credentials_store_read()
+    if data:
+        try:
+            iters = int(data.get("iterations") or ADMIN_PBKDF2_ITERATIONS)
+        except (TypeError, ValueError):
+            iters = ADMIN_PBKDF2_ITERATIONS
+        return _pbkdf2_verify(password, data["salt_b64"], data["hash_b64"], iters)
+    return password == ADMIN_USER["password"]
+
+
+def _persist_admin_credentials(username: str, new_password: str) -> None:
+    salt = os.urandom(16)
+    iterations = ADMIN_PBKDF2_ITERATIONS
+    dk = hashlib.pbkdf2_hmac("sha256", new_password.encode("utf-8"), salt, iterations)
+    payload = {
+        "username": username,
+        "iterations": iterations,
+        "salt_b64": base64.b64encode(salt).decode("ascii"),
+        "hash_b64": base64.b64encode(dk).decode("ascii"),
+    }
+    fd, tmp_path = tempfile.mkstemp(dir=BASE_DIR, prefix=".crm_admin_cred_", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, ADMIN_CREDENTIALS_STORE)
+    finally:
+        if os.path.isfile(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 for d in [STATIC_DIR, UPLOAD_DIR, TRASH_DIR, BACKUP_DIR]:
     os.makedirs(d, exist_ok=True)
 
@@ -1296,16 +1376,31 @@ def get_db():
 
 
 def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
-    if credentials.username != ADMIN_USER["username"] or credentials.password != ADMIN_USER["password"]:
+    if not _verify_admin_login(credentials.username, credentials.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号或密码错误")
     return credentials.username
 
 
 def authenticate_admin(user: str = Depends(authenticate)):
     """跨客户手册全文检索等能力：仅管理员。当前仅 admin 账号，后续多用户时在此扩展。"""
-    if user != ADMIN_USER["username"]:
+    if user != _effective_admin_username():
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
     return user
+
+
+class ChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=6, max_length=256)
+
+
+@app.post("/api/account/change-password")
+async def api_account_change_password(body: ChangePasswordBody, user: str = Depends(authenticate)):
+    if body.new_password == body.current_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="新密码不能与当前密码相同")
+    if not _verify_admin_login(user, body.current_password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前密码错误")
+    _persist_admin_credentials(user, body.new_password)
+    return {"ok": True}
 
 
 def _roster_strip_amount_for_ratio(v: str) -> str:
@@ -1591,6 +1686,35 @@ def _validate_pipeline_payload(
         raise HTTPException(status_code=400, detail=f"{prefix}：已填写入职时间或已标记待入职/已入职时，面试结果必须为“通过”")
     if has_onboarding_signal and got_offer == "否":
         raise HTTPException(status_code=400, detail=f"{prefix}：已填写入职时间或已标记待入职/已入职时，是否接offer不能为“否”")
+
+
+def _normalize_interview_person_name(raw: Any) -> str:
+    """与前端员工访谈提示 normalizePersonName 一致：strip + 合并连续空白。"""
+    s = str(raw or "").strip()
+    return re.sub(r"\s+", " ", s)
+
+
+def _interview_mark_left_for_normalized_name_keys(
+    db: Session,
+    client_id: int,
+    name_keys: Set[str],
+) -> int:
+    """访谈标离职（免校验）：仅写 employment_status；不 commit。name_keys 须已规范化。"""
+    if client_id <= 0 or not name_keys:
+        return 0
+    rows = (
+        db.query(DeliveryInterviewEntry)
+        .filter(DeliveryInterviewEntry.client_id == client_id)
+        .order_by(DeliveryInterviewEntry.id)
+        .all()
+    )
+    matched = 0
+    for inv in rows:
+        if _normalize_interview_person_name(inv.full_name) not in name_keys:
+            continue
+        matched += 1
+        inv.employment_status = "离职"
+    return matched
 
 
 def _interview_entry_to_dict(e: DeliveryInterviewEntry) -> Dict[str, str]:
@@ -3466,8 +3590,10 @@ async def roster_create_row_all(
     db.add(entry)
     db.commit()
     db.refresh(entry)
+    _resequence_roster_serial_no(db, int(mc.id))
     db.add(AuditLog(client_id=0, operator=user, action=f"整体花名册新增一行: {data.get('full_name') or ('#' + str(entry.id))}"))
     db.commit()
+    db.refresh(entry)
     return _roster_entry_to_dict(entry)
 
 
@@ -4052,6 +4178,7 @@ async def roster_create_row(
     db.add(entry)
     db.commit()
     db.refresh(entry)
+    _resequence_roster_serial_no(db, client_id)
     log = AuditLog(
         client_id=client_id,
         operator=user,
@@ -4059,6 +4186,7 @@ async def roster_create_row(
     )
     db.add(log)
     db.commit()
+    db.refresh(entry)
     return _roster_entry_to_dict(entry)
 
 
@@ -4072,6 +4200,7 @@ async def roster_update_row(
     entry = db.query(RosterEntry).filter(RosterEntry.id == row_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
+    old_cid = int(entry.client_id) if entry.client_id is not None else 0
     raw_body = body if isinstance(body, dict) else {}
     data = _normalize_roster_payload(raw_body)
     for k in list(data.keys()):
@@ -4084,13 +4213,30 @@ async def roster_update_row(
         entry.client_id = mc.id
         data["customer_name"] = normalized_cn
     # 未匹配到客户时保留原 client_id，避免「客户」简称与库中全称不一致时被置为 0，从当前客户花名册中消失
+    cid = int(entry.client_id) if entry.client_id is not None else 0
+    interview_sync_n = 0
+    if cid > 0 and "离职" in str(data.get("employment_status") or ""):
+        sync_keys: Set[str] = {
+            _normalize_interview_person_name(entry.full_name),
+            _normalize_interview_person_name(data.get("full_name", "")),
+        }
+        sync_keys.discard("")
+        if sync_keys:
+            interview_sync_n = _interview_mark_left_for_normalized_name_keys(db, cid, sync_keys)
     for k, v in data.items():
         setattr(entry, k, v)
     db.commit()
     db.refresh(entry)
-    log = AuditLog(client_id=entry.client_id, operator=user, action=f"花名册修改行 id={row_id}")
+    new_cid = int(entry.client_id) if entry.client_id is not None else 0
+    for cid in {old_cid, new_cid}:
+        _resequence_roster_serial_no(db, cid)
+    action_msg = f"花名册修改行 id={row_id}"
+    if interview_sync_n:
+        action_msg += f"，同步员工访谈标离职 {interview_sync_n} 条（免校验）"
+    log = AuditLog(client_id=entry.client_id, operator=user, action=action_msg)
     db.add(log)
     db.commit()
+    db.refresh(entry)
     return _roster_entry_to_dict(entry)
 
 
@@ -4431,12 +4577,15 @@ async def roster_export_csv_all(db: Session = Depends(get_db), user: str = Depen
     output.write("\ufeff")
     writer = csv.writer(output)
     writer.writerow(ROSTER_EXPORT_HEADERS)
-    for e in rows:
+    for row_index, e in enumerate(rows, start=1):
         d = _roster_entry_to_dict(e)
         line = []
         for zh in ROSTER_EXPORT_HEADERS:
             fn = _CHINESE_ROSTER_HEADER_MAP[zh]
-            line.append(d.get(fn, ""))
+            if zh == "序号":
+                line.append(str(row_index))
+            else:
+                line.append(d.get(fn, ""))
         writer.writerow(line)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
@@ -4703,6 +4852,7 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
     detail_metric_keys = [
+        "待客户筛选",
         "待面试",
         "已面试",
         "面试通过",
@@ -4846,6 +4996,7 @@ async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: 
             inner_fail_counts[key] = int(inner_fail_counts.get(key, 0)) + 1
         if resume_screening == "待反馈":
             item["待客户筛选"] += 1
+            append_detail(detail_map, "待客户筛选", e.full_name, position)
         if resume_screening == "通过":
             item["客筛通过"] += 1
         if interviewed == "放弃":
@@ -5429,6 +5580,36 @@ async def interview_create_row(
     db.add(AuditLog(client_id=client_id, operator=user, action=f"员工访谈新增行 id={entry.id}"))
     db.commit()
     return _interview_entry_to_dict(entry)
+
+
+@app.post("/api/clients/{client_id}/delivery/interviews/mark-employment-left")
+async def interview_mark_employment_left_by_name(
+    client_id: int,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
+    """提示「已离职」等场景：仅改在职/离职，不校验交付判断等必填（与 PUT 行接口区分）。"""
+    c = db.query(Client).filter(Client.id == client_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    raw = body if isinstance(body, dict) else {}
+    needle = _normalize_interview_person_name(raw.get("full_name", ""))
+    if not needle:
+        raise HTTPException(status_code=400, detail="请提供员工姓名")
+    matched = _interview_mark_left_for_normalized_name_keys(db, client_id, {needle})
+    db.commit()
+    if matched:
+        label = needle if len(needle) <= 60 else needle[:57] + "..."
+        db.add(
+            AuditLog(
+                client_id=client_id,
+                operator=user,
+                action=f"员工访谈标离职（免校验）匹配「{label}」共 {matched} 条",
+            )
+        )
+        db.commit()
+    return {"updated": matched}
 
 
 @app.put("/api/delivery/interviews/row/{row_id}")
@@ -6192,6 +6373,11 @@ if __name__ == "__main__":
     print("ITO CRM Ultimate V8 系统启动成功")
     print(f"本地访问: http://127.0.0.1:{V8_PORT}")
     print(f"内网访问: http://{ip}:{V8_PORT}")
-    print("管理员账号: admin / admin123")
+    if os.path.isfile(ADMIN_CREDENTIALS_STORE):
+        print(f"管理员账号: {_effective_admin_username()}（已在界面修改密码，凭据保存在本地文件）")
+    elif os.environ.get("CRM_ADMIN_PASSWORD"):
+        print(f"管理员账号: {ADMIN_USER['username']}（已配置 CRM_ADMIN_PASSWORD）")
+    else:
+        print(f"管理员账号: {ADMIN_USER['username']} / {ADMIN_USER['password']}")
     print(f"{'='*50}\n")
     uvicorn.run(app, host="0.0.0.0", port=V8_PORT)

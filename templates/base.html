@@ -477,6 +477,10 @@
         .crm-login-form {
             margin-top: 1.35rem;
         }
+        /* 改密弹窗：弱化浏览器将字符渲染成可读字形的情况（兜底掩码） */
+        #pwd-change-overlay .crm-pwd-change-form input[type='password'] {
+            -webkit-text-security: disc;
+        }
         .crm-handbook-chat-shell {
             position: fixed;
             right: max(1rem, env(safe-area-inset-right, 0px) + 1rem);
@@ -635,6 +639,46 @@
         </div>
     </div>
 
+    <div id="pwd-change-overlay" class="crm-login-overlay fixed inset-0 z-[110] hidden flex items-center justify-center px-4 py-8 overflow-hidden">
+        <div class="crm-login-blob crm-login-blob--a" aria-hidden="true"></div>
+        <div class="crm-login-blob crm-login-blob--b" aria-hidden="true"></div>
+        <div class="crm-login-panel w-full max-w-md">
+            <div class="crm-login-panel-head text-center">
+                <p class="crm-login-brand">ITO CRM</p>
+                <h2 class="crm-login-title">修改密码</h2>
+            </div>
+            <div class="crm-login-divider" role="presentation"></div>
+            <form id="pwd-change-form" class="crm-login-form flex flex-col gap-4 crm-pwd-change-form" autocomplete="off" onsubmit="return false;">
+                <div class="flex flex-col gap-1">
+                    <label for="pwd-change-current" class="text-xs font-medium text-violet-200/80">当前密码</label>
+                    <input id="pwd-change-current" type="password" name="current_password" placeholder="请输入当前密码" autocomplete="current-password"
+                        class="crm-login-input w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[0.9375rem] text-slate-100 placeholder:text-violet-200/35 outline-none transition focus:border-violet-400/50 focus:ring-2 focus:ring-violet-500/25">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label for="pwd-change-new" class="text-xs font-medium text-violet-200/80">新密码（至少 6 位）</label>
+                    <input id="pwd-change-new" type="password" name="new_password" placeholder="请输入新密码" autocomplete="off"
+                        class="crm-login-input w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[0.9375rem] text-slate-100 placeholder:text-violet-200/35 outline-none transition focus:border-violet-400/50 focus:ring-2 focus:ring-violet-500/25">
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label for="pwd-change-new2" class="text-xs font-medium text-violet-200/80">确认新密码</label>
+                    <input id="pwd-change-new2" type="password" name="new_password_confirm" placeholder="请再次输入新密码" autocomplete="off"
+                        class="crm-login-input w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[0.9375rem] text-slate-100 placeholder:text-violet-200/35 outline-none transition focus:border-violet-400/50 focus:ring-2 focus:ring-violet-500/25">
+                </div>
+                <p id="pwd-change-err" class="hidden text-center text-sm font-medium text-rose-400/95"></p>
+                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-1">
+                    <button type="button" id="pwd-change-cancel"
+                        class="w-full sm:w-auto rounded-full border border-white/18 px-5 py-3 text-[0.9375rem] font-semibold text-slate-100 bg-black/25 hover:bg-white/10 transition">
+                        取消
+                    </button>
+                    <button type="button" id="pwd-change-save"
+                        class="w-full sm:w-auto rounded-full border border-white/18 px-5 py-3 text-[0.9375rem] font-semibold text-white bg-[rgba(91,65,145,0.82)] hover:bg-[rgba(105,75,165,0.9)] shadow-[0_10px_28px_rgba(61,40,110,0.45)] transition">
+                        保存
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="main-shell" class="min-h-screen flex flex-col hidden">
         <header class="border-b border-[#30363d] bg-[#010409] text-[#e6edf3] shrink-0 relative z-[100] overflow-visible">
             <div class="max-w-[1280px] mx-auto px-4 flex items-center justify-between min-h-[3.5rem] gap-4 overflow-visible">
@@ -645,6 +689,7 @@
                 {% block header_extra %}{% endblock %}
                 <div class="flex items-center gap-3 shrink-0 text-sm">
                     <span id="header-user" class="text-[#8b949e] hidden sm:inline"></span>
+                    <button type="button" id="change-pwd-btn" class="text-[#58a6ff] hover:underline font-medium">修改密码</button>
                     <button type="button" id="logout-btn" class="text-[#58a6ff] hover:underline font-medium">退出</button>
                 </div>
             </div>
@@ -922,10 +967,32 @@
             var overlay = document.getElementById('login-overlay');
             var shell = document.getElementById('main-shell');
             var errEl = document.getElementById('login-err');
+            var pwdOverlay = document.getElementById('pwd-change-overlay');
+
+            function resetPwdModal() {
+                ['pwd-change-current', 'pwd-change-new', 'pwd-change-new2'].forEach(function (id) {
+                    var el = document.getElementById(id);
+                    if (el) { el.value = ''; }
+                });
+                var pe = document.getElementById('pwd-change-err');
+                if (pe) { pe.textContent = ''; pe.classList.add('hidden'); }
+            }
+
+            function closePwdModal() {
+                if (pwdOverlay) { pwdOverlay.classList.add('hidden'); }
+                resetPwdModal();
+            }
+
+            function showPwdModal() {
+                if (!pwdOverlay) { return; }
+                resetPwdModal();
+                pwdOverlay.classList.remove('hidden');
+            }
 
             function showLogin(msg) {
                 shell.classList.add('hidden');
                 overlay.classList.remove('hidden');
+                if (pwdOverlay) { pwdOverlay.classList.add('hidden'); }
                 window.crmHideHandbookAssistant();
                 if (msg) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
                 else { errEl.classList.add('hidden'); }
@@ -971,7 +1038,61 @@
                 localStorage.removeItem('crm_user');
                 document.getElementById('login-pwd').value = '';
                 window.crmHideHandbookAssistant();
+                resetPwdModal();
                 showLogin();
+            };
+
+            document.getElementById('change-pwd-btn').onclick = function () {
+                showPwdModal();
+            };
+            document.getElementById('pwd-change-cancel').onclick = closePwdModal;
+            document.getElementById('pwd-change-save').onclick = async function () {
+                var curEl = document.getElementById('pwd-change-current');
+                var nwEl = document.getElementById('pwd-change-new');
+                var nw2El = document.getElementById('pwd-change-new2');
+                var pwdErr = document.getElementById('pwd-change-err');
+                var cur = curEl ? curEl.value : '';
+                var nw = nwEl ? nwEl.value : '';
+                var nw2 = nw2El ? nw2El.value : '';
+                if (pwdErr) { pwdErr.classList.add('hidden'); pwdErr.textContent = ''; }
+                if (!nw || nw.length < 6) {
+                    if (pwdErr) { pwdErr.textContent = '新密码至少 6 位'; pwdErr.classList.remove('hidden'); }
+                    return;
+                }
+                if (nw !== nw2) {
+                    if (pwdErr) { pwdErr.textContent = '两次输入的新密码不一致'; pwdErr.classList.remove('hidden'); }
+                    return;
+                }
+                var u = localStorage.getItem('crm_user') || '';
+                var b = localStorage.getItem('crm_b64');
+                if (!b || !u) {
+                    closePwdModal();
+                    showLogin('请先登录');
+                    return;
+                }
+                try {
+                    var r = await fetch('/api/account/change-password', {
+                        method: 'POST',
+                        headers: Object.assign({}, window.crmAuthHeader(), { 'Content-Type': 'application/json' }),
+                        body: JSON.stringify({ current_password: cur, new_password: nw }),
+                    });
+                    var data = await r.json().catch(function () { return {}; });
+                    if (!r.ok) {
+                        var detail = data.detail;
+                        var msg;
+                        if (r.status === 404 && (!detail || detail === 'Not Found')) {
+                            msg = '接口不可用（404）：请确认后端已更新并已重启；若在网关后部署请检查是否转发 /api/account/change-password。';
+                        } else {
+                            msg = typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map(function (x) { return x.msg || ''; }).join('；') : '保存失败');
+                        }
+                        if (pwdErr) { pwdErr.textContent = msg || '保存失败'; pwdErr.classList.remove('hidden'); }
+                        return;
+                    }
+                    localStorage.setItem('crm_b64', btoa(u + ':' + nw));
+                    closePwdModal();
+                } catch (e) {
+                    if (pwdErr) { pwdErr.textContent = '网络错误'; pwdErr.classList.remove('hidden'); }
+                }
             };
 
             verifySession();

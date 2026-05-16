@@ -21,3 +21,4 @@ uploads/
 .DS_Store
 .env
 .env.*
+.crm_admin_credentials.json
