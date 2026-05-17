@@ -719,7 +719,41 @@
             </div>
         </div>
         <div v-else-if="moduleKey === 'interviews'" class="mt-2 flex flex-col flex-1 min-h-0 gap-2">
-            <div class="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-3 shrink-0 space-y-2">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 shrink-0">
+                <div
+                    v-if="!interviewFilterPanelExpanded"
+                    class="flex flex-wrap items-center justify-between gap-2 px-2 py-2 sm:px-3 sm:py-2.5"
+                >
+                    <p class="text-sm font-semibold text-gray-700 min-w-0">
+                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredInterviewRows.length }}</span> 条
+                    </p>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                        <button
+                            type="button"
+                            class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                            title="展开筛选区"
+                            aria-label="展开筛选区"
+                            @click="toggleInterviewFilterPanel"
+                        >
+                            展开筛选
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="inline-block h-4 w-4 ml-0.5 align-text-bottom text-gray-500">
+                                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                            title="回到顶部"
+                            aria-label="回到顶部"
+                            @click="scrollToTop"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                                <path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div v-else class="p-2 sm:p-3 space-y-2">
                 <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
                     <div class="flex flex-wrap items-end gap-3 min-w-0">
                         <label class="flex flex-col gap-0.5 text-xs">
@@ -738,6 +772,17 @@
                         <input ref="interviewFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onInterviewImportFile" />
                         <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportInterviewCsv">导出</button>
                         <button type="button" class="crm-btn-rollback !py-1.5 !px-3 !text-sm" @click="restoreInterviewLatestBackup">回滚</button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                            title="收起筛选区（仅保留合计与展开）"
+                            aria-label="收起筛选区"
+                            @click="toggleInterviewFilterPanel"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                                <path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
                         <button
                             type="button"
                             class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
@@ -874,6 +919,7 @@
                         </div>
                     </label>
                     <button type="button" class="crm-filter-item crm-filter-reset" @click="resetInterviewFilter">清除筛选</button>
+                </div>
                 </div>
             </div>
             <div
@@ -2360,6 +2406,15 @@ createApp({
         const interviewPositionDropdownOpen = ref(false);
         const interviewQ1DropdownOpen = ref(false);
         const interviewSatisfactionDropdownOpen = ref(false);
+        const interviewFilterPanelExpanded = ref(true);
+        const toggleInterviewFilterPanel = () => {
+            interviewFilterPanelExpanded.value = !interviewFilterPanelExpanded.value;
+            if (!interviewFilterPanelExpanded.value) {
+                interviewPositionDropdownOpen.value = false;
+                interviewQ1DropdownOpen.value = false;
+                interviewSatisfactionDropdownOpen.value = false;
+            }
+        };
         const interviewOptionSearch = reactive({
             position: '',
             employee_q1: '',
@@ -4262,6 +4317,7 @@ createApp({
             interviewCompactFields: INTERVIEW_COMPACT_FIELDS, interviewTextareaFields: INTERVIEW_TEXTAREA_FIELDS,
             interviewFilter, interviewSelectOptions, interviewOptionSearch,
             interviewPositionDropdownOpen, interviewQ1DropdownOpen, interviewSatisfactionDropdownOpen,
+            interviewFilterPanelExpanded, toggleInterviewFilterPanel,
             interviewPositionFilterRef, interviewQ1FilterRef, interviewSatisfactionFilterRef,
             filteredInterviewPositionOptions, filteredInterviewQ1Options, filteredInterviewSatisfactionOptions,
             interviewPositionSummary, interviewQ1Summary, interviewSatisfactionSummary,
