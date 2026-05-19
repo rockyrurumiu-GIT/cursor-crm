@@ -25,7 +25,7 @@
         </div>
     </div>
     <!-- 客户（含费用折算器子项） -->
-    <div class="gh-nav-item{% if path.startswith('/customers') or path.startswith('/tools/calc') %} nav-active{% endif %}">
+    <div class="gh-nav-item{% if (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/tools/calc') %} nav-active{% endif %}">
         <span class="nav-trigger cursor-default">客户
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
@@ -41,7 +41,6 @@
                     <div>
                         <div class="gh-mega-col-h">客户管理</div>
                         <a class="gh-mega-link" href="/customers">进入客户管理</a>
-                        <a class="gh-mega-link" href="/customers/roster">花名册</a>
                     </div>
                     <div>
                         <div class="gh-mega-col-h">外包费用</div>
@@ -124,7 +123,7 @@
         </div>
     </div>
     <!-- 交付 -->
-    <div class="gh-nav-item{% if path.startswith('/delivery') %} nav-active{% endif %}">
+    <div class="gh-nav-item{% if path.startswith('/delivery') or path.startswith('/customers/roster') %} nav-active{% endif %}">
         <span class="nav-trigger cursor-default">交付
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
@@ -138,6 +137,7 @@
                     </div>
                     <div>
                         <div class="gh-mega-col-h">员工管理</div>
+                        <a class="gh-mega-link" href="/customers/roster">花名册</a>
                         <a class="gh-mega-link" href="/delivery/interviews">员工访谈</a>
                         <a class="gh-mega-link" href="/delivery/turnover">离职率分析</a>
                     </div>
