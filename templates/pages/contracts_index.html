@@ -9,7 +9,8 @@
     <h1 class="text-2xl font-bold text-gray-900">合同与里程碑</h1>
     <p class="text-sm text-gray-500">交接审批通过后自动生成 SOW 草稿；里程碑可预置结算回款行。</p>
     <div class="bg-white border rounded-lg overflow-hidden">
-        <table class="crm-table w-full">
+        <div class="crm-h-scroll">
+        <table class="crm-table w-full" data-table-id="contracts">
             <thead>
                 <tr>
                     <th class="crm-th">合同号</th>
@@ -38,6 +39,7 @@
                 <tr v-if="!items.length"><td colspan="6" class="crm-td text-center text-gray-400 py-8">暂无合同（需先通过交接审批）</td></tr>
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 {% endraw %}

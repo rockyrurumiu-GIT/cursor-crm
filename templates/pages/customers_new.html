@@ -23,12 +23,47 @@
         </div>
         <div>
             <label class="block text-sm font-medium mb-1">开拓阶段</label>
-            <select name="phase" class="w-full p-2 border rounded">
+            <select name="phase" class="crm-form-control">
                 <option>初步接触</option>
                 <option>方案/报价</option>
                 <option>合同签订</option>
                 <option>成交</option>
             </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">预估当年合作金额</label>
+            <div class="relative">
+                <input id="estimated-annual-amount-display" type="text" readonly tabindex="-1"
+                    class="w-full p-2 border rounded pr-14 bg-gray-50 text-gray-700 cursor-default"
+                    placeholder="由名下商机自动汇总">
+                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm pointer-events-none">万元</span>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">= 各商机「预估当年金额 × 赢单率」之和（不含输单商机）</p>
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">联系人姓名</label>
+            <input name="contact_name" class="w-full p-2 border rounded">
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">联系方式</label>
+            <input name="contact_info" class="w-full p-2 border rounded" placeholder="电话、微信等">
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">联系人职位</label>
+            <input name="contact_title" class="w-full p-2 border rounded">
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">联系人关系</label>
+            <select name="contact_relationship" class="crm-form-control">
+                <option value="">请选择</option>
+                <option>普通</option>
+                <option>良好</option>
+                <option>密切</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">客户所在城市</label>
+            <input name="city" class="w-full p-2 border rounded" placeholder="例如：深圳">
         </div>
         <div>
             <label class="block text-sm font-medium mb-1">描述</label>
@@ -51,11 +86,22 @@
 (function () {
     var form = document.getElementById('new-client-form');
     var msg = document.getElementById('form-msg');
+    var amountDisplay = document.getElementById('estimated-annual-amount-display');
     var clientId = {% if is_edit %}{{ client_id }}{% else %}null{% endif %};
     var submitBtn = form.querySelector('button[type="submit"]');
 
+    function setEstimatedAmountDisplay(value) {
+        if (!amountDisplay) return;
+        var v = (value || '').trim();
+        amountDisplay.value = v || '';
+        amountDisplay.placeholder = clientId ? '暂无商机数据' : '保存后由名下商机自动汇总';
+    }
+
     async function loadClient() {
-        if (!clientId) return;
+        if (!clientId) {
+            setEstimatedAmountDisplay('');
+            return;
+        }
         msg.classList.add('hidden');
         try {
             var r = await fetch('/api/clients/' + clientId, { headers: window.crmAuthHeader() });
@@ -66,9 +112,12 @@
                 return;
             }
             var data = await r.json();
-            ['name', 'industry', 'owner', 'scale', 'phase', 'description', 'remarks'].forEach(function (key) {
+            ['name', 'industry', 'owner', 'scale', 'phase',
+             'contact_name', 'contact_info', 'contact_title', 'contact_relationship', 'city',
+             'description', 'remarks'].forEach(function (key) {
                 if (form.elements[key]) form.elements[key].value = data[key] || '';
             });
+            setEstimatedAmountDisplay(data.estimated_annual_amount);
         } catch (err) {
             msg.textContent = '加载失败';
             msg.classList.remove('hidden');

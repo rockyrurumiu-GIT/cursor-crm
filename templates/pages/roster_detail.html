@@ -4,6 +4,27 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
     /* tbody 固定「操作」列 */
+    .roster-table col.crm-col-op,
+    .roster-table th.crm-sticky-right-op,
+    .roster-table td.crm-sticky-right-op {
+        width: var(--crm-op-col-width, 5.75rem) !important;
+        min-width: var(--crm-op-col-width, 5.75rem) !important;
+        max-width: var(--crm-op-col-width, 5.75rem) !important;
+    }
+    /* 打卡等长文本：省略显示，悬停展开（与客户拜访 crm-cell-clip 一致） */
+    .roster-table td.roster-col-checkin {
+        overflow: hidden;
+        max-width: 8rem;
+    }
+    .roster-table .crm-cell-clip:hover {
+        z-index: 12;
+    }
+    .roster-table tbody tr:nth-child(even) .crm-cell-clip:hover {
+        background: #f6f8fa;
+    }
+    .roster-table tbody tr:hover .crm-cell-clip:hover {
+        background: #eef6ff;
+    }
     .roster-sticky-op { box-shadow: -8px 0 24px -12px rgba(15, 23, 42, 0.08); }
     thead .roster-sticky-op {
         box-shadow: -8px 0 14px -6px rgba(73, 66, 58, 0.18);
@@ -59,20 +80,6 @@
         border-collapse: separate;
         border-spacing: 0;
     }
-    .crm-table .crm-th.roster-col-serial,
-    .crm-table .crm-td.roster-col-serial {
-        width: var(--roster-sticky-serial-width);
-        min-width: var(--roster-sticky-serial-width);
-        max-width: var(--roster-sticky-serial-width);
-        box-sizing: border-box;
-    }
-    .crm-table .crm-th.roster-col-name,
-    .crm-table .crm-td.roster-col-name {
-        width: var(--roster-sticky-name-width);
-        min-width: var(--roster-sticky-name-width);
-        max-width: var(--roster-sticky-name-width);
-        box-sizing: border-box;
-    }
     .roster-sticky-left-serial,
     .roster-sticky-left-key {
         position: sticky;
@@ -96,16 +103,16 @@
     .crm-table thead .roster-sticky-left-serial {
         top: 0;
         z-index: 30;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table thead .roster-sticky-left-key {
         top: 0;
         z-index: 29;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table tbody tr:hover .roster-sticky-left-serial,
     .crm-table tbody tr:hover .roster-sticky-left-key {
-        background: #fafaf9;
+        background: #eef6ff;
     }
     /* 与交付详情一致：表格占满主区域剩余高度，仅表格内滚动，避免整页与表格双滚动、底栏遮挡感 */
     .roster-table-scroll-fill.crm-table-scroll {
@@ -264,7 +271,7 @@
 
         <div class="rounded-xl border border-gray-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_24px_-4px_rgba(15,23,42,0.06)] overflow-hidden flex-1 min-h-0 flex flex-col">
             <div class="crm-h-scroll roster-wrap crm-table-scroll roster-table-scroll-fill flex-1 min-h-0">
-                <table class="crm-table roster-table min-w-[2280px] text-sm text-gray-800">
+                <table class="crm-table roster-table text-sm text-gray-800" data-table-id="roster" data-table-min-width="2280" data-roster-content-fit="1">
                     <thead>
                         <tr>
                             <th class="crm-th min-w-[3.25rem] roster-col-serial roster-sticky-left-serial">序号</th>
@@ -285,14 +292,14 @@
                             <th class="crm-th min-w-[5rem] crm-percent-cell">GM%</th>
                             <th class="crm-th min-w-[5.5rem]">员工+1</th>
                             <th v-if="isZNTX" class="crm-th min-w-[6rem]">入职渠道</th>
-                            <th v-if="isZNTX" class="crm-th min-w-[5rem]">打卡</th>
+                            <th v-if="isZNTX" class="crm-th min-w-[5rem] max-w-[8rem] roster-col-checkin">打卡</th>
                             <th class="crm-th min-w-[5.5rem]">员工+2</th>
                             <th class="crm-th min-w-[4.5rem]">接口</th>
                             <th v-if="showStdReleaseLeaveCols" class="crm-th min-w-[7rem]">项目释放日期</th>
                             <th v-if="showStdReleaseLeaveCols" class="crm-th min-w-[7rem]">公司离职日期</th>
                             <th v-if="showStdReleaseLeaveCols" class="crm-th min-w-[14rem]">离职或释放原因</th>
                             <th class="crm-th min-w-[10rem] max-w-[15rem]">备注</th>
-                            <th class="crm-th sticky right-0 z-20 min-w-[5.5rem] roster-sticky-op crm-sticky-right-op">操作</th>
+                            <th class="crm-th sticky right-0 z-20 roster-sticky-op crm-sticky-right-op">操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -325,7 +332,9 @@
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-percent-cell">{{ row.gm_pct }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.employee_plus1 }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_onboarding_channel }}</td>
-                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_attendance_checkin }}</td>
+                            <td v-if="isZNTX" class="crm-td px-3 py-3 text-gray-700 align-top roster-col-checkin">
+                                <div class="crm-cell-clip" :title="row.zntx_attendance_checkin || ''">{{ row.zntx_attendance_checkin || '—' }}</div>
+                            </td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.employee_plus2 }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.interface_contact }}</td>
                             <td v-if="showStdReleaseLeaveCols" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.project_release_date) }}</td>
@@ -412,7 +421,7 @@
     </div>
 
     <!-- 新增/编辑 -->
-    <div v-if="showForm" class="roster-detail-modal-overlay">
+    <div v-if="showForm" class="crm-esc-modal roster-detail-modal-overlay">
         <div class="roster-detail-modal-panel">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ formReadonly ? '花名册详情' : (editingId ? '修改行' : '新增行') }}</h3>
@@ -526,7 +535,7 @@
     </div>
 
     <!-- 删除确认（整体/单客户花名册共用） -->
-    <div v-if="showDel" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" @click.self="cancelDelete">
+    <div v-if="showDel" class="crm-esc-modal fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" @click.self="cancelDelete">
         <div class="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full text-center" role="dialog" aria-modal="true" aria-labelledby="roster-del-title">
             <h3 id="roster-del-title" class="text-lg font-semibold text-gray-900 mb-2">确认删除</h3>
             <p class="text-gray-600 text-sm mb-4">确定删除该条花名册记录？删除后不可恢复。</p>
@@ -538,7 +547,7 @@
     </div>
 
     <!-- 审计日志 -->
-    <div v-if="showLogs" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <div v-if="showLogs" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="text-lg font-bold text-gray-900">字段变更记录（审计）</h3>
@@ -570,7 +579,7 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, onMounted, reactive, computed, watch } = Vue;
+const { createApp, ref, onMounted, reactive, computed, watch, nextTick } = Vue;
 const CLIENT_ID = window.__ROSTER_CLIENT_ID__;
 const IS_GLOBAL_ROSTER = !CLIENT_ID || Number(CLIENT_ID) === 0;
 const STANDARD_FORM_FIELDS = [
@@ -1470,6 +1479,11 @@ createApp({
             await loadRows();
             loadCrmClients();
             applyRosterAddFromQuery();
+            window.crmScheduleTableColumnResize?.();
+            nextTick(() => {
+                const table = document.querySelector('.roster-table');
+                if (table) window.crmFitTableColumnsToContent?.(table);
+            });
         });
         return {
             rows, filteredRows, filters, employmentStatusOptions, workLocationOptions, customerNameOptions, positionTitleOptions,

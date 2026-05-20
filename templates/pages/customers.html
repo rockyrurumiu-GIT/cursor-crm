@@ -2,6 +2,20 @@
 {% block title %}客户列表 · ITO CRM V8{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    /* 客户列表横向滚动；操作列固定最小宽度避免挤压 */
+    #page-app .customers-table {
+        width: max-content;
+        min-width: 100%;
+        table-layout: auto;
+    }
+    #page-app .customers-table .customers-op-col {
+        width: 1%;
+        min-width: 23rem;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+</style>
 {% endblock %}
 {% block content %}
 {% raw %}
@@ -9,36 +23,45 @@
     <div class="container mx-auto p-6 max-w-[1280px] space-y-4">
         <div class="flex justify-between items-center flex-wrap gap-2">
             <h1 class="text-2xl font-bold text-gray-900">客户列表</h1>
-            <div class="flex items-center space-x-2">
-                <span v-if="filterPhase" class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-sm">
+            <div class="flex items-center flex-wrap gap-2">
+                <span v-if="filterPhase" class="inline-flex items-center h-9 bg-blue-100 text-blue-700 px-3 rounded-lg text-sm font-medium">
                     筛选: {{ filterPhase }} <button type="button" @click="clearPhase" class="ml-1 text-red-500">×</button>
                 </span>
-                <span v-if="filterHandoff" class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm">
+                <span v-if="filterHandoff" class="inline-flex items-center h-9 bg-amber-100 text-amber-800 px-3 rounded-lg text-sm font-medium">
                     交接: {{ handoffFilterLabel }} <button type="button" @click="clearHandoffFilter" class="ml-1 text-red-500">×</button>
                 </span>
-                <select v-model="filterHandoffQuick" @change="applyHandoffFilter" class="border rounded px-2 py-1 text-sm">
-                    <option value="">交接状态</option>
-                    <option value="pending_review">待审</option>
-                    <option value="approved">已通过</option>
-                    <option value="rejected">已驳回</option>
-                    <option value="none">未提交</option>
-                </select>
-                <a href="/customers/new" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ 新增客户</a>
-                <a href="/customers/reviews" class="border border-amber-500 text-amber-700 px-4 py-2 rounded hover:bg-amber-50 text-sm">待审交接</a>
-                <button type="button" @click="exportCSV" class="border border-blue-600 text-blue-600 px-4 py-2 rounded hover:bg-blue-50">导出全量名单 (CSV)</button>
+                <div class="min-w-[7.5rem] shrink-0">
+                    <select v-model="filterHandoffQuick" @change="applyHandoffFilter" class="crm-form-control">
+                        <option value="">交接状态</option>
+                        <option value="pending_review">待审</option>
+                        <option value="approved">已通过</option>
+                        <option value="rejected">已驳回</option>
+                        <option value="none">未提交</option>
+                    </select>
+                </div>
+                <a href="/customers/new"
+                    class="inline-flex items-center justify-center h-9 px-4 text-sm font-medium rounded-lg border border-blue-600 bg-blue-600 text-white hover:bg-blue-700">+ 新增客户</a>
+                <a href="/customers/reviews"
+                    class="inline-flex items-center justify-center h-9 px-4 text-sm font-medium rounded-lg border border-amber-500 bg-white text-amber-700 hover:bg-amber-50">待审交接</a>
+                <button type="button" @click="exportCSV"
+                    class="inline-flex items-center justify-center h-9 px-4 text-sm font-medium rounded-lg border border-blue-600 bg-white text-blue-600 hover:bg-blue-50">导出全量名单 (CSV)</button>
             </div>
         </div>
 
         <div class="bg-white rounded-lg shadow overflow-hidden">
-            <table class="crm-table">
+            <div class="crm-h-scroll">
+            <table class="crm-table customers-table">
                 <thead>
                     <tr>
                         <th class="crm-th">客户名称</th>
                         <th class="crm-th">销售负责人</th>
                         <th class="crm-th">外包规模</th>
                         <th class="crm-th">开拓阶段</th>
+                        <th class="crm-th">预估金额</th>
+                        <th class="crm-th">城市</th>
+                        <th class="crm-th">首要联系人</th>
                         <th class="crm-th">交接状态</th>
-                        <th class="crm-th">操作</th>
+                        <th class="crm-th customers-op-col">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -49,30 +72,36 @@
                         <td class="crm-td">
                             <span :class="phaseColor(c.phase)" class="px-2 py-1 rounded text-xs">{{ c.phase }}</span>
                         </td>
+                        <td class="crm-td">{{ fmtAmount(c) }}</td>
+                        <td class="crm-td">{{ fmtDash(c.city) }}</td>
+                        <td class="crm-td">{{ fmtPrimaryContact(c) }}</td>
                         <td class="crm-td">
                             <span v-if="handoffEntry(c.id)" :class="handoffBadge(handoffEntry(c.id).status)" class="px-2 py-1 rounded text-xs">{{ handoffEntry(c.id).status_label }}</span>
                             <span v-else class="text-gray-400 text-xs">未提交</span>
                         </td>
-                        <td class="crm-td space-x-3">
-                            <button type="button" @click="openDetail(c)" class="text-blue-600 text-sm">详情/记录</button>
-                            <a :href="`/customers/${c.id}/handoff`" class="text-[#0969da] text-sm">交接</a>
-                            <a :href="`/customers/${c.id}/edit`" class="text-amber-600 text-sm">修改</a>
-                            <button type="button" @click="confirmDelete(c)" class="text-red-600 text-sm">删除</button>
+                        <td class="crm-td customers-op-col">
+                            <div class="inline-flex items-center gap-3 flex-nowrap whitespace-nowrap">
+                                <button type="button" @click="openDetail(c)" class="text-blue-600 text-sm hover:underline">客户详情/拜访记录</button>
+                                <a :href="`/customers/${c.id}/handoff`" class="text-gray-700 text-sm hover:text-gray-900 hover:underline">交接</a>
+                                <a :href="`/customers/${c.id}/edit`" class="text-amber-600 text-sm hover:underline">修改</a>
+                                <button type="button" @click="confirmDelete(c)" class="text-red-600 text-sm hover:underline">删除</button>
+                            </div>
                         </td>
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </div>
 
-    <div v-if="showDetail" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
-        <div class="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-5/6 flex flex-col max-h-[90vh]">
+    <div v-if="showDetail" class="crm-esc-modal fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-6 sm:p-8">
+        <div class="bg-white rounded-lg shadow-2xl w-[min(90vw,1200px)] max-h-[calc(100vh-5rem)] flex flex-col">
             <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
                 <h3 class="text-xl font-bold">{{ selectedClient.name }} - 全景档案</h3>
                 <button type="button" @click="showDetail=false" class="text-gray-500 hover:text-black text-2xl">×</button>
             </div>
-            <div class="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-5 lg:gap-6 items-start">
+                <div class="min-h-0 md:max-h-[calc(100vh-11rem)] md:overflow-y-auto md:pr-2">
                     <div class="flex justify-between items-center mb-4">
                         <h4 class="font-bold border-l-4 border-blue-600 pl-2">拜访/沟通记录</h4>
                         <button type="button" @click="showAddVisit=true" class="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">+ 新记录</button>
@@ -95,8 +124,38 @@
                 </div>
                 <div class="space-y-6">
                     <div>
-                        <h4 class="font-bold border-l-4 border-[#0969da] pl-2 mb-4">销售-交付交接</h4>
-                        <a :href="`/customers/${selectedClient.id}/handoff`" class="inline-block text-sm bg-blue-50 text-[#0969da] px-3 py-2 rounded border border-blue-100">打开交接工作台 →</a>
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="font-bold border-l-4 border-emerald-600 pl-2">线索信息</h4>
+                            <a :href="`/customers/${selectedClient.id}/edit`" class="text-sm text-[#0969da] hover:underline">修改</a>
+                        </div>
+                        <dl class="text-sm grid grid-cols-2 gap-x-4 gap-y-2 p-3 border rounded bg-gray-50">
+                            <div><dt class="text-gray-500 text-xs">预估当年合作金额</dt><dd>{{ fmtAmount(selectedClient) }}</dd></div>
+                            <div class="col-span-2 text-xs text-gray-400">由名下商机「预估当年金额 × 赢单率」自动汇总</div>
+                            <div><dt class="text-gray-500 text-xs">客户所在城市</dt><dd>{{ fmtDash(selectedClient.city) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">行业</dt><dd>{{ fmtDash(selectedClient.industry) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">外包规模</dt><dd>{{ fmtDash(selectedClient.scale) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">开拓阶段</dt><dd>{{ fmtDash(selectedClient.phase) }}</dd></div>
+                            <div class="col-span-2"><dt class="text-gray-500 text-xs">销售负责人</dt><dd>{{ fmtDash(selectedClient.owner) }}</dd></div>
+                        </dl>
+                    </div>
+                    <div>
+                        <h4 class="font-bold border-l-4 border-violet-600 pl-2 mb-3">首要联系人</h4>
+                        <div v-if="hasPrimaryContact(selectedClient)" class="text-sm p-3 border rounded bg-gray-50 space-y-2">
+                            <div><span class="text-gray-500 text-xs">姓名</span><p>{{ selectedClient.contact_name }}</p></div>
+                            <div><span class="text-gray-500 text-xs">职位</span><p>{{ fmtDash(selectedClient.contact_title) }}</p></div>
+                            <div><span class="text-gray-500 text-xs">联系方式</span><p>{{ fmtDash(selectedClient.contact_info) }}</p></div>
+                            <div><span class="text-gray-500 text-xs">联系人关系</span><p>{{ fmtDash(selectedClient.contact_relationship) }}</p></div>
+                            <a href="/contacts/all" class="inline-block text-xs text-[#0969da] hover:underline pt-1">查看联系人库 →</a>
+                        </div>
+                        <p v-else class="text-sm text-gray-400 p-3 border rounded bg-gray-50">未填写，可在「修改」中补充。</p>
+                    </div>
+                    <div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-bold border-l-4 border-[#0969da] pl-2">客户描述</h4>
+                            <a :href="`/customers/${selectedClient.id}/edit`" class="text-sm text-[#0969da] hover:underline">修改</a>
+                        </div>
+                        <div v-if="selectedClient.description" class="text-sm text-gray-700 whitespace-pre-wrap p-3 border rounded bg-gray-50">{{ selectedClient.description }}</div>
+                        <p v-else class="text-sm text-gray-400">暂无描述，可在「修改」中填写。</p>
                     </div>
                     <div>
                         <h4 class="font-bold border-l-4 border-orange-500 pl-2 mb-4">备注与折算记录</h4>
@@ -120,7 +179,7 @@
         </div>
     </div>
 
-    <div v-if="showAddVisit" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div v-if="showAddVisit" class="crm-esc-modal fixed inset-0 z-[210] bg-black/40 flex items-center justify-center p-6">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
             <h3 class="font-bold mb-4">新增拜访记录</h3>
             <div class="space-y-3">
@@ -136,7 +195,7 @@
         </div>
     </div>
 
-    <div v-if="showDelete" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div v-if="showDelete" class="crm-esc-modal fixed inset-0 z-[210] bg-black/50 flex items-center justify-center p-6">
         <div class="bg-white p-6 rounded shadow-lg w-80 text-center">
             <h3 class="text-lg font-bold text-red-600 mb-4">确认删除客户？</h3>
             <p class="text-sm mb-4">删除后数据将进入回收站。请输入下方随机码进行确认：</p>
@@ -234,6 +293,36 @@ createApp({
             return m[p] || 'bg-gray-100';
         };
 
+        const fmtDash = (v) => (v && String(v).trim()) ? String(v).trim() : '—';
+        const fmtAmount = (c) => fmtDash(c && c.estimated_annual_amount) === '—' ? '—' : `${c.estimated_annual_amount} 万元`;
+        const fmtPrimaryContact = (c) => {
+            const name = (c && c.contact_name ? String(c.contact_name) : '').trim();
+            const title = (c && c.contact_title ? String(c.contact_title) : '').trim();
+            if (!name) return '—';
+            return title ? `${name}(${title})` : name;
+        };
+        const hasPrimaryContact = (c) => !!(c && (
+            (c.contact_name && String(c.contact_name).trim()) ||
+            (c.contact_info && String(c.contact_info).trim()) ||
+            (c.contact_title && String(c.contact_title).trim()) ||
+            (c.contact_relationship && String(c.contact_relationship).trim())
+        ));
+
+        const appendClientFields = (fd, c) => {
+            fd.append('name', c.name);
+            fd.append('industry', c.industry || '');
+            fd.append('owner', c.owner || '');
+            fd.append('scale', c.scale || '');
+            fd.append('phase', c.phase || '');
+            fd.append('description', c.description || '');
+            fd.append('contact_name', c.contact_name || '');
+            fd.append('contact_info', c.contact_info || '');
+            fd.append('contact_title', c.contact_title || '');
+            fd.append('contact_relationship', c.contact_relationship || '');
+            fd.append('city', c.city || '');
+            fd.append('remarks', c.remarks || '');
+        };
+
         const openDetail = (c) => {
             selectedClient.value = { ...c };
             fetch(`/api/clients/${c.id}/details`, { headers: authHeader() }).then(r => r.json()).then(d => {
@@ -244,13 +333,7 @@ createApp({
 
         const updateClient = (c) => {
             const fd = new FormData();
-            fd.append('name', c.name);
-            fd.append('industry', c.industry || '');
-            fd.append('owner', c.owner || '');
-            fd.append('scale', c.scale || '');
-            fd.append('phase', c.phase);
-            fd.append('description', c.description || '');
-            fd.append('remarks', c.remarks || '');
+            appendClientFields(fd, c);
             fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: authHeader(), body: fd }).then(() => {
                 alert('保存成功');
                 loadClients();
@@ -302,7 +385,9 @@ createApp({
             clients, handoffMap, filterPhase, filterHandoff, filterHandoffQuick, handoffFilterLabel,
             showDetail, showAddVisit, showDelete, selectedClient, details,
             deleteCaptcha, deleteInput, visitForm, onVisitFileChange,
-            loadClients, clearPhase, applyHandoffFilter, clearHandoffFilter, phaseColor, handoffEntry, handoffBadge, openDetail, updateClient, confirmDelete, executeDelete,
+            loadClients, clearPhase, applyHandoffFilter, clearHandoffFilter, phaseColor, handoffEntry, handoffBadge,
+            fmtDash, fmtAmount, fmtPrimaryContact, hasPrimaryContact,
+            openDetail, updateClient, confirmDelete, executeDelete,
             submitVisit, exportCSV, isImage, viewFull, formatDate
         };
     }

@@ -28,7 +28,7 @@
                 </p>
             </div>
             <div class="flex gap-2 flex-wrap">
-                <select v-if="handoffs.length" v-model="selectedId" @change="loadHandoff" class="border rounded px-2 py-1 text-sm">
+                <select v-if="handoffs.length" v-model="selectedId" @change="loadHandoff" class="crm-form-control text-sm min-w-[10rem]">
                     <option v-for="h in handoffs" :key="h.id" :value="h.id">v{{ h.version }} · {{ h.status_label }}</option>
                 </select>
                 <button v-if="canCreate" type="button" @click="createHandoff" class="border border-[#0969da] text-[#0969da] px-3 py-1.5 rounded text-sm hover:bg-blue-50">+ 新版本</button>
@@ -54,7 +54,7 @@
                     <h3 class="font-bold border-l-4 border-[#0969da] pl-2">项目上下文</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <label class="text-sm">项目类型
-                            <select v-model="form.requirement.context.project_type" :disabled="!editable" class="w-full mt-1 border rounded p-2">
+                            <select v-model="form.requirement.context.project_type" :disabled="!editable" class="crm-form-control w-full mt-1">
                                 <option value="">请选择</option>
                                 <option v-for="o in spec.enums.project_type" :key="o" :value="o">{{ o }}</option>
                             </select>
@@ -108,12 +108,12 @@
                     <div v-for="(p, idx) in form.requirement.positions" :key="idx" class="border rounded p-3 space-y-2 bg-gray-50/50">
                         <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
                             <input v-model="p.role" :disabled="!editable" placeholder="岗位" class="border rounded p-2 text-sm">
-                            <select v-model="p.level" :disabled="!editable" class="border rounded p-2 text-sm">
+                            <select v-model="p.level" :disabled="!editable" class="crm-form-control text-sm">
                                 <option value="">级别</option>
                                 <option v-for="lv in spec.enums.position_level" :key="lv" :value="lv">{{ lv }}</option>
                             </select>
                             <input v-model.number="p.headcount" :disabled="!editable" type="number" min="1" placeholder="编制" class="border rounded p-2 text-sm">
-                            <select v-model="p.billing_unit" :disabled="!editable" class="border rounded p-2 text-sm">
+                            <select v-model="p.billing_unit" :disabled="!editable" class="crm-form-control text-sm">
                                 <option v-for="u in spec.enums.billing_unit" :key="u" :value="u">{{ u }}</option>
                             </select>
                             <input v-model="p.start_date" :disabled="!editable" type="date" class="border rounded p-2 text-sm">
@@ -138,7 +138,7 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <input v-model="form.requirement.commercial.quote_ref" :disabled="!editable" placeholder="报价单编号" class="border rounded p-2 text-sm">
                         <input v-model="form.requirement.commercial.estimated_amount" :disabled="!editable" placeholder="预计合同金额" class="border rounded p-2 text-sm">
-                        <select v-model="form.requirement.commercial.payment_cycle" :disabled="!editable" class="border rounded p-2 text-sm">
+                        <select v-model="form.requirement.commercial.payment_cycle" :disabled="!editable" class="crm-form-control text-sm">
                             <option value="">付款周期</option>
                             <option v-for="pc in spec.enums.payment_cycle" :key="pc" :value="pc">{{ pc }}</option>
                         </select>
@@ -215,10 +215,10 @@
     </div>
 
     <!-- 驳回弹窗 -->
-    <div v-if="showReject" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div v-if="showReject" class="crm-esc-modal fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
             <h3 class="font-bold mb-4">驳回交接单</h3>
-            <select v-model="rejectForm.code" class="w-full border rounded p-2 mb-3">
+            <select v-model="rejectForm.code" class="crm-form-control w-full mb-3">
                 <option v-for="r in config.reject_codes" :key="r.code" :value="r.code">{{ r.label }}</option>
             </select>
             <textarea v-model="rejectForm.detail" rows="4" class="w-full border rounded p-2 text-sm" placeholder="具体原因与修改建议…"></textarea>

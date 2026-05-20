@@ -14,7 +14,8 @@
     <div v-if="loadError" class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-4">{{ loadError }}</div>
     <div v-if="!loading && !items.length" class="bg-white border rounded-lg p-12 text-center text-gray-400">暂无与您相关的待审交接单</div>
     <div v-else-if="items.length" class="bg-white border rounded-lg overflow-hidden">
-        <table class="crm-table w-full">
+        <div class="crm-h-scroll">
+        <table class="crm-table w-full" data-table-id="handoff-pending">
             <thead>
                 <tr>
                     <th class="crm-th">客户</th>
@@ -40,6 +41,7 @@
                 </tr>
             </tbody>
         </table>
+        </div>
     </div>
     <div v-if="loading" class="text-center text-gray-400 py-8 text-sm">加载中…</div>
 </div>

@@ -142,6 +142,13 @@ class Client(Base):
     owner = Column(String)
     scale = Column(String)
     phase = Column(String)  # 初步接触, 方案/报价, 合同签订, 成交
+    win_rate = Column(String, default="")
+    estimated_annual_amount = Column(String, default="")
+    contact_name = Column(String, default="")
+    contact_info = Column(String, default="")
+    contact_title = Column(String, default="")
+    contact_relationship = Column(String, default="")
+    city = Column(String, default="")
     description = Column(Text)
     remarks = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.now)
@@ -161,6 +168,7 @@ class VisitRecord(Base):
     attachment = Column(String, nullable=True)
     week_period = Column(String, default="")
     region = Column(String, default="")
+    city = Column(String, default="")
     salesperson = Column(String, default="")
     planned_time = Column(String, default="")
     visit_purpose = Column(Text, default="")
@@ -251,9 +259,10 @@ class Opportunity(Base):
     client_id = Column(Integer, ForeignKey("clients.id"), index=True)
     name = Column(String, default="")
     amount = Column(String, default="")
+    estimated_current_year_amount = Column(String, default="")
     probability = Column(String, default="")
     expected_close_date = Column(String, default="")
-    stage = Column(String, default="qualifying", index=True)
+    stage = Column(String, default="initial", index=True)
     owner = Column(String, default="")
     remarks = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.now)
@@ -988,6 +997,42 @@ def _ensure_handoff_phase2_schema_compat():
             conn.exec_driver_sql("ALTER TABLE handoff_requests ADD COLUMN opportunity_id INTEGER")
 
 
+def _ensure_opportunities_schema_compat():
+    """补齐 opportunities 表新增字段，兼容旧库。"""
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(opportunities)").fetchall()}
+        except Exception:
+            return
+        add_cols = {
+            "estimated_current_year_amount": "TEXT DEFAULT ''",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE opportunities ADD COLUMN {col} {ddl}")
+
+
+def _ensure_clients_schema_compat():
+    """补齐 clients 表新增字段，兼容旧库。"""
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(clients)").fetchall()}
+        except Exception:
+            return
+        add_cols = {
+            "win_rate": "TEXT DEFAULT ''",
+            "estimated_annual_amount": "TEXT DEFAULT ''",
+            "contact_name": "TEXT DEFAULT ''",
+            "contact_info": "TEXT DEFAULT ''",
+            "contact_title": "TEXT DEFAULT ''",
+            "contact_relationship": "TEXT DEFAULT ''",
+            "city": "TEXT DEFAULT ''",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE clients ADD COLUMN {col} {ddl}")
+
+
 def _ensure_visits_schema_compat():
     """补齐客户拜访周计划字段，兼容旧库 visits 表。"""
     with engine.begin() as conn:
@@ -1002,6 +1047,7 @@ def _ensure_visits_schema_compat():
             "next_plan": "TEXT DEFAULT ''",
             "week_period": "TEXT DEFAULT ''",
             "region": "TEXT DEFAULT ''",
+            "city": "TEXT DEFAULT ''",
             "salesperson": "TEXT DEFAULT ''",
             "planned_time": "TEXT DEFAULT ''",
             "visit_purpose": "TEXT DEFAULT ''",
@@ -1017,6 +1063,15 @@ def _ensure_visits_schema_compat():
         for col, ddl in add_cols.items():
             if col not in existing:
                 conn.exec_driver_sql(f"ALTER TABLE visits ADD COLUMN {col} {ddl}")
+        # 旧库迁移时 created_at/updated_at 可能为 TEXT 空串，ORM DateTime 读取会报错
+        conn.exec_driver_sql(
+            "UPDATE visits SET created_at = datetime('now') "
+            "WHERE created_at IS NULL OR trim(CAST(created_at AS TEXT)) = ''"
+        )
+        conn.exec_driver_sql(
+            "UPDATE visits SET updated_at = datetime('now') "
+            "WHERE updated_at IS NULL OR trim(CAST(updated_at AS TEXT)) = ''"
+        )
 
 
 _ensure_roster_schema_compat()
@@ -1024,6 +1079,8 @@ _ensure_interview_schema_compat()
 _ensure_handbook_schema_compat()
 _ensure_handbook_fts_schema()
 _ensure_handoff_phase2_schema_compat()
+_ensure_opportunities_schema_compat()
+_ensure_clients_schema_compat()
 _ensure_visits_schema_compat()
 HANDBOOK_SEARCH_BODY_MAX = 2_000_000
 HANDBOOK_SEARCH_SNIPPET_LIST = 780
@@ -2939,6 +2996,51 @@ async def get_stats(db: Session = Depends(get_db), user: str = Depends(authentic
     }
 
 
+PRIMARY_CONTACT_TAG = "首要联系人"
+
+
+def _sync_client_primary_contact(db: Session, client: Client) -> None:
+    """将 Client 内联联系人同步到 contacts 表（tags=首要联系人）。"""
+    primary = (
+        db.query(Contact)
+        .filter(Contact.client_id == client.id, Contact.tags == PRIMARY_CONTACT_TAG)
+        .first()
+    )
+    name = (client.contact_name or "").strip()
+    if not name:
+        if primary:
+            db.delete(primary)
+        return
+
+    contact_info = (client.contact_info or "").strip()
+    if "@" in contact_info:
+        phone, email = "", contact_info
+    else:
+        phone, email = contact_info, ""
+
+    relationship = (client.contact_relationship or "").strip()
+    remarks = f"关系：{relationship}" if relationship else ""
+
+    if primary:
+        primary.name = name
+        primary.title = (client.contact_title or "").strip()
+        primary.phone = phone
+        primary.email = email
+        primary.remarks = remarks
+    else:
+        db.add(
+            Contact(
+                client_id=client.id,
+                name=name,
+                title=(client.contact_title or "").strip(),
+                phone=phone,
+                email=email,
+                tags=PRIMARY_CONTACT_TAG,
+                remarks=remarks,
+            )
+        )
+
+
 @app.get("/api/clients")
 async def list_clients(
     phase: Optional[str] = None,
@@ -2946,10 +3048,17 @@ async def list_clients(
     db: Session = Depends(get_db),
     user: str = Depends(authenticate),
 ):
+    from phase2_core import refresh_client_estimated_annual_amount
+
     query = db.query(Client)
     if phase:
         query = query.filter(Client.phase == phase)
     clients = query.order_by(desc(Client.created_at)).all()
+    for c in clients:
+        refresh_client_estimated_annual_amount(db, c.id, Client, Opportunity)
+    db.commit()
+    for c in clients:
+        db.refresh(c)
     if not handoff_status:
         return clients
     hs = handoff_status.strip()
@@ -2986,24 +3095,51 @@ async def create_client(
     scale: str = Form(...),
     phase: str = Form(...),
     description: str = Form(...),
+    contact_name: Optional[str] = Form(None),
+    contact_info: Optional[str] = Form(None),
+    contact_title: Optional[str] = Form(None),
+    contact_relationship: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
+    remarks: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     user: str = Depends(authenticate),
 ):
-    client = Client(name=name, industry=industry, owner=owner, scale=scale, phase=phase, description=description)
+    client = Client(
+        name=name,
+        industry=industry,
+        owner=owner,
+        scale=scale,
+        phase=phase,
+        description=description,
+        estimated_annual_amount="",
+        contact_name=(contact_name or "").strip(),
+        contact_info=(contact_info or "").strip(),
+        contact_title=(contact_title or "").strip(),
+        contact_relationship=(contact_relationship or "").strip(),
+        city=(city or "").strip(),
+        remarks=(remarks or "").strip(),
+    )
     db.add(client)
     db.commit()
     db.refresh(client)
+    _sync_client_primary_contact(db, client)
     log = AuditLog(client_id=client.id, operator=user, action=f"创建了客户: {name}")
     db.add(log)
     db.commit()
+    db.refresh(client)
     return client
 
 
 @app.get("/api/clients/{client_id}")
 async def get_client(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    from phase2_core import refresh_client_estimated_annual_amount
+
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="客户不存在")
+    refresh_client_estimated_annual_amount(db, client_id, Client, Opportunity)
+    db.commit()
+    db.refresh(client)
     return client
 
 
@@ -3016,10 +3152,17 @@ async def update_client(
     scale: str = Form(...),
     phase: str = Form(...),
     description: str = Form(...),
+    contact_name: Optional[str] = Form(None),
+    contact_info: Optional[str] = Form(None),
+    contact_title: Optional[str] = Form(None),
+    contact_relationship: Optional[str] = Form(None),
+    city: Optional[str] = Form(None),
     remarks: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     user: str = Depends(authenticate),
 ):
+    from phase2_core import refresh_client_estimated_annual_amount
+
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -3043,6 +3186,21 @@ async def update_client(
         updates.append("更新了客户描述")
     if (client.remarks or "") != (remarks or ""):
         updates.append("更新了备注信息")
+    new_contact_name = (contact_name or "").strip()
+    new_contact_info = (contact_info or "").strip()
+    new_contact_title = (contact_title or "").strip()
+    new_contact_relationship = (contact_relationship or "").strip()
+    new_city = (city or "").strip()
+    if (client.contact_name or "") != new_contact_name:
+        updates.append(f"联系人姓名从[{client.contact_name or ''}]变更为[{new_contact_name}]")
+    if (client.contact_info or "") != new_contact_info:
+        updates.append("更新了联系方式")
+    if (client.contact_title or "") != new_contact_title:
+        updates.append(f"联系人职位从[{client.contact_title or ''}]变更为[{new_contact_title}]")
+    if (client.contact_relationship or "") != new_contact_relationship:
+        updates.append(f"联系人关系从[{client.contact_relationship or ''}]变更为[{new_contact_relationship}]")
+    if (client.city or "") != new_city:
+        updates.append(f"客户所在城市从[{client.city or ''}]变更为[{new_city}]")
 
     client.name = name
     client.industry = industry
@@ -3050,6 +3208,11 @@ async def update_client(
     client.scale = scale
     client.phase = phase
     client.description = description
+    client.contact_name = new_contact_name
+    client.contact_info = new_contact_info
+    client.contact_title = new_contact_title
+    client.contact_relationship = new_contact_relationship
+    client.city = new_city
     client.remarks = remarks or ""
 
     old_folder = f"{old_name}_{client_id}"
@@ -3078,6 +3241,8 @@ async def update_client(
     if updates:
         log = AuditLog(client_id=client_id, operator=user, action="; ".join(updates))
         db.add(log)
+    _sync_client_primary_contact(db, client)
+    refresh_client_estimated_annual_amount(db, client_id, Client, Opportunity)
     db.commit()
     return {"status": "ok"}
 
@@ -3132,7 +3297,16 @@ async def add_visit(
         with open(os.path.join(UPLOAD_DIR, file_path), "wb") as f:
             f.write(content_bytes)
 
-    visit = VisitRecord(client_id=client_id, date=date, location=location, content=content, attachment=file_path)
+    now = datetime.now()
+    visit = VisitRecord(
+        client_id=client_id,
+        date=date,
+        location=location,
+        content=content,
+        attachment=file_path,
+        created_at=now,
+        updated_at=now,
+    )
     db.add(visit)
     db.commit()
     return {"status": "ok"}
@@ -3140,13 +3314,29 @@ async def add_visit(
 
 @app.get("/api/export/clients")
 async def export_clients(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    from phase2_core import refresh_client_estimated_annual_amount
+
     output = io.StringIO()
     output.write("\ufeff")
     writer = csv.writer(output)
-    writer.writerow(["ID", "客户名称", "行业", "负责人", "外包规模", "开拓阶段", "创建时间"])
+    writer.writerow([
+        "ID", "客户名称", "行业", "负责人", "外包规模", "开拓阶段",
+        "预估当年合作金额(万元)", "联系人姓名", "联系方式", "联系人职位", "联系人关系", "客户所在城市",
+        "创建时间",
+    ])
     clients = db.query(Client).all()
     for c in clients:
-        writer.writerow([c.id, c.name, c.industry, c.owner, c.scale, c.phase, c.created_at.strftime("%Y-%m-%d")])
+        refresh_client_estimated_annual_amount(db, c.id, Client, Opportunity)
+    db.commit()
+    for c in clients:
+        db.refresh(c)
+        writer.writerow([
+            c.id, c.name, c.industry, c.owner, c.scale, c.phase,
+            c.estimated_annual_amount or "",
+            c.contact_name or "", c.contact_info or "", c.contact_title or "",
+            c.contact_relationship or "", c.city or "",
+            c.created_at.strftime("%Y-%m-%d"),
+        ])
 
     response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

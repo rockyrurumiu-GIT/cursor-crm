@@ -5,13 +5,14 @@ import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-OPPORTUNITY_STAGES = frozenset({"qualifying", "proposal", "negotiating", "won", "lost"})
+OPPORTUNITY_STAGES = frozenset({"initial", "qualifying", "proposal", "negotiating", "won", "lost"})
 OPPORTUNITY_STAGE_LABELS = {
-    "qualifying": "需求确认",
-    "proposal": "方案/报价",
-    "negotiating": "商务谈判",
-    "won": "赢单",
-    "lost": "输单",
+    "initial": "商机确认 / 初步接触",
+    "qualifying": "需求分析 / 方案匹配",
+    "proposal": "方案建议 / 报价演示",
+    "negotiating": "谈判 / 赢单谈判",
+    "won": "赢单结案 / 签约",
+    "lost": "输单结案",
 }
 
 CONTRACT_STATUSES = frozenset({"draft", "signed", "active", "closed"})
@@ -26,6 +27,46 @@ MILESTONE_STATUSES = frozenset({"pending", "invoiced", "paid"})
 MILESTONE_STATUS_LABELS = {"pending": "待开票", "invoiced": "已开票", "paid": "已回款"}
 
 
+def _parse_numeric_amount(raw: str) -> float:
+    s = "".join(ch for ch in str(raw or "") if ch.isdigit() or ch == ".")
+    if not s:
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def _format_wan_amount(wan: float) -> str:
+    if wan <= 0:
+        return ""
+    return f"{wan:.2f}".rstrip("0").rstrip(".")
+
+
+def compute_client_estimated_annual_amount_wan(db, client_id: int, Opportunity) -> str:
+    """客户预估当年合作金额（万元）= SUM(商机预估当年金额 × 赢单率)，排除输单。"""
+    opps = (
+        db.query(Opportunity)
+        .filter(Opportunity.client_id == client_id, Opportunity.stage != "lost")
+        .all()
+    )
+    total_yuan = 0.0
+    for o in opps:
+        amount_yuan = _parse_numeric_amount(o.estimated_current_year_amount)
+        win_rate = _parse_numeric_amount(o.probability) / 100.0
+        total_yuan += amount_yuan * win_rate
+    return _format_wan_amount(total_yuan / 10000.0)
+
+
+def refresh_client_estimated_annual_amount(db, client_id: int, Client, Opportunity) -> str:
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        return ""
+    new_val = compute_client_estimated_annual_amount_wan(db, client_id, Opportunity)
+    client.estimated_annual_amount = new_val
+    return new_val
+
+
 def opportunity_to_dict(o, client_name: str = "") -> Dict[str, Any]:
     return {
         "id": o.id,
@@ -33,9 +74,10 @@ def opportunity_to_dict(o, client_name: str = "") -> Dict[str, Any]:
         "client_name": client_name,
         "name": o.name or "",
         "amount": o.amount or "",
+        "estimated_current_year_amount": o.estimated_current_year_amount or "",
         "probability": o.probability or "",
         "expected_close_date": o.expected_close_date or "",
-        "stage": o.stage or "qualifying",
+        "stage": o.stage or "initial",
         "stage_label": OPPORTUNITY_STAGE_LABELS.get(o.stage, o.stage),
         "owner": o.owner or "",
         "remarks": o.remarks or "",

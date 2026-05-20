@@ -120,10 +120,34 @@
         .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer) {
             z-index: 3;
         }
+        /* 三键操作列固定宽（colgroup + 单元格双保险） */
+        :root { --crm-op-col-width: 5.75rem; }
+        col.crm-col-op {
+            width: var(--crm-op-col-width) !important;
+            min-width: var(--crm-op-col-width) !important;
+            max-width: var(--crm-op-col-width) !important;
+        }
         /* 通用：操作列固定在最右侧（表头/表体分层） */
+        .crm-table th.crm-sticky-right-op,
+        .crm-table td.crm-sticky-right-op {
+            width: var(--crm-op-col-width) !important;
+            min-width: var(--crm-op-col-width) !important;
+            max-width: var(--crm-op-col-width) !important;
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
+        }
+        .crm-sticky-right-op button.mr-2,
+        .crm-sticky-right-op .mr-2 {
+            margin-right: 0.25rem !important;
+        }
         .crm-sticky-right-op {
             position: sticky;
             right: 0;
+            width: var(--crm-op-col-width) !important;
+            min-width: var(--crm-op-col-width) !important;
+            max-width: var(--crm-op-col-width) !important;
+            box-sizing: border-box;
+            white-space: nowrap;
             background: #fff;
             border-left: 1px solid #e5e7eb;
             box-shadow: -8px 0 16px -10px rgba(15, 23, 42, 0.18);
@@ -135,44 +159,173 @@
             top: 0;
             right: 0;
             z-index: 15 !important;
-            background: #e6e2db;
+            background: #2f75b5;
+            color: #fff;
+            border-color: #1f5a94;
+        }
+        .crm-table tbody .crm-sticky-right-op {
+            background: #fff;
+        }
+        .crm-table tbody tr:nth-child(even) .crm-sticky-right-op {
+            background: #f6f8fa;
         }
         .crm-table tbody tr:hover .crm-sticky-right-op {
-            background: #fafaf9;
+            background: #eef6ff;
         }
-        /* 全局表格风格（暖灰表头）。新建表格优先复用这些 class */
+        /* 操作列：三键（详情/修改/删除）固定宽 */
+        .crm-table th.crm-op-col,
+        .crm-table td.crm-op-col,
+        .visit-table th.crm-op-col,
+        .visit-table td.crm-op-col {
+            padding-left: 0.35rem !important;
+            padding-right: 0.35rem !important;
+        }
+        .crm-op-col {
+            width: var(--crm-op-col-width) !important;
+            min-width: var(--crm-op-col-width) !important;
+            max-width: var(--crm-op-col-width) !important;
+            white-space: nowrap;
+            box-sizing: border-box;
+        }
+        .visit-table th.crm-op-col,
+        .visit-table td.crm-op-col {
+            width: var(--crm-op-col-width) !important;
+            min-width: var(--crm-op-col-width) !important;
+            max-width: var(--crm-op-col-width) !important;
+            white-space: nowrap;
+        }
+        /* 全局表格：蓝表头、斑马纹、整行悬停高亮（客户拜访 / 员工访谈等统一风格） */
         .crm-table {
             width: 100%;
             border-collapse: collapse;
             text-align: left;
         }
         .crm-table th.crm-th {
-            padding: 0.75rem 0.95rem;
-            font-size: 0.75rem;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-            color: #2f2a24;
-            background: #e6e2db;
-            border-bottom: 1px solid #d2cbc1;
-            border-right: 1px solid #d8d1c8;
+            padding: 0.5rem 0.65rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            color: #fff;
+            background: #2f75b5;
+            border: 1px solid #1f5a94;
+            border-bottom: 1px solid #1f5a94;
             white-space: nowrap;
             vertical-align: middle;
             text-align: center;
         }
-        .crm-table th.crm-th:last-child { border-right: none; }
+        .crm-table th.crm-th:last-child { border-right: 1px solid #1f5a94; }
         .crm-table td.crm-td {
-            padding: 0.75rem 0.75rem;
-            font-size: 0.875rem;
-            color: #374151;
-            border-top: 1px solid #f1f5f9;
+            padding: 0.5rem 0.6rem;
+            font-size: 0.8rem;
+            color: #1f2937;
+            border: 1px solid #d0d7de;
+            border-top: 1px solid #d0d7de;
             vertical-align: top;
             background: #fff;
         }
         .crm-table td.crm-td.crm-name-cell {
-            color: #1d4ed8;
+            color: #0969da;
             font-weight: 600;
         }
-        .crm-table tbody tr:hover td.crm-td { background: #fafaf9; }
+        .crm-table tbody tr:nth-child(even) td.crm-td {
+            background: #f6f8fa;
+        }
+        .crm-table tbody tr:hover td.crm-td {
+            background: #eef6ff;
+        }
+        /* 冻结列：表头与数据行随斑马纹 / 悬停同步变色 */
+        .crm-table thead .delivery-sticky-left-serial,
+        .crm-table thead .delivery-sticky-left-key,
+        .crm-table thead .roster-sticky-left-serial,
+        .crm-table thead .roster-sticky-left-key,
+        .crm-table thead .settlement-sticky-serial,
+        .crm-table thead .settlement-sticky-date,
+        .crm-table thead .settlement-sticky-customer,
+        .crm-table thead .turnover-sticky-right-actions {
+            background: #2f75b5;
+            color: #fff;
+            border-color: #1f5a94;
+        }
+        .crm-table tbody .delivery-sticky-left-serial,
+        .crm-table tbody .delivery-sticky-left-key,
+        .crm-table tbody .roster-sticky-left-serial,
+        .crm-table tbody .roster-sticky-left-key,
+        .crm-table tbody .settlement-sticky-serial,
+        .crm-table tbody .settlement-sticky-date,
+        .crm-table tbody .settlement-sticky-customer,
+        .crm-table tbody .turnover-sticky-right-actions {
+            background: #fff;
+        }
+        .crm-table tbody tr:nth-child(even) .delivery-sticky-left-serial,
+        .crm-table tbody tr:nth-child(even) .delivery-sticky-left-key,
+        .crm-table tbody tr:nth-child(even) .roster-sticky-left-serial,
+        .crm-table tbody tr:nth-child(even) .roster-sticky-left-key,
+        .crm-table tbody tr:nth-child(even) .settlement-sticky-serial,
+        .crm-table tbody tr:nth-child(even) .settlement-sticky-date,
+        .crm-table tbody tr:nth-child(even) .settlement-sticky-customer,
+        .crm-table tbody tr:nth-child(even) .turnover-sticky-right-actions {
+            background: #f6f8fa;
+        }
+        .crm-table tbody tr:hover .delivery-sticky-left-serial,
+        .crm-table tbody tr:hover .delivery-sticky-left-key,
+        .crm-table tbody tr:hover .roster-sticky-left-serial,
+        .crm-table tbody tr:hover .roster-sticky-left-key,
+        .crm-table tbody tr:hover .settlement-sticky-serial,
+        .crm-table tbody tr:hover .settlement-sticky-date,
+        .crm-table tbody tr:hover .settlement-sticky-customer,
+        .crm-table tbody tr:hover .turnover-sticky-right-actions {
+            background: #eef6ff;
+        }
+        /* 表头列宽拖拽（与客户拜访记录一致） */
+        .crm-table th.crm-th-resizable,
+        .visit-table th.crm-th-resizable,
+        .visit-table th.visit-th-resizable {
+            position: relative;
+            overflow: visible;
+        }
+        .crm-table th.crm-th-resizable::after,
+        .visit-table th.crm-th-resizable::after,
+        .visit-table th.visit-th-resizable::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 10px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 3;
+            touch-action: none;
+        }
+        .crm-table th.crm-th-resizable:hover::after,
+        .crm-table th.crm-th-resizable.is-resizing::after,
+        .visit-table th.crm-th-resizable:hover::after,
+        .visit-table th.crm-th-resizable.is-resizing::after,
+        .visit-table th.visit-th-resizable:hover::after,
+        .visit-table th.visit-th-resizable.is-resizing::after {
+            background: rgba(255, 255, 255, 0.35);
+        }
+        /* 表格长文本：默认单行省略，悬停原位展开（勿用 title，避免浏览器灰色提示框） */
+        .crm-cell-clip {
+            display: block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .crm-cell-clip:hover {
+            position: relative;
+            z-index: 4;
+            white-space: normal;
+            overflow: visible;
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+        }
+        .crm-table tbody tr:nth-child(even) .crm-cell-clip:hover {
+            background: #f6f8fa;
+        }
+        .crm-table tbody tr:hover .crm-cell-clip:hover {
+            background: #eef6ff;
+        }
         .crm-table tfoot td.crm-td {
             background: #f8fafc;
             border-top: 1px solid #e2e8f0;
@@ -202,15 +355,75 @@
         .crm-form-control[readonly] {
             background: #f9fafb;
         }
-        select.crm-form-control {
-            appearance: none;
+        /* 下拉框标签（筛选条 / 弹窗表单项上方说明文字） */
+        .crm-field-label {
+            display: block;
+            font-size: 0.75rem;
+            line-height: 1rem;
+            color: #6b7280;
+            margin-bottom: 0.25rem;
         }
-        /* 兜底：未迁移到统一类的普通下拉框，也保持与单行文本框同高（筛选用 .crm-filter-control 已由下方 2.25rem 约束） */
-        select:not([multiple]):not([size]):not(.crm-form-control):not(.crm-filter-control) {
-            min-height: 2.5rem;
-            line-height: 1.5rem;
+        /* 全局下拉框：浅蓝描边 + 圆角 + 右侧双箭头（表单 / 筛选 / 弹窗统一） */
+        #main-shell select:not([multiple]):not([size]),
+        select.crm-form-control,
+        select.crm-filter-control {
+            appearance: none;
+            -webkit-appearance: none;
+            border: 1px solid #a5b4fc;
+            border-radius: 0.5rem;
+            background-color: #ffffff;
+            background-repeat: no-repeat;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 10'%3E%3Cpath d='M4 0.5 7.5 4.5H0.5Z' fill='%23374151'/%3E%3Cpath d='M4 9.5 0.5 5.5h7Z' fill='%23374151'/%3E%3C/svg%3E");
+            background-size: 0.5rem 0.625rem;
+            background-position: right 0.65rem center;
+            color: #1f2937;
             box-sizing: border-box;
             vertical-align: middle;
+            cursor: pointer;
+        }
+        select.crm-form-control,
+        #main-shell select.crm-form-control {
+            height: 2.5rem;
+            min-height: 2.5rem;
+            padding: 0.5rem 2rem 0.5rem 0.75rem;
+            font-size: 1rem;
+            line-height: 1.5rem;
+        }
+        select.crm-filter-control,
+        #main-shell select.crm-filter-control {
+            height: 2.25rem;
+            min-height: 2.25rem;
+            padding: 0.375rem 1.75rem 0.375rem 0.75rem;
+            font-size: 0.75rem;
+            line-height: 1.1;
+            background-position: right 0.5rem center;
+        }
+        #main-shell select:not([multiple]):not([size]):not(.crm-form-control):not(.crm-filter-control) {
+            min-height: 2.5rem;
+            padding: 0.5rem 2rem 0.5rem 0.75rem;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+        }
+        #main-shell select:not([multiple]):not([size]):focus,
+        select.crm-form-control:focus,
+        select.crm-filter-control:focus {
+            outline: none;
+            border-color: #818cf8;
+            box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.35);
+        }
+        #main-shell select:not([multiple]):not([size]):disabled,
+        select.crm-form-control:disabled,
+        select.crm-filter-control:disabled {
+            background-color: #f9fafb;
+            border-color: #e5e7eb;
+            cursor: not-allowed;
+            opacity: 0.9;
+        }
+        select.crm-form-control.crm-form-control--error,
+        select.crm-filter-control.crm-form-control--error {
+            border-width: 2px;
+            border-color: #f87171;
+            box-shadow: none;
         }
         /* 全局筛选条：列表页顶部筛选控件统一高度、边框和按钮风格 */
         .crm-filter-row {
@@ -238,9 +451,6 @@
         }
         .crm-filter-control::placeholder {
             color: #9ca3af;
-        }
-        select.crm-filter-control {
-            appearance: none;
         }
         .crm-filter-reset {
             height: 2.25rem;
@@ -639,7 +849,7 @@
         <div class="crm-login-blob crm-login-blob--b" aria-hidden="true"></div>
         <div class="crm-login-panel">
             <div class="crm-login-panel-head text-center">
-                <img src="/static/images/throme-logo.png?v=logo1t" class="crm-login-logo" width="176" height="132" alt="Throme" decoding="async">
+                <img src="/static/images/throme-logo.png?v=logo2" class="crm-login-logo" width="484" height="384" alt="Throme" decoding="async">
                 <h2 class="crm-login-title">登录</h2>
             </div>
             <div class="crm-login-divider" role="presentation"></div>
@@ -657,12 +867,12 @@
         </div>
     </div>
 
-    <div id="pwd-change-overlay" class="crm-login-overlay fixed inset-0 z-[110] hidden flex items-center justify-center px-4 py-8 overflow-hidden">
+    <div id="pwd-change-overlay" class="crm-esc-modal crm-login-overlay fixed inset-0 z-[110] hidden flex items-center justify-center px-4 py-8 overflow-hidden">
         <div class="crm-login-blob crm-login-blob--a" aria-hidden="true"></div>
         <div class="crm-login-blob crm-login-blob--b" aria-hidden="true"></div>
         <div class="crm-login-panel w-full max-w-md">
             <div class="crm-login-panel-head text-center">
-                <img src="/static/images/throme-logo.png?v=logo1t" class="crm-login-logo" width="176" height="132" alt="Throme" decoding="async">
+                <img src="/static/images/throme-logo.png?v=logo2" class="crm-login-logo" width="484" height="384" alt="Throme" decoding="async">
                 <h2 class="crm-login-title">修改密码</h2>
             </div>
             <div class="crm-login-divider" role="presentation"></div>
@@ -684,7 +894,7 @@
                 </div>
                 <p id="pwd-change-err" class="hidden text-center text-sm font-medium text-rose-400/95"></p>
                 <div class="flex flex-col gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-1">
-                    <button type="button" id="pwd-change-cancel"
+                    <button type="button" id="pwd-change-cancel" data-crm-esc-close
                         class="w-full sm:w-auto rounded-full border border-white/18 px-5 py-3 text-[0.9375rem] font-semibold text-slate-100 bg-black/25 hover:bg-white/10 transition">
                         取消
                     </button>
@@ -702,7 +912,7 @@
             <div class="max-w-[1280px] mx-auto px-4 flex items-center justify-between min-h-[3.5rem] gap-4 overflow-visible">
                 <div class="crm-header-nav-wrap flex items-center flex-1 min-w-0">
                     <a href="/home" class="inline-flex items-center gap-2 text-white font-semibold tracking-tight shrink-0 mr-4 md:mr-8">
-                        <img src="/static/images/throme-logo.png?v=logo1t" class="crm-brand-logo" width="88" height="32" alt="Throme" decoding="async">
+                        <img src="/static/images/throme-logo.png?v=logo2" class="crm-brand-logo" width="484" height="384" alt="Throme" decoding="async">
                         <span>ITO CRM{% block brand_badge %}<span class="text-[#8b949e] font-normal text-xs ml-1.5">V8</span>{% endblock %}</span>
                     </a>
                     {% include "partials/nav.html" %}
@@ -770,6 +980,80 @@
             a.click();
             URL.revokeObjectURL(url);
         };
+        window.crmEscModalVisible = function (el) {
+            if (!el || el.classList.contains('hidden')) { return false; }
+            var st = window.getComputedStyle(el);
+            if (st.display === 'none' || st.visibility === 'hidden' || Number(st.opacity) === 0) { return false; }
+            if (!el.offsetParent && st.position !== 'fixed') { return false; }
+            return true;
+        };
+
+        window.crmFindEscCloseButton = function (root) {
+            if (!root) { return null; }
+            var marked = root.querySelector('[data-crm-esc-close]');
+            if (marked) { return marked; }
+            var buttons = root.querySelectorAll('button');
+            var i, t, b;
+            for (i = 0; i < buttons.length; i++) {
+                b = buttons[i];
+                t = (b.textContent || '').trim();
+                if (t === '×' || b.getAttribute('aria-label') === '关闭') { return b; }
+            }
+            for (i = 0; i < buttons.length; i++) {
+                b = buttons[i];
+                t = (b.textContent || '').trim();
+                if (/^(取消|关闭|关闭日志|结束播放)$/.test(t)) { return b; }
+            }
+            return null;
+        };
+
+        window.crmCloseTopEscModal = function () {
+            var candidates = [];
+            var pwd = document.getElementById('pwd-change-overlay');
+            if (pwd && window.crmEscModalVisible(pwd)) {
+                candidates.push({ z: 110, root: pwd });
+            }
+            var hbPanel = document.getElementById('handbook-assistant-panel');
+            if (hbPanel && window.crmEscModalVisible(hbPanel)) {
+                candidates.push({
+                    z: 150,
+                    root: hbPanel,
+                    close: function () {
+                        var btn = document.getElementById('handbook-assistant-close');
+                        if (btn) { btn.click(); }
+                    }
+                });
+            }
+            var modalSel = '.crm-esc-modal, .delivery-detail-modal-overlay, .roster-detail-modal-overlay, .settlement-detail-modal-overlay';
+            document.querySelectorAll(modalSel).forEach(function (el) {
+                if (!window.crmEscModalVisible(el)) { return; }
+                var z = parseInt(window.getComputedStyle(el).zIndex, 10);
+                if (isNaN(z)) { z = 50; }
+                candidates.push({ z: z, root: el });
+            });
+            if (!candidates.length) { return false; }
+            candidates.sort(function (a, b) { return b.z - a.z; });
+            var top = candidates[0];
+            if (top.close) {
+                top.close();
+                return true;
+            }
+            var btn = window.crmFindEscCloseButton(top.root);
+            if (btn) {
+                btn.click();
+                return true;
+            }
+            return false;
+        };
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape' || e.defaultPrevented) { return; }
+            if (window.crmCloseTopEscModal()) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }, true);
+
         window.crmExportCsv = async function (e) {
             if (e) { e.preventDefault(); }
             var b = localStorage.getItem('crm_b64');
@@ -1125,5 +1409,6 @@
         })();
     </script>
     {% block page_scripts %}{% endblock %}
+    <script src="/static/js/crm-table-resize.js?v=9"></script>
 </body>
 </html>

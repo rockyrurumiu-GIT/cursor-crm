@@ -66,28 +66,28 @@
         min-width: 0;
     }
     .insight-table tr.insight-summary-row .crm-td {
-        background: #e6e2db;
-        color: #2f2a24;
+        background: #d4e4f7;
+        color: #1e3a5f;
         font-weight: 700;
-        border-top: 2px solid #d2cbc1;
-        border-bottom: 1px solid #d2cbc1;
+        border-top: 2px solid #1f5a94;
+        border-bottom: 1px solid #a8c4e8;
         padding-top: 9px;
         padding-bottom: 9px;
     }
     .insight-table tbody tr.insight-summary-row:hover .crm-td {
-        background: #e6e2db;
+        background: #d4e4f7;
     }
     .insight-table tr.insight-month-summary-row .crm-td {
-        background: #d9d4cc;
-        color: #1f2937;
+        background: #b8d4f0;
+        color: #1e3a5f;
         font-weight: 700;
-        border-top: 2px solid #bfb8ad;
-        border-bottom: 1px solid #bfb8ad;
+        border-top: 2px solid #1f5a94;
+        border-bottom: 1px solid #8fb5e3;
         padding-top: 9px;
         padding-bottom: 9px;
     }
     .insight-table tbody tr.insight-month-summary-row:hover .crm-td {
-        background: #d9d4cc;
+        background: #b8d4f0;
     }
     .insight-metric-trigger {
         cursor: help;
@@ -177,7 +177,7 @@
             class="crm-table-scroll insight-table-wrap border border-gray-200 rounded-lg"
             style="--crm-table-scroll-max-height: calc(100vh - 260px);"
         >
-            <table class="crm-table insight-table">
+            <table class="crm-table insight-table" data-table-id="pipeline-insight">
                 <thead>
                     <tr>
                         <th class="crm-th">时间</th>
@@ -674,6 +674,7 @@ createApp({
         onMounted(async () => {
             await loadBrief();
             await loadInsight();
+            window.crmScheduleTableColumnResize?.();
         });
 
         return {

@@ -13,7 +13,8 @@
     </div>
     <div v-if="!items.length" class="bg-white border rounded-lg p-12 text-center text-gray-400">暂无待审交接单</div>
     <div v-else class="bg-white border rounded-lg overflow-hidden">
-        <table class="crm-table w-full">
+        <div class="crm-h-scroll">
+        <table class="crm-table w-full" data-table-id="customer-reviews">
             <thead>
                 <tr>
                     <th class="crm-th">客户</th>
@@ -37,6 +38,7 @@
                 </tr>
             </tbody>
         </table>
+        </div>
     </div>
 </div>
 {% endraw %}

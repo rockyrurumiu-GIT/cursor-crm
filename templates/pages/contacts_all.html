@@ -14,7 +14,8 @@
         <button type="button" @click="openNew" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm">+ 新增联系人</button>
     </div>
     <div class="bg-white border rounded-lg overflow-hidden">
-        <table class="crm-table w-full">
+        <div class="crm-h-scroll">
+        <table class="crm-table w-full" data-table-id="contacts">
             <thead>
                 <tr>
                     <th class="crm-th">姓名</th>
@@ -22,6 +23,7 @@
                     <th class="crm-th">职位</th>
                     <th class="crm-th">电话</th>
                     <th class="crm-th">邮箱</th>
+                    <th class="crm-th">关系/标签</th>
                     <th class="crm-th">操作</th>
                 </tr>
             </thead>
@@ -32,13 +34,19 @@
                     <td class="crm-td">{{ c.title || '—' }}</td>
                     <td class="crm-td">{{ c.phone || '—' }}</td>
                     <td class="crm-td">{{ c.email || '—' }}</td>
+                    <td class="crm-td">
+                        <span v-if="c.tags === '首要联系人'" class="inline-block px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-700 mr-1">首要</span>
+                        <span v-if="contactRelationship(c)" class="text-sm text-gray-600">{{ contactRelationship(c) }}</span>
+                        <span v-if="c.tags !== '首要联系人' && !contactRelationship(c)" class="text-gray-400">—</span>
+                    </td>
                     <td class="crm-td"><button type="button" @click="remove(c)" class="text-red-600 text-sm">删除</button></td>
                 </tr>
-                <tr v-if="!items.length"><td colspan="6" class="crm-td text-center text-gray-400 py-8">暂无联系人</td></tr>
+                <tr v-if="!items.length"><td colspan="7" class="crm-td text-center text-gray-400 py-8">暂无联系人</td></tr>
             </tbody>
         </table>
+        </div>
     </div>
-    <div v-if="showForm" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+    <div v-if="showForm" class="crm-esc-modal fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-3">
             <h3 class="font-bold">新增联系人</h3>
             <input v-model.number="form.client_id" type="number" placeholder="客户 ID" class="w-full border rounded p-2 text-sm">
@@ -68,6 +76,10 @@ createApp({
             const r = await fetch('/api/contacts', { headers: auth() });
             items.value = r.ok ? await r.json() : [];
         };
+        const contactRelationship = (c) => {
+            const r = (c.remarks || '').trim();
+            return r.startsWith('关系：') ? r.slice(3) : '';
+        };
         const openNew = () => { form.value = { client_id: '', name: '', title: '', phone: '', email: '' }; showForm.value = true; };
         const save = async () => {
             const r = await fetch('/api/contacts', { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form.value, tags: '', remarks: '' }) });
@@ -79,7 +91,7 @@ createApp({
             await load();
         };
         onMounted(load);
-        return { items, showForm, form, openNew, save, remove };
+        return { items, showForm, form, contactRelationship, openNew, save, remove };
     },
 }).mount('#contacts-app');
 </script>

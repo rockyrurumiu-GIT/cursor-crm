@@ -20,6 +20,7 @@ from phase2_core import (
     contract_to_dict,
     milestone_to_dict,
     opportunity_to_dict,
+    refresh_client_estimated_annual_amount,
     suggest_milestones_from_requirement,
 )
 
@@ -28,9 +29,10 @@ class OpportunityBody(BaseModel):
     client_id: int
     name: str
     amount: str = ""
+    estimated_current_year_amount: str = ""
     probability: str = ""
     expected_close_date: str = ""
-    stage: str = "qualifying"
+    stage: str = "initial"
     owner: str = ""
     remarks: str = ""
 
@@ -176,6 +178,7 @@ def register_phase2_routes(
             client_id=body.client_id,
             name=body.name.strip(),
             amount=body.amount,
+            estimated_current_year_amount=body.estimated_current_year_amount,
             probability=body.probability,
             expected_close_date=body.expected_close_date,
             stage=body.stage,
@@ -185,6 +188,8 @@ def register_phase2_routes(
         db.add(o)
         db.commit()
         db.refresh(o)
+        refresh_client_estimated_annual_amount(db, body.client_id, Client, Opportunity)
+        db.commit()
         return opportunity_to_dict(o, client.name)
 
     @app.put("/api/opportunities/{opp_id}")
@@ -201,14 +206,33 @@ def register_phase2_routes(
             raise HTTPException(status_code=400, detail="无效商机阶段")
         o.name = body.name.strip()
         o.amount = body.amount
+        o.estimated_current_year_amount = body.estimated_current_year_amount
         o.probability = body.probability
         o.expected_close_date = body.expected_close_date
         o.stage = body.stage
         o.owner = body.owner
         o.remarks = body.remarks
         db.commit()
+        refresh_client_estimated_annual_amount(db, o.client_id, Client, Opportunity)
+        db.commit()
         client = db.query(Client).filter(Client.id == o.client_id).first()
         return opportunity_to_dict(o, client.name if client else "")
+
+    @app.delete("/api/opportunities/{opp_id}")
+    async def delete_opportunity(
+        opp_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(authenticate),
+    ):
+        o = db.query(Opportunity).filter(Opportunity.id == opp_id).first()
+        if not o:
+            raise HTTPException(status_code=404, detail="商机不存在")
+        client_id = o.client_id
+        db.delete(o)
+        db.commit()
+        refresh_client_estimated_annual_amount(db, client_id, Client, Opportunity)
+        db.commit()
+        return {"ok": True}
 
     @app.post("/api/opportunities/{opp_id}/create-handoff")
     async def opp_create_handoff(opp_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):

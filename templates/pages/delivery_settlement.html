@@ -46,27 +46,7 @@
         --settlement-sticky-date-width: 11rem;
         --settlement-sticky-customer-width: 7.5rem;
     }
-    .crm-table.settlement-table .settlement-col-serial,
-    .crm-table.settlement-table .crm-th.settlement-col-serial {
-        width: var(--settlement-sticky-serial-width);
-        min-width: var(--settlement-sticky-serial-width);
-        max-width: var(--settlement-sticky-serial-width);
-        box-sizing: border-box;
-    }
-    .crm-table.settlement-table .settlement-col-date,
-    .crm-table.settlement-table .crm-th.settlement-col-date {
-        width: var(--settlement-sticky-date-width);
-        min-width: var(--settlement-sticky-date-width);
-        max-width: var(--settlement-sticky-date-width);
-        box-sizing: border-box;
-    }
-    .crm-table.settlement-table .settlement-col-customer,
-    .crm-table.settlement-table .crm-th.settlement-col-customer {
-        width: var(--settlement-sticky-customer-width);
-        min-width: var(--settlement-sticky-customer-width);
-        max-width: var(--settlement-sticky-customer-width);
-        box-sizing: border-box;
-    }
+    /* 列宽由 colgroup + 拖拽脚本同步的 CSS 变量控制，勿写死 min/max 以免拖宽后出现空白 */
     .settlement-sticky-serial,
     .settlement-sticky-date,
     .settlement-sticky-customer {
@@ -97,22 +77,22 @@
     .crm-table thead .settlement-sticky-serial {
         top: 0;
         z-index: 32;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table thead .settlement-sticky-date {
         top: 0;
         z-index: 31;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table thead .settlement-sticky-customer {
         top: 0;
         z-index: 30;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-serial,
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-date,
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-customer {
-        background: #fafaf9;
+        background: #eef6ff;
     }
     .crm-table.settlement-table tfoot .settlement-sticky-serial,
     .crm-table.settlement-table tfoot .settlement-sticky-date,
@@ -296,7 +276,7 @@
         </div>
         <p v-if="expectedPaymentFilterWarning" class="text-sm text-amber-700 shrink-0">{{ expectedPaymentFilterWarning }}</p>
         <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-scroll-fill flex-1 min-h-0">
-            <table class="crm-table settlement-table min-w-[1900px]">
+            <table class="crm-table settlement-table" data-table-id="settlement" data-table-min-width="1900">
                 <thead>
                     <tr>
                         <th class="crm-th settlement-col-serial settlement-sticky-serial">序号</th>
@@ -314,7 +294,7 @@
                         <th class="crm-th">实际回款时间</th>
                         <th class="crm-th">回款天数</th>
                         <th class="crm-th">回款周期</th>
-                        <th class="crm-th">回款性质</th>
+                        <th class="crm-th" data-col-min="96">回款性质</th>
                         <th class="crm-th">PO单</th>
                         <th class="crm-th">发票号</th>
                         <th class="crm-th min-w-[6em] whitespace-nowrap">备注</th>
@@ -338,7 +318,7 @@
                         <td class="crm-td">{{ displayDateSlash(row.actual_payment_date) }}</td>
                         <td class="crm-td">{{ row.payment_days }}</td>
                         <td class="crm-td">{{ row.payment_cycle }}</td>
-                        <td class="crm-td">{{ row.payment_nature }}</td>
+                        <td class="crm-td whitespace-nowrap">{{ row.payment_nature }}</td>
                         <td class="crm-td">{{ row.po_no }}</td>
                         <td class="crm-td">{{ row.invoice_no }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.remarks }}</td>
@@ -372,7 +352,7 @@
         </div>
     </div>
 
-    <div v-if="showForm" class="settlement-detail-modal-overlay">
+    <div v-if="showForm" class="crm-esc-modal settlement-detail-modal-overlay">
         <div class="settlement-detail-modal-panel">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ formDetailReadonly ? '结算回款详情' : (editingId ? '修改结算回款' : '新增结算回款') }}</h3>
@@ -415,7 +395,7 @@
         </div>
     </div>
 
-    <div v-if="showLogs" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <div v-if="showLogs" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="text-lg font-bold text-gray-900">结算回款日志</h3>
@@ -1133,6 +1113,7 @@ createApp({
         onMounted(async () => {
             document.addEventListener('click', onDocClickCloseCustomerFilter);
             await loadRows();
+            window.crmScheduleTableColumnResize?.();
         });
         onUnmounted(() => {
             document.removeEventListener('click', onDocClickCloseCustomerFilter);

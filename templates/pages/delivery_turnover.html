@@ -21,13 +21,6 @@
         border-collapse: separate;
         border-spacing: 0;
     }
-    .crm-table.turnover-table .crm-th.roster-col-name,
-    .crm-table.turnover-table .crm-td.roster-col-name {
-        width: var(--roster-sticky-name-width);
-        min-width: var(--roster-sticky-name-width);
-        max-width: var(--roster-sticky-name-width);
-        box-sizing: border-box;
-    }
     .crm-table.turnover-table .roster-sticky-left-serial {
         position: sticky;
         background: #fff;
@@ -42,10 +35,10 @@
     .crm-table.turnover-table thead .roster-sticky-left-serial {
         top: 0;
         z-index: 30;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table.turnover-table tbody tr:hover .roster-sticky-left-serial {
-        background: #fafaf9;
+        background: #eef6ff;
     }
     /* 末列「操作」：横向滚动时固定在最右侧 */
     .crm-table.turnover-table .turnover-sticky-right-actions {
@@ -62,10 +55,10 @@
     .crm-table.turnover-table thead .turnover-sticky-right-actions {
         top: 0;
         z-index: 30;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table.turnover-table tbody tr:hover .turnover-sticky-right-actions {
-        background: #fafaf9;
+        background: #eef6ff;
     }
     .crm-table.turnover-table tfoot .turnover-sticky-right-actions {
         z-index: 2;
@@ -79,6 +72,21 @@
         white-space: nowrap !important;
         word-break: normal !important;
         overflow-wrap: normal !important;
+    }
+    /* 释放原因 / 交付沟通等长文本：默认单行省略，悬停展开 */
+    .crm-table.turnover-table .crm-td.turnover-col-text {
+        width: 16rem;
+        min-width: 10rem;
+        max-width: 20rem;
+        box-sizing: border-box;
+        overflow: hidden;
+        line-height: 1.35;
+        vertical-align: top;
+    }
+    .crm-table.turnover-table .crm-th.turnover-col-text {
+        max-width: 20rem;
+        white-space: nowrap;
+        vertical-align: middle;
     }
     /* 与花名册姓名列：复选框 + 姓名 */
     .turnover-table-wrap .roster-name-cell {
@@ -355,14 +363,14 @@
         color: #64748b;
         font-weight: 500;
     }
-    .turnover-dash-glass .turnover-dash-filter-strip .crm-form-control {
+    .turnover-dash-glass .turnover-dash-filter-strip input.crm-form-control {
         background: #ffffff;
         border: 1px solid #e2e8f0;
         color: #0f172a;
         border-radius: 0.75rem;
         box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
     }
-    .turnover-dash-glass .turnover-dash-filter-strip .crm-form-control:focus {
+    .turnover-dash-glass .turnover-dash-filter-strip input.crm-form-control:focus {
         border-color: #a5b4fc;
         outline: none;
         box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
@@ -647,7 +655,7 @@
 
     <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden flex-1 min-h-0 flex flex-col min-w-0">
         <div class="crm-h-scroll crm-table-scroll turnover-wrap turnover-table-scroll-fill flex-1 min-h-0 min-w-0">
-            <table class="crm-table turnover-table turnover-table-wrap min-w-[2200px] text-sm text-gray-800">
+            <table class="crm-table turnover-table turnover-table-wrap text-sm text-gray-800" data-table-id="turnover" data-table-min-width="2200">
                 <thead>
                     <tr>
                         <th class="crm-th roster-col-name roster-sticky-left-serial">姓名</th>
@@ -662,16 +670,16 @@
                         <th class="crm-th">离职时间</th>
                         <th class="crm-th turnover-tenure-col">司龄</th>
                         <th class="crm-th">主动/被动</th>
-                        <th class="crm-th">释放/离职原因</th>
-                        <th class="crm-th">交付沟通</th>
-                        <th class="crm-th">业务处理动作</th>
-                        <th class="crm-th">BP参与动作</th>
+                        <th class="crm-th turnover-col-text">释放/离职原因</th>
+                        <th class="crm-th turnover-col-text">交付沟通</th>
+                        <th class="crm-th turnover-col-text">业务处理动作</th>
+                        <th class="crm-th turnover-col-text">BP参与动作</th>
                         <th class="crm-th">补偿金</th>
                         <th class="crm-th">报价</th>
                         <th class="crm-th">薪资</th>
                         <th class="crm-th">GM$</th>
                         <th class="crm-th">GM%</th>
-                        <th class="crm-th turnover-sticky-right-actions">操作</th>
+                        <th class="crm-th turnover-sticky-right-actions crm-sticky-right-op">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -698,10 +706,10 @@
                         <td class="crm-td">{{ row.company_resign_date }}</td>
                         <td class="crm-td turnover-tenure-col whitespace-nowrap">{{ row.tenure }}</td>
                         <td class="crm-td">{{ row.zntx_separation_type }}</td>
-                        <td class="crm-td">{{ row.leave_reason }}</td>
-                        <td class="crm-td">{{ row.delivery_communication }}</td>
-                        <td class="crm-td">{{ row.business_action }}</td>
-                        <td class="crm-td">{{ row.bp_involved }}</td>
+                        <td class="crm-td turnover-col-text"><div class="crm-cell-clip">{{ row.leave_reason || '—' }}</div></td>
+                        <td class="crm-td turnover-col-text"><div class="crm-cell-clip">{{ row.delivery_communication || '—' }}</div></td>
+                        <td class="crm-td turnover-col-text"><div class="crm-cell-clip">{{ row.business_action || '—' }}</div></td>
+                        <td class="crm-td turnover-col-text"><div class="crm-cell-clip">{{ row.bp_involved || '—' }}</div></td>
                         <td class="crm-td">{{ row.zntx_compensation_amount }}</td>
                         <td class="crm-td">{{ row.monthly_quote_tax }}</td>
                         <td class="crm-td">{{ row.pre_tax_salary }}</td>
@@ -737,7 +745,7 @@
 
     </div>
 
-    <div v-if="showLogs" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <div v-if="showLogs" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="text-lg font-bold text-gray-900">字段变更记录（审计）</h3>
@@ -762,7 +770,7 @@
         </div>
     </div>
 
-    <div v-if="showDashboard" class="fixed inset-0 turnover-dash-overlay turnover-dash-glass flex items-start justify-center overflow-x-hidden overflow-y-hidden px-3 sm:px-4">
+    <div v-if="showDashboard" class="crm-esc-modal fixed inset-0 turnover-dash-overlay turnover-dash-glass flex items-start justify-center overflow-x-hidden overflow-y-hidden px-3 sm:px-4">
         <div class="rounded-2xl shadow-2xl w-full max-w-6xl turnover-dash-panel turnover-dash-panel-shell flex flex-col">
             <div class="turnover-dash-head px-4 sm:px-5 py-3.5 border-b border-gray-100 flex flex-wrap justify-between items-center gap-2 shrink-0 bg-white">
                 <div>
@@ -1036,7 +1044,7 @@
         </div>
     </div>
 
-    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <div v-if="showAddModal" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ addFormReadonly ? '离职档案详情' : (editingId != null ? '修改离职档案' : '新增离职档案行') }}</h3>
@@ -2052,7 +2060,10 @@ createApp({
             if (showLogs.value) await loadLogs();
         };
 
-        onMounted(loadRows);
+        onMounted(async () => {
+            await loadRows();
+            window.crmScheduleTableColumnResize?.();
+        });
         return {
             rows, filteredRows, loading,
             filters, positionTitleOptions, workLocationOptions, customerNameOptions, separationTypeOptions,

@@ -35,7 +35,7 @@
             <div id="calc-remark" class="mt-4 pt-4 border-t">
                 <label class="block text-sm font-medium mb-1">保存计算结果到客户备注</label>
                 <div class="flex space-x-2 flex-wrap gap-y-2">
-                    <select v-model="calc.targetClientId" class="flex-1 min-w-[12rem] p-2 border rounded">
+                    <select v-model="calc.targetClientId" class="crm-form-control flex-1 min-w-[12rem]">
                         <option value="">-- 请选择客户 --</option>
                         <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
                     </select>

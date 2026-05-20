@@ -126,15 +126,13 @@
         overflow-wrap: anywhere;
         vertical-align: top;
     }
-    /* 交付判断 / 员工诉求 / 交付待办：加宽列、自然换行、不截断（不使用 line-clamp） */
+    /* 交付判断 / 员工诉求 / 交付待办：默认单行省略，悬停展开（见 base .crm-cell-clip） */
     .crm-table.interview-table .crm-td.interview-col-text-wide {
         width: 30rem;
         min-width: 24rem;
         max-width: 34rem;
         box-sizing: border-box;
-        white-space: normal !important;
-        word-break: break-word;
-        overflow-wrap: anywhere;
+        overflow: hidden;
         line-height: 1.35;
         vertical-align: top;
     }
@@ -290,20 +288,6 @@
         max-width: 14ch;
         text-overflow: clip;
     }
-    .crm-table.interview-table .crm-td.interview-col-serial,
-    .crm-table.interview-table .crm-th.interview-col-serial {
-        width: var(--interview-sticky-serial-width);
-        min-width: var(--interview-sticky-serial-width);
-        max-width: var(--interview-sticky-serial-width);
-        box-sizing: border-box;
-    }
-    .crm-table.interview-table .crm-td.interview-col-name,
-    .crm-table.interview-table .crm-th.interview-col-name {
-        width: var(--interview-sticky-name-width);
-        min-width: var(--interview-sticky-name-width);
-        max-width: var(--interview-sticky-name-width);
-        box-sizing: border-box;
-    }
     .delivery-sticky-left-serial,
     .delivery-sticky-left-key {
         position: sticky;
@@ -327,16 +311,16 @@
     .crm-table thead .delivery-sticky-left-serial {
         top: 0;
         z-index: 30;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table thead .delivery-sticky-left-key {
         top: 0;
         z-index: 29;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table tbody tr:hover .delivery-sticky-left-serial,
     .crm-table tbody tr:hover .delivery-sticky-left-key {
-        background: #fafaf9;
+        background: #eef6ff;
     }
     /* 结算回款：前三列冻结（序号 / 结算进度更新时间 / 客户） */
     .crm-table.settlement-table {
@@ -345,27 +329,6 @@
         --settlement-sticky-serial-width: 4.5rem;
         --settlement-sticky-date-width: 11rem;
         --settlement-sticky-customer-width: 7.5rem;
-    }
-    .crm-table.settlement-table .settlement-col-serial,
-    .crm-table.settlement-table .crm-th.settlement-col-serial {
-        width: var(--settlement-sticky-serial-width);
-        min-width: var(--settlement-sticky-serial-width);
-        max-width: var(--settlement-sticky-serial-width);
-        box-sizing: border-box;
-    }
-    .crm-table.settlement-table .settlement-col-date,
-    .crm-table.settlement-table .crm-th.settlement-col-date {
-        width: var(--settlement-sticky-date-width);
-        min-width: var(--settlement-sticky-date-width);
-        max-width: var(--settlement-sticky-date-width);
-        box-sizing: border-box;
-    }
-    .crm-table.settlement-table .settlement-col-customer,
-    .crm-table.settlement-table .crm-th.settlement-col-customer {
-        width: var(--settlement-sticky-customer-width);
-        min-width: var(--settlement-sticky-customer-width);
-        max-width: var(--settlement-sticky-customer-width);
-        box-sizing: border-box;
     }
     .settlement-sticky-serial,
     .settlement-sticky-date,
@@ -397,22 +360,22 @@
     .crm-table thead .settlement-sticky-serial {
         top: 0;
         z-index: 32;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table thead .settlement-sticky-date {
         top: 0;
         z-index: 31;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table thead .settlement-sticky-customer {
         top: 0;
         z-index: 30;
-        background: #e6e2db;
+        background: #2f75b5;
     }
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-serial,
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-date,
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-customer {
-        background: #fafaf9;
+        background: #eef6ff;
     }
     /* 手册音视频：Plyr 极简条 + indigo 主色（与站内强调色一致） */
     .handbook-plyr-audio-wrap .plyr--audio .plyr__controls {
@@ -618,7 +581,7 @@
                 </p>
             </div>
             <div ref="pipelineScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
-            <table class="crm-table pipeline-table min-w-[2400px]">
+            <table class="crm-table pipeline-table" data-table-id="pipeline" data-table-min-width="2400">
                 <thead>
                     <tr>
                         <th class="crm-th">简历时间</th>
@@ -686,7 +649,7 @@
                 </tbody>
             </table>
             </div>
-            <div v-if="showPipelineBatchModal" class="delivery-detail-modal-overlay">
+            <div v-if="showPipelineBatchModal" class="crm-esc-modal delivery-detail-modal-overlay">
                 <div class="delivery-detail-modal-panel max-w-xl">
                     <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                         <h3 class="font-bold text-lg">批量操作</h3>
@@ -1039,7 +1002,7 @@
                 </div>
             </div>
             <div ref="interviewScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
-                <table class="crm-table interview-table">
+                <table class="crm-table interview-table" data-table-id="interview">
                 <thead>
                     <tr>
                         <th class="crm-th interview-col-tight interview-col-name delivery-sticky-left-serial">员工姓名</th>
@@ -1074,9 +1037,9 @@
                         <td class="crm-td interview-col-tight">{{ displayDateSlash(row.onboarding_time) }}</td>
                         <td class="crm-td interview-col-tight">{{ displayDateSlash(row.interview_date) }}</td>
                         <td class="crm-td interview-col-tight">{{ row.satisfaction }}</td>
-                        <td class="crm-td interview-col-text-wide">{{ row.delivery_judgment }}</td>
-                        <td class="crm-td interview-col-text-wide">{{ row.employee_requests }}</td>
-                        <td class="crm-td interview-col-text-wide">{{ row.delivery_todos }}</td>
+                        <td class="crm-td interview-col-text-wide"><div class="crm-cell-clip">{{ row.delivery_judgment || '—' }}</div></td>
+                        <td class="crm-td interview-col-text-wide"><div class="crm-cell-clip">{{ row.employee_requests || '—' }}</div></td>
+                        <td class="crm-td interview-col-text-wide"><div class="crm-cell-clip">{{ row.delivery_todos || '—' }}</div></td>
                         <td class="crm-td interview-col-tight">{{ row.work_location }}</td>
                         <td class="crm-td interview-col-tight">{{ row.hometown }}</td>
                         <td class="crm-td interview-col-tight">{{ row.followup_1d }}</td>
@@ -1102,7 +1065,7 @@
                 <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openAdd">新增</button>
             </div>
             <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
-                <table class="crm-table settlement-table min-w-[1900px]">
+                <table class="crm-table settlement-table" data-table-id="settlement" data-table-min-width="1900">
                 <thead>
                     <tr>
                         <th class="crm-th settlement-col-serial settlement-sticky-serial">序号</th>
@@ -1120,7 +1083,7 @@
                         <th class="crm-th">实际回款时间</th>
                         <th class="crm-th">回款天数</th>
                         <th class="crm-th">回款周期</th>
-                        <th class="crm-th">回款性质</th>
+                        <th class="crm-th" data-col-min="96">回款性质</th>
                         <th class="crm-th">PO单</th>
                         <th class="crm-th">发票号</th>
                         <th class="crm-th">备注</th>
@@ -1144,7 +1107,7 @@
                         <td class="crm-td">{{ displayDateSlash(row.actual_payment_date) }}</td>
                         <td class="crm-td">{{ row.payment_days }}</td>
                         <td class="crm-td">{{ row.payment_cycle }}</td>
-                        <td class="crm-td">{{ row.payment_nature }}</td>
+                        <td class="crm-td whitespace-nowrap">{{ row.payment_nature }}</td>
                         <td class="crm-td">{{ row.po_no }}</td>
                         <td class="crm-td">{{ row.invoice_no }}</td>
                         <td class="crm-td">{{ row.remarks }}</td>
@@ -1208,39 +1171,41 @@
             </div>
             <div class="border border-gray-200 rounded-lg overflow-hidden flex flex-col flex-1 min-h-0 bg-white">
                 <div v-if="!filteredHandbookFiles.length" class="p-10 text-center text-gray-400 text-sm">暂无手册，请上传。</div>
-                <div v-else class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
-                        <thead class="bg-gray-50 text-left text-xs text-gray-600">
+                <div v-else class="overflow-x-auto crm-table-scroll">
+                    <table class="crm-table handbook-table min-w-full text-sm" data-table-id="handbook">
+                        <thead>
                             <tr>
-                                <th class="px-3 py-2 font-medium">文件</th>
-                                <th class="px-3 py-2 font-medium">版本</th>
-                                <th class="px-3 py-2 font-medium">状态</th>
-                                <th class="px-3 py-2 font-medium">类型</th>
-                                <th class="px-3 py-2 font-medium">全文索引</th>
-                                <th class="px-3 py-2 font-medium">标签 / 权限</th>
-                                <th class="px-3 py-2 font-medium">时间</th>
-                                <th class="px-3 py-2 font-medium text-right">操作</th>
+                                <th class="crm-th text-left">文件</th>
+                                <th class="crm-th">版本</th>
+                                <th class="crm-th">状态</th>
+                                <th class="crm-th">类型</th>
+                                <th class="crm-th">全文索引</th>
+                                <th class="crm-th">标签 / 权限</th>
+                                <th class="crm-th">时间</th>
+                                <th class="crm-th text-right">操作</th>
                             </tr>
                         </thead>
-                        <tbody class="divide-y divide-gray-100">
-                            <tr v-for="f in filteredHandbookFiles" :key="f.id" class="hover:bg-gray-50/80">
-                                <td class="px-3 py-2 font-medium text-gray-900 max-w-[14rem] truncate" :title="f.original_filename">{{ f.original_filename }}</td>
-                                <td class="px-3 py-2 text-gray-700">{{ f.version_label || '—' }}</td>
-                                <td class="px-3 py-2"><span class="rounded-full px-2 py-0.5 text-xs" :class="handbookStatusClass(f.status)">{{ handbookStatusLabel(f.status) }}</span></td>
-                                <td class="px-3 py-2 text-gray-600">{{ handbookMediaLabel(f) }}</td>
-                                <td class="px-3 py-2 text-xs">
+                        <tbody>
+                            <tr v-for="f in filteredHandbookFiles" :key="f.id">
+                                <td class="crm-td crm-name-cell max-w-[14rem]"><div class="crm-cell-clip">{{ f.original_filename }}</div></td>
+                                <td class="crm-td">{{ f.version_label || '—' }}</td>
+                                <td class="crm-td"><span class="rounded-full px-2 py-0.5 text-xs" :class="handbookStatusClass(f.status)">{{ handbookStatusLabel(f.status) }}</span></td>
+                                <td class="crm-td">{{ handbookMediaLabel(f) }}</td>
+                                <td class="crm-td text-xs">
                                     <span class="rounded px-1.5 py-0.5" :class="handbookSearchStatusClass(f)">{{ handbookSearchStatusLabel(f) }}</span>
-                                    <span v-if="f.search_method && f.search_status === 'indexed'" class="text-gray-400 ml-1">{{ f.search_method === 'ocr' ? 'OCR' : f.search_method === 'meta' ? '元数据' : '文本层' }}</span>
-                                    <span v-if="f.search_error" class="block text-amber-700 mt-0.5" :title="f.search_error">{{ f.search_error.length > 48 ? f.search_error.slice(0,48)+'…' : f.search_error }}</span>
+                                    <span v-if="f.search_method && f.search_status === 'indexed'" class="text-gray-500 ml-1">{{ f.search_method === 'ocr' ? 'OCR' : f.search_method === 'meta' ? '元数据' : '文本层' }}</span>
+                                    <div v-if="f.search_error" class="crm-cell-clip text-amber-700 mt-0.5">{{ f.search_error }}</div>
                                 </td>
-                                <td class="px-3 py-2 text-xs text-gray-500 max-w-[14rem]">
-                                    <span v-if="(f.tags||[]).length">标：{{ (f.tags||[]).join('、') }}<br /></span>
-                                    <span v-if="(f.permission_departments||[]).length">部：{{ (f.permission_departments||[]).join('、') }}</span>
-                                    <span v-if="(f.permission_levels||[]).length"><br />级：{{ (f.permission_levels||[]).join('、') }}</span>
-                                    <span v-if="!(f.tags||[]).length && !(f.permission_departments||[]).length && !(f.permission_levels||[]).length">—</span>
+                                <td class="crm-td text-xs max-w-[14rem]">
+                                    <div class="crm-cell-clip">
+                                        <span v-if="(f.tags||[]).length">标：{{ (f.tags||[]).join('、') }}<br /></span>
+                                        <span v-if="(f.permission_departments||[]).length">部：{{ (f.permission_departments||[]).join('、') }}</span>
+                                        <span v-if="(f.permission_levels||[]).length"><br />级：{{ (f.permission_levels||[]).join('、') }}</span>
+                                        <span v-if="!(f.tags||[]).length && !(f.permission_departments||[]).length && !(f.permission_levels||[]).length">—</span>
+                                    </div>
                                 </td>
-                                <td class="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{{ formatDate(f.created_at) }}</td>
-                                <td class="px-3 py-2 text-right whitespace-nowrap space-x-2">
+                                <td class="crm-td text-xs whitespace-nowrap">{{ formatDate(f.created_at) }}</td>
+                                <td class="crm-td text-right whitespace-nowrap space-x-2">
                                     <button v-if="f.media_kind === 'pdf'" type="button" class="text-indigo-600 hover:underline" @click="openHandbookReader(f)">阅读</button>
                                     <button v-else-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="text-indigo-600 hover:underline" @click="openHandbookReader(f)">播放</button>
                                     <button type="button" class="text-gray-700 hover:underline" @click="openHandbookMetaModal(f)">元数据</button>
@@ -1284,7 +1249,7 @@
     <Teleport to="body">
     <div
         v-if="handbookReaderRow"
-        class="fixed inset-0 z-[110] box-border flex flex-col p-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"
+        class="crm-esc-modal fixed inset-0 z-[110] box-border flex flex-col p-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"
         :class="handbookReaderPipBrowseMode ? 'pointer-events-none bg-transparent' : 'bg-black/50'"
         role="dialog"
         aria-modal="true"
@@ -1428,7 +1393,7 @@
     <Teleport to="body">
         <div
             v-if="handbookFsDetailOpen && handbookFsDetailHit"
-            class="fixed inset-0 z-[115] flex items-center justify-center bg-black/45 p-3 sm:p-6"
+            class="crm-esc-modal fixed inset-0 z-[115] flex items-center justify-center bg-black/45 p-3 sm:p-6"
             role="dialog"
             aria-modal="true"
             aria-label="检索摘录详情"
@@ -1459,7 +1424,7 @@
         </div>
     </Teleport>
 
-    <div v-if="handbookMetaModalOpen" class="fixed inset-0 z-[58] flex items-center justify-center bg-black/45 p-4">
+    <div v-if="handbookMetaModalOpen" class="crm-esc-modal fixed inset-0 z-[58] flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg text-gray-900">编辑手册元数据</h3>
@@ -1494,7 +1459,7 @@
         </div>
     </div>
 
-    <div v-if="handbookCuesModalOpen" class="fixed inset-0 z-[58] flex items-center justify-center bg-black/45 p-4">
+    <div v-if="handbookCuesModalOpen" class="crm-esc-modal fixed inset-0 z-[58] flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg text-gray-900">时间戳锚点</h3>
@@ -1516,7 +1481,7 @@
         </div>
     </div>
 
-    <div v-if="showPipelineForm && moduleKey === 'pipeline'" class="delivery-detail-modal-overlay">
+    <div v-if="showPipelineForm && moduleKey === 'pipeline'" class="crm-esc-modal delivery-detail-modal-overlay">
         <div class="delivery-detail-modal-panel max-w-7xl">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ pipelineFormReadonly ? '管道数据详情' : (pipelineEditingId ? '修改管道数据' : '新增管道数据') }}</h3>
@@ -1617,7 +1582,7 @@
         </div>
     </div>
 
-    <div v-if="showPipelineLogs && moduleKey === 'pipeline'" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <div v-if="showPipelineLogs && moduleKey === 'pipeline'" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="text-lg font-bold text-gray-900">管道数据日志</h3>
@@ -1639,7 +1604,7 @@
         </div>
     </div>
 
-    <div v-if="showInterviewForm && moduleKey === 'interviews'" class="delivery-detail-modal-overlay">
+    <div v-if="showInterviewForm && moduleKey === 'interviews'" class="crm-esc-modal delivery-detail-modal-overlay">
         <div class="delivery-detail-modal-panel max-w-7xl">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ interviewFormReadonly ? '员工访谈详情' : (interviewEditingId ? '修改员工访谈' : '新增员工访谈') }}</h3>
@@ -1735,7 +1700,7 @@
         </div>
     </div>
 
-    <div v-if="showInterviewLogs && moduleKey === 'interviews'" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <div v-if="showInterviewLogs && moduleKey === 'interviews'" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="text-lg font-bold text-gray-900">员工访谈日志</h3>
@@ -1757,7 +1722,7 @@
         </div>
     </div>
 
-    <div v-if="showForm && moduleKey === 'settlement'" class="delivery-detail-modal-overlay">
+    <div v-if="showForm && moduleKey === 'settlement'" class="crm-esc-modal delivery-detail-modal-overlay">
         <div class="delivery-detail-modal-panel max-w-7xl">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ settlementFormReadonly ? '结算回款详情' : (editingId ? '修改结算回款' : '新增结算回款') }}</h3>
@@ -4294,6 +4259,7 @@ createApp({
                 const rr = await fetch(`/api/clients/${clientId}/approved-handoff-summary`, { headers: window.crmAuthHeader() });
                 requirementsSummary.value = rr.ok ? await rr.json() : null;
             }
+            window.crmScheduleTableColumnResize?.();
         });
         onBeforeUnmount(() => {
             document.removeEventListener('click', handleDocumentClick);
