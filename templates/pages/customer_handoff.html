@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+{% block title %}销售-交付交接 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    .handoff-step-active { border-color: #0969da; color: #0969da; background: #eff6ff; }
+    .handoff-approval-bar {
+        position: sticky; bottom: 0; z-index: 30;
+        background: rgba(255,255,255,0.96);
+        backdrop-filter: blur(8px);
+        border-top: 1px solid #e5e7eb;
+        box-shadow: 0 -4px 20px rgba(15,23,42,0.06);
+    }
+</style>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="handoff-app" class="pb-24">
+    <div class="container mx-auto p-6 max-w-[1280px] space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <a href="/customers" class="text-sm text-[#0969da] hover:underline">← 客户列表</a>
+                <h1 class="mt-1 text-2xl font-bold text-gray-900">{{ clientName }} · 销售交接</h1>
+                <p v-if="handoff" class="text-sm text-gray-500 mt-1">
+                    v{{ handoff.version }} ·
+                    <span :class="statusBadge(handoff.status)" class="px-2 py-0.5 rounded text-xs">{{ handoff.status_label }}</span>
+                    · 完整度 {{ handoff.completeness.score }}%
+                </p>
+            </div>
+            <div class="flex gap-2 flex-wrap">
+                <select v-if="handoffs.length" v-model="selectedId" @change="loadHandoff" class="border rounded px-2 py-1 text-sm">
+                    <option v-for="h in handoffs" :key="h.id" :value="h.id">v{{ h.version }} · {{ h.status_label }}</option>
+                </select>
+                <button v-if="canCreate" type="button" @click="createHandoff" class="border border-[#0969da] text-[#0969da] px-3 py-1.5 rounded text-sm hover:bg-blue-50">+ 新版本</button>
+            </div>
+        </div>
+
+        <div v-if="!handoff && !loading" class="bg-white border rounded-lg p-8 text-center">
+            <p class="text-gray-500 mb-4">尚未创建销售-交付交接单</p>
+            <button type="button" @click="createHandoff" class="bg-[#0969da] text-white px-4 py-2 rounded">创建交接单</button>
+        </div>
+
+        <div v-if="handoff" class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <div class="xl:col-span-2 space-y-4">
+                <!-- 步骤导航 -->
+                <div class="flex flex-wrap gap-2">
+                    <button v-for="(s,i) in steps" :key="s" type="button" @click="step=i"
+                        :class="step===i?'handoff-step-active':''"
+                        class="px-3 py-1.5 rounded-full border text-sm">{{ i+1 }}. {{ s }}</button>
+                </div>
+
+                <!-- Step 0: 上下文 + 原文 -->
+                <div v-show="step===0" class="bg-white border rounded-lg p-5 space-y-4">
+                    <h3 class="font-bold border-l-4 border-[#0969da] pl-2">项目上下文</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label class="text-sm">项目类型
+                            <select v-model="form.requirement.context.project_type" :disabled="!editable" class="w-full mt-1 border rounded p-2">
+                                <option value="">请选择</option>
+                                <option v-for="o in spec.enums.project_type" :key="o" :value="o">{{ o }}</option>
+                            </select>
+                        </label>
+                        <label class="text-sm">办公地点
+                            <input v-model="form.requirement.context.location" :disabled="!editable" class="w-full mt-1 border rounded p-2">
+                        </label>
+                        <label class="text-sm">时区
+                            <input v-model="form.requirement.context.timezone" :disabled="!editable" class="w-full mt-1 border rounded p-2" placeholder="UTC+8">
+                        </label>
+                        <label class="text-sm">客户接口人
+                            <input v-model="form.requirement.context.client_contact" :disabled="!editable" class="w-full mt-1 border rounded p-2">
+                        </label>
+                    </div>
+                    <label class="text-sm block">考勤/加班规则
+                        <textarea v-model="form.requirement.context.attendance_rules" :disabled="!editable" rows="2" class="w-full mt-1 border rounded p-2"></textarea>
+                    </label>
+                    <div class="border-t pt-4">
+                        <h4 class="font-semibold text-sm mb-2">原始材料（会议纪要/聊天记录）</h4>
+                        <textarea v-model="form.source_text" :disabled="!editable" rows="5" class="w-full border rounded p-2 text-sm" placeholder="粘贴原文，可使用 AI 自动填充下方表单…"></textarea>
+                        <button v-if="editable" type="button" @click="aiParse" :disabled="aiLoading" class="mt-2 text-sm bg-violet-50 text-violet-700 border border-violet-200 px-3 py-1.5 rounded">
+                            {{ aiLoading ? '解析中…' : '✨ AI 从原文填充' }}
+                        </button>
+                        <p v-if="!config.llm_available" class="text-xs text-amber-600 mt-1">LLM 未配置（CRM_LLM_PROVIDER=null），可手动填写。</p>
+                    </div>
+                </div>
+
+                <!-- Step 1: 技术栈 -->
+                <div v-show="step===1" class="bg-white border rounded-lg p-5 space-y-4">
+                    <h3 class="font-bold border-l-4 border-[#0969da] pl-2">技术栈画像</h3>
+                    <label class="text-sm block">主语言/框架（逗号分隔）
+                        <input :value="langsStr" @input="setLangs" :disabled="!editable" class="w-full mt-1 border rounded p-2" placeholder="Java/Spring, Vue3">
+                    </label>
+                    <label class="text-sm block">中间件（逗号分隔）
+                        <input :value="mwStr" @input="setMw" :disabled="!editable" class="w-full mt-1 border rounded p-2" placeholder="Redis, K8s">
+                    </label>
+                    <label class="text-sm block">版本约束
+                        <input v-model="form.requirement.tech_stack.version_constraints" :disabled="!editable" class="w-full mt-1 border rounded p-2" placeholder="JDK 17, Spring Boot 3.x">
+                    </label>
+                    <label class="text-sm block">环境隔离要求
+                        <textarea v-model="form.requirement.tech_stack.env_requirements" :disabled="!editable" rows="2" class="w-full mt-1 border rounded p-2"></textarea>
+                    </label>
+                </div>
+
+                <!-- Step 2: 岗位矩阵 -->
+                <div v-show="step===2" class="bg-white border rounded-lg p-5 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="font-bold border-l-4 border-[#0969da] pl-2">岗位编制矩阵</h3>
+                        <button v-if="editable" type="button" @click="addPosition" class="text-sm text-[#0969da]">+ 添加岗位</button>
+                    </div>
+                    <div v-for="(p, idx) in form.requirement.positions" :key="idx" class="border rounded p-3 space-y-2 bg-gray-50/50">
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            <input v-model="p.role" :disabled="!editable" placeholder="岗位" class="border rounded p-2 text-sm">
+                            <select v-model="p.level" :disabled="!editable" class="border rounded p-2 text-sm">
+                                <option value="">级别</option>
+                                <option v-for="lv in spec.enums.position_level" :key="lv" :value="lv">{{ lv }}</option>
+                            </select>
+                            <input v-model.number="p.headcount" :disabled="!editable" type="number" min="1" placeholder="编制" class="border rounded p-2 text-sm">
+                            <select v-model="p.billing_unit" :disabled="!editable" class="border rounded p-2 text-sm">
+                                <option v-for="u in spec.enums.billing_unit" :key="u" :value="u">{{ u }}</option>
+                            </select>
+                            <input v-model="p.start_date" :disabled="!editable" type="date" class="border rounded p-2 text-sm">
+                            <button v-if="editable" type="button" @click="removePosition(idx)" class="text-red-600 text-sm">删除</button>
+                        </div>
+                        <input v-model="p.skills" :disabled="!editable" placeholder="技能硬要求" class="w-full border rounded p-2 text-sm">
+                    </div>
+                    <label class="flex items-center gap-2 text-sm">
+                        <input type="checkbox" v-model="form.requirement.urgent" :disabled="!editable">
+                        加急（90 天内到岗）
+                    </label>
+                </div>
+
+                <!-- Step 3: 交付约束 + 商务 -->
+                <div v-show="step===3" class="bg-white border rounded-lg p-5 space-y-4">
+                    <h3 class="font-bold border-l-4 border-orange-500 pl-2">交付约束</h3>
+                    <textarea v-model="form.requirement.delivery_constraints.sla" :disabled="!editable" rows="2" class="w-full border rounded p-2 text-sm" placeholder="SLA / 替换人员时限"></textarea>
+                    <textarea v-model="form.requirement.delivery_constraints.acceptance" :disabled="!editable" rows="2" class="w-full border rounded p-2 text-sm" placeholder="验收标准"></textarea>
+                    <textarea v-model="form.requirement.delivery_constraints.compliance" :disabled="!editable" rows="2" class="w-full border rounded p-2 text-sm" placeholder="合规/保密/设备"></textarea>
+                    <textarea v-model="form.requirement.delivery_constraints.risk_notes" :disabled="!editable" rows="2" class="w-full border rounded p-2 text-sm" placeholder="风险自评"></textarea>
+                    <h3 class="font-bold border-l-4 border-green-600 pl-2 pt-2">商务前置</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input v-model="form.requirement.commercial.quote_ref" :disabled="!editable" placeholder="报价单编号" class="border rounded p-2 text-sm">
+                        <input v-model="form.requirement.commercial.estimated_amount" :disabled="!editable" placeholder="预计合同金额" class="border rounded p-2 text-sm">
+                        <select v-model="form.requirement.commercial.payment_cycle" :disabled="!editable" class="border rounded p-2 text-sm">
+                            <option value="">付款周期</option>
+                            <option v-for="pc in spec.enums.payment_cycle" :key="pc" :value="pc">{{ pc }}</option>
+                        </select>
+                    </div>
+                    <label class="flex items-center gap-2 text-sm"><input type="checkbox" v-model="form.requirement.commercial.has_po" :disabled="!editable"> 已有 PO</label>
+                    <label class="flex items-center gap-2 text-sm"><input type="checkbox" v-model="form.requirement.commercial.has_framework" :disabled="!editable"> 已有框架合同</label>
+                </div>
+
+                <div v-if="editable" class="flex gap-2">
+                    <button type="button" @click="saveDraft" class="bg-gray-100 px-4 py-2 rounded text-sm">保存草稿</button>
+                    <button type="button" @click="submitHandoff" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm">提交交付负责人审批</button>
+                </div>
+            </div>
+
+            <!-- 右栏：完整度 + AI 辅助 -->
+            <div class="space-y-4">
+                <div class="bg-white border rounded-lg p-4">
+                    <h3 class="font-bold text-sm mb-3">需求完整度</h3>
+                    <div class="text-3xl font-bold text-[#0969da]">{{ handoff.completeness.score }}%</div>
+                    <ul class="mt-3 text-sm space-y-1">
+                        <li v-for="m in handoff.completeness.missing" :key="m.field" class="text-red-600">✗ {{ m.label }}</li>
+                        <li v-if="!handoff.completeness.missing.length" class="text-green-600">✓ 必填项已齐全</li>
+                    </ul>
+                </div>
+
+                <div v-if="config.is_reviewer && handoff.status==='pending_review'" class="bg-white border rounded-lg p-4">
+                    <h3 class="font-bold text-sm mb-2">AI 审批辅助</h3>
+                    <p class="text-xs text-gray-500 mb-2">仅供参考，审批责任在人。</p>
+                    <button type="button" @click="aiReviewAssist" :disabled="aiLoading" class="text-sm w-full border border-violet-200 text-violet-700 py-2 rounded bg-violet-50">
+                        {{ aiLoading ? '生成中…' : '生成启动需求书 & 缺失项' }}
+                    </button>
+                    <div v-if="aiBrief" class="mt-3 prose prose-sm max-w-none">
+                        <pre class="whitespace-pre-wrap text-xs bg-gray-50 p-2 rounded max-h-48 overflow-y-auto">{{ aiBrief }}</pre>
+                    </div>
+                    <ul v-if="aiGaps.length" class="mt-2 text-xs space-y-1">
+                        <li v-for="(g,i) in aiGaps" :key="i" :class="g.severity==='high'?'text-red-600':'text-amber-600'">
+                            {{ g.suggestion || g.field }}
+                        </li>
+                    </ul>
+                    <button v-if="aiGaps.length" type="button" @click="adoptReject" class="mt-2 text-xs text-red-600 underline">采纳为驳回说明</button>
+                </div>
+
+                <div v-if="handoff.status==='approved'" class="bg-green-50 border border-green-200 rounded-lg p-4 text-sm">
+                    <p class="font-semibold text-green-800">交接已通过</p>
+                    <button type="button" @click="syncPipeline" class="mt-2 text-[#0969da] underline text-xs">同步需求到管道洞察</button>
+                    <a :href="`/delivery/pipeline/${clientId}`" class="block mt-1 text-[#0969da] underline text-xs">进入管道数据 →</a>
+                    <a href="/contracts" class="block mt-1 text-[#0969da] underline text-xs">查看合同与里程碑 →</a>
+                </div>
+
+                <div v-if="handoff.reject_detail" class="bg-red-50 border border-red-200 rounded-lg p-4 text-sm">
+                    <p class="font-semibold text-red-800">驳回：{{ handoff.reject_reason_label }}</p>
+                    <p class="mt-1 text-red-700">{{ handoff.reject_detail }}</p>
+                </div>
+
+                <div class="bg-white border rounded-lg p-4">
+                    <h3 class="font-bold text-sm mb-3">审批历史</h3>
+                    <div class="text-xs space-y-2 max-h-64 overflow-y-auto">
+                        <div v-for="lg in logs" :key="lg.id" class="border-l-2 border-gray-200 pl-2">
+                            <p class="text-gray-400">{{ lg.created_at }} · {{ lg.operator }}</p>
+                            <p>{{ lg.action }} <span v-if="lg.detail">— {{ lg.detail }}</span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 审批底栏 -->
+    <div v-if="handoff && canReview" class="handoff-approval-bar">
+        <div class="container mx-auto max-w-[1280px] px-6 py-3 flex justify-end gap-3">
+            <button type="button" @click="showReject=true" class="px-5 py-2 rounded border border-red-300 text-red-600 hover:bg-red-50">驳回</button>
+            <button type="button" @click="approveHandoff" class="px-5 py-2 rounded bg-[#0969da] text-white hover:bg-blue-700">一键通过</button>
+        </div>
+    </div>
+
+    <!-- 驳回弹窗 -->
+    <div v-if="showReject" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h3 class="font-bold mb-4">驳回交接单</h3>
+            <select v-model="rejectForm.code" class="w-full border rounded p-2 mb-3">
+                <option v-for="r in config.reject_codes" :key="r.code" :value="r.code">{{ r.label }}</option>
+            </select>
+            <textarea v-model="rejectForm.detail" rows="4" class="w-full border rounded p-2 text-sm" placeholder="具体原因与修改建议…"></textarea>
+            <div class="flex gap-2 mt-4">
+                <button type="button" @click="showReject=false" class="flex-1 bg-gray-100 py-2 rounded">取消</button>
+                <button type="button" @click="confirmReject" class="flex-1 bg-red-600 text-white py-2 rounded">确认驳回</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+<script>
+window.__CRM_HANDOFF__ = { clientId: {{ client_id }}, handoffId: {% if handoff_id is not none %}{{ handoff_id }}{% else %}null{% endif %} };
+</script>
+{% endblock %}
+{% block page_scripts %}
+<script src="/static/js/customer_handoff.js"></script>
+{% endblock %}

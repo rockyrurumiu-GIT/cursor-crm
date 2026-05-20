@@ -25,15 +25,58 @@
             </svg>
         </div>
     </div>
+    <div class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl">
+        <a href="/customers/reviews" class="block bg-amber-50 border border-amber-200 rounded-lg p-4 hover:border-amber-300">
+            <p class="text-xs text-amber-800 font-medium uppercase tracking-wide">待审交接</p>
+            <p class="text-2xl font-bold text-amber-900 mt-1">{{ stats.handoff?.pending_review ?? 0 }}</p>
+        </a>
+        <a href="/customers?handoff_status=rejected" class="block bg-red-50 border border-red-200 rounded-lg p-4 hover:border-red-300">
+            <p class="text-xs text-red-800 font-medium uppercase tracking-wide">已驳回</p>
+            <p class="text-2xl font-bold text-red-900 mt-1">{{ stats.handoff?.rejected ?? 0 }}</p>
+        </a>
+        <a href="/customers?handoff_status=approved" class="block bg-green-50 border border-green-200 rounded-lg p-4 hover:border-green-300">
+            <p class="text-xs text-green-800 font-medium uppercase tracking-wide">已通过</p>
+            <p class="text-2xl font-bold text-green-900 mt-1">{{ stats.handoff?.approved ?? 0 }}</p>
+        </a>
+    </div>
+    <div id="goals" class="mt-8 max-w-3xl">
+        <h2 class="text-lg font-bold text-gray-900 mb-3">目标概览</h2>
+        <p class="text-sm text-gray-500 mb-4">季度/个人/团队目标已合并至漏斗看板；详细 OKR 模块 Phase 2 扩展。</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="bg-white border rounded-lg p-4 shadow-sm">
+                <p class="text-xs text-gray-500">交接通过率</p>
+                <p class="text-xl font-bold text-[#0969da] mt-1">{{ approvalRate }}%</p>
+            </div>
+            <div class="bg-white border rounded-lg p-4 shadow-sm">
+                <p class="text-xs text-gray-500">未读通知</p>
+                <p class="text-xl font-bold text-gray-900 mt-1">{{ stats.notifications_unread ?? 0 }}</p>
+            </div>
+            <a href="/opportunity/leads" class="bg-white border rounded-lg p-4 shadow-sm hover:border-[#0969da] block">
+                <p class="text-xs text-gray-500">商机管理</p>
+                <p class="text-sm font-medium text-[#0969da] mt-2">进入商机列表 →</p>
+            </a>
+        </div>
+    </div>
 </div>
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, onMounted } = Vue;
+const { createApp, ref, computed, onMounted } = Vue;
 createApp({
     setup() {
-        const stats = ref({ funnel: { '初步接触': 0, '方案/报价': 0, '合同签订': 0, '成交': 0 }, trash: { count: 0, size: '0MB' } });
+        const stats = ref({
+            funnel: { '初步接触': 0, '方案/报价': 0, '合同签订': 0, '成交': 0 },
+            trash: { count: 0, size: '0MB' },
+            handoff: { pending_review: 0, rejected: 0, approved: 0 },
+            notifications_unread: 0,
+        });
+        const approvalRate = computed(() => {
+            const h = stats.value.handoff || {};
+            const total = (h.approved || 0) + (h.rejected || 0);
+            if (!total) return 0;
+            return Math.round(100 * (h.approved || 0) / total);
+        });
         const loadStats = () => {
             fetch('/api/stats', { headers: window.crmAuthHeader() }).then(r => r.json()).then(d => { stats.value = d; });
         };
@@ -41,7 +84,7 @@ createApp({
             window.location.href = '/customers?phase=' + encodeURIComponent(p);
         };
         onMounted(loadStats);
-        return { stats, goPhase };
+        return { stats, approvalRate, goPhase };
     }
 }).mount('#page-app');
 </script>

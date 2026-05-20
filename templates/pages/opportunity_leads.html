@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}商机 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="opp-app" class="container mx-auto p-6 max-w-[1280px] space-y-4">
+    <div class="flex flex-wrap justify-between gap-3 items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">商机管理</h1>
+            <p class="text-sm text-gray-500 mt-1">赢单后可一键发起销售-交付交接。</p>
+        </div>
+        <button type="button" @click="showForm=true" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm">+ 新建商机</button>
+    </div>
+    <div class="bg-white border rounded-lg overflow-hidden">
+        <table class="crm-table w-full">
+            <thead>
+                <tr>
+                    <th class="crm-th">商机名称</th>
+                    <th class="crm-th">客户</th>
+                    <th class="crm-th">金额</th>
+                    <th class="crm-th">阶段</th>
+                    <th class="crm-th">负责人</th>
+                    <th class="crm-th">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="o in items" :key="o.id">
+                    <td class="crm-td">{{ o.name }}</td>
+                    <td class="crm-td">{{ o.client_name }}</td>
+                    <td class="crm-td">{{ o.amount || '—' }}</td>
+                    <td class="crm-td"><span class="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-800">{{ o.stage_label }}</span></td>
+                    <td class="crm-td">{{ o.owner }}</td>
+                    <td class="crm-td space-x-2">
+                        <button type="button" @click="edit(o)" class="text-[#0969da] text-sm">编辑</button>
+                        <button v-if="o.stage==='won'" type="button" @click="createHandoff(o)" class="text-green-700 text-sm">发起交接</button>
+                    </td>
+                </tr>
+                <tr v-if="!items.length"><td colspan="6" class="crm-td text-center text-gray-400 py-8">暂无商机</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div v-if="showForm" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-3">
+            <h3 class="font-bold">{{ form.id ? '编辑商机' : '新建商机' }}</h3>
+            <input v-model.number="form.client_id" type="number" placeholder="客户 ID" class="w-full border rounded p-2 text-sm">
+            <input v-model="form.name" placeholder="商机名称" class="w-full border rounded p-2 text-sm">
+            <input v-model="form.amount" placeholder="预计金额" class="w-full border rounded p-2 text-sm">
+            <select v-model="form.stage" class="w-full border rounded p-2 text-sm">
+                <option value="qualifying">需求确认</option>
+                <option value="proposal">方案/报价</option>
+                <option value="negotiating">商务谈判</option>
+                <option value="won">赢单</option>
+                <option value="lost">输单</option>
+            </select>
+            <input v-model="form.owner" placeholder="负责人" class="w-full border rounded p-2 text-sm">
+            <div class="flex gap-2 pt-2">
+                <button type="button" @click="showForm=false" class="flex-1 bg-gray-100 py-2 rounded">取消</button>
+                <button type="button" @click="save" class="flex-1 bg-[#0969da] text-white py-2 rounded">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+    setup() {
+        const items = ref([]);
+        const showForm = ref(false);
+        const form = ref({ id: null, client_id: '', name: '', amount: '', stage: 'qualifying', owner: '' });
+        const auth = () => window.crmAuthHeader();
+        const load = async () => {
+            const r = await fetch('/api/opportunities', { headers: auth() });
+            items.value = r.ok ? await r.json() : [];
+        };
+        const edit = (o) => { form.value = { ...o }; showForm.value = true; };
+        const save = async () => {
+            const body = { client_id: form.value.client_id, name: form.value.name, amount: form.value.amount || '', stage: form.value.stage, owner: form.value.owner || '', probability: '', expected_close_date: '', remarks: '' };
+            const url = form.value.id ? `/api/opportunities/${form.value.id}` : '/api/opportunities';
+            const r = await fetch(url, { method: form.value.id ? 'PUT' : 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (r.ok) { showForm.value = false; await load(); } else alert((await r.json()).detail || '保存失败');
+        };
+        const createHandoff = async (o) => {
+            const r = await fetch(`/api/opportunities/${o.id}/create-handoff`, { method: 'POST', headers: auth() });
+            const d = await r.json();
+            if (r.ok) window.location.href = d.url; else alert(d.detail || '失败');
+        };
+        onMounted(load);
+        return { items, showForm, form, edit, save, createHandoff };
+    },
+}).mount('#opp-app');
+</script>
+{% endblock %}

@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}客户拜访 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    .visit-table th.visit-th {
+        padding: 0.5rem 0.65rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: #fff;
+        background: #2f75b5;
+        border: 1px solid #1f5a94;
+        white-space: nowrap;
+        text-align: center;
+        vertical-align: middle;
+    }
+    .visit-table th.visit-th-group {
+        background: #1f5a94;
+        font-size: 0.72rem;
+        letter-spacing: 0.02em;
+    }
+    .visit-table th.visit-th-group.plan { color: #ffcccc; }
+    .visit-table td.visit-td {
+        padding: 0.5rem 0.6rem;
+        font-size: 0.8rem;
+        border: 1px solid #d0d7de;
+        vertical-align: top;
+        max-width: 200px;
+        word-break: break-word;
+    }
+    .visit-table tbody tr:nth-child(even) td.visit-td { background: #f6f8fa; }
+    .visit-table tbody tr:hover td.visit-td { background: #eef6ff; }
+    .visit-cell-clip { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .visit-cell-clip:hover { white-space: normal; overflow: visible; }
+</style>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="visits-app" class="container mx-auto p-4 md:p-6 max-w-[100%] space-y-4">
+    <div class="flex flex-wrap justify-between gap-3 items-start">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">客户拜访记录</h1>
+            <p class="text-sm text-gray-500 mt-1">销售个人周拜访计划与完成情况 · 可按销售、区域、客户筛选</p>
+        </div>
+        <button type="button" @click="openCreate" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm shrink-0">+ 新增拜访记录</button>
+    </div>
+
+    <div class="bg-white border rounded-lg p-4 flex flex-wrap gap-3 items-end">
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">按销售查看</label>
+            <select v-model="filterSales" @change="load" class="border rounded px-2 py-1.5 text-sm min-w-[140px]">
+                <option value="">全部销售</option>
+                <option v-for="s in filters.salespeople" :key="s" :value="s">{{ s }}</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">按区域查看</label>
+            <select v-model="filterRegion" @change="load" class="border rounded px-2 py-1.5 text-sm min-w-[140px]">
+                <option value="">全部区域</option>
+                <option v-for="r in filters.regions" :key="r" :value="r">{{ r }}</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">按客户查看</label>
+            <select v-model="filterClientId" @change="load" class="border rounded px-2 py-1.5 text-sm min-w-[180px]">
+                <option value="">全部客户</option>
+                <option v-for="c in filters.clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+        </div>
+        <button type="button" @click="clearFilters" class="text-sm text-[#0969da] hover:underline py-1.5">清除筛选</button>
+        <span class="text-xs text-gray-400 ml-auto">共 {{ items.length }} 条</span>
+    </div>
+
+    <div class="bg-white border rounded-lg overflow-x-auto">
+        <table class="visit-table w-full min-w-[1600px] border-collapse">
+            <thead>
+                <tr>
+                    <th class="visit-th visit-th-group" rowspan="2">时间</th>
+                    <th class="visit-th visit-th-group" rowspan="2">区域</th>
+                    <th class="visit-th visit-th-group" rowspan="2">销售</th>
+                    <th class="visit-th visit-th-group plan" colspan="6">本周拜访计划</th>
+                    <th class="visit-th visit-th-group" colspan="7">拜访计划完成情况</th>
+                    <th class="visit-th visit-th-group" rowspan="2">操作</th>
+                </tr>
+                <tr>
+                    <th class="visit-th">客户名称</th>
+                    <th class="visit-th">计划拜访时间</th>
+                    <th class="visit-th">拜访方式</th>
+                    <th class="visit-th">拜访目的</th>
+                    <th class="visit-th">拜访对象</th>
+                    <th class="visit-th">我方随行人员</th>
+                    <th class="visit-th">是否完成拜访</th>
+                    <th class="visit-th">完成拜访时间</th>
+                    <th class="visit-th">拜访时长（分）</th>
+                    <th class="visit-th">拜访效率/目的是否达成</th>
+                    <th class="visit-th">拜访纪要（重要拜访摘要形成）</th>
+                    <th class="visit-th">拜访纪要</th>
+                    <th class="visit-th">下一步行动</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="row in items" :key="row.id">
+                    <td class="visit-td">{{ row.week_period || '—' }}</td>
+                    <td class="visit-td">{{ row.region || '—' }}</td>
+                    <td class="visit-td">{{ row.salesperson || '—' }}</td>
+                    <td class="visit-td font-medium text-[#0969da]">{{ row.client_name || '—' }}</td>
+                    <td class="visit-td">{{ row.planned_time || '—' }}</td>
+                    <td class="visit-td">{{ row.way || '—' }}</td>
+                    <td class="visit-td"><div class="visit-cell-clip" :title="row.visit_purpose">{{ row.visit_purpose || '—' }}</div></td>
+                    <td class="visit-td">{{ row.target || '—' }}</td>
+                    <td class="visit-td">{{ row.accompanying || '—' }}</td>
+                    <td class="visit-td">{{ row.completed || '—' }}</td>
+                    <td class="visit-td">{{ row.completion_time || '—' }}</td>
+                    <td class="visit-td">{{ row.duration_minutes || '—' }}</td>
+                    <td class="visit-td">{{ row.result || '—' }}</td>
+                    <td class="visit-td">{{ row.summary_formed || '—' }}</td>
+                    <td class="visit-td"><div class="visit-cell-clip" :title="row.visit_summary">{{ row.visit_summary || '—' }}</div></td>
+                    <td class="visit-td"><div class="visit-cell-clip" :title="row.next_plan">{{ row.next_plan || '—' }}</div></td>
+                    <td class="visit-td whitespace-nowrap">
+                        <button type="button" @click="openDetail(row)" class="text-[#0969da] text-xs mr-2">详情</button>
+                        <button type="button" @click="openEdit(row)" class="text-[#0969da] text-xs mr-2">修改</button>
+                        <button type="button" @click="remove(row)" class="text-red-600 text-xs">删除</button>
+                    </td>
+                </tr>
+                <tr v-if="!items.length">
+                    <td colspan="17" class="visit-td text-center text-gray-400 py-12">暂无拜访记录，点击「新增拜访记录」添加</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div v-if="detailRow" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="detailRow=null">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+            <h3 class="text-lg font-bold mb-4">拜访记录详情</h3>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <template v-for="f in detailFields" :key="f.key">
+                    <dt class="text-gray-500">{{ f.label }}</dt>
+                    <dd class="text-gray-900 mb-2 sm:mb-0">{{ detailRow[f.key] || '—' }}</dd>
+                </template>
+            </dl>
+            <button type="button" @click="detailRow=null" class="mt-4 w-full bg-gray-100 py-2 rounded">关闭</button>
+        </div>
+    </div>
+
+    <div v-if="showForm" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showForm=false">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+            <h3 class="font-bold text-lg mb-4">{{ form.id ? '修改拜访记录' : '新增拜访记录' }}</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div class="sm:col-span-2">
+                    <label class="text-xs text-gray-500">客户 *</label>
+                    <select v-model.number="form.client_id" class="w-full border rounded p-2">
+                        <option :value="0" disabled>请选择客户</option>
+                        <option v-for="c in filters.clients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    </select>
+                </div>
+                <div><label class="text-xs text-gray-500">时间（周）</label><input v-model="form.week_period" placeholder="如 2026.4.13-4.19" class="w-full border rounded p-2"></div>
+                <div><label class="text-xs text-gray-500">区域</label><input v-model="form.region" class="w-full border rounded p-2"></div>
+                <div><label class="text-xs text-gray-500">销售</label><input v-model="form.salesperson" class="w-full border rounded p-2"></div>
+                <div><label class="text-xs text-gray-500">计划拜访时间</label><input v-model="form.planned_time" placeholder="周一/周二…" class="w-full border rounded p-2"></div>
+                <div><label class="text-xs text-gray-500">拜访方式</label><input v-model="form.way" placeholder="电话/上门…" class="w-full border rounded p-2"></div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">拜访目的</label><textarea v-model="form.visit_purpose" rows="2" class="w-full border rounded p-2"></textarea></div>
+                <div><label class="text-xs text-gray-500">拜访对象</label><input v-model="form.target" class="w-full border rounded p-2"></div>
+                <div><label class="text-xs text-gray-500">我方随行人员</label><input v-model="form.accompanying" class="w-full border rounded p-2"></div>
+                <div><label class="text-xs text-gray-500">是否完成拜访</label>
+                    <select v-model="form.completed" class="w-full border rounded p-2"><option value="">—</option><option value="是">是</option><option value="否">否</option></select>
+                </div>
+                <div><label class="text-xs text-gray-500">完成拜访时间</label><input v-model="form.completion_time" class="w-full border rounded p-2"></div>
+                <div><label class="text-xs text-gray-500">拜访时长（分）</label><input v-model="form.duration_minutes" class="w-full border rounded p-2"></div>
+                <div><label class="text-xs text-gray-500">拜访效率/目的是否达成</label>
+                    <select v-model="form.result" class="w-full border rounded p-2"><option value="">—</option><option value="是">是</option><option value="否">否</option></select>
+                </div>
+                <div><label class="text-xs text-gray-500">拜访纪要（重要拜访摘要形成）</label>
+                    <select v-model="form.summary_formed" class="w-full border rounded p-2"><option value="">—</option><option value="是">是</option><option value="否">否</option></select>
+                </div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">拜访纪要</label><textarea v-model="form.visit_summary" rows="3" class="w-full border rounded p-2"></textarea></div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">下一步行动</label><textarea v-model="form.next_plan" rows="2" class="w-full border rounded p-2"></textarea></div>
+            </div>
+            <div class="flex gap-2 mt-4">
+                <button type="button" @click="showForm=false" class="flex-1 bg-gray-100 py-2 rounded">取消</button>
+                <button type="button" @click="save" class="flex-1 bg-[#0969da] text-white py-2 rounded">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script src="/static/js/customer_visits.js"></script>
+{% endblock %}

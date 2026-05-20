@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}联系人 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="contacts-app" class="container mx-auto p-6 max-w-[1280px] space-y-4">
+    <div class="flex flex-wrap justify-between gap-3 items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">联系人</h1>
+            <p class="text-sm text-gray-500 mt-1">关联客户接口人，可在交接单中引用。</p>
+        </div>
+        <button type="button" @click="openNew" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm">+ 新增联系人</button>
+    </div>
+    <div class="bg-white border rounded-lg overflow-hidden">
+        <table class="crm-table w-full">
+            <thead>
+                <tr>
+                    <th class="crm-th">姓名</th>
+                    <th class="crm-th">客户</th>
+                    <th class="crm-th">职位</th>
+                    <th class="crm-th">电话</th>
+                    <th class="crm-th">邮箱</th>
+                    <th class="crm-th">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="c in items" :key="c.id">
+                    <td class="crm-td">{{ c.name }}</td>
+                    <td class="crm-td"><a :href="`/customers/${c.client_id}/handoff`" class="text-[#0969da]">{{ c.client_name }}</a></td>
+                    <td class="crm-td">{{ c.title || '—' }}</td>
+                    <td class="crm-td">{{ c.phone || '—' }}</td>
+                    <td class="crm-td">{{ c.email || '—' }}</td>
+                    <td class="crm-td"><button type="button" @click="remove(c)" class="text-red-600 text-sm">删除</button></td>
+                </tr>
+                <tr v-if="!items.length"><td colspan="6" class="crm-td text-center text-gray-400 py-8">暂无联系人</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div v-if="showForm" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 space-y-3">
+            <h3 class="font-bold">新增联系人</h3>
+            <input v-model.number="form.client_id" type="number" placeholder="客户 ID" class="w-full border rounded p-2 text-sm">
+            <input v-model="form.name" placeholder="姓名" class="w-full border rounded p-2 text-sm">
+            <input v-model="form.title" placeholder="职位" class="w-full border rounded p-2 text-sm">
+            <input v-model="form.phone" placeholder="电话" class="w-full border rounded p-2 text-sm">
+            <input v-model="form.email" placeholder="邮箱" class="w-full border rounded p-2 text-sm">
+            <div class="flex gap-2 pt-2">
+                <button type="button" @click="showForm=false" class="flex-1 bg-gray-100 py-2 rounded">取消</button>
+                <button type="button" @click="save" class="flex-1 bg-[#0969da] text-white py-2 rounded">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+    setup() {
+        const items = ref([]);
+        const showForm = ref(false);
+        const form = ref({ client_id: '', name: '', title: '', phone: '', email: '' });
+        const auth = () => window.crmAuthHeader();
+        const load = async () => {
+            const r = await fetch('/api/contacts', { headers: auth() });
+            items.value = r.ok ? await r.json() : [];
+        };
+        const openNew = () => { form.value = { client_id: '', name: '', title: '', phone: '', email: '' }; showForm.value = true; };
+        const save = async () => {
+            const r = await fetch('/api/contacts', { method: 'POST', headers: { ...auth(), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form.value, tags: '', remarks: '' }) });
+            if (r.ok) { showForm.value = false; await load(); } else alert((await r.json()).detail || '失败');
+        };
+        const remove = async (c) => {
+            if (!confirm('删除联系人？')) return;
+            await fetch(`/api/contacts/${c.id}`, { method: 'DELETE', headers: auth() });
+            await load();
+        };
+        onMounted(load);
+        return { items, showForm, form, openNew, save, remove };
+    },
+}).mount('#contacts-app');
+</script>
+{% endblock %}

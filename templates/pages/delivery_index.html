@@ -134,6 +134,10 @@
                 <h1 class="mt-2 text-2xl font-bold text-gray-900">{{ moduleTitle }} · 客户列表</h1>
             </div>
         </div>
+        <div v-if="gateBannerCount" class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {{ gateBannerCount }} 个客户尚未通过销售-交付交接审批。仍可进入交付模块，但建议先完成
+            <a href="/delivery/handoff-pending" class="text-[#0969da] underline font-medium">项目待审</a>。
+        </div>
         <section class="delivery-client-gallery" aria-label="客户卡片列表">
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-6">
                 <a
@@ -159,6 +163,9 @@
                             <span class="delivery-client-card__meta-k">开拓阶段</span>
                             <span>{{ c.phase || '—' }}</span>
                         </div>
+                        <div v-if="!isHandoffApproved(c.id)" class="delivery-client-card__meta-row mt-2 text-amber-700 text-xs font-medium">
+                            ⚠ 交接未通过：{{ handoffLabel(c.id) }}
+                        </div>
                     </div>
                     <span class="delivery-client-card__cta">
                         进入{{ moduleTitle }}
@@ -178,18 +185,25 @@ window.__DELIVERY_MODULE_TITLE__ = "{{ module_title }}";
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, onMounted } = Vue;
+const { createApp, ref, computed, onMounted } = Vue;
 createApp({
     setup() {
         const clients = ref([]);
+        const handoffMap = ref({});
         const moduleKey = window.__DELIVERY_MODULE_KEY__;
         const moduleTitle = window.__DELIVERY_MODULE_TITLE__;
         const loadClients = async () => {
             const r = await fetch('/api/clients', { headers: window.crmAuthHeader() });
             clients.value = r.ok ? await r.json() : [];
+            const hr = await fetch('/api/clients/handoff-summary', { headers: window.crmAuthHeader() });
+            const hd = hr.ok ? await hr.json() : {};
+            handoffMap.value = hd && !hd.detail ? hd : {};
         };
+        const isHandoffApproved = (cid) => handoffMap.value[String(cid)] && handoffMap.value[String(cid)].status === 'approved';
+        const handoffLabel = (cid) => (handoffMap.value[String(cid)] && handoffMap.value[String(cid)].status_label) || '未提交';
+        const gateBannerCount = computed(() => clients.value.filter(c => !isHandoffApproved(c.id)).length);
         onMounted(loadClients);
-        return { clients, moduleKey, moduleTitle };
+        return { clients, handoffMap, moduleKey, moduleTitle, isHandoffApproved, handoffLabel, gateBannerCount };
     }
 }).mount('#delivery-index-app');
 </script>

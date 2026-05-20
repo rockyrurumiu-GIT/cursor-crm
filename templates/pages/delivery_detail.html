@@ -1254,6 +1254,30 @@
                 </div>
             </div>
         </div>
+        <div v-else-if="moduleKey === 'requirements'" class="mt-4 space-y-4">
+            <div v-if="!requirementsSummary || !requirementsSummary.approved" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                该客户尚无<strong>已通过</strong>的销售-交付交接单。
+                <a :href="`/customers/${clientId}/handoff`" class="text-[#0969da] underline ml-1">前往填写交接 →</a>
+            </div>
+            <div v-else class="space-y-4">
+                <div class="rounded-lg border border-green-200 bg-green-50 p-4">
+                    <p class="font-semibold text-green-900">{{ requirementsSummary.title }}</p>
+                    <p class="text-xs text-green-800 mt-1">审批通过：{{ requirementsSummary.approved_at || '—' }}</p>
+                </div>
+                <div v-if="requirementsSummary.brief_md" class="border rounded-lg p-4 bg-white">
+                    <h3 class="font-bold text-sm mb-2">项目启动前置需求书</h3>
+                    <pre class="whitespace-pre-wrap text-xs text-gray-700 max-h-96 overflow-y-auto">{{ requirementsSummary.brief_md }}</pre>
+                </div>
+                <div class="border rounded-lg p-4 bg-white text-sm">
+                    <h3 class="font-bold mb-2">岗位编制矩阵</h3>
+                    <ul class="space-y-1">
+                        <li v-for="(p,i) in (requirementsSummary.requirement?.positions||[])" :key="i">
+                            {{ p.role }} · {{ p.level }} × {{ p.headcount }} · 到岗 {{ p.start_date }}
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
         <p v-else class="text-gray-600 mt-2">当前为该客户的{{ moduleTitle }}页面占位，可在此接入该模块的业务表单、列表与图表。</p>
     </div>
 
@@ -2229,6 +2253,7 @@ createApp({
         const moduleTitle = window.__DELIVERY_MODULE_TITLE__;
         const clientId = window.__DELIVERY_CLIENT_ID__;
         const clientName = ref(`客户#${clientId}`);
+        const requirementsSummary = ref(null);
         const returnToInsight = ref(false);
         const pipelineRows = ref([]);
         const checkedPipelineRowIds = reactive({});
@@ -4265,6 +4290,10 @@ createApp({
                 window.crmOpenHandbookSource = openHandbookSource;
                 await openHandbookSourceFromUrl();
             }
+            if (moduleKey === 'requirements') {
+                const rr = await fetch(`/api/clients/${clientId}/approved-handoff-summary`, { headers: window.crmAuthHeader() });
+                requirementsSummary.value = rr.ok ? await rr.json() : null;
+            }
         });
         onBeforeUnmount(() => {
             document.removeEventListener('click', handleDocumentClick);
@@ -4277,7 +4306,7 @@ createApp({
             destroyHandbookPlyr();
         });
         return {
-            moduleKey, moduleTitle, clientId, clientName,
+            moduleKey, moduleTitle, clientId, clientName, requirementsSummary,
             pipelineRows, pipelineFilter, pipelineDateOptions, pipelineSelectOptions, filteredPipelineRows, resetPipelineFilter,
             resumeScreeningDropdownOpen, resumeScreeningFilterRef, resumeScreeningSummary,
             pipelineFilterPeriodPickerRef, pipelineFilterPeriodDropdownOpen, pipelineFilterPeriodHoverMonth,

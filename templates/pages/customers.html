@@ -13,7 +13,18 @@
                 <span v-if="filterPhase" class="bg-blue-100 text-blue-700 px-2 py-1 rounded text-sm">
                     筛选: {{ filterPhase }} <button type="button" @click="clearPhase" class="ml-1 text-red-500">×</button>
                 </span>
+                <span v-if="filterHandoff" class="bg-amber-100 text-amber-800 px-2 py-1 rounded text-sm">
+                    交接: {{ handoffFilterLabel }} <button type="button" @click="clearHandoffFilter" class="ml-1 text-red-500">×</button>
+                </span>
+                <select v-model="filterHandoffQuick" @change="applyHandoffFilter" class="border rounded px-2 py-1 text-sm">
+                    <option value="">交接状态</option>
+                    <option value="pending_review">待审</option>
+                    <option value="approved">已通过</option>
+                    <option value="rejected">已驳回</option>
+                    <option value="none">未提交</option>
+                </select>
                 <a href="/customers/new" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ 新增客户</a>
+                <a href="/customers/reviews" class="border border-amber-500 text-amber-700 px-4 py-2 rounded hover:bg-amber-50 text-sm">待审交接</a>
                 <button type="button" @click="exportCSV" class="border border-blue-600 text-blue-600 px-4 py-2 rounded hover:bg-blue-50">导出全量名单 (CSV)</button>
             </div>
         </div>
@@ -26,6 +37,7 @@
                         <th class="crm-th">销售负责人</th>
                         <th class="crm-th">外包规模</th>
                         <th class="crm-th">开拓阶段</th>
+                        <th class="crm-th">交接状态</th>
                         <th class="crm-th">操作</th>
                     </tr>
                 </thead>
@@ -37,8 +49,13 @@
                         <td class="crm-td">
                             <span :class="phaseColor(c.phase)" class="px-2 py-1 rounded text-xs">{{ c.phase }}</span>
                         </td>
+                        <td class="crm-td">
+                            <span v-if="handoffEntry(c.id)" :class="handoffBadge(handoffEntry(c.id).status)" class="px-2 py-1 rounded text-xs">{{ handoffEntry(c.id).status_label }}</span>
+                            <span v-else class="text-gray-400 text-xs">未提交</span>
+                        </td>
                         <td class="crm-td space-x-3">
                             <button type="button" @click="openDetail(c)" class="text-blue-600 text-sm">详情/记录</button>
+                            <a :href="`/customers/${c.id}/handoff`" class="text-[#0969da] text-sm">交接</a>
                             <a :href="`/customers/${c.id}/edit`" class="text-amber-600 text-sm">修改</a>
                             <button type="button" @click="confirmDelete(c)" class="text-red-600 text-sm">删除</button>
                         </td>
@@ -77,6 +94,10 @@
                     </div>
                 </div>
                 <div class="space-y-6">
+                    <div>
+                        <h4 class="font-bold border-l-4 border-[#0969da] pl-2 mb-4">销售-交付交接</h4>
+                        <a :href="`/customers/${selectedClient.id}/handoff`" class="inline-block text-sm bg-blue-50 text-[#0969da] px-3 py-2 rounded border border-blue-100">打开交接工作台 →</a>
+                    </div>
                     <div>
                         <h4 class="font-bold border-l-4 border-orange-500 pl-2 mb-4">备注与折算记录</h4>
                         <textarea v-model="selectedClient.remarks" class="w-full h-32 p-2 border rounded text-sm bg-yellow-50" placeholder="点击保存按钮同步修改..."></textarea>
@@ -132,13 +153,18 @@
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, onMounted } = Vue;
+const { createApp, ref, computed, onMounted } = Vue;
 
 createApp({
     setup() {
         const params = new URLSearchParams(window.location.search);
         const clients = ref([]);
+        const handoffMap = ref({});
         const filterPhase = ref(params.get('phase') || '');
+        const filterHandoff = ref(params.get('handoff_status') || '');
+        const filterHandoffQuick = ref(params.get('handoff_status') || '');
+        const handoffFilterLabels = { pending_review: '待审', approved: '已通过', rejected: '已驳回', none: '未提交' };
+        const handoffFilterLabel = computed(() => handoffFilterLabels[filterHandoff.value] || filterHandoff.value);
         const showDetail = ref(false);
         const showAddVisit = ref(false);
         const showDelete = ref(false);
@@ -157,11 +183,40 @@ createApp({
         const authHeader = () => window.crmAuthHeader();
 
         const loadClients = () => {
-            const url = filterPhase.value
-                ? `/api/clients?phase=${encodeURIComponent(filterPhase.value)}`
-                : '/api/clients';
+            let url = '/api/clients';
+            const qs = [];
+            if (filterPhase.value) qs.push('phase=' + encodeURIComponent(filterPhase.value));
+            if (filterHandoff.value) qs.push('handoff_status=' + encodeURIComponent(filterHandoff.value));
+            if (qs.length) url += '?' + qs.join('&');
             fetch(url, { headers: authHeader() }).then(r => r.json()).then(d => { clients.value = d; });
+            fetch('/api/clients/handoff-summary', { headers: authHeader() })
+                .then((r) => (r.ok ? r.json() : {}))
+                .then((d) => { handoffMap.value = d && !d.detail ? d : {}; });
         };
+
+        const applyHandoffFilter = () => {
+            filterHandoff.value = filterHandoffQuick.value;
+            const qs = new URLSearchParams();
+            if (filterPhase.value) qs.set('phase', filterPhase.value);
+            if (filterHandoff.value) qs.set('handoff_status', filterHandoff.value);
+            window.history.replaceState({}, '', qs.toString() ? '/customers?' + qs : '/customers');
+            loadClients();
+        };
+
+        const clearHandoffFilter = () => {
+            filterHandoff.value = '';
+            filterHandoffQuick.value = '';
+            applyHandoffFilter();
+        };
+
+        const handoffEntry = (cid) => handoffMap.value[String(cid)] || null;
+
+        const handoffBadge = (s) => ({
+            draft: 'bg-gray-100 text-gray-700',
+            pending_review: 'bg-amber-100 text-amber-800',
+            rejected: 'bg-red-100 text-red-800',
+            approved: 'bg-green-100 text-green-800',
+        }[s] || 'bg-gray-100');
 
         const clearPhase = () => {
             filterPhase.value = '';
@@ -244,9 +299,10 @@ createApp({
         onMounted(loadClients);
 
         return {
-            clients, filterPhase, showDetail, showAddVisit, showDelete, selectedClient, details,
+            clients, handoffMap, filterPhase, filterHandoff, filterHandoffQuick, handoffFilterLabel,
+            showDetail, showAddVisit, showDelete, selectedClient, details,
             deleteCaptcha, deleteInput, visitForm, onVisitFileChange,
-            loadClients, clearPhase, phaseColor, openDetail, updateClient, confirmDelete, executeDelete,
+            loadClients, clearPhase, applyHandoffFilter, clearHandoffFilter, phaseColor, handoffEntry, handoffBadge, openDetail, updateClient, confirmDelete, executeDelete,
             submitVisit, exportCSV, isImage, viewFull, formatDate
         };
     }

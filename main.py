@@ -151,14 +151,27 @@ class VisitRecord(Base):
     __tablename__ = "visits"
     id = Column(Integer, primary_key=True)
     client_id = Column(Integer, ForeignKey("clients.id"))
-    date = Column(String)
-    location = Column(String)
-    way = Column(String)
-    target = Column(String)
-    content = Column(Text)
-    result = Column(Text)
-    next_plan = Column(Text)
+    date = Column(String, default="")
+    location = Column(String, default="")
+    way = Column(String, default="")
+    target = Column(String, default="")
+    content = Column(Text, default="")
+    result = Column(Text, default="")
+    next_plan = Column(Text, default="")
     attachment = Column(String, nullable=True)
+    week_period = Column(String, default="")
+    region = Column(String, default="")
+    salesperson = Column(String, default="")
+    planned_time = Column(String, default="")
+    visit_purpose = Column(Text, default="")
+    accompanying = Column(String, default="")
+    completed = Column(String, default="")
+    completion_time = Column(String, default="")
+    duration_minutes = Column(String, default="")
+    summary_formed = Column(String, default="")
+    visit_summary = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
 
 
 class AuditLog(Base):
@@ -167,6 +180,113 @@ class AuditLog(Base):
     client_id = Column(Integer)
     operator = Column(String)
     action = Column(Text)
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class HandoffRequest(Base):
+    """销售-交付交接单"""
+    __tablename__ = "handoff_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    opportunity_id = Column(Integer, nullable=True, index=True)
+    version = Column(Integer, default=1)
+    title = Column(String, default="")
+    status = Column(String, default="draft", index=True)
+    sales_owner = Column(String, default="")
+    delivery_owner = Column(String, default="")
+    source_text = Column(Text, default="")
+    requirement_json = Column(Text, default="{}")
+    ai_parsed_json = Column(Text, default="")
+    ai_brief_md = Column(Text, default="")
+    ai_gap_flags = Column(Text, default="[]")
+    ai_status = Column(String, default="")
+    reject_reason_code = Column(String, default="")
+    reject_detail = Column(Text, default="")
+    reviewer = Column(String, default="")
+    reviewed_at = Column(DateTime, nullable=True)
+    submitted_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now)
+
+
+class HandoffReviewLog(Base):
+    __tablename__ = "handoff_review_logs"
+    id = Column(Integer, primary_key=True)
+    handoff_id = Column(Integer, ForeignKey("handoff_requests.id"), index=True)
+    client_id = Column(Integer, index=True)
+    operator = Column(String)
+    action = Column(String)
+    detail = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class CrmNotification(Base):
+    __tablename__ = "crm_notifications"
+    id = Column(Integer, primary_key=True)
+    username = Column(String, index=True)
+    ntype = Column(String)
+    handoff_id = Column(Integer, nullable=True)
+    client_id = Column(Integer, nullable=True)
+    message = Column(Text)
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class Contact(Base):
+    __tablename__ = "contacts"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    name = Column(String, default="")
+    title = Column(String, default="")
+    phone = Column(String, default="")
+    email = Column(String, default="")
+    tags = Column(String, default="")
+    remarks = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class Opportunity(Base):
+    __tablename__ = "opportunities"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    name = Column(String, default="")
+    amount = Column(String, default="")
+    probability = Column(String, default="")
+    expected_close_date = Column(String, default="")
+    stage = Column(String, default="qualifying", index=True)
+    owner = Column(String, default="")
+    remarks = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class Contract(Base):
+    __tablename__ = "contracts"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    handoff_id = Column(Integer, nullable=True, index=True)
+    opportunity_id = Column(Integer, nullable=True, index=True)
+    contract_no = Column(String, default="")
+    contract_type = Column(String, default="")
+    title = Column(String, default="")
+    total_amount = Column(String, default="")
+    start_date = Column(String, default="")
+    end_date = Column(String, default="")
+    status = Column(String, default="draft", index=True)
+    sow_markdown = Column(Text, default="")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class ContractMilestone(Base):
+    __tablename__ = "contract_milestones"
+    id = Column(Integer, primary_key=True, index=True)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), index=True)
+    name = Column(String, default="")
+    deliverable = Column(Text, default="")
+    invoice_pct = Column(String, default="")
+    planned_date = Column(String, default="")
+    amount = Column(String, default="")
+    status = Column(String, default="pending")
+    settlement_entry_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -858,10 +978,53 @@ def _ensure_handbook_fts_schema():
         )
 
 
+def _ensure_handoff_phase2_schema_compat():
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(handoff_requests)").fetchall()}
+        except Exception:
+            existing = set()
+        if existing and "opportunity_id" not in existing:
+            conn.exec_driver_sql("ALTER TABLE handoff_requests ADD COLUMN opportunity_id INTEGER")
+
+
+def _ensure_visits_schema_compat():
+    """补齐客户拜访周计划字段，兼容旧库 visits 表。"""
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(visits)").fetchall()}
+        except Exception:
+            return
+        add_cols = {
+            "way": "TEXT DEFAULT ''",
+            "target": "TEXT DEFAULT ''",
+            "result": "TEXT DEFAULT ''",
+            "next_plan": "TEXT DEFAULT ''",
+            "week_period": "TEXT DEFAULT ''",
+            "region": "TEXT DEFAULT ''",
+            "salesperson": "TEXT DEFAULT ''",
+            "planned_time": "TEXT DEFAULT ''",
+            "visit_purpose": "TEXT DEFAULT ''",
+            "accompanying": "TEXT DEFAULT ''",
+            "completed": "TEXT DEFAULT ''",
+            "completion_time": "TEXT DEFAULT ''",
+            "duration_minutes": "TEXT DEFAULT ''",
+            "summary_formed": "TEXT DEFAULT ''",
+            "visit_summary": "TEXT DEFAULT ''",
+            "created_at": "TEXT DEFAULT ''",
+            "updated_at": "TEXT DEFAULT ''",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE visits ADD COLUMN {col} {ddl}")
+
+
 _ensure_roster_schema_compat()
 _ensure_interview_schema_compat()
 _ensure_handbook_schema_compat()
 _ensure_handbook_fts_schema()
+_ensure_handoff_phase2_schema_compat()
+_ensure_visits_schema_compat()
 HANDBOOK_SEARCH_BODY_MAX = 2_000_000
 HANDBOOK_SEARCH_SNIPPET_LIST = 780
 HANDBOOK_SEARCH_SNIPPET_MODAL = min(32_000, HANDBOOK_SEARCH_BODY_MAX)
@@ -2755,15 +2918,64 @@ async def get_stats(db: Session = Depends(get_db), user: str = Depends(authentic
             trash_count += 1
             trash_size += os.path.getsize(fp)
 
-    return {"funnel": stats, "trash": {"count": trash_count, "size": f"{trash_size/1024/1024:.2f} MB"}}
+    handoff_pending = db.query(HandoffRequest).filter(HandoffRequest.status == "pending_review").count()
+    handoff_rejected = db.query(HandoffRequest).filter(HandoffRequest.status == "rejected").count()
+    handoff_approved = db.query(HandoffRequest).filter(HandoffRequest.status == "approved").count()
+    notifications_unread = (
+        db.query(CrmNotification)
+        .filter(CrmNotification.username == user, CrmNotification.read_at.is_(None))
+        .count()
+    )
+
+    return {
+        "funnel": stats,
+        "trash": {"count": trash_count, "size": f"{trash_size/1024/1024:.2f} MB"},
+        "handoff": {
+            "pending_review": handoff_pending,
+            "rejected": handoff_rejected,
+            "approved": handoff_approved,
+        },
+        "notifications_unread": notifications_unread,
+    }
 
 
 @app.get("/api/clients")
-async def list_clients(phase: Optional[str] = None, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def list_clients(
+    phase: Optional[str] = None,
+    handoff_status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    user: str = Depends(authenticate),
+):
     query = db.query(Client)
     if phase:
         query = query.filter(Client.phase == phase)
-    return query.order_by(desc(Client.created_at)).all()
+    clients = query.order_by(desc(Client.created_at)).all()
+    if not handoff_status:
+        return clients
+    hs = handoff_status.strip()
+    out = []
+    for c in clients:
+        latest = (
+            db.query(HandoffRequest)
+            .filter(HandoffRequest.client_id == c.id, HandoffRequest.status != "superseded")
+            .order_by(desc(HandoffRequest.version), desc(HandoffRequest.id))
+            .first()
+        )
+        cur = latest.status if latest else "none"
+        if hs == "none" and not latest:
+            out.append(c)
+        elif latest and cur == hs:
+            out.append(c)
+    return out
+
+
+@app.get("/api/clients/handoff-summary")
+async def clients_handoff_summary(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    """须在 /api/clients/{client_id} 之前注册，避免 handoff-summary 被当成 client_id。"""
+    from handoff_core import build_clients_handoff_summary
+
+    rows = db.query(HandoffRequest).filter(HandoffRequest.status != "superseded").all()
+    return build_clients_handoff_summary(rows)
 
 
 @app.post("/api/clients")
@@ -6165,6 +6377,51 @@ def _page(template: str, request: Request, **ctx):
     return TEMPLATES.TemplateResponse(request, template, ctx)
 
 
+from handoff_routes import register_handoff_routes
+from phase2_routes import register_phase2_routes
+from visit_routes import register_visit_routes
+
+register_handoff_routes(
+    app,
+    get_db=get_db,
+    authenticate=authenticate,
+    authenticate_admin=authenticate_admin,
+    effective_admin_username=_effective_admin_username,
+    page_renderer=_page,
+    Client=Client,
+    HandoffRequest=HandoffRequest,
+    HandoffReviewLog=HandoffReviewLog,
+    CrmNotification=CrmNotification,
+    VisitRecord=VisitRecord,
+    DeliveryPipelineInsightDemand=DeliveryPipelineInsightDemand,
+    Contract=Contract,
+    ContractMilestone=ContractMilestone,
+)
+
+register_phase2_routes(
+    app,
+    get_db=get_db,
+    authenticate=authenticate,
+    page_renderer=_page,
+    Client=Client,
+    Contact=Contact,
+    Opportunity=Opportunity,
+    Contract=Contract,
+    ContractMilestone=ContractMilestone,
+    HandoffRequest=HandoffRequest,
+    DeliverySettlementEntry=DeliverySettlementEntry,
+)
+
+register_visit_routes(
+    app,
+    get_db=get_db,
+    authenticate=authenticate,
+    page_renderer=_page,
+    Client=Client,
+    VisitRecord=VisitRecord,
+)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return RedirectResponse(url="/home", status_code=302)
@@ -6208,105 +6465,6 @@ async def page_roster_index(request: Request):
 @app.get("/customers/roster/{client_id}", response_class=HTMLResponse)
 async def page_roster_detail(request: Request, client_id: int):
     return _page("pages/roster_detail.html", request, client_id=client_id)
-
-
-@app.get("/opportunity/leads", response_class=HTMLResponse)
-async def page_opp_leads(request: Request):
-    return _page(
-        "pages/placeholder.html",
-        request,
-        title="销售线索",
-        subtitle="线索池、跟进与转化（可在此接入列表与看板）。",
-        section_label="商机",
-    )
-
-
-@app.get("/opportunity/pool", response_class=HTMLResponse)
-async def page_opp_pool(request: Request):
-    return _page(
-        "pages/placeholder.html",
-        request,
-        title="销售公海池",
-        subtitle="公海领取规则与回收（可在此接入公海列表）。",
-        section_label="商机",
-    )
-
-
-@app.get("/opportunity/dashboard", response_class=HTMLResponse)
-async def page_opp_dash(request: Request):
-    return _page(
-        "pages/placeholder.html",
-        request,
-        title="商机仪表盘",
-        subtitle="阶段分布、赢率与预测（可在此接入图表）。",
-        section_label="商机",
-    )
-
-
-@app.get("/goals/quarter", response_class=HTMLResponse)
-async def page_goal_quarter(request: Request):
-    return _page(
-        "pages/placeholder.html",
-        request,
-        title="季度目标",
-        subtitle="团队/个人季度 OKR 与完成率。",
-        section_label="目标",
-    )
-
-
-@app.get("/goals/personal", response_class=HTMLResponse)
-async def page_goal_personal(request: Request):
-    return _page(
-        "pages/placeholder.html",
-        request,
-        title="个人指标",
-        subtitle="个人配额与达成进度。",
-        section_label="目标",
-    )
-
-
-@app.get("/goals/team", response_class=HTMLResponse)
-async def page_goal_team(request: Request):
-    return _page(
-        "pages/placeholder.html",
-        request,
-        title="团队看板",
-        subtitle="团队排名与对比。",
-        section_label="目标",
-    )
-
-
-@app.get("/contacts/all", response_class=HTMLResponse)
-async def page_contacts_all(request: Request):
-    return _page(
-        "pages/placeholder.html",
-        request,
-        title="全部联系人",
-        subtitle="统一联系人库与关联客户。",
-        section_label="联系人",
-    )
-
-
-@app.get("/contacts/tags", response_class=HTMLResponse)
-async def page_contacts_tags(request: Request):
-    return _page(
-        "pages/placeholder.html",
-        request,
-        title="分组与标签",
-        subtitle="标签体系与智能分组。",
-        section_label="联系人",
-    )
-
-
-@app.get("/contacts/import", response_class=HTMLResponse)
-async def page_contacts_import(request: Request):
-    return _page(
-        "pages/placeholder.html",
-        request,
-        title="导入与导出",
-        subtitle="批量导入、导出与去重。",
-        section_label="联系人",
-    )
 
 
 DELIVERY_MODULES = {

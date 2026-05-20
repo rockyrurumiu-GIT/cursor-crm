@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}合同 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="contracts-app" class="container mx-auto p-6 max-w-[1280px] space-y-4">
+    <h1 class="text-2xl font-bold text-gray-900">合同与里程碑</h1>
+    <p class="text-sm text-gray-500">交接审批通过后自动生成 SOW 草稿；里程碑可预置结算回款行。</p>
+    <div class="bg-white border rounded-lg overflow-hidden">
+        <table class="crm-table w-full">
+            <thead>
+                <tr>
+                    <th class="crm-th">合同号</th>
+                    <th class="crm-th">客户</th>
+                    <th class="crm-th">标题</th>
+                    <th class="crm-th">金额</th>
+                    <th class="crm-th">状态</th>
+                    <th class="crm-th">里程碑</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="c in items" :key="c.id">
+                    <td class="crm-td">{{ c.contract_no }}</td>
+                    <td class="crm-td">{{ c.client_name }}</td>
+                    <td class="crm-td">{{ c.title }}</td>
+                    <td class="crm-td">{{ c.total_amount || '—' }}</td>
+                    <td class="crm-td">{{ c.status_label }}</td>
+                    <td class="crm-td">
+                        <div v-for="m in c.milestones" :key="m.id" class="text-xs mb-1">
+                            {{ m.name }}
+                            <button v-if="!m.settlement_entry_id" type="button" @click="seed(c,m)" class="text-[#0969da] ml-1">预置结算</button>
+                            <span v-else class="text-green-600 ml-1">已预置</span>
+                        </div>
+                    </td>
+                </tr>
+                <tr v-if="!items.length"><td colspan="6" class="crm-td text-center text-gray-400 py-8">暂无合同（需先通过交接审批）</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+    setup() {
+        const items = ref([]);
+        const auth = () => window.crmAuthHeader();
+        const load = async () => {
+            const r = await fetch('/api/contracts', { headers: auth() });
+            items.value = r.ok ? await r.json() : [];
+        };
+        const seed = async (c, m) => {
+            const r = await fetch(`/api/contracts/${c.id}/milestones/${m.id}/seed-settlement`, { method: 'POST', headers: auth() });
+            if (r.ok) await load(); else alert((await r.json()).detail || '失败');
+        };
+        onMounted(load);
+        return { items, seed };
+    },
+}).mount('#contracts-app');
+</script>
+{% endblock %}

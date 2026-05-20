@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}项目待审 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="delivery-pending-app" class="container mx-auto p-6 max-w-[1280px] space-y-4">
+    <div>
+        <a href="/delivery/requirements" class="text-sm text-[#0969da] hover:underline">← 交付模块</a>
+        <h1 class="mt-1 text-2xl font-bold text-gray-900">项目待审</h1>
+        <p class="text-sm text-gray-500 mt-1">销售交接（销售-交付交接）待您审批的项目；仅显示指派给您或您有权限审核的待审单。</p>
+    </div>
+    <div v-if="loadError" class="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-4">{{ loadError }}</div>
+    <div v-if="!loading && !items.length" class="bg-white border rounded-lg p-12 text-center text-gray-400">暂无与您相关的待审交接单</div>
+    <div v-else-if="items.length" class="bg-white border rounded-lg overflow-hidden">
+        <table class="crm-table w-full">
+            <thead>
+                <tr>
+                    <th class="crm-th">客户</th>
+                    <th class="crm-th">交接标题</th>
+                    <th class="crm-th">销售</th>
+                    <th class="crm-th">交付负责人</th>
+                    <th class="crm-th">完整度</th>
+                    <th class="crm-th">提交时间</th>
+                    <th class="crm-th">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="h in items" :key="h.id">
+                    <td class="crm-td font-medium text-[#0969da]">{{ h.client_name }}</td>
+                    <td class="crm-td">v{{ h.version }} · {{ h.title }}</td>
+                    <td class="crm-td">{{ h.sales_owner || '—' }}</td>
+                    <td class="crm-td">{{ h.delivery_owner || '—' }}</td>
+                    <td class="crm-td">{{ h.completeness.score }}%</td>
+                    <td class="crm-td text-sm text-gray-500">{{ formatTime(h.submitted_at) }}</td>
+                    <td class="crm-td">
+                        <a :href="`/customers/${h.client_id}/handoff/${h.id}`" class="text-[#0969da] text-sm font-medium">审核 →</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <div v-if="loading" class="text-center text-gray-400 py-8 text-sm">加载中…</div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+    setup() {
+        const items = ref([]);
+        const loading = ref(true);
+        const loadError = ref('');
+        const formatTime = (iso) => {
+            if (!iso) return '—';
+            try {
+                const d = new Date(iso);
+                return d.toLocaleString('zh-CN', { hour12: false });
+            } catch { return iso; }
+        };
+        onMounted(async () => {
+            loading.value = true;
+            loadError.value = '';
+            const r = await fetch('/api/delivery/handoffs/pending', { headers: window.crmAuthHeader() });
+            if (r.ok) {
+                items.value = await r.json();
+            } else {
+                const d = await r.json().catch(() => ({}));
+                loadError.value = d.detail || '加载失败';
+                items.value = [];
+            }
+            loading.value = false;
+        });
+        return { items, loading, loadError, formatTime };
+    },
+}).mount('#delivery-pending-app');
+</script>
+{% endblock %}

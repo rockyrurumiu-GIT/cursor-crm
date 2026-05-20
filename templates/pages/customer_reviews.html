@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}待审交接 · ITO CRM V8{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="reviews-app" class="container mx-auto p-6 max-w-[1280px] space-y-4">
+    <div>
+        <a href="/customers" class="text-sm text-[#0969da] hover:underline">← 客户列表</a>
+        <h1 class="mt-1 text-2xl font-bold text-gray-900">待审交接队列</h1>
+        <p class="text-sm text-gray-500 mt-1">交付负责人一键审核或驳回销售提交的交接单。</p>
+    </div>
+    <div v-if="!items.length" class="bg-white border rounded-lg p-12 text-center text-gray-400">暂无待审交接单</div>
+    <div v-else class="bg-white border rounded-lg overflow-hidden">
+        <table class="crm-table w-full">
+            <thead>
+                <tr>
+                    <th class="crm-th">客户</th>
+                    <th class="crm-th">交接标题</th>
+                    <th class="crm-th">销售</th>
+                    <th class="crm-th">完整度</th>
+                    <th class="crm-th">提交时间</th>
+                    <th class="crm-th">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="h in items" :key="h.id">
+                    <td class="crm-td">{{ h.client_name }}</td>
+                    <td class="crm-td">v{{ h.version }} · {{ h.title }}</td>
+                    <td class="crm-td">{{ h.sales_owner }}</td>
+                    <td class="crm-td">{{ h.completeness.score }}%</td>
+                    <td class="crm-td text-sm text-gray-500">{{ h.submitted_at || '—' }}</td>
+                    <td class="crm-td">
+                        <a :href="`/customers/${h.client_id}/handoff/${h.id}`" class="text-[#0969da] text-sm font-medium">审核 →</a>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+    setup() {
+        const items = ref([]);
+        onMounted(async () => {
+            const r = await fetch('/api/handoffs/pending', { headers: window.crmAuthHeader() });
+            items.value = r.ok ? await r.json() : [];
+        });
+        return { items };
+    },
+}).mount('#reviews-app');
+</script>
+{% endblock %}
