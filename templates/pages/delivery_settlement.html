@@ -46,6 +46,13 @@
         --settlement-sticky-date-width: 11rem;
         --settlement-sticky-customer-width: 7.5rem;
     }
+    .crm-table.settlement-table .crm-th,
+    .crm-table.settlement-table .crm-td {
+        white-space: nowrap;
+    }
+    .crm-table.settlement-table .crm-currency-cell {
+        min-width: 6.5rem;
+    }
     /* 列宽由 colgroup + 拖拽脚本同步的 CSS 变量控制，勿写死 min/max 以免拖宽后出现空白 */
     .settlement-sticky-serial,
     .settlement-sticky-date,

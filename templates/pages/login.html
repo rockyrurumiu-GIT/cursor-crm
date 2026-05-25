@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}登录 · ITO CRM{% endblock %}
+{% block content %}{% endblock %}
+{% block page_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var overlay = document.getElementById('login-overlay');
+    var shell = document.getElementById('main-shell');
+    if (overlay) { overlay.classList.remove('hidden'); }
+    if (shell) { shell.classList.add('hidden'); }
+    var params = new URLSearchParams(window.location.search || '');
+    var next = params.get('next') || '/home';
+    if (next && next.charAt(0) === '/' && next.indexOf('//') !== 0) {
+        window.__crm_login_next = next;
+    }
+});
+</script>
+{% endblock %}

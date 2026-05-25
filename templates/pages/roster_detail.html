@@ -7,9 +7,8 @@
     .roster-table col.crm-col-op,
     .roster-table th.crm-sticky-right-op,
     .roster-table td.crm-sticky-right-op {
-        width: var(--crm-op-col-width, 5.75rem) !important;
-        min-width: var(--crm-op-col-width, 5.75rem) !important;
-        max-width: var(--crm-op-col-width, 5.75rem) !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
     }
     /* 打卡等长文本：省略显示，悬停展开（与客户拜访 crm-cell-clip 一致） */
     .roster-table td.roster-col-checkin {

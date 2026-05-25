@@ -26,6 +26,27 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel, Field
 
+import security_foundation as sec
+from auth import deps as auth_deps
+from auth import data_scope as ds
+from auth import service as auth_service
+from auth.data_scope_catalog import (
+    RESOURCE_CRM_CLIENT,
+    RESOURCE_CRM_OPPORTUNITY,
+    RESOURCE_CRM_CONTACT,
+    RESOURCE_CRM_VISIT,
+    RESOURCE_DELIVERY_HANDBOOK,
+    RESOURCE_DELIVERY_HANDOFF,
+    RESOURCE_DELIVERY_INTERVIEWS,
+    RESOURCE_DELIVERY_PIPELINE,
+    RESOURCE_DELIVERY_ROSTER,
+    RESOURCE_DELIVERY_SETTLEMENT,
+)
+from auth.deps import get_current_context
+from auth.migrate import run_all as run_schema_migrations
+from auth.routes import build_router as build_auth_router
+from auth.service import AuthContext
+
 # --- 1. 配置与初始化 ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
@@ -33,13 +54,16 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 TRASH_DIR = os.path.join(BASE_DIR, "deleted_files")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
-DB_URL = "sqlite:///./crm_v8.db"
+DB_URL = os.environ.get("CRM_DB_URL", "sqlite:///./crm_v8.db")
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
 ADMIN_USER = {
     "username": os.environ.get("CRM_ADMIN_USERNAME", "admin"),
     "password": os.environ.get("CRM_ADMIN_PASSWORD", "admin123"),
 }
-ADMIN_CREDENTIALS_STORE = os.path.join(BASE_DIR, ".crm_admin_credentials.json")
+ADMIN_CREDENTIALS_STORE = os.environ.get(
+    "CRM_ADMIN_CREDENTIALS_STORE",
+    os.path.join(BASE_DIR, ".crm_admin_credentials.json"),
+)
 ADMIN_PBKDF2_ITERATIONS = 390000
 
 
@@ -77,7 +101,7 @@ def _pbkdf2_verify(password: str, salt_b64: str, hash_b64: str, iterations: int)
 
 
 def _verify_admin_login(username: str, password: str) -> bool:
-    if username != _effective_admin_username():
+    if username.strip().lower() != _effective_admin_username().lower():
         return False
     data = _admin_credentials_store_read()
     if data:
@@ -86,6 +110,11 @@ def _verify_admin_login(username: str, password: str) -> bool:
         except (TypeError, ValueError):
             iters = ADMIN_PBKDF2_ITERATIONS
         return _pbkdf2_verify(password, data["salt_b64"], data["hash_b64"], iters)
+    if not sec.default_admin_password_allowed(
+        credentials_store_path=ADMIN_CREDENTIALS_STORE,
+        env_password=os.environ.get("CRM_ADMIN_PASSWORD", ""),
+    ):
+        return False
     return password == ADMIN_USER["password"]
 
 
@@ -140,6 +169,11 @@ class Client(Base):
     name = Column(String, unique=True)
     industry = Column(String)
     owner = Column(String)
+    owner_user_id = Column(Integer, nullable=True, index=True)
+    owner_dept_id = Column(Integer, nullable=True, index=True)
+    assigned_user_id = Column(Integer, nullable=True, index=True)
+    delivery_owner_user_id = Column(Integer, nullable=True, index=True)
+    delivery_dept_id = Column(Integer, nullable=True, index=True)
     scale = Column(String)
     phase = Column(String)  # 初步接触, 方案/报价, 合同签订, 成交
     win_rate = Column(String, default="")
@@ -178,6 +212,8 @@ class VisitRecord(Base):
     duration_minutes = Column(String, default="")
     summary_formed = Column(String, default="")
     visit_summary = Column(Text, default="")
+    owner_user_id = Column(Integer, nullable=True)
+    owner_dept_id = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now)
 
@@ -202,6 +238,7 @@ class HandoffRequest(Base):
     status = Column(String, default="draft", index=True)
     sales_owner = Column(String, default="")
     delivery_owner = Column(String, default="")
+    delivery_owner_user_id = Column(Integer, nullable=True, index=True)
     source_text = Column(Text, default="")
     requirement_json = Column(Text, default="{}")
     ai_parsed_json = Column(Text, default="")
@@ -264,6 +301,8 @@ class Opportunity(Base):
     expected_close_date = Column(String, default="")
     stage = Column(String, default="initial", index=True)
     owner = Column(String, default="")
+    owner_user_id = Column(Integer, nullable=True, index=True)
+    owner_dept_id = Column(Integer, nullable=True, index=True)
     remarks = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.now)
 
@@ -378,6 +417,7 @@ class DeliveryPipelineEntry(Base):
     phone = Column(String, default="")
     education = Column(String, default="")
     recruiter = Column(String, default="")
+    recruiter_user_id = Column(Integer, nullable=True)
     resume_screening = Column(String, default="")
     interviewed = Column(String, default="")
     interview_time = Column(String, default="")
@@ -892,6 +932,12 @@ def _safe_handbook_filename(name: str) -> str:
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base.metadata.create_all(bind=engine)
+run_schema_migrations(engine)
+auth_service.bootstrap_after_migrate(
+    engine,
+    admin_username=_effective_admin_username(),
+    admin_password=ADMIN_USER["password"],
+)
 
 
 def _ensure_interview_schema_compat():
@@ -919,6 +965,8 @@ def _ensure_interview_schema_compat():
             "followup_7d": "TEXT DEFAULT ''",
             "followup_30d": "TEXT DEFAULT ''",
             "followup_90d": "TEXT DEFAULT ''",
+            "owner_user_id": "INTEGER NULL",
+            "owner_dept_id": "INTEGER NULL",
         }
         for col, ddl in add_cols.items():
             if col not in existing:
@@ -995,6 +1043,8 @@ def _ensure_handoff_phase2_schema_compat():
             existing = set()
         if existing and "opportunity_id" not in existing:
             conn.exec_driver_sql("ALTER TABLE handoff_requests ADD COLUMN opportunity_id INTEGER")
+        if existing and "delivery_owner_user_id" not in existing:
+            conn.exec_driver_sql("ALTER TABLE handoff_requests ADD COLUMN delivery_owner_user_id INTEGER")
 
 
 def _ensure_opportunities_schema_compat():
@@ -1006,10 +1056,22 @@ def _ensure_opportunities_schema_compat():
             return
         add_cols = {
             "estimated_current_year_amount": "TEXT DEFAULT ''",
+            "owner_user_id": "INTEGER NULL",
+            "owner_dept_id": "INTEGER NULL",
         }
         for col, ddl in add_cols.items():
             if col not in existing:
                 conn.exec_driver_sql(f"ALTER TABLE opportunities ADD COLUMN {col} {ddl}")
+
+
+def _ensure_pipeline_schema_compat():
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(delivery_pipeline_entries)").fetchall()}
+        except Exception:
+            return
+        if "recruiter_user_id" not in existing:
+            conn.exec_driver_sql("ALTER TABLE delivery_pipeline_entries ADD COLUMN recruiter_user_id INTEGER")
 
 
 def _ensure_clients_schema_compat():
@@ -1027,6 +1089,11 @@ def _ensure_clients_schema_compat():
             "contact_title": "TEXT DEFAULT ''",
             "contact_relationship": "TEXT DEFAULT ''",
             "city": "TEXT DEFAULT ''",
+            "owner_user_id": "INTEGER NULL",
+            "owner_dept_id": "INTEGER NULL",
+            "assigned_user_id": "INTEGER NULL",
+            "delivery_owner_user_id": "INTEGER NULL",
+            "delivery_dept_id": "INTEGER NULL",
         }
         for col, ddl in add_cols.items():
             if col not in existing:
@@ -1080,6 +1147,7 @@ _ensure_handbook_schema_compat()
 _ensure_handbook_fts_schema()
 _ensure_handoff_phase2_schema_compat()
 _ensure_opportunities_schema_compat()
+_ensure_pipeline_schema_compat()
 _ensure_clients_schema_compat()
 _ensure_visits_schema_compat()
 HANDBOOK_SEARCH_BODY_MAX = 2_000_000
@@ -1583,8 +1651,7 @@ def _handbook_background_index_pdf(row_id: int) -> None:
 # --- 3. 后端核心逻辑 ---
 app = FastAPI(title="ITO CRM Ultimate")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-app.mount("/previews", StaticFiles(directory=UPLOAD_DIR), name="previews")
-security = HTTPBasic()
+security = HTTPBasic(auto_error=False)
 
 
 def get_db():
@@ -1595,22 +1662,144 @@ def get_db():
         db.close()
 
 
-def authenticate(credentials: HTTPBasicCredentials = Depends(security)):
-    if not _verify_admin_login(credentials.username, credentials.password):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号或密码错误")
-    return credentials.username
+def _scoped_client_query(db: Session, ctx: AuthContext, action: str = "read"):
+    allowed = ds.visible_client_ids(db, ctx, action=action)
+    q = db.query(Client)
+    if allowed is None:
+        return q
+    if not allowed:
+        return q.filter(Client.id == -1)
+    return q.filter(Client.id.in_(allowed))
 
 
-def authenticate_admin(user: str = Depends(authenticate)):
-    """跨客户手册全文检索等能力：仅管理员。当前仅 admin 账号，后续多用户时在此扩展。"""
-    if user != _effective_admin_username():
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
+def _ensure_client_access(
+    db: Session,
+    ctx: AuthContext,
+    client_id: int,
+    *,
+    resource: str = RESOURCE_CRM_CLIENT,
+    action: str = "read",
+) -> Client:
+    if resource == RESOURCE_CRM_CLIENT and action == "read":
+        ds.assert_client_visible(db, ctx, client_id, action=action)
+    else:
+        ds.assert_client_in_scope(db, ctx, client_id, resource, action)
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    return client
+
+
+auth_deps.configure_auth(
+    get_db=get_db,
+    legacy_verify=_verify_admin_login,
+    legacy_effective_username=_effective_admin_username,
+)
+app.add_middleware(
+    sec.html_auth_middleware(
+        _verify_admin_login,
+        _effective_admin_username,
+        is_authenticated=auth_deps.request_is_authenticated,
+    )
+)
+app.include_router(
+    build_auth_router(
+        get_db,
+        legacy_verify=_verify_admin_login,
+        legacy_effective_username=_effective_admin_username,
+    )
+)
+
+
+def authenticate(user: str = Depends(auth_deps.authenticate)):
     return user
+
+
+def authenticate_admin(user: str = Depends(auth_deps.authenticate_admin)):
+    return user
+
+
+def require_permission(code: str):
+    return auth_deps.require_permission(code)
 
 
 class ChangePasswordBody(BaseModel):
     current_password: str
     new_password: str = Field(..., min_length=6, max_length=256)
+
+
+@app.post("/api/auth/legacy-bootstrap")
+async def api_auth_legacy_bootstrap(
+    credentials: HTTPBasicCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Set HttpOnly cookie after login (legacy admin or rbac sys_user)."""
+    from auth.permissions import ALL_PERMISSION_CODES
+
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号或密码错误")
+    ctx = None
+    if auth_service.is_rbac_mode():
+        ctx = auth_service.verify_sys_user_password(db, credentials.username, credentials.password)
+    if not ctx and _verify_admin_login(credentials.username, credentials.password):
+        row = auth_service._fetch_user_by_username(db, credentials.username)
+        if row and row.get("status") == "active":
+            ctx = auth_service.build_auth_context(db, int(row["id"]), credentials.username)
+        else:
+            ctx = auth_service.AuthContext(
+                username=credentials.username,
+                display_name=credentials.username,
+                roles=["SUPER_ADMIN"],
+                permissions=set(ALL_PERMISSION_CODES),
+                is_super=True,
+            )
+    if not ctx:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="账号或密码错误")
+    if ctx.user_id is not None:
+        auth_service.record_login(db, ctx.user_id)
+        db.commit()
+    resp = JSONResponse({"ok": True, "user": ctx.username})
+    token = sec.make_legacy_session_token(ctx.username)
+    resp.set_cookie(
+        sec.LEGACY_COOKIE_NAME,
+        token,
+        httponly=True,
+        samesite="lax",
+        max_age=7 * 86400,
+        path="/",
+    )
+    if ctx.user_id is not None:
+        ver = auth_service._user_session_version(db, ctx.user_id)
+        session_token = auth_service.make_session_token(ctx.user_id, ctx.username, ver)
+        resp.set_cookie(
+            auth_service.SESSION_COOKIE_NAME,
+            session_token,
+            httponly=True,
+            samesite="lax",
+            max_age=auth_service.SESSION_MAX_AGE,
+            path="/",
+        )
+    return resp
+
+
+@app.post("/api/auth/logout")
+async def api_auth_logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie(sec.LEGACY_COOKIE_NAME, path="/")
+    resp.delete_cookie(auth_service.SESSION_COOKIE_NAME, path="/")
+    return resp
+
+
+@app.get("/api/files/access")
+async def api_files_access(path: str, user: str = Depends(authenticate)):
+    """Authenticated file download; replaces public /previews (phase 01)."""
+    try:
+        abs_path = sec.resolve_upload_path(UPLOAD_DIR, path)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="非法文件路径")
+    if not os.path.isfile(abs_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
+    return FileResponse(abs_path, filename=os.path.basename(abs_path))
 
 
 @app.post("/api/account/change-password")
@@ -1660,20 +1849,28 @@ def _sql_roster_employment_active_pool():
     return or_(col.is_(None), col == "", not_(col.like("%离职%")))
 
 
-def _roster_entries_union_of_all_clients(db: Session) -> List[RosterEntry]:
+def _roster_entries_union_of_all_clients(db: Session, ctx: Optional[AuthContext] = None) -> List[RosterEntry]:
     """整体花名册（在职池）：各客户已关联行，且不含离职档案。"""
-    return (
+    q = (
         db.query(RosterEntry)
         .join(Client, RosterEntry.client_id == Client.id)
         .filter(_sql_roster_employment_active_pool())
-        .order_by(RosterEntry.id)
-        .all()
     )
+    if ctx is not None:
+        q = ds.filter_query_by_client_scope(
+            q, db, ctx, RESOURCE_DELIVERY_ROSTER, "read", RosterEntry.client_id
+        )
+    return q.order_by(RosterEntry.id).all()
 
 
-def _roster_entries_turnover_pool(db: Session) -> List[RosterEntry]:
+def _roster_entries_turnover_pool(db: Session, ctx: Optional[AuthContext] = None) -> List[RosterEntry]:
     """离职率分析：全部为离职档案行（可与在职花名册并存于同一表，互不展示重叠）。"""
-    return db.query(RosterEntry).filter(_sql_roster_employment_left()).order_by(RosterEntry.id).all()
+    q = db.query(RosterEntry).filter(_sql_roster_employment_left())
+    if ctx is not None:
+        q = ds.filter_query_by_client_scope(
+            q, db, ctx, RESOURCE_DELIVERY_ROSTER, "read", RosterEntry.client_id
+        )
+    return q.order_by(RosterEntry.id).all()
 
 
 def _write_roster_backup_turnover_csv_all(rows: List[RosterEntry]) -> str:
@@ -2963,9 +3160,16 @@ def get_host_ip():
 
 
 @app.get("/api/stats")
-async def get_stats(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def get_stats(
+    db: Session = Depends(get_db),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("crm.clients.read")),
+):
     phases = ["初步接触", "方案/报价", "合同签订", "成交"]
-    stats = {p: db.query(Client).filter(Client.phase == p).count() for p in phases}
+    stats = {
+        p: _scoped_client_query(db, ctx, action="read").filter(Client.phase == p).count()
+        for p in phases
+    }
 
     trash_count = 0
     trash_size = 0
@@ -3046,11 +3250,12 @@ async def list_clients(
     phase: Optional[str] = None,
     handoff_status: Optional[str] = None,
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(auth_deps.require_permission("crm.clients.read")),
 ):
     from phase2_core import refresh_client_estimated_annual_amount
 
-    query = db.query(Client)
+    query = _scoped_client_query(db, ctx, action="read")
     if phase:
         query = query.filter(Client.phase == phase)
     clients = query.order_by(desc(Client.created_at)).all()
@@ -3079,7 +3284,9 @@ async def list_clients(
 
 
 @app.get("/api/clients/handoff-summary")
-async def clients_handoff_summary(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def clients_handoff_summary(
+    db: Session = Depends(get_db), user: str = Depends(require_permission("crm.clients.read"))
+):
     """须在 /api/clients/{client_id} 之前注册，避免 handoff-summary 被当成 client_id。"""
     from handoff_core import build_clients_handoff_summary
 
@@ -3102,8 +3309,11 @@ async def create_client(
     city: Optional[str] = Form(None),
     remarks: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("crm.clients.write")),
 ):
+    ds.assert_data_scope(ctx, RESOURCE_CRM_CLIENT, "write")
+    owner_fields = ds.default_owner_fields(ctx)
     client = Client(
         name=name,
         industry=industry,
@@ -3118,6 +3328,7 @@ async def create_client(
         contact_relationship=(contact_relationship or "").strip(),
         city=(city or "").strip(),
         remarks=(remarks or "").strip(),
+        **owner_fields,
     )
     db.add(client)
     db.commit()
@@ -3131,12 +3342,15 @@ async def create_client(
 
 
 @app.get("/api/clients/{client_id}")
-async def get_client(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def get_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("crm.clients.read")),
+):
     from phase2_core import refresh_client_estimated_annual_amount
 
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="客户不存在")
+    client = _ensure_client_access(db, ctx, client_id, action="read")
     refresh_client_estimated_annual_amount(db, client_id, Client, Opportunity)
     db.commit()
     db.refresh(client)
@@ -3159,14 +3373,13 @@ async def update_client(
     city: Optional[str] = Form(None),
     remarks: Optional[str] = Form(None),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("crm.clients.write")),
 ):
     from phase2_core import refresh_client_estimated_annual_amount
 
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="客户不存在")
-    duplicate = db.query(Client).filter(Client.name == name, Client.id != client_id).first()
+    client = _ensure_client_access(db, ctx, client_id, action="write")
+    duplicate = _scoped_client_query(db, ctx, action="write").filter(Client.name == name, Client.id != client_id).first()
     if duplicate:
         raise HTTPException(status_code=400, detail="客户名称已存在")
 
@@ -3248,10 +3461,13 @@ async def update_client(
 
 
 @app.delete("/api/clients/{client_id}")
-async def delete_client(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="客户不存在")
+async def delete_client(
+    client_id: int,
+    db: Session = Depends(get_db),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("crm.clients.write")),
+):
+    client = _ensure_client_access(db, ctx, client_id, action="write")
     client_folder = f"{client.name}_{client.id}"
     src_path = os.path.join(UPLOAD_DIR, client_folder)
     if os.path.exists(src_path):
@@ -3267,7 +3483,13 @@ async def delete_client(client_id: int, db: Session = Depends(get_db), user: str
 
 
 @app.get("/api/clients/{client_id}/details")
-async def get_details(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def get_details(
+    client_id: int,
+    db: Session = Depends(get_db),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("crm.clients.read")),
+):
+    _ensure_client_access(db, ctx, client_id, action="read")
     visits = db.query(VisitRecord).filter(VisitRecord.client_id == client_id).all()
     logs = db.query(AuditLog).filter(AuditLog.client_id == client_id).order_by(desc(AuditLog.created_at)).all()
     return {"visits": visits, "logs": logs}
@@ -3281,9 +3503,11 @@ async def add_visit(
     content: str = Form(...),
     file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("crm.visits.write")),
 ):
     client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="客户不存在")
     folder_name = f"{client.name}_{client.id}"
     target_dir = os.path.join(UPLOAD_DIR, folder_name)
     os.makedirs(target_dir, exist_ok=True)
@@ -3293,8 +3517,13 @@ async def add_visit(
         content_bytes = await file.read()
         if len(content_bytes) > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail="文件超过20MB限制")
-        file_path = f"{folder_name}/{int(time.time())}_{file.filename}"
-        with open(os.path.join(UPLOAD_DIR, file_path), "wb") as f:
+        safe_name = sec.safe_visit_attachment_name(file.filename or "")
+        file_path = f"{folder_name}/{safe_name}"
+        try:
+            abs_target = sec.resolve_upload_path(UPLOAD_DIR, file_path)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="非法文件路径")
+        with open(abs_target, "wb") as f:
             f.write(content_bytes)
 
     now = datetime.now()
@@ -3313,7 +3542,11 @@ async def add_visit(
 
 
 @app.get("/api/export/clients")
-async def export_clients(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def export_clients(
+    db: Session = Depends(get_db),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("crm.clients.read")),
+):
     from phase2_core import refresh_client_estimated_annual_amount
 
     output = io.StringIO()
@@ -3324,7 +3557,7 @@ async def export_clients(db: Session = Depends(get_db), user: str = Depends(auth
         "预估当年合作金额(万元)", "联系人姓名", "联系方式", "联系人职位", "联系人关系", "客户所在城市",
         "创建时间",
     ])
-    clients = db.query(Client).all()
+    clients = _scoped_client_query(db, ctx, action="export").all()
     for c in clients:
         refresh_client_estimated_annual_amount(db, c.id, Client, Opportunity)
     db.commit()
@@ -3349,7 +3582,9 @@ async def export_clients(db: Session = Depends(get_db), user: str = Depends(auth
 
 
 @app.get("/api/clients/{client_id}/brief")
-async def get_client_brief(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def get_client_brief(
+    client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("crm.clients.read"))
+):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -3394,7 +3629,7 @@ def _handbook_row_to_dict(r: DeliveryHandbookFile) -> Dict[str, Any]:
         "client_id": r.client_id,
         "original_filename": r.original_filename or "",
         "stored_path": sp,
-        "preview_url": f"/previews/{sp}" if sp else "",
+        "preview_url": sec.file_access_url(sp),
         "version_label": (getattr(r, "version_label", None) or "") or "",
         "status": _handbook_normalize_status(getattr(r, "status", None) or "draft"),
         "tags": _handbook_parse_json_list(getattr(r, "tags_json", None)),
@@ -3413,7 +3648,9 @@ def _handbook_row_to_dict(r: DeliveryHandbookFile) -> Dict[str, Any]:
 
 
 @app.get("/api/clients/{client_id}/delivery/handbooks")
-async def list_delivery_handbooks(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def list_delivery_handbooks(
+    client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.handbook.read"))
+):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -3437,7 +3674,7 @@ async def upload_delivery_handbooks(
     permission_departments: str = Form(default=""),
     permission_levels: str = Form(default=""),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.handbook.write")),
 ):
     if not files:
         raise HTTPException(status_code=400, detail="请选择文件")
@@ -3487,7 +3724,11 @@ async def upload_delivery_handbooks(
     saved: List[DeliveryHandbookFile] = []
     now = datetime.now()
     for stored_rel, content_bytes, raw_name, safe, mk in payloads:
-        with open(os.path.join(UPLOAD_DIR, stored_rel), "wb") as f:
+        try:
+            abs_target = sec.resolve_upload_path(UPLOAD_DIR, stored_rel)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="非法文件路径")
+        with open(abs_target, "wb") as f:
             f.write(content_bytes)
         outline_js = "[]"
         if mk == "pdf":
@@ -3530,7 +3771,7 @@ async def patch_delivery_handbook(
     background_tasks: BackgroundTasks,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.handbook.write")),
 ):
     row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
     if not row or row.client_id != client_id:
@@ -3583,7 +3824,7 @@ async def rebuild_handbook_pdf_outline(
     client_id: int,
     row_id: int,
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.handbook.write")),
 ):
     row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
     if not row or row.client_id != client_id:
@@ -3611,7 +3852,7 @@ async def get_handbook_pdf_text(
     client_id: int,
     row_id: int,
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.handbook.read")),
 ):
     row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
     if not row or row.client_id != client_id:
@@ -3636,7 +3877,7 @@ async def get_handbook_pdf_page_png(
     page: int = 1,
     q: str = "",
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.handbook.read")),
 ):
     row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
     if not row or row.client_id != client_id:
@@ -3659,7 +3900,7 @@ async def delete_delivery_handbook(
     client_id: int,
     row_id: int,
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.handbook.write")),
 ):
     row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
     if not row or row.client_id != client_id:
@@ -3685,7 +3926,7 @@ async def delivery_handbooks_search_cross_client(
     q: str,
     limit: int = 40,
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate_admin),
+    user: str = Depends(require_permission("delivery.handbook.read")),
 ):
     """跨客户检索手册：PDF 为正文+OCR；音视频/Word 为元数据+锚点文案。FTS5 + 子串回退。"""
     q_strip = (q or "").strip()
@@ -3767,7 +4008,7 @@ async def delivery_handbooks_search_cross_client(
 async def handbook_assistant_chat(
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate_admin),
+    user: str = Depends(require_permission("delivery.handbook.read")),
 ):
     """全局悬浮问答第一版：检索式回答 + 可点击来源；后续可替换为 LLM RAG。"""
     q_strip = str((body or {}).get("q") or (body or {}).get("query") or "").strip()
@@ -3882,7 +4123,7 @@ async def handbook_assistant_chat(
 @app.post("/api/delivery/handbooks/sync-fts-indexed")
 async def delivery_handbooks_sync_fts_from_body(
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate_admin),
+    user: str = Depends(require_permission("delivery.handbook.write")),
 ):
     """重写 FTS：PDF 用已索引正文；音视频/文档用元数据摘录。"""
     rows = (
@@ -3934,7 +4175,7 @@ async def delivery_handbooks_sync_fts_from_body(
 async def delivery_handbooks_reindex_stale(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate_admin),
+    user: str = Depends(require_permission("delivery.handbook.write")),
 ):
     """将未完成索引的条目重新排队（PDF 抽正文；音视频/Word 建元数据索引）。"""
     rows = (
@@ -3962,8 +4203,12 @@ async def delivery_handbooks_reindex_stale(
 
 
 @app.get("/api/roster")
-async def roster_list_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
-    rows = _roster_entries_union_of_all_clients(db)
+async def roster_list_all(
+    db: Session = Depends(get_db),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("delivery.roster.read")),
+):
+    rows = _roster_entries_union_of_all_clients(db, ctx)
     return [_roster_entry_to_dict(r) for r in rows]
 
 
@@ -3971,7 +4216,7 @@ async def roster_list_all(db: Session = Depends(get_db), user: str = Depends(aut
 async def roster_create_row_all(
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.roster.write")),
 ):
     data = _normalize_roster_payload(body if isinstance(body, dict) else {})
     missing = [k for k in ROSTER_CREATE_REQUIRED_FIELDS if not str(data.get(k, "")).strip()]
@@ -4000,7 +4245,7 @@ async def roster_create_row_all(
 
 
 @app.get("/api/clients/{client_id}/roster")
-async def roster_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.roster.read"))):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -4014,9 +4259,13 @@ async def roster_list(client_id: int, db: Session = Depends(get_db), user: str =
 
 
 @app.get("/api/roster/turnover")
-async def roster_turnover_list(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_turnover_list(
+    db: Session = Depends(get_db),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("delivery.roster.read")),
+):
     """离职率分析专用列表（仅 employment 含「离职」的行）。"""
-    rows = _roster_entries_turnover_pool(db)
+    rows = _roster_entries_turnover_pool(db, ctx)
     return [_roster_entry_to_dict(r) for r in rows]
 
 
@@ -4355,7 +4604,7 @@ async def roster_turnover_dashboard(
     period_start: str = "",
     period_end: str = "",
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.roster.read")),
 ):
     """
     离职率分析看板：分子为期内离职人数（离职档案行且离职日期落在区间内）；
@@ -4560,7 +4809,7 @@ async def roster_create_row(
     client_id: int,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.roster.write")),
 ):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
@@ -4597,7 +4846,7 @@ async def roster_update_row(
     row_id: int,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.roster.write")),
 ):
     entry = db.query(RosterEntry).filter(RosterEntry.id == row_id).first()
     if not entry:
@@ -4643,7 +4892,7 @@ async def roster_update_row(
 
 
 @app.delete("/api/roster/{row_id}")
-async def roster_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.roster.write"))):
     entry = db.query(RosterEntry).filter(RosterEntry.id == row_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -4663,7 +4912,7 @@ async def roster_import_csv_all(
     file: UploadFile = File(...),
     confirm: str = Form(""),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.roster.write")),
 ):
     def _skip_serial_hint(merged_row: Dict[str, str], csv_line_no: int) -> str:
         serial = (merged_row.get("serial_no") or "").strip()
@@ -4757,7 +5006,7 @@ async def roster_turnover_import_csv(
     file: UploadFile = File(...),
     confirm: str = Form(""),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.roster.write")),
 ):
     """仅替换「离职档案池」：不删在职花名册；导入行会强制标记为离职。"""
 
@@ -4851,7 +5100,7 @@ async def roster_import_csv(
     file: UploadFile = File(...),
     confirm: str = Form(""),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.roster.write")),
 ):
     def _skip_serial_hint(merged_row: Dict[str, str], csv_line_no: int) -> str:
         serial = (merged_row.get("serial_no") or "").strip()
@@ -4949,7 +5198,7 @@ async def roster_import_csv(
 
 
 @app.get("/api/roster/turnover/export")
-async def roster_turnover_export_csv_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_turnover_export_csv_all(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.roster.read"))):
     rows = _roster_entries_turnover_pool(db)
     output = io.StringIO()
     output.write("\ufeff")
@@ -4973,7 +5222,7 @@ async def roster_turnover_export_csv_all(db: Session = Depends(get_db), user: st
 
 
 @app.get("/api/roster/export")
-async def roster_export_csv_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_export_csv_all(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.roster.read"))):
     rows = _roster_entries_union_of_all_clients(db)
     output = io.StringIO()
     output.write("\ufeff")
@@ -5000,7 +5249,7 @@ async def roster_export_csv_all(db: Session = Depends(get_db), user: str = Depen
 
 
 @app.get("/api/clients/{client_id}/roster/export")
-async def roster_export_csv(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_export_csv(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.roster.read"))):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -5034,7 +5283,7 @@ async def roster_export_csv(client_id: int, db: Session = Depends(get_db), user:
 
 
 @app.post("/api/roster/restore/latest")
-async def roster_restore_latest_backup_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_restore_latest_backup_all(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.roster.write"))):
     latest = _pick_latest_backup("roster_backup_all__")
     if not latest:
         raise HTTPException(status_code=404, detail="未找到整体花名册备份文件")
@@ -5072,7 +5321,7 @@ async def roster_restore_latest_backup_all(db: Session = Depends(get_db), user: 
 
 
 @app.post("/api/clients/{client_id}/roster/restore/latest")
-async def roster_restore_latest_backup(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_restore_latest_backup(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.roster.write"))):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -5109,7 +5358,7 @@ async def roster_restore_latest_backup(client_id: int, db: Session = Depends(get
 
 
 @app.post("/api/roster/turnover/restore/latest")
-async def roster_turnover_restore_latest_backup_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_turnover_restore_latest_backup_all(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.roster.write"))):
     latest = _pick_latest_backup("roster_backup_turnover_all__")
     if not latest:
         raise HTTPException(status_code=404, detail="未找到离职档案备份文件")
@@ -5149,7 +5398,7 @@ async def roster_turnover_restore_latest_backup_all(db: Session = Depends(get_db
 
 
 @app.get("/api/roster/logs")
-async def roster_logs_all(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def roster_logs_all(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.roster.read"))):
     logs = db.query(AuditLog).filter(AuditLog.action.like("%花名册%")).order_by(desc(AuditLog.created_at)).limit(300).all()
     return logs
 
@@ -5249,7 +5498,7 @@ def _normalize_period_label(period: str) -> str:
 
 
 @app.get("/api/clients/{client_id}/delivery/pipeline/insight")
-async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def pipeline_insight(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.pipeline.read"))):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -5600,7 +5849,7 @@ async def pipeline_insight_update_demand(
     client_id: int,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.pipeline.write")),
 ):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
@@ -5640,7 +5889,9 @@ async def pipeline_insight_update_demand(
 
 
 @app.get("/api/clients/{client_id}/delivery/pipeline")
-async def pipeline_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def pipeline_list(
+    client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.pipeline.read"))
+):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -5661,7 +5912,7 @@ async def pipeline_create_row(
     client_id: int,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.pipeline.write")),
 ):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
@@ -5692,7 +5943,7 @@ async def pipeline_update_row(
     row_id: int,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.pipeline.write")),
 ):
     entry = db.query(DeliveryPipelineEntry).filter(DeliveryPipelineEntry.id == row_id).first()
     if not entry:
@@ -5711,7 +5962,7 @@ async def pipeline_update_row(
 
 
 @app.delete("/api/delivery/pipeline/row/{row_id}")
-async def pipeline_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def pipeline_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.pipeline.write"))):
     entry = db.query(DeliveryPipelineEntry).filter(DeliveryPipelineEntry.id == row_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -5731,7 +5982,7 @@ async def pipeline_import_csv(
     file: UploadFile = File(...),
     confirm: str = Form(""),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.pipeline.write")),
 ):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
@@ -5859,7 +6110,7 @@ async def pipeline_import_csv_global(
     file: UploadFile = File(...),
     confirm: str = Form(""),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.pipeline.write")),
 ):
     return await pipeline_import_csv(
         client_id=client_id,
@@ -5871,7 +6122,7 @@ async def pipeline_import_csv_global(
 
 
 @app.get("/api/clients/{client_id}/delivery/pipeline/export")
-async def pipeline_export_csv(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def pipeline_export_csv(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.pipeline.read"))):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -5899,7 +6150,7 @@ async def pipeline_export_csv(client_id: int, db: Session = Depends(get_db), use
 
 
 @app.get("/api/clients/{client_id}/delivery/pipeline/logs")
-async def pipeline_logs(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def pipeline_logs(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.pipeline.read"))):
     logs = (
         db.query(AuditLog)
         .filter(AuditLog.client_id == client_id)
@@ -5911,7 +6162,7 @@ async def pipeline_logs(client_id: int, db: Session = Depends(get_db), user: str
 
 
 @app.post("/api/clients/{client_id}/delivery/pipeline/restore/latest")
-async def pipeline_restore_latest_backup(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def pipeline_restore_latest_backup(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.pipeline.write"))):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -5952,7 +6203,7 @@ async def pipeline_restore_latest_backup(client_id: int, db: Session = Depends(g
 
 
 @app.get("/api/clients/{client_id}/delivery/interviews")
-async def interview_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def interview_list(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.read"))):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -5970,7 +6221,7 @@ async def interview_create_row(
     client_id: int,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.interviews.write")),
 ):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
@@ -6002,7 +6253,7 @@ async def interview_mark_employment_left_by_name(
     client_id: int,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.interviews.write")),
 ):
     """提示「已离职」等场景：仅改在职/离职，不校验交付判断等必填（与 PUT 行接口区分）。"""
     c = db.query(Client).filter(Client.id == client_id).first()
@@ -6032,7 +6283,7 @@ async def interview_update_row(
     row_id: int,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.interviews.write")),
 ):
     entry = db.query(DeliveryInterviewEntry).filter(DeliveryInterviewEntry.id == row_id).first()
     if not entry:
@@ -6058,7 +6309,7 @@ async def interview_update_row(
 
 
 @app.delete("/api/delivery/interviews/row/{row_id}")
-async def interview_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def interview_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.write"))):
     entry = db.query(DeliveryInterviewEntry).filter(DeliveryInterviewEntry.id == row_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -6078,7 +6329,7 @@ async def interview_import_csv(
     file: UploadFile = File(...),
     confirm: str = Form(""),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.interviews.write")),
 ):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
@@ -6235,7 +6486,7 @@ async def interview_import_csv_global(
     file: UploadFile = File(...),
     confirm: str = Form(""),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.interviews.write")),
 ):
     return await interview_import_csv(
         client_id=client_id,
@@ -6247,7 +6498,7 @@ async def interview_import_csv_global(
 
 
 @app.get("/api/clients/{client_id}/delivery/interviews/export")
-async def interview_export_csv(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def interview_export_csv(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.read"))):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -6276,7 +6527,7 @@ async def interview_export_csv(client_id: int, db: Session = Depends(get_db), us
 
 
 @app.get("/api/clients/{client_id}/delivery/interviews/logs")
-async def interview_logs(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def interview_logs(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.read"))):
     logs = (
         db.query(AuditLog)
         .filter(AuditLog.client_id == client_id)
@@ -6288,7 +6539,7 @@ async def interview_logs(client_id: int, db: Session = Depends(get_db), user: st
 
 
 @app.post("/api/clients/{client_id}/delivery/interviews/restore/latest")
-async def interview_restore_latest_backup(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def interview_restore_latest_backup(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.write"))):
     c = db.query(Client).filter(Client.id == client_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -6329,8 +6580,16 @@ async def interview_restore_latest_backup(client_id: int, db: Session = Depends(
 
 
 @app.get("/api/delivery/settlement")
-async def settlement_list(db: Session = Depends(get_db), user: str = Depends(authenticate)):
-    rows = db.query(DeliverySettlementEntry).order_by(DeliverySettlementEntry.id).all()
+async def settlement_list(
+    db: Session = Depends(get_db),
+    ctx: AuthContext = Depends(get_current_context),
+    user: str = Depends(require_permission("delivery.settlement.read")),
+):
+    q = db.query(DeliverySettlementEntry).order_by(DeliverySettlementEntry.id)
+    q = ds.filter_query_by_client_scope(
+        q, db, ctx, RESOURCE_DELIVERY_SETTLEMENT, "read", DeliverySettlementEntry.client_id
+    )
+    rows = q.all()
     return [_settlement_entry_to_dict(r) for r in rows]
 
 
@@ -6338,7 +6597,7 @@ async def settlement_list(db: Session = Depends(get_db), user: str = Depends(aut
 async def settlement_create_row(
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.settlement.write")),
 ):
     data = _normalize_settlement_payload(body if isinstance(body, dict) else {})
     _validate_settlement_payload(data)
@@ -6362,7 +6621,7 @@ async def settlement_update_row(
     row_id: int,
     body: Dict[str, Any] = Body(default={}),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.settlement.write")),
 ):
     entry = db.query(DeliverySettlementEntry).filter(DeliverySettlementEntry.id == row_id).first()
     if not entry:
@@ -6382,7 +6641,7 @@ async def settlement_update_row(
 
 
 @app.delete("/api/delivery/settlement/row/{row_id}")
-async def settlement_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def settlement_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.settlement.write"))):
     entry = db.query(DeliverySettlementEntry).filter(DeliverySettlementEntry.id == row_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="记录不存在")
@@ -6401,7 +6660,7 @@ async def settlement_import_csv(
     file: UploadFile = File(...),
     confirm: str = Form(""),
     db: Session = Depends(get_db),
-    user: str = Depends(authenticate),
+    user: str = Depends(require_permission("delivery.settlement.write")),
 ):
     raw = await file.read()
     if len(raw) > MAX_FILE_SIZE:
@@ -6486,7 +6745,7 @@ async def settlement_import_csv(
 
 
 @app.get("/api/delivery/settlement/export")
-async def settlement_export_csv(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def settlement_export_csv(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.settlement.read"))):
     rows = db.query(DeliverySettlementEntry).order_by(DeliverySettlementEntry.id).all()
     output = io.StringIO()
     output.write("\ufeff")
@@ -6507,7 +6766,7 @@ async def settlement_export_csv(db: Session = Depends(get_db), user: str = Depen
 
 
 @app.get("/api/delivery/settlement/logs")
-async def settlement_logs(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def settlement_logs(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.settlement.read"))):
     logs = (
         db.query(AuditLog)
         .filter(AuditLog.action.like("结算回款%"))
@@ -6518,7 +6777,7 @@ async def settlement_logs(db: Session = Depends(get_db), user: str = Depends(aut
 
 
 @app.post("/api/delivery/settlement/restore/latest")
-async def settlement_restore_latest_backup(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+async def settlement_restore_latest_backup(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.settlement.write"))):
     latest = _pick_latest_backup("settlement_backup_")
     if not latest:
         raise HTTPException(status_code=404, detail="未找到结算回款备份文件")
@@ -6564,6 +6823,7 @@ V8_PORT = int(os.environ.get("CRM_V8_PORT", "8001"))
 
 def _page(template: str, request: Request, **ctx):
     # Starlette 0.28+: TemplateResponse(request, name, context) — 顺序不能错
+    ctx.setdefault("auth_mode", auth_service.auth_mode())
     return TEMPLATES.TemplateResponse(request, template, ctx)
 
 
@@ -6576,6 +6836,7 @@ register_handoff_routes(
     get_db=get_db,
     authenticate=authenticate,
     authenticate_admin=authenticate_admin,
+    review_dep=require_permission("delivery.handoff.review"),
     effective_admin_username=_effective_admin_username,
     page_renderer=_page,
     Client=Client,
@@ -6615,6 +6876,29 @@ register_visit_routes(
 @app.get("/", response_class=HTMLResponse)
 async def root():
     return RedirectResponse(url="/home", status_code=302)
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def page_login(request: Request):
+    return _page("pages/login.html", request, auth_mode=auth_service.auth_mode())
+
+
+@app.get("/system/users", response_class=HTMLResponse)
+async def page_system_users(
+    request: Request,
+    ctx=Depends(auth_deps.require_any_permission(
+        "system.users.manage", "system.roles.manage", "system.audit.read"
+    )),
+):
+    return _page(
+        "pages/system_admin.html",
+        request,
+        auth_mode=auth_service.auth_mode(),
+        can_users=auth_service.user_has_permission(ctx, "system.users.manage"),
+        can_roles=auth_service.user_has_permission(ctx, "system.roles.manage"),
+        can_audit=auth_service.user_has_permission(ctx, "system.audit.read"),
+        is_super=ctx.is_super,
+    )
 
 
 @app.get("/home", response_class=HTMLResponse)
@@ -6734,11 +7018,12 @@ if __name__ == "__main__":
     print("ITO CRM Ultimate V8 系统启动成功")
     print(f"本地访问: http://127.0.0.1:{V8_PORT}")
     print(f"内网访问: http://{ip}:{V8_PORT}")
-    if os.path.isfile(ADMIN_CREDENTIALS_STORE):
-        print(f"管理员账号: {_effective_admin_username()}（已在界面修改密码，凭据保存在本地文件）")
-    elif os.environ.get("CRM_ADMIN_PASSWORD"):
-        print(f"管理员账号: {ADMIN_USER['username']}（已配置 CRM_ADMIN_PASSWORD）")
-    else:
-        print(f"管理员账号: {ADMIN_USER['username']} / {ADMIN_USER['password']}")
+    print(
+        sec.admin_startup_auth_hint(
+            effective_username=_effective_admin_username(),
+            credentials_store_path=ADMIN_CREDENTIALS_STORE,
+            env_password_set=bool(os.environ.get("CRM_ADMIN_PASSWORD", "").strip()),
+        )
+    )
     print(f"{'='*50}\n")
     uvicorn.run(app, host="0.0.0.0", port=V8_PORT)

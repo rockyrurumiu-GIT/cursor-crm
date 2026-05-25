@@ -14,6 +14,8 @@
         min-width: 23rem;
         white-space: nowrap;
         vertical-align: middle;
+        overflow: visible !important;
+        text-overflow: clip !important;
     }
 </style>
 {% endblock %}
@@ -114,10 +116,10 @@
                         <p class="text-sm">{{ v.content }}</p>
                         <div v-if="v.attachment" class="mt-3 pt-3 border-t">
                             <div v-if="isImage(v.attachment)">
-                                <img :src="'/previews/'+v.attachment" class="w-16 h-16 object-cover rounded border cursor-zoom-in" @click="viewFull('/previews/'+v.attachment)">
+                                <img :src="visitAttachmentUrls[v.attachment] || ''" class="w-16 h-16 object-cover rounded border cursor-zoom-in" @click="viewFull(v.attachment)">
                             </div>
                             <div v-else class="flex items-center">
-                                <span class="text-xs text-blue-600 underline cursor-pointer" @click="viewFull('/previews/'+v.attachment)">📄 查看预览 (PDF/TXT)</span>
+                                <span class="text-xs text-blue-600 underline cursor-pointer" @click="viewFull(v.attachment)">📄 查看预览 (PDF/TXT)</span>
                             </div>
                         </div>
                     </div>
@@ -323,11 +325,25 @@ createApp({
             fd.append('remarks', c.remarks || '');
         };
 
+        const visitAttachmentUrls = ref({});
+
+        const preloadVisitAttachments = async (visits) => {
+            for (const v of visits || []) {
+                const path = v && v.attachment;
+                if (!path || visitAttachmentUrls.value[path] || !isImage(path)) continue;
+                try {
+                    const blob = await window.crmFetchAuthenticatedBlob(path);
+                    visitAttachmentUrls.value[path] = URL.createObjectURL(blob);
+                } catch (e) { /* ignore */ }
+            }
+        };
+
         const openDetail = (c) => {
             selectedClient.value = { ...c };
-            fetch(`/api/clients/${c.id}/details`, { headers: authHeader() }).then(r => r.json()).then(d => {
+            fetch(`/api/clients/${c.id}/details`, { headers: authHeader() }).then(r => r.json()).then(async (d) => {
                 details.value = d;
                 showDetail.value = true;
+                await preloadVisitAttachments(d.visits);
             });
         };
 
@@ -375,8 +391,8 @@ createApp({
 
         const exportCSV = () => window.crmExportCsv();
 
-        const isImage = (path) => /\.(jpg|jpeg|png|gif)$/i.test(path);
-        const viewFull = (url) => window.open(url, '_blank');
+        const isImage = (path) => /\.(jpg|jpeg|png|gif|webp)$/i.test(path);
+        const viewFull = (path) => window.crmOpenAuthenticatedFile(path);
         const formatDate = (ds) => new Date(ds).toLocaleString();
 
         onMounted(loadClients);
@@ -388,7 +404,7 @@ createApp({
             loadClients, clearPhase, applyHandoffFilter, clearHandoffFilter, phaseColor, handoffEntry, handoffBadge,
             fmtDash, fmtAmount, fmtPrimaryContact, hasPrimaryContact,
             openDetail, updateClient, confirmDelete, executeDelete,
-            submitVisit, exportCSV, isImage, viewFull, formatDate
+            submitVisit, exportCSV, isImage, viewFull, formatDate, visitAttachmentUrls
         };
     }
 }).mount('#page-app');

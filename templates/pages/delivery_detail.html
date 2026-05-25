@@ -330,6 +330,13 @@
         --settlement-sticky-date-width: 11rem;
         --settlement-sticky-customer-width: 7.5rem;
     }
+    .crm-table.settlement-table .crm-th,
+    .crm-table.settlement-table .crm-td {
+        white-space: nowrap;
+    }
+    .crm-table.settlement-table .crm-currency-cell {
+        min-width: 6.5rem;
+    }
     .settlement-sticky-serial,
     .settlement-sticky-date,
     .settlement-sticky-customer {
@@ -1182,7 +1189,7 @@
                                 <th class="crm-th">全文索引</th>
                                 <th class="crm-th">标签 / 权限</th>
                                 <th class="crm-th">时间</th>
-                                <th class="crm-th text-right">操作</th>
+                                <th class="crm-th text-right crm-op-col-xl">操作</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1205,12 +1212,12 @@
                                     </div>
                                 </td>
                                 <td class="crm-td text-xs whitespace-nowrap">{{ formatDate(f.created_at) }}</td>
-                                <td class="crm-td text-right whitespace-nowrap space-x-2">
+                                <td class="crm-td text-right whitespace-nowrap space-x-2 crm-op-col-xl">
                                     <button v-if="f.media_kind === 'pdf'" type="button" class="text-indigo-600 hover:underline" @click="openHandbookReader(f)">阅读</button>
                                     <button v-else-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="text-indigo-600 hover:underline" @click="openHandbookReader(f)">播放</button>
                                     <button type="button" class="text-gray-700 hover:underline" @click="openHandbookMetaModal(f)">元数据</button>
                                     <button v-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="text-gray-700 hover:underline" @click="openHandbookCuesModal(f)">锚点</button>
-                                    <a :href="f.preview_url" target="_blank" rel="noopener" class="text-blue-600 hover:underline">下载</a>
+                                    <button type="button" class="text-blue-600 hover:underline" @click="downloadHandbookFile(f)">下载</button>
                                     <button type="button" class="text-red-600 hover:underline" @click="removeHandbook(f)">删除</button>
                                 </td>
                             </tr>
@@ -1351,7 +1358,7 @@
             </div>
             <div v-else-if="handbookReaderRow.media_kind === 'video'" class="flex flex-1 min-h-0 flex-col sm:flex-row gap-3 p-3 overflow-hidden">
                 <div class="handbook-video-plyr-wrap flex-1 min-w-0 min-h-0 flex items-center justify-center bg-black rounded-lg overflow-hidden handbook-plyr">
-                    <video ref="handbookMediaRef" class="handbook-video-native w-full max-h-full" playsinline :src="handbookReaderRow.preview_url"></video>
+                    <video ref="handbookMediaRef" class="handbook-video-native w-full max-h-full" playsinline :src="handbookReaderMediaUrl || ''"></video>
                 </div>
                 <aside class="w-full sm:w-52 shrink-0 min-h-0 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
                     <p class="text-xs font-semibold text-gray-600 mb-2">时间戳索引</p>
@@ -1363,7 +1370,7 @@
             </div>
             <div v-else-if="handbookReaderRow.media_kind === 'audio'" class="flex flex-1 min-h-0 flex-col sm:flex-row gap-3 p-3 overflow-hidden">
                 <div class="handbook-plyr-audio-wrap flex-1 min-w-0 min-h-0 flex flex-col justify-center handbook-plyr">
-                    <audio ref="handbookMediaRef" class="w-full" :src="handbookReaderRow.preview_url"></audio>
+                    <audio ref="handbookMediaRef" class="w-full" :src="handbookReaderMediaUrl || ''"></audio>
                 </div>
                 <aside class="w-full sm:w-52 shrink-0 min-h-0 overflow-y-auto border border-gray-100 rounded-lg p-2 bg-gray-50">
                     <p class="text-xs font-semibold text-gray-600 mb-2">时间戳索引</p>
@@ -2254,6 +2261,8 @@ createApp({
         const handbookFsDetailHit = ref(null);
         const highlightHandbookSearchHtml = (text) => crmHighlightSearchQuery(text, handbookFsQuery.value);
         const handbookReaderRow = ref(null);
+        const handbookReaderMediaUrl = ref('');
+        const handbookPdfBlobUrl = ref('');
         const handbookReaderPdfPage = ref(1);
         const handbookPdfSearchQuery = ref('');
         const handbookPdfTextPages = ref([]);
@@ -2307,7 +2316,7 @@ createApp({
             const row = handbookReaderRow.value;
             if (!row || row.media_kind !== 'pdf') return '';
             const p = handbookReaderPdfPage.value || 1;
-            const base = row.preview_url || '';
+            const base = handbookPdfBlobUrl.value || '';
             if (!base) return '';
             const q = String(handbookPdfSearchQuery.value || '').trim();
             const parts = [`page=${encodeURIComponent(String(p))}`];
@@ -2748,8 +2757,16 @@ createApp({
         };
         const loadSettlementRows = async () => {
             if (moduleKey !== 'settlement') return;
-            const r = await fetch(`/api/clients/${clientId}/delivery/settlement`, { headers: window.crmAuthHeader() });
-            settlementRows.value = r.ok ? await r.json() : [];
+            const r = await fetch('/api/delivery/settlement', { headers: window.crmAuthHeader() });
+            if (!r.ok) {
+                settlementRows.value = [];
+                return;
+            }
+            const all = await r.json();
+            const cid = Number(clientId);
+            settlementRows.value = Array.isArray(all)
+                ? all.filter((row) => Number(row.client_id) === cid)
+                : [];
         };
         const showSettlementReminders = async () => {
             const text = buildSettlementReminderText(settlementRows.value, clientName.value, todayInputDate());
@@ -3799,13 +3816,51 @@ createApp({
             const x = Number(row && row.client_id);
             return Number.isFinite(x) && x > 0 ? x : clientId;
         };
+        const clearHandbookReaderBlobUrls = () => {
+            if (handbookReaderMediaUrl.value) {
+                URL.revokeObjectURL(handbookReaderMediaUrl.value);
+                handbookReaderMediaUrl.value = '';
+            }
+            if (handbookPdfBlobUrl.value) {
+                URL.revokeObjectURL(handbookPdfBlobUrl.value);
+                handbookPdfBlobUrl.value = '';
+            }
+        };
+        const loadHandbookReaderBlobs = async (row) => {
+            const sp = (row && row.stored_path) || '';
+            if (!sp) return;
+            const rowId = Number(row.id);
+            try {
+                const blob = await window.crmFetchAuthenticatedBlob(sp);
+                if (!handbookReaderRow.value || Number(handbookReaderRow.value.id) !== rowId) return;
+                if (row.media_kind === 'pdf') {
+                    if (handbookPdfBlobUrl.value) URL.revokeObjectURL(handbookPdfBlobUrl.value);
+                    handbookPdfBlobUrl.value = URL.createObjectURL(blob);
+                } else if (row.media_kind === 'video' || row.media_kind === 'audio') {
+                    if (handbookReaderMediaUrl.value) URL.revokeObjectURL(handbookReaderMediaUrl.value);
+                    handbookReaderMediaUrl.value = URL.createObjectURL(blob);
+                }
+            } catch (e) { /* ignore */ }
+        };
+        const downloadHandbookFile = async (f) => {
+            const sp = (f && f.stored_path) || '';
+            if (!sp) return;
+            try {
+                const blob = await window.crmFetchAuthenticatedBlob(sp);
+                window.crmDownloadBlob(blob, '', (f && f.original_filename) || 'download');
+            } catch (e) {
+                alert('下载失败');
+            }
+        };
         const openHandbookReader = async (row, opts = {}) => {
+            clearHandbookReaderBlobUrls();
             handbookReaderRow.value = row;
             handbookReaderPdfPage.value = Math.max(1, Number(opts.page) || 1);
             if (row.media_kind === 'pdf') {
                 handbookPdfSearchQuery.value = '';
                 loadHandbookPdfText(row);
             }
+            loadHandbookReaderBlobs(row);
             if ((row.media_kind === 'video' || row.media_kind === 'audio') && opts.seconds !== undefined && opts.seconds !== null) {
                 handbookPendingMediaSeek.value = Math.max(0, Number(opts.seconds) || 0);
             }
@@ -3837,6 +3892,7 @@ createApp({
             handbookReaderPipBrowseMode.value = false;
             handbookPdfSearchQuery.value = '';
             clearHandbookPdfRenderedPage();
+            clearHandbookReaderBlobUrls();
             destroyHandbookPlyr();
             handbookReaderRow.value = null;
         };
@@ -4194,8 +4250,8 @@ createApp({
             const payload = {};
             SETTLEMENT_FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
             const url = editingId.value
-                ? `/api/delivery/settlement/${editingId.value}`
-                : `/api/clients/${clientId}/delivery/settlement`;
+                ? `/api/delivery/settlement/row/${editingId.value}`
+                : '/api/delivery/settlement';
             const method = editingId.value ? 'PUT' : 'POST';
             const r = await fetch(url, {
                 method,
@@ -4212,7 +4268,7 @@ createApp({
         };
         const removeRow = async (row) => {
             if (!confirm('确定删除该条记录？')) return;
-            const r = await fetch(`/api/delivery/settlement/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
+            const r = await fetch(`/api/delivery/settlement/row/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
             if (!r.ok) {
                 alert('删除失败');
                 return;
@@ -4296,7 +4352,9 @@ createApp({
             handbookReaderPipBrowseMode, restoreHandbookReaderFromPipBrowse,
             handbookMetaModalOpen, handbookMetaForm, handbookCuesModalOpen, handbookCuesEdit,
             handbookStatusLabel, handbookStatusClass, handbookMediaLabel, handbookSearchStatusLabel, handbookSearchStatusClass, formatHandbookSeconds,
-            loadHandbooks, onHandbookFilesSelected, uploadSelectedHandbookFiles, removeHandbook, openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
+            loadHandbooks, onHandbookFilesSelected, uploadSelectedHandbookFiles, removeHandbook, downloadHandbookFile,
+            openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
+            handbookReaderMediaUrl,
             openHandbookMetaModal, saveHandbookMeta, openHandbookCuesModal, saveHandbookCues, rebuildHandbookOutline,
             pipelineScrollWrap,
             PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,

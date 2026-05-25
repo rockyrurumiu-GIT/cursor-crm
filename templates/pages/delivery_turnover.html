@@ -715,7 +715,7 @@
                         <td class="crm-td">{{ row.pre_tax_salary }}</td>
                         <td class="crm-td">{{ row.gms }}</td>
                         <td class="crm-td">{{ row.gm_pct }}</td>
-                        <td class="crm-td whitespace-nowrap turnover-sticky-right-actions">
+                        <td class="crm-td whitespace-nowrap turnover-sticky-right-actions crm-sticky-right-op">
                             <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openDetail(row)">详情</button>
                             <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
                             <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
@@ -736,7 +736,7 @@
                         <td class="crm-td"></td>
                         <td class="crm-td font-semibold text-gray-700">{{ formatAmount(totalProfit) }}</td>
                         <td class="crm-td font-semibold text-gray-700">{{ totalProfitRate }}</td>
-                        <td class="crm-td turnover-sticky-right-actions"></td>
+                        <td class="crm-td turnover-sticky-right-actions crm-sticky-right-op"></td>
                     </tr>
                 </tfoot>
             </table>

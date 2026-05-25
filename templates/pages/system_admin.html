@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}权限中心 · ITO CRM{% endblock %}
+{% block head_extra %}
+<style>
+    .spc-tab { border-bottom: 2px solid transparent; color: #656d76; }
+    .spc-tab.active { border-color: #0969da; color: #0969da; font-weight: 600; }
+    .spc-drawer { transform: translateX(100%); transition: transform 0.2s ease; }
+    .spc-drawer.open { transform: translateX(0); }
+    .spc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #f6f8fa; border: 1px solid #d0d7de; }
+    .spc-matrix th, .spc-matrix td { border: 1px solid #d0d7de; padding: 8px 10px; font-size: 13px; }
+    .spc-matrix th { background: #f6f8fa; font-weight: 600; }
+    .spc-code-hint { font-size: 10px; color: #656d76; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="container mx-auto max-w-6xl px-4 py-6" id="permission-center-app"
+    data-can-users="{{ '1' if can_users else '0' }}"
+    data-can-roles="{{ '1' if can_roles else '0' }}"
+    data-can-audit="{{ '1' if can_audit else '0' }}"
+    data-is-super="{{ '1' if is_super else '0' }}">
+    <h1 class="text-2xl font-bold text-gray-900 mb-1">权限中心</h1>
+    <p class="text-sm text-gray-600 mb-4">用户、角色、权限矩阵与审计日志统一管理。</p>
+
+    <div class="flex flex-wrap gap-4 border-b border-gray-200 mb-4" role="tablist">
+        <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="users" id="tab-btn-users">用户管理</button>
+        <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="roles" id="tab-btn-roles">角色管理</button>
+        <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="matrix" id="tab-btn-matrix">功能权限</button>
+        <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="datascope" id="tab-btn-datascope">数据权限</button>
+        <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="preview" id="tab-btn-preview">权限预览</button>
+        <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="audit" id="tab-btn-audit">审计日志</button>
+    </div>
+
+    <p id="spc-global-msg" class="hidden text-sm mb-3"></p>
+
+    <!-- Tab: Users -->
+    <section id="panel-users" class="spc-panel hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <input id="user-search" type="search" placeholder="搜索用户名或显示名…" class="border rounded-lg px-3 py-2 text-sm w-64 max-w-full">
+            <div class="flex flex-wrap items-center gap-2">
+                <select id="batch-role-select" class="border rounded-lg px-2 py-2 text-sm hidden"></select>
+                <select id="batch-role-mode" class="border rounded-lg px-2 py-2 text-sm hidden">
+                    <option value="replace">覆盖角色</option>
+                    <option value="add">追加角色</option>
+                </select>
+                <button type="button" id="btn-batch-roles" class="hidden rounded-lg border px-3 py-2 text-sm hover:bg-gray-50">批量分配角色</button>
+                <label class="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer">
+                    导入 CSV
+                    <input type="file" id="user-import-file" accept=".csv,text/csv" class="hidden">
+                </label>
+                <button type="button" id="btn-new-user" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新建用户</button>
+            </div>
+        </div>
+        <p id="user-page-info" class="text-xs text-gray-500 mb-2"></p>
+        <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-left text-gray-600">
+                    <tr>
+                        <th class="px-3 py-2 w-8"><input type="checkbox" id="user-select-all" title="全选"></th>
+                        <th class="px-3 py-2">用户名</th>
+                        <th class="px-3 py-2">显示名</th>
+                        <th class="px-3 py-2">状态</th>
+                        <th class="px-3 py-2">部门</th>
+                        <th class="px-3 py-2">角色</th>
+                        <th class="px-3 py-2">最后登录</th>
+                        <th class="px-3 py-2">创建时间</th>
+                        <th class="px-3 py-2">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="users-tbody"></tbody>
+            </table>
+        </div>
+        <div class="flex justify-end gap-2 mt-3">
+            <button type="button" id="btn-user-prev" class="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40">上一页</button>
+            <button type="button" id="btn-user-next" class="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40">下一页</button>
+        </div>
+    </section>
+
+    <!-- Tab: Roles -->
+    <section id="panel-roles" class="spc-panel hidden">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[420px]">
+            <div class="md:col-span-1 bg-white rounded-xl border border-gray-200 p-3">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="font-semibold text-sm">角色列表</h2>
+                    <button type="button" id="btn-new-role" class="text-xs text-blue-600 hover:underline">+ 自定义</button>
+                </div>
+                <input id="role-search" type="search" placeholder="搜索角色…" class="w-full border rounded-lg px-2 py-1.5 text-xs mb-2">
+                <ul id="roles-list" class="space-y-1 text-sm max-h-[320px] overflow-y-auto"></ul>
+            </div>
+            <div class="md:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
+                <div id="role-detail-empty" class="text-sm text-gray-500">请选择左侧角色</div>
+                <div id="role-detail" class="hidden">
+                    <h2 class="text-lg font-semibold" id="role-detail-name"></h2>
+                    <p class="text-xs text-gray-500 mt-1"><span id="role-detail-code"></span> · <span id="role-detail-builtin"></span> · 绑定 <span id="role-detail-count">0</span> 人</p>
+                    <p class="text-sm text-gray-600 mt-2" id="role-detail-desc"></p>
+                    <div class="mt-4 flex gap-2">
+                        <button type="button" id="btn-edit-role-meta" class="text-sm text-blue-600 hover:underline">编辑名称/描述</button>
+                        <button type="button" id="btn-open-matrix" class="text-sm text-blue-600 hover:underline">编辑权限矩阵 →</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tab: Matrix -->
+    <section id="panel-matrix" class="spc-panel hidden">
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+            <label class="text-sm text-gray-600">角色</label>
+            <select id="matrix-role-select" class="border rounded-lg px-3 py-2 text-sm min-w-[200px]"></select>
+            <button type="button" id="btn-save-matrix" class="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">保存权限</button>
+            <span id="matrix-readonly-hint" class="hidden text-sm text-amber-700">超级管理员角色权限不可修改</span>
+        </div>
+        <div id="matrix-container" class="bg-white rounded-xl border border-gray-200 p-4 overflow-x-auto"></div>
+    </section>
+
+    <!-- Tab: Data scope -->
+    <section id="panel-datascope" class="spc-panel hidden">
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+            <label class="text-sm text-gray-600">角色</label>
+            <select id="datascope-role-select" class="border rounded-lg px-3 py-2 text-sm min-w-[200px]"></select>
+            <button type="button" id="btn-save-datascope" class="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">保存数据权限</button>
+            <span id="datascope-readonly-hint" class="hidden text-sm text-amber-700">超级管理员数据范围为全部，不可修改</span>
+        </div>
+        <div id="datascope-container" class="bg-white rounded-xl border border-gray-200 p-4 overflow-x-auto"></div>
+    </section>
+
+    <!-- Tab: Preview -->
+    <section id="panel-preview" class="spc-panel hidden">
+        <div class="flex flex-wrap items-center gap-3 mb-3">
+            <label class="text-sm text-gray-600">用户</label>
+            <select id="preview-user-select" class="border rounded-lg px-3 py-2 text-sm min-w-[240px]"></select>
+            <button type="button" id="btn-load-preview" class="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">刷新预览</button>
+        </div>
+        <div id="preview-container" class="bg-white rounded-xl border border-gray-200 p-4 text-sm"></div>
+    </section>
+
+    <!-- Tab: Audit -->
+    <section id="panel-audit" class="spc-panel hidden">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+            <input id="audit-actor" class="border rounded-lg px-3 py-2 text-sm" placeholder="操作人">
+            <input id="audit-action" class="border rounded-lg px-3 py-2 text-sm" placeholder="操作类型">
+            <input id="audit-from" type="date" class="border rounded-lg px-3 py-2 text-sm">
+            <input id="audit-to" type="date" class="border rounded-lg px-3 py-2 text-sm">
+        </div>
+        <button type="button" id="btn-audit-search" class="mb-3 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50">查询</button>
+        <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-50 text-left">
+                    <tr>
+                        <th class="px-3 py-2">时间</th>
+                        <th class="px-3 py-2">操作人</th>
+                        <th class="px-3 py-2">操作</th>
+                        <th class="px-3 py-2">目标</th>
+                        <th class="px-3 py-2">摘要</th>
+                        <th class="px-3 py-2">详情</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-tbody"></tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<!-- Drawer overlay -->
+<div id="spc-drawer-backdrop" class="fixed inset-0 z-[150] hidden bg-black/40"></div>
+<aside id="spc-drawer" class="spc-drawer fixed top-0 right-0 z-[160] h-full w-full max-w-md bg-white shadow-xl flex flex-col">
+    <div class="flex items-center justify-between border-b px-4 py-3">
+        <h3 id="drawer-title" class="font-semibold">编辑用户</h3>
+        <button type="button" id="drawer-close" class="text-2xl leading-none text-gray-400 hover:text-gray-700">&times;</button>
+    </div>
+    <div id="drawer-body" class="flex-1 overflow-y-auto p-4 space-y-4 text-sm"></div>
+    <div class="border-t px-4 py-3 flex justify-end gap-2">
+        <button type="button" id="drawer-cancel" class="rounded-lg border px-4 py-2 text-sm">取消</button>
+        <button type="button" id="drawer-save" class="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white">保存</button>
+    </div>
+</aside>
+{% endblock %}
+{% block page_scripts %}
+<script src="/static/js/system-permission-center.js?v=4"></script>
+{% endblock %}

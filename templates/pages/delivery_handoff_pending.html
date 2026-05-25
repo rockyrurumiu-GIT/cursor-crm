@@ -24,7 +24,7 @@
                     <th class="crm-th">交付负责人</th>
                     <th class="crm-th">完整度</th>
                     <th class="crm-th">提交时间</th>
-                    <th class="crm-th">操作</th>
+                    <th class="crm-th crm-op-col">操作</th>
                 </tr>
             </thead>
             <tbody>
@@ -35,7 +35,7 @@
                     <td class="crm-td">{{ h.delivery_owner || '—' }}</td>
                     <td class="crm-td">{{ h.completeness.score }}%</td>
                     <td class="crm-td text-sm text-gray-500">{{ formatTime(h.submitted_at) }}</td>
-                    <td class="crm-td">
+                    <td class="crm-td crm-op-col whitespace-nowrap">
                         <a :href="`/customers/${h.client_id}/handoff/${h.id}`" class="text-[#0969da] text-sm font-medium">审核 →</a>
                     </td>
                 </tr>

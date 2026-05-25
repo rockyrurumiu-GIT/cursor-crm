@@ -1,0 +1,1405 @@
+from __future__ import annotations
+
+import hashlib
+import hmac
+import json
+import os
+import secrets
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional, Set
+
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
+
+from auth import password as pwd
+from auth.permissions import (
+    ALL_PERMISSION_CODES,
+    ROLE_DEFAULT_PERMISSIONS,
+    ROLE_DELIVERY,
+    ROLE_SALES,
+    ROLE_SUPER_ADMIN,
+    ROLE_VIEWER,
+)
+from auth.data_scope_catalog import (
+    DATA_SCOPE_ACTIONS,
+    RESOURCE_CODES,
+    SCOPE_ALL,
+    SCOPE_ASSIGNED,
+    SCOPE_NONE,
+    merge_scope_types,
+    permission_to_resource,
+)
+
+SESSION_COOKIE_NAME = "crm_session"
+SESSION_MAX_AGE = 7 * 86400
+
+
+def auth_mode() -> str:
+    return (os.environ.get("CRM_AUTH_MODE") or "rbac").strip().lower()
+
+
+def is_rbac_mode() -> bool:
+    return auth_mode() == "rbac"
+
+
+def session_secret() -> str:
+    return (os.environ.get("CRM_SESSION_SECRET") or "crm-dev-session-secret-change-me").strip()
+
+
+@dataclass
+class AuthContext:
+    username: str
+    user_id: Optional[int] = None
+    display_name: str = ""
+    roles: List[str] = field(default_factory=list)
+    role_ids: List[int] = field(default_factory=list)
+    permissions: Set[str] = field(default_factory=set)
+    dept_ids: List[int] = field(default_factory=list)
+    primary_dept_id: Optional[int] = None
+    role_data_scopes: Dict[tuple[str, str], str] = field(default_factory=dict)
+    is_super: bool = False
+    must_change_password: bool = False
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _user_session_version(db: Session, user_id: int) -> int:
+    row = db.execute(
+        text("SELECT session_version FROM sys_user WHERE id = :id"),
+        {"id": user_id},
+    ).fetchone()
+    if not row:
+        return 0
+    try:
+        return int(row[0] or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def make_session_token(user_id: int, username: str, session_version: int) -> str:
+    exp = int(datetime.now(timezone.utc).timestamp()) + SESSION_MAX_AGE
+    payload = f"{user_id}:{username}:{exp}:{session_version}"
+    sig = hmac.new(
+        session_secret().encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    return f"{payload}:{sig}"
+
+
+def verify_session_token(token: str, db: Session) -> Optional[tuple[int, str]]:
+    raw = (token or "").strip()
+    parts = raw.split(":")
+    if len(parts) == 4:
+        try:
+            user_id = int(parts[0])
+        except ValueError:
+            return None
+        username = parts[1]
+        try:
+            exp = int(parts[2])
+        except ValueError:
+            return None
+        sig = parts[3]
+        payload = f"{user_id}:{username}:{exp}"
+        session_version = 0
+    elif len(parts) == 5:
+        try:
+            user_id = int(parts[0])
+        except ValueError:
+            return None
+        username = parts[1]
+        try:
+            exp = int(parts[2])
+            session_version = int(parts[3])
+        except ValueError:
+            return None
+        sig = parts[4]
+        payload = f"{user_id}:{username}:{exp}:{session_version}"
+    else:
+        return None
+    expected = hmac.new(
+        session_secret().encode("utf-8"),
+        payload.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+    if not secrets.compare_digest(expected, sig):
+        return None
+    if exp < int(datetime.now(timezone.utc).timestamp()):
+        return None
+    row = _fetch_user_row(db, user_id)
+    if not row or row.get("status") != "active":
+        return None
+    if _user_session_version(db, user_id) != session_version:
+        return None
+    return user_id, username
+
+
+def _fetch_user_row(db: Session, user_id: int) -> Optional[Dict[str, Any]]:
+    row = db.execute(
+        text(
+            "SELECT id, username, display_name, status, last_login_at, session_version, "
+            "must_change_password, created_at, updated_at FROM sys_user WHERE id = :id"
+        ),
+        {"id": user_id},
+    ).mappings().first()
+    return dict(row) if row else None
+
+
+def _fetch_user_by_username(db: Session, username: str) -> Optional[Dict[str, Any]]:
+    row = db.execute(
+        text(
+            "SELECT id, username, display_name, password_hash, password_salt, password_iters, status "
+            "FROM sys_user WHERE LOWER(username) = LOWER(:u)"
+        ),
+        {"u": username.strip()},
+    ).mappings().first()
+    return dict(row) if row else None
+
+
+def get_user_roles(db: Session, user_id: int) -> List[str]:
+    rows = db.execute(
+        text(
+            "SELECT r.code FROM sys_role r "
+            "JOIN sys_user_role ur ON ur.role_id = r.id WHERE ur.user_id = :uid"
+        ),
+        {"uid": user_id},
+    ).fetchall()
+    return [str(r[0]) for r in rows]
+
+
+def get_user_permissions(db: Session, user_id: int) -> Set[str]:
+    roles = get_user_roles(db, user_id)
+    if ROLE_SUPER_ADMIN in roles:
+        return set(ALL_PERMISSION_CODES)
+    rows = db.execute(
+        text(
+            "SELECT DISTINCT p.code FROM sys_permission p "
+            "JOIN sys_role_permission rp ON rp.permission_id = p.id "
+            "JOIN sys_user_role ur ON ur.role_id = rp.role_id "
+            "WHERE ur.user_id = :uid"
+        ),
+        {"uid": user_id},
+    ).fetchall()
+    return {str(r[0]) for r in rows}
+
+
+def get_user_role_ids(db: Session, user_id: int) -> List[int]:
+    rows = db.execute(
+        text(
+            "SELECT r.id FROM sys_role r "
+            "JOIN sys_user_role ur ON ur.role_id = r.id WHERE ur.user_id = :uid ORDER BY r.id"
+        ),
+        {"uid": user_id},
+    ).fetchall()
+    return [int(r[0]) for r in rows]
+
+
+def get_user_dept_ids(db: Session, user_id: int) -> tuple[List[int], Optional[int]]:
+    rows = db.execute(
+        text(
+            "SELECT dept_id, is_primary FROM sys_user_dept WHERE user_id = :uid ORDER BY is_primary DESC, dept_id"
+        ),
+        {"uid": user_id},
+    ).fetchall()
+    dept_ids = [int(r[0]) for r in rows]
+    primary = None
+    for dept_id, is_primary in rows:
+        if int(is_primary or 0):
+            primary = int(dept_id)
+            break
+    if primary is None and dept_ids:
+        primary = dept_ids[0]
+    return dept_ids, primary
+
+
+def load_user_role_data_scopes(db: Session, user_id: int) -> Dict[tuple[str, str], str]:
+    rows = db.execute(
+        text(
+            "SELECT rds.resource_code, rds.action, rds.scope_type "
+            "FROM sys_role_data_scope rds "
+            "JOIN sys_user_role ur ON ur.role_id = rds.role_id "
+            "WHERE ur.user_id = :uid"
+        ),
+        {"uid": user_id},
+    ).fetchall()
+    merged: Dict[tuple[str, str], str] = {}
+    for resource_code, action, scope_type in rows:
+        key = (str(resource_code), str(action))
+        prev = merged.get(key, SCOPE_NONE)
+        merged[key] = merge_scope_types(prev, str(scope_type))
+    return merged
+
+
+def build_auth_context(db: Session, user_id: int, username: str) -> AuthContext:
+    row = _fetch_user_row(db, user_id)
+    if not row or row.get("status") != "active":
+        raise ValueError("inactive user")
+    roles = get_user_roles(db, user_id)
+    role_ids = get_user_role_ids(db, user_id)
+    perms = get_user_permissions(db, user_id)
+    dept_ids, primary_dept_id = get_user_dept_ids(db, user_id)
+    role_data_scopes = load_user_role_data_scopes(db, user_id)
+    is_super = ROLE_SUPER_ADMIN in roles
+    return AuthContext(
+        username=username,
+        user_id=user_id,
+        display_name=str(row.get("display_name") or username),
+        roles=roles,
+        role_ids=role_ids,
+        permissions=perms,
+        dept_ids=dept_ids,
+        primary_dept_id=primary_dept_id,
+        role_data_scopes=role_data_scopes,
+        is_super=is_super,
+        must_change_password=bool(int(row.get("must_change_password") or 0)),
+    )
+
+
+def verify_sys_user_password(db: Session, username: str, password: str) -> Optional[AuthContext]:
+    row = _fetch_user_by_username(db, username)
+    if not row or row.get("status") != "active":
+        return None
+    iters = int(row.get("password_iters") or pwd.PBKDF2_ITERATIONS)
+    if not pwd.verify_password(
+        password,
+        salt_b64=str(row.get("password_salt") or ""),
+        hash_b64=str(row.get("password_hash") or ""),
+        iterations=iters,
+    ):
+        return None
+    return build_auth_context(db, int(row["id"]), str(row["username"]))
+
+
+def user_has_permission(ctx: AuthContext, code: str) -> bool:
+    if ctx.is_super:
+        return True
+    return code in ctx.permissions
+
+
+def audit_log(
+    db: Session,
+    *,
+    actor: str,
+    action: str,
+    target_type: str = "",
+    target_id: str = "",
+    detail: str = "",
+    before: Optional[Dict[str, Any]] = None,
+    after: Optional[Dict[str, Any]] = None,
+) -> None:
+    db.execute(
+        text(
+            "INSERT INTO sys_audit_log (actor_username, action, target_type, target_id, detail, "
+            "before_json, after_json, created_at) "
+            "VALUES (:actor, :action, :tt, :tid, :detail, :before, :after, :at)"
+        ),
+        {
+            "actor": actor,
+            "action": action,
+            "tt": target_type,
+            "tid": target_id,
+            "detail": detail,
+            "before": json.dumps(before, ensure_ascii=False) if before is not None else "",
+            "after": json.dumps(after, ensure_ascii=False) if after is not None else "",
+            "at": _utc_now(),
+        },
+    )
+
+
+def bump_session_version(db: Session, user_id: int) -> None:
+    db.execute(
+        text(
+            "UPDATE sys_user SET session_version = COALESCE(session_version, 0) + 1, "
+            "updated_at = :at WHERE id = :uid"
+        ),
+        {"at": _utc_now(), "uid": user_id},
+    )
+
+
+def record_login(db: Session, user_id: int) -> None:
+    db.execute(
+        text("UPDATE sys_user SET last_login_at = :at, updated_at = :at WHERE id = :uid"),
+        {"at": _utc_now(), "uid": user_id},
+    )
+
+
+def seed_rbac_data(
+    db: Session,
+    *,
+    admin_username: str,
+    admin_password: str,
+) -> None:
+    """Idempotent seed: permissions, roles, admin user."""
+    now = _utc_now()
+    for code in sorted(ALL_PERMISSION_CODES):
+        existing = db.execute(
+            text("SELECT id FROM sys_permission WHERE code = :c"), {"c": code}
+        ).fetchone()
+        if not existing:
+            db.execute(
+                text(
+                    "INSERT INTO sys_permission (code, name, module) VALUES (:c, :n, :m)"
+                ),
+                {"c": code, "n": code, "m": code.split(".")[0]},
+            )
+
+    builtin_codes = {ROLE_SUPER_ADMIN, ROLE_SALES, ROLE_DELIVERY, ROLE_VIEWER}
+    role_defs = [
+        (ROLE_SUPER_ADMIN, "超级管理员", "拥有全部权限"),
+        (ROLE_SALES, "销售", "客户与商机"),
+        (ROLE_DELIVERY, "交付", "花名册、管道、手册、交接"),
+        (ROLE_VIEWER, "只读", "只读访问"),
+        ("RESTRICTED", "无业务权限", "测试/占位：不分配任何权限码"),
+    ]
+    role_ids: Dict[str, int] = {}
+    for code, name, desc in role_defs:
+        row = db.execute(text("SELECT id FROM sys_role WHERE code = :c"), {"c": code}).fetchone()
+        is_builtin = 1 if code in builtin_codes or code == ROLE_SUPER_ADMIN else 0
+        if row:
+            role_ids[code] = int(row[0])
+            db.execute(
+                text("UPDATE sys_role SET is_builtin = :b WHERE id = :id"),
+                {"b": is_builtin, "id": role_ids[code]},
+            )
+        else:
+            db.execute(
+                text(
+                    "INSERT INTO sys_role (code, name, description, is_builtin, created_at) "
+                    "VALUES (:c, :n, :d, :b, :at)"
+                ),
+                {"c": code, "n": name, "d": desc, "b": is_builtin, "at": now},
+            )
+            rid = db.execute(text("SELECT id FROM sys_role WHERE code = :c"), {"c": code}).fetchone()
+            role_ids[code] = int(rid[0])
+
+    for role_code, perms in ROLE_DEFAULT_PERMISSIONS.items():
+        if role_code not in role_ids:
+            continue
+        rid = role_ids[role_code]
+        db.execute(text("DELETE FROM sys_role_permission WHERE role_id = :rid"), {"rid": rid})
+        for perm_code in perms:
+            prow = db.execute(
+                text("SELECT id FROM sys_permission WHERE code = :c"), {"c": perm_code}
+            ).fetchone()
+            if not prow:
+                continue
+            db.execute(
+                text(
+                    "INSERT OR IGNORE INTO sys_role_permission (role_id, permission_id) "
+                    "VALUES (:rid, :pid)"
+                ),
+                {"rid": rid, "pid": int(prow[0])},
+            )
+
+    user_row = db.execute(
+        text("SELECT id FROM sys_user WHERE username = :u"), {"u": admin_username}
+    ).fetchone()
+    if user_row:
+        uid = int(user_row[0])
+    else:
+        salt_b64, hash_b64, iters = pwd.hash_password(admin_password)
+        db.execute(
+            text(
+                "INSERT INTO sys_user (username, display_name, password_hash, password_salt, "
+                "password_iters, status, created_at, updated_at) "
+                "VALUES (:u, :dn, :h, :s, :i, 'active', :at, :at)"
+            ),
+            {
+                "u": admin_username,
+                "dn": admin_username,
+                "h": hash_b64,
+                "s": salt_b64,
+                "i": iters,
+                "at": now,
+            },
+        )
+        uid = int(
+            db.execute(text("SELECT id FROM sys_user WHERE username = :u"), {"u": admin_username})
+            .fetchone()[0]
+        )
+
+    super_rid = role_ids[ROLE_SUPER_ADMIN]
+    db.execute(
+        text("INSERT OR IGNORE INTO sys_user_role (user_id, role_id) VALUES (:uid, :rid)"),
+        {"uid": uid, "rid": super_rid},
+    )
+    seed_departments(db)
+    seed_role_data_scopes(db, role_ids)
+    _ensure_user_dept_defaults(db, uid, [ROLE_SUPER_ADMIN])
+
+
+def seed_departments(db: Session) -> None:
+    now = _utc_now()
+    defs = [
+        ("ROOT", "公司", None, "ROOT", "general"),
+        ("SALES", "销售部", "ROOT", "ROOT/SALES", "sales"),
+        ("DELIVERY", "交付部", "ROOT", "ROOT/DELIVERY", "delivery"),
+        ("FINANCE", "财务部", "ROOT", "ROOT/FINANCE", "finance"),
+        ("ADMIN", "管理部", "ROOT", "ROOT/ADMIN", "general"),
+    ]
+    code_to_id: Dict[str, int] = {}
+    for code, name, parent_code, path, dept_type in defs:
+        row = db.execute(text("SELECT id FROM sys_dept WHERE code = :c"), {"c": code}).fetchone()
+        parent_id = code_to_id.get(parent_code) if parent_code else None
+        if row:
+            code_to_id[code] = int(row[0])
+            db.execute(
+                text(
+                    "UPDATE sys_dept SET name = :n, parent_id = :pid, path = :p, dept_type = :t, updated_at = :at "
+                    "WHERE code = :c"
+                ),
+                {"n": name, "pid": parent_id, "p": path, "t": dept_type, "at": now, "c": code},
+            )
+        else:
+            db.execute(
+                text(
+                    "INSERT INTO sys_dept (name, code, parent_id, path, dept_type, status, created_at, updated_at) "
+                    "VALUES (:n, :c, :pid, :p, :t, 'active', :at, :at)"
+                ),
+                {"n": name, "c": code, "pid": parent_id, "p": path, "t": dept_type, "at": now},
+            )
+            rid = db.execute(text("SELECT id FROM sys_dept WHERE code = :c"), {"c": code}).fetchone()
+            code_to_id[code] = int(rid[0])
+
+
+def _scope_rows_for_role(role_code: str) -> Dict[tuple[str, str], str]:
+    crm_resources = [c for c in RESOURCE_CODES if c.startswith("crm.")]
+    delivery_resources = [c for c in RESOURCE_CODES if c.startswith("delivery.")]
+    rows: Dict[tuple[str, str], str] = {}
+    if role_code == ROLE_SUPER_ADMIN:
+        for resource in RESOURCE_CODES:
+            for action in DATA_SCOPE_ACTIONS:
+                rows[(resource, action)] = SCOPE_ALL
+        return rows
+    if role_code == ROLE_SALES:
+        for resource in crm_resources:
+            for action in ("read", "write", "export"):
+                rows[(resource, action)] = SCOPE_ASSIGNED
+            rows[(resource, "delete")] = SCOPE_NONE
+        return rows
+    if role_code == ROLE_DELIVERY:
+        for resource in delivery_resources:
+            for action in ("read", "write", "export"):
+                rows[(resource, action)] = SCOPE_ASSIGNED
+            rows[(resource, "delete")] = SCOPE_NONE
+        rows[("crm.client", "read")] = SCOPE_ASSIGNED
+        return rows
+    if role_code == ROLE_VIEWER:
+        for resource in RESOURCE_CODES:
+            rows[(resource, "read")] = SCOPE_ASSIGNED
+            for action in ("write", "export", "delete"):
+                rows[(resource, action)] = SCOPE_NONE
+        return rows
+    if role_code == "RESTRICTED":
+        for resource in RESOURCE_CODES:
+            for action in DATA_SCOPE_ACTIONS:
+                rows[(resource, action)] = SCOPE_NONE
+        return rows
+    return rows
+
+
+def seed_role_data_scopes(db: Session, role_ids: Dict[str, int]) -> None:
+    now = _utc_now()
+    for role_code, rid in role_ids.items():
+        defaults = _scope_rows_for_role(role_code)
+        if not defaults:
+            continue
+        existing = db.execute(
+            text("SELECT COUNT(*) FROM sys_role_data_scope WHERE role_id = :rid"),
+            {"rid": rid},
+        ).scalar()
+        if int(existing or 0) > 0:
+            continue
+        for (resource_code, action), scope_type in defaults.items():
+            db.execute(
+                text(
+                    "INSERT INTO sys_role_data_scope (role_id, resource_code, action, scope_type, created_at, updated_at) "
+                    "VALUES (:rid, :rc, :act, :st, :at, :at)"
+                ),
+                {"rid": rid, "rc": resource_code, "act": action, "st": scope_type, "at": now},
+            )
+
+
+def _ensure_user_dept_defaults(db: Session, user_id: int, role_codes: List[str]) -> None:
+    existing = db.execute(
+        text("SELECT 1 FROM sys_user_dept WHERE user_id = :uid LIMIT 1"),
+        {"uid": user_id},
+    ).fetchone()
+    if existing:
+        return
+    dept_code = "ADMIN"
+    if ROLE_SALES in role_codes:
+        dept_code = "SALES"
+    elif ROLE_DELIVERY in role_codes:
+        dept_code = "DELIVERY"
+    row = db.execute(text("SELECT id FROM sys_dept WHERE code = :c"), {"c": dept_code}).fetchone()
+    if not row:
+        return
+    db.execute(
+        text(
+            "INSERT OR IGNORE INTO sys_user_dept (user_id, dept_id, is_primary, created_at) "
+            "VALUES (:uid, :did, 1, :at)"
+        ),
+        {"uid": user_id, "did": int(row[0]), "at": _utc_now()},
+    )
+
+
+def resolve_rbac_from_request(
+    request,
+    db: Session,
+    *,
+    legacy_verify: Callable[[str, str], bool],
+    legacy_effective_username: Callable[[], str],
+) -> Optional[AuthContext]:
+    import security_foundation as sec
+
+    cookie = request.cookies.get(SESSION_COOKIE_NAME) or ""
+    parsed = verify_session_token(cookie, db)
+    if parsed:
+        user_id, username = parsed
+        try:
+            return build_auth_context(db, user_id, username)
+        except ValueError:
+            return None
+
+    creds = sec._parse_basic_auth(request)
+    if creds:
+        u, p = creds
+        ctx = verify_sys_user_password(db, u, p)
+        if ctx:
+            return ctx
+        if legacy_verify(u, p) and u.strip().lower() == legacy_effective_username().lower():
+            return AuthContext(
+                username=legacy_effective_username(),
+                user_id=None,
+                display_name=u,
+                roles=[ROLE_SUPER_ADMIN],
+                permissions=set(ALL_PERMISSION_CODES),
+                is_super=True,
+            )
+    legacy_cookie = request.cookies.get(sec.LEGACY_COOKIE_NAME) or ""
+    eff = legacy_effective_username()
+    if sec.verify_legacy_session_token(legacy_cookie, effective_username=eff):
+        ctx = _fetch_user_by_username(db, eff)
+        if ctx and ctx.get("status") == "active":
+            return build_auth_context(db, int(ctx["id"]), eff)
+        return AuthContext(
+            username=eff,
+            user_id=None,
+            display_name=eff,
+            roles=[ROLE_SUPER_ADMIN],
+            permissions=set(ALL_PERMISSION_CODES),
+            is_super=True,
+        )
+    return None
+
+
+def resolve_legacy_from_request(
+    request,
+    *,
+    legacy_verify: Callable[[str, str], bool],
+    legacy_effective_username: Callable[[], str],
+) -> Optional[AuthContext]:
+    import security_foundation as sec
+
+    eff = legacy_effective_username()
+    creds = sec._parse_basic_auth(request)
+    if creds and legacy_verify(creds[0], creds[1]) and creds[0].strip().lower() == eff.lower():
+        return AuthContext(
+            username=eff,
+            display_name=eff,
+            roles=[ROLE_SUPER_ADMIN],
+            permissions=set(ALL_PERMISSION_CODES),
+            is_super=True,
+        )
+    cookie = request.cookies.get(sec.LEGACY_COOKIE_NAME) or ""
+    if sec.verify_legacy_session_token(cookie, effective_username=eff):
+        return AuthContext(
+            username=eff,
+            display_name=eff,
+            roles=[ROLE_SUPER_ADMIN],
+            permissions=set(ALL_PERMISSION_CODES),
+            is_super=True,
+        )
+    return None
+
+
+def list_users(
+    db: Session,
+    *,
+    q: str = "",
+    limit: int = 0,
+    offset: int = 0,
+) -> Dict[str, Any]:
+    sql = (
+        "SELECT id, username, display_name, status, last_login_at, must_change_password, "
+        "created_at, updated_at FROM sys_user WHERE 1=1"
+    )
+    params: Dict[str, Any] = {}
+    needle = (q or "").strip().lower()
+    if needle:
+        sql += " AND (LOWER(username) LIKE :q OR LOWER(display_name) LIKE :q)"
+        params["q"] = f"%{needle}%"
+    count_sql = "SELECT COUNT(*) FROM sys_user WHERE 1=1"
+    if needle:
+        count_sql += " AND (LOWER(username) LIKE :q OR LOWER(display_name) LIKE :q)"
+    total = int(db.execute(text(count_sql), params).scalar() or 0)
+    sql += " ORDER BY id"
+    if limit > 0:
+        sql += " LIMIT :lim OFFSET :off"
+        params["lim"] = max(1, min(limit, 500))
+        params["off"] = max(0, offset)
+    rows = db.execute(text(sql), params).mappings().all()
+    out = []
+    for row in rows:
+        d = dict(row)
+        uid = int(d["id"])
+        d["must_change_password"] = bool(int(d.get("must_change_password") or 0))
+        d["roles"] = get_user_roles(db, uid)
+        d["role_labels"] = _role_labels_for_codes(db, d["roles"])
+        dept_ids, primary_dept_id = get_user_dept_ids(db, uid)
+        d["dept_ids"] = dept_ids
+        d["primary_dept_id"] = primary_dept_id
+        if dept_ids:
+            placeholders = ", ".join(f":d{i}" for i in range(len(dept_ids)))
+            params = {f"d{i}": did for i, did in enumerate(dept_ids)}
+            drows = db.execute(
+                text(f"SELECT id, name, code FROM sys_dept WHERE id IN ({placeholders})"),
+                params,
+            ).fetchall()
+            d["depts"] = [{"id": int(r[0]), "name": str(r[1]), "code": str(r[2])} for r in drows]
+        else:
+            d["depts"] = []
+        out.append(d)
+    return {"items": out, "total": total, "limit": limit, "offset": offset}
+
+
+def _role_labels_for_codes(db: Session, codes: List[str]) -> List[str]:
+    if not codes:
+        return []
+    placeholders = ", ".join(f":c{i}" for i in range(len(codes)))
+    params = {f"c{i}": c for i, c in enumerate(codes)}
+    rows = db.execute(
+        text(f"SELECT code, name FROM sys_role WHERE code IN ({placeholders})"),
+        params,
+    ).fetchall()
+    name_map = {str(r[0]): str(r[1]) for r in rows}
+    return [name_map.get(c, c) for c in codes]
+
+
+def _role_permission_codes(db: Session, role_id: int) -> List[str]:
+    rows = db.execute(
+        text(
+            "SELECT p.code FROM sys_permission p "
+            "JOIN sys_role_permission rp ON rp.permission_id = p.id "
+            "WHERE rp.role_id = :rid ORDER BY p.code"
+        ),
+        {"rid": role_id},
+    ).fetchall()
+    return [str(r[0]) for r in rows]
+
+
+def list_roles(db: Session) -> List[Dict[str, Any]]:
+    rows = db.execute(
+        text(
+            "SELECT id, code, name, description, is_builtin, created_at FROM sys_role ORDER BY id"
+        )
+    ).mappings().all()
+    out = []
+    for row in rows:
+        d = dict(row)
+        rid = int(d["id"])
+        d["permissions"] = _role_permission_codes(db, rid)
+        d["is_builtin"] = bool(int(d.get("is_builtin") or 0))
+        cnt = db.execute(
+            text("SELECT COUNT(*) FROM sys_user_role WHERE role_id = :rid"),
+            {"rid": rid},
+        ).fetchone()
+        d["user_count"] = int(cnt[0]) if cnt else 0
+        out.append(d)
+    return out
+
+
+def list_audit_logs(
+    db: Session,
+    *,
+    actor_username: str = "",
+    target_type: str = "",
+    action: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    limit: int = 100,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    q = "SELECT id, actor_username, action, target_type, target_id, detail, before_json, after_json, created_at FROM sys_audit_log WHERE 1=1"
+    params: Dict[str, Any] = {}
+    if actor_username:
+        q += " AND actor_username LIKE :actor"
+        params["actor"] = f"%{actor_username}%"
+    if target_type:
+        q += " AND target_type = :tt"
+        params["tt"] = target_type
+    if action:
+        q += " AND action = :act"
+        params["act"] = action
+    if date_from:
+        q += " AND created_at >= :df"
+        params["df"] = date_from
+    if date_to:
+        q += " AND created_at <= :dt"
+        params["dt"] = date_to
+    q += " ORDER BY id DESC LIMIT :lim OFFSET :off"
+    params["lim"] = max(1, min(limit, 500))
+    params["off"] = max(0, offset)
+    rows = db.execute(text(q), params).mappings().all()
+    out = []
+    for row in rows:
+        d = dict(row)
+        for key in ("before_json", "after_json"):
+            raw = d.get(key) or ""
+            if raw:
+                try:
+                    d[key.replace("_json", "")] = json.loads(raw)
+                except json.JSONDecodeError:
+                    d[key.replace("_json", "")] = raw
+            else:
+                d[key.replace("_json", "")] = None
+        out.append(d)
+    return out
+
+
+def create_user(
+    db: Session,
+    *,
+    username: str,
+    password: str,
+    display_name: str,
+    role_codes: List[str],
+    actor: str,
+    actor_ctx: AuthContext,
+) -> Dict[str, Any]:
+    from auth import policy
+
+    if _fetch_user_by_username(db, username):
+        raise ValueError("用户名已存在")
+    policy.assert_user_roles_change(db, user_id=0, new_role_codes=role_codes, actor=actor_ctx)
+    now = _utc_now()
+    salt_b64, hash_b64, iters = pwd.hash_password(password)
+    db.execute(
+        text(
+            "INSERT INTO sys_user (username, display_name, password_hash, password_salt, "
+            "password_iters, status, session_version, created_at, updated_at) "
+            "VALUES (:u, :dn, :h, :s, :i, 'active', 0, :at, :at)"
+        ),
+        {
+            "u": username,
+            "dn": display_name or username,
+            "h": hash_b64,
+            "s": salt_b64,
+            "i": iters,
+            "at": now,
+        },
+    )
+    row = _fetch_user_by_username(db, username)
+    if not row:
+        raise ValueError("用户创建失败")
+    uid = int(row["id"])
+    _set_user_roles(db, uid, role_codes)
+    _ensure_user_dept_defaults(db, uid, role_codes)
+    assigned = get_user_roles(db, uid)
+    if role_codes and not assigned:
+        raise ValueError("角色无效，请从列表中选择")
+    audit_log(
+        db,
+        actor=actor,
+        action="user.create",
+        target_type="user",
+        target_id=str(uid),
+        detail=username,
+        after={"username": username, "roles": assigned},
+    )
+    return {"id": uid, "username": username}
+
+
+def update_user_profile(
+    db: Session,
+    user_id: int,
+    *,
+    display_name: str,
+    actor: str,
+) -> None:
+    row = _fetch_user_row(db, user_id)
+    if not row:
+        raise ValueError("用户不存在")
+    before = {"display_name": row.get("display_name")}
+    now = _utc_now()
+    db.execute(
+        text("UPDATE sys_user SET display_name = :dn, updated_at = :at WHERE id = :uid"),
+        {"dn": display_name, "at": now, "uid": user_id},
+    )
+    audit_log(
+        db,
+        actor=actor,
+        action="user.update",
+        target_type="user",
+        target_id=str(user_id),
+        detail=str(row.get("username")),
+        before=before,
+        after={"display_name": display_name},
+    )
+
+
+def set_user_status(db: Session, user_id: int, status: str, *, actor: str, actor_ctx: AuthContext) -> None:
+    from auth import policy
+
+    if status not in ("active", "disabled"):
+        raise ValueError("无效状态")
+    row = _fetch_user_row(db, user_id)
+    if not row:
+        raise ValueError("用户不存在")
+    policy.assert_user_status_change(db, user_id=user_id, new_status=status, actor=actor_ctx)
+    before = {"status": row.get("status")}
+    now = _utc_now()
+    db.execute(
+        text("UPDATE sys_user SET status = :st, updated_at = :at WHERE id = :uid"),
+        {"st": status, "at": now, "uid": user_id},
+    )
+    if status != "active":
+        bump_session_version(db, user_id)
+    audit_log(
+        db,
+        actor=actor,
+        action="user.disable" if status == "disabled" else "user.enable",
+        target_type="user",
+        target_id=str(user_id),
+        detail=str(row.get("username")),
+        before=before,
+        after={"status": status},
+    )
+
+
+def update_user_roles(
+    db: Session,
+    user_id: int,
+    role_codes: List[str],
+    *,
+    actor: str,
+    actor_ctx: AuthContext,
+) -> None:
+    from auth import policy
+
+    row = _fetch_user_row(db, user_id)
+    if not row:
+        raise ValueError("用户不存在")
+    before_roles = get_user_roles(db, user_id)
+    policy.assert_user_roles_change(db, user_id=user_id, new_role_codes=role_codes, actor=actor_ctx)
+    _set_user_roles(db, user_id, role_codes)
+    after_roles = get_user_roles(db, user_id)
+    audit_log(
+        db,
+        actor=actor,
+        action="user.roles",
+        target_type="user",
+        target_id=str(user_id),
+        detail=str(row.get("username")),
+        before={"roles": before_roles},
+        after={"roles": after_roles},
+    )
+
+
+def reset_user_password(
+    db: Session,
+    user_id: int,
+    password: str,
+    *,
+    actor: str,
+    must_change_password: bool = False,
+) -> None:
+    row = _fetch_user_row(db, user_id)
+    if not row:
+        raise ValueError("用户不存在")
+    salt_b64, hash_b64, iters = pwd.hash_password(password)
+    now = _utc_now()
+    db.execute(
+        text(
+            "UPDATE sys_user SET password_hash = :h, password_salt = :s, "
+            "password_iters = :i, must_change_password = :mcp, updated_at = :at WHERE id = :uid"
+        ),
+        {
+            "h": hash_b64,
+            "s": salt_b64,
+            "i": iters,
+            "mcp": 1 if must_change_password else 0,
+            "at": now,
+            "uid": user_id,
+        },
+    )
+    bump_session_version(db, user_id)
+    audit_log(
+        db,
+        actor=actor,
+        action="user.password_reset",
+        target_type="user",
+        target_id=str(user_id),
+        detail=str(row.get("username") or user_id),
+        before={},
+        after={"password_reset": True, "must_change_password": must_change_password},
+    )
+
+
+def clear_must_change_password(db: Session, user_id: int) -> None:
+    db.execute(
+        text("UPDATE sys_user SET must_change_password = 0, updated_at = :at WHERE id = :uid"),
+        {"at": _utc_now(), "uid": user_id},
+    )
+
+
+def change_own_password(
+    db: Session,
+    user_id: int,
+    *,
+    current_password: str,
+    new_password: str,
+) -> None:
+    row = db.execute(
+        text(
+            "SELECT username, password_hash, password_salt, password_iters, status "
+            "FROM sys_user WHERE id = :id"
+        ),
+        {"id": user_id},
+    ).mappings().first()
+    if not row or row.get("status") != "active":
+        raise ValueError("用户不存在或已禁用")
+    iters = int(row.get("password_iters") or pwd.PBKDF2_ITERATIONS)
+    if not pwd.verify_password(
+        current_password,
+        salt_b64=str(row.get("password_salt") or ""),
+        hash_b64=str(row.get("password_hash") or ""),
+        iterations=iters,
+    ):
+        raise ValueError("当前密码不正确")
+    salt_b64, hash_b64, iters = pwd.hash_password(new_password)
+    now = _utc_now()
+    db.execute(
+        text(
+            "UPDATE sys_user SET password_hash = :h, password_salt = :s, password_iters = :i, "
+            "must_change_password = 0, updated_at = :at WHERE id = :uid"
+        ),
+        {"h": hash_b64, "s": salt_b64, "i": iters, "at": now, "uid": user_id},
+    )
+    bump_session_version(db, user_id)
+
+
+def batch_update_user_roles(
+    db: Session,
+    user_ids: List[int],
+    role_codes: List[str],
+    *,
+    mode: str,
+    actor: str,
+    actor_ctx: AuthContext,
+) -> Dict[str, Any]:
+    if not user_ids:
+        raise ValueError("请选择至少一个用户")
+    if not role_codes:
+        raise ValueError("请选择至少一个角色")
+    if mode not in ("replace", "add"):
+        raise ValueError("无效批量模式")
+    updated = 0
+    for uid in user_ids:
+        if mode == "add":
+            merged = list(dict.fromkeys(get_user_roles(db, uid) + role_codes))
+            update_user_roles(db, uid, merged, actor=actor, actor_ctx=actor_ctx)
+        else:
+            update_user_roles(db, uid, role_codes, actor=actor, actor_ctx=actor_ctx)
+        updated += 1
+    audit_log(
+        db,
+        actor=actor,
+        action="user.roles.batch",
+        target_type="user",
+        target_id=",".join(str(i) for i in user_ids),
+        detail=f"mode={mode}",
+        after={"role_codes": role_codes, "count": updated},
+    )
+    return {"updated": updated}
+
+
+def import_users_csv(
+    db: Session,
+    rows: List[Dict[str, str]],
+    *,
+    actor: str,
+    actor_ctx: AuthContext,
+) -> Dict[str, Any]:
+    created = 0
+    skipped = 0
+    errors: List[str] = []
+    for i, row in enumerate(rows, start=2):
+        username = (row.get("username") or "").strip()
+        password = (row.get("password") or "").strip()
+        display_name = (row.get("display_name") or "").strip()
+        roles_raw = (row.get("role_codes") or row.get("roles") or "").strip()
+        if not username and not password and not roles_raw:
+            continue
+        if not username or not password:
+            errors.append(f"第{i}行: 缺少用户名或密码")
+            skipped += 1
+            continue
+        role_codes = [c.strip() for c in roles_raw.replace(";", ",").split(",") if c.strip()]
+        if not role_codes:
+            role_codes = ["VIEWER"]
+        if _fetch_user_by_username(db, username):
+            skipped += 1
+            continue
+        try:
+            create_user(
+                db,
+                username=username,
+                password=password,
+                display_name=display_name,
+                role_codes=role_codes,
+                actor=actor,
+                actor_ctx=actor_ctx,
+            )
+            created += 1
+        except Exception as e:
+            errors.append(f"第{i}行 {username}: {e}")
+            skipped += 1
+    audit_log(
+        db,
+        actor=actor,
+        action="user.import",
+        target_type="user",
+        target_id="csv",
+        detail=f"created={created} skipped={skipped}",
+        after={"created": created, "skipped": skipped, "errors": errors[:20]},
+    )
+    return {"created": created, "skipped": skipped, "errors": errors}
+
+
+def create_custom_role(db: Session, *, name: str, description: str, actor: str) -> Dict[str, Any]:
+    from auth import policy
+
+    label = policy.validate_custom_role_name(name)
+    code = policy.generate_custom_role_code()
+    now = _utc_now()
+    db.execute(
+        text(
+            "INSERT INTO sys_role (code, name, description, is_builtin, created_at) "
+            "VALUES (:c, :n, :d, 0, :at)"
+        ),
+        {"c": code, "n": label, "d": (description or "").strip(), "at": now},
+    )
+    row = db.execute(text("SELECT id FROM sys_role WHERE code = :c"), {"c": code}).fetchone()
+    rid = int(row[0])
+    audit_log(
+        db,
+        actor=actor,
+        action="role.create",
+        target_type="role",
+        target_id=str(rid),
+        detail=code,
+        after={"code": code, "name": label},
+    )
+    return {"id": rid, "code": code, "name": label}
+
+
+def update_role_meta(
+    db: Session,
+    role_id: int,
+    *,
+    name: str,
+    description: str,
+    actor: str,
+) -> None:
+    role = db.execute(
+        text("SELECT id, code, name, description, is_builtin FROM sys_role WHERE id = :id"),
+        {"id": role_id},
+    ).mappings().first()
+    if not role:
+        raise ValueError("角色不存在")
+    before = dict(role)
+    db.execute(
+        text("UPDATE sys_role SET name = :n, description = :d WHERE id = :id"),
+        {"n": name.strip(), "d": (description or "").strip(), "id": role_id},
+    )
+    audit_log(
+        db,
+        actor=actor,
+        action="role.update",
+        target_type="role",
+        target_id=str(role_id),
+        detail=str(before.get("code")),
+        before={"name": before.get("name"), "description": before.get("description")},
+        after={"name": name, "description": description},
+    )
+
+
+def _set_user_roles(db: Session, user_id: int, role_codes: List[str]) -> None:
+    db.execute(text("DELETE FROM sys_user_role WHERE user_id = :uid"), {"uid": user_id})
+    for code in role_codes:
+        row = db.execute(text("SELECT id FROM sys_role WHERE code = :c"), {"c": code}).fetchone()
+        if row:
+            db.execute(
+                text("INSERT OR IGNORE INTO sys_user_role (user_id, role_id) VALUES (:uid, :rid)"),
+                {"uid": user_id, "rid": int(row[0])},
+            )
+
+
+def set_role_permissions(
+    db: Session,
+    role_id: int,
+    permission_codes: List[str],
+    *,
+    actor: str,
+    actor_ctx: AuthContext,
+) -> None:
+    from auth import policy
+
+    role = policy.assert_can_edit_role_permissions(actor_ctx, db, role_id)
+    before_perms = _role_permission_codes(db, role_id)
+    db.execute(text("DELETE FROM sys_role_permission WHERE role_id = :rid"), {"rid": role_id})
+    for code in permission_codes:
+        row = db.execute(text("SELECT id FROM sys_permission WHERE code = :c"), {"c": code}).fetchone()
+        if row:
+            db.execute(
+                text(
+                    "INSERT OR IGNORE INTO sys_role_permission (role_id, permission_id) "
+                    "VALUES (:rid, :pid)"
+                ),
+                {"rid": role_id, "pid": int(row[0])},
+            )
+    after_perms = _role_permission_codes(db, role_id)
+    audit_log(
+        db,
+        actor=actor,
+        action="role.permissions",
+        target_type="role",
+        target_id=str(role_id),
+        detail=str(role.get("code")),
+        before={"permissions": before_perms},
+        after={"permissions": after_perms},
+    )
+
+
+def list_departments(db: Session) -> List[Dict[str, Any]]:
+    rows = db.execute(
+        text(
+            "SELECT id, name, code, parent_id, path, dept_type, status FROM sys_dept ORDER BY path"
+        )
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def set_user_departments(
+    db: Session,
+    user_id: int,
+    dept_ids: List[int],
+    *,
+    primary_dept_id: Optional[int] = None,
+    actor: str,
+) -> None:
+    row = _fetch_user_row(db, user_id)
+    if not row:
+        raise ValueError("用户不存在")
+    if not dept_ids:
+        raise ValueError("至少选择一个部门")
+    if not dept_ids:
+        valid = 0
+    else:
+        placeholders = ", ".join(f":vd{i}" for i in range(len(dept_ids)))
+        params = {f"vd{i}": int(d) for i, d in enumerate(dept_ids)}
+        valid = db.execute(
+            text(f"SELECT COUNT(*) FROM sys_dept WHERE id IN ({placeholders})"),
+            params,
+        ).scalar()
+    if int(valid or 0) != len(dept_ids):
+        raise ValueError("部门无效")
+    primary = primary_dept_id if primary_dept_id in dept_ids else dept_ids[0]
+    db.execute(text("DELETE FROM sys_user_dept WHERE user_id = :uid"), {"uid": user_id})
+    now = _utc_now()
+    for did in dept_ids:
+        db.execute(
+            text(
+                "INSERT INTO sys_user_dept (user_id, dept_id, is_primary, created_at) "
+                "VALUES (:uid, :did, :pri, :at)"
+            ),
+            {"uid": user_id, "did": int(did), "pri": 1 if int(did) == int(primary) else 0, "at": now},
+        )
+    audit_log(
+        db,
+        actor=actor,
+        action="user.depts",
+        target_type="user",
+        target_id=str(user_id),
+        detail=str(row.get("username")),
+        after={"dept_ids": dept_ids, "primary_dept_id": primary},
+    )
+
+
+def get_role_data_scopes(db: Session, role_id: int) -> List[Dict[str, Any]]:
+    rows = db.execute(
+        text(
+            "SELECT resource_code, action, scope_type FROM sys_role_data_scope "
+            "WHERE role_id = :rid ORDER BY resource_code, action"
+        ),
+        {"rid": role_id},
+    ).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def set_role_data_scopes(
+    db: Session,
+    role_id: int,
+    scopes: List[Dict[str, str]],
+    *,
+    actor: str,
+    actor_ctx: AuthContext,
+) -> None:
+    from auth import policy
+    from auth.data_scope_catalog import SCOPE_TYPES
+
+    role = policy.assert_can_edit_role_permissions(actor_ctx, db, role_id)
+    if str(role.get("code")) == ROLE_SUPER_ADMIN:
+        raise ValueError("超级管理员数据范围为全部，不可修改")
+    valid_types = set(SCOPE_TYPES)
+    now = _utc_now()
+    before = get_role_data_scopes(db, role_id)
+    db.execute(text("DELETE FROM sys_role_data_scope WHERE role_id = :rid"), {"rid": role_id})
+    for item in scopes:
+        rc = str(item.get("resource_code") or "").strip()
+        act = str(item.get("action") or "").strip()
+        st = str(item.get("scope_type") or "").strip()
+        if rc not in RESOURCE_CODES or act not in DATA_SCOPE_ACTIONS or st not in valid_types:
+            raise ValueError(f"无效数据范围配置: {item}")
+        db.execute(
+            text(
+                "INSERT INTO sys_role_data_scope (role_id, resource_code, action, scope_type, created_at, updated_at) "
+                "VALUES (:rid, :rc, :act, :st, :at, :at)"
+            ),
+            {"rid": role_id, "rc": rc, "act": act, "st": st, "at": now},
+        )
+    after = get_role_data_scopes(db, role_id)
+    audit_log(
+        db,
+        actor=actor,
+        action="role.data_scopes",
+        target_type="role",
+        target_id=str(role_id),
+        detail=str(role.get("code")),
+        before={"data_scopes": before},
+        after={"data_scopes": after},
+    )
+
+
+def build_data_scope_matrix(role_scopes: Optional[List[Dict[str, Any]]] = None) -> dict:
+    from auth.data_scope_catalog import SCOPE_TYPES
+
+    scope_labels = {
+        "none": "无",
+        "self": "仅本人",
+        "assigned": "分配给我",
+        "dept": "本部门",
+        "dept_and_child": "本部门及下级",
+        "all": "全部",
+        "shared": "共享",
+    }
+    granted = {
+        (str(x["resource_code"]), str(x["action"])): str(x["scope_type"])
+        for x in (role_scopes or [])
+    }
+    resource_labels = {
+        "crm.client": "客户",
+        "crm.opportunity": "商机",
+        "crm.contact": "联系人",
+        "crm.visit": "客户拜访",
+        "delivery.roster": "花名册",
+        "delivery.pipeline": "交付管道",
+        "delivery.interviews": "访谈记录",
+        "delivery.handbook": "交付手册",
+        "delivery.handoff": "项目交接",
+        "delivery.settlement": "结算台账",
+        "file": "文件",
+    }
+    action_labels = {"read": "查看", "write": "编辑", "export": "导出", "delete": "删除"}
+    rows = []
+    for resource in RESOURCE_CODES:
+        cells = {}
+        for action in DATA_SCOPE_ACTIONS:
+            cells[action] = granted.get((resource, action), SCOPE_NONE)
+        rows.append({
+            "resource_code": resource,
+            "label": resource_labels.get(resource, resource),
+            "cells": cells,
+        })
+    return {
+        "scope_types": [{"code": c, "label": scope_labels.get(c, c)} for c in SCOPE_TYPES if c != "shared"],
+        "actions": [{"code": a, "label": action_labels[a]} for a in DATA_SCOPE_ACTIONS],
+        "rows": rows,
+    }
+
+
+def user_permission_preview(db: Session, user_id: int) -> Dict[str, Any]:
+    row = _fetch_user_row(db, user_id)
+    if not row:
+        raise ValueError("用户不存在")
+    ctx = build_auth_context(db, user_id, str(row["username"]))
+    from auth.data_scope import get_effective_data_scope
+
+    data_scopes = []
+    for resource in RESOURCE_CODES:
+        for action in DATA_SCOPE_ACTIONS:
+            perm_codes = [
+                p for p in ctx.permissions if permission_to_resource(p) == resource
+            ]
+            if action == "read" and not any(p.endswith(".read") for p in perm_codes):
+                if not any(
+                    p.startswith(resource.split(".")[0]) for p in ctx.permissions
+                ):
+                    continue
+            scope = get_effective_data_scope(ctx, resource, action)
+            data_scopes.append({
+                "resource_code": resource,
+                "action": action,
+                "scope_type": scope,
+            })
+    dept_ids, primary_dept_id = get_user_dept_ids(db, user_id)
+    return {
+        "user": {
+            "id": user_id,
+            "username": ctx.username,
+            "display_name": ctx.display_name,
+        },
+        "roles": ctx.roles,
+        "permissions": sorted(ctx.permissions),
+        "dept_ids": dept_ids,
+        "primary_dept_id": primary_dept_id,
+        "data_scopes": data_scopes,
+    }
+
+
+def bootstrap_after_migrate(
+    engine: Engine,
+    *,
+    admin_username: str,
+    admin_password: str,
+) -> None:
+    from sqlalchemy.orm import sessionmaker
+
+    SessionLocal = sessionmaker(bind=engine)
+    db = SessionLocal()
+    try:
+        seed_rbac_data(db, admin_username=admin_username, admin_password=admin_password)
+        seed_departments(db)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

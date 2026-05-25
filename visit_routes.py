@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from auth.deps import require_permission
 from visit_core import (
     VisitBody,
     _visit_period_raw,
@@ -33,7 +34,10 @@ def register_visit_routes(
         return page_renderer("pages/customer_visits.html", request)
 
     @app.get("/api/customer-visits/filters")
-    async def visit_filters(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def visit_filters(
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.visits.read")),
+    ):
         rows = db.query(VisitRecord).all()
         sales_from_visits = {(r.salesperson or "").strip() for r in rows if (r.salesperson or "").strip()}
         owners = {(c.owner or "").strip() for c in db.query(Client).all() if (c.owner or "").strip()}
@@ -54,7 +58,7 @@ def register_visit_routes(
         client_id: Optional[int] = None,
         week: Optional[str] = None,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        user: str = Depends(require_permission("crm.visits.read")),
     ):
         q = db.query(VisitRecord)
         if client_id:
@@ -80,7 +84,9 @@ def register_visit_routes(
 
     @app.get("/api/customer-visits/{visit_id}")
     async def get_customer_visit(
-        visit_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)
+        visit_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.visits.read")),
     ):
         v = db.query(VisitRecord).filter(VisitRecord.id == visit_id).first()
         if not v:
@@ -92,7 +98,9 @@ def register_visit_routes(
 
     @app.post("/api/customer-visits")
     async def create_customer_visit(
-        body: VisitBody, db: Session = Depends(get_db), user: str = Depends(authenticate)
+        body: VisitBody,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.visits.write")),
     ):
         client = db.query(Client).filter(Client.id == body.client_id).first()
         if not client:
@@ -112,7 +120,7 @@ def register_visit_routes(
         visit_id: int,
         body: VisitBody,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        user: str = Depends(require_permission("crm.visits.write")),
     ):
         v = db.query(VisitRecord).filter(VisitRecord.id == visit_id).first()
         if not v:
@@ -127,7 +135,9 @@ def register_visit_routes(
 
     @app.delete("/api/customer-visits/{visit_id}")
     async def delete_customer_visit(
-        visit_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)
+        visit_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.visits.write")),
     ):
         v = db.query(VisitRecord).filter(VisitRecord.id == visit_id).first()
         if not v:

@@ -121,26 +121,50 @@
             z-index: 3;
         }
         /* 三键操作列固定宽（colgroup + 单元格双保险） */
-        :root { --crm-op-col-width: 5.75rem; }
+        :root {
+            --crm-op-col-width: 9rem;
+            --crm-op-col-width-wide: 13rem;
+            --crm-op-col-width-xl: 18rem;
+        }
         col.crm-col-op {
             width: var(--crm-op-col-width) !important;
             min-width: var(--crm-op-col-width) !important;
             max-width: var(--crm-op-col-width) !important;
         }
+        col.crm-col-op-wide {
+            width: var(--crm-op-col-width-wide) !important;
+            min-width: var(--crm-op-col-width-wide) !important;
+            max-width: var(--crm-op-col-width-wide) !important;
+        }
+        col.crm-col-op-xl {
+            width: var(--crm-op-col-width-xl) !important;
+            min-width: var(--crm-op-col-width-xl) !important;
+            max-width: var(--crm-op-col-width-xl) !important;
+        }
         /* 通用：操作列固定在最右侧（表头/表体分层） */
         .crm-table th.crm-sticky-right-op,
-        .crm-table td.crm-sticky-right-op {
+        .crm-table td.crm-sticky-right-op,
+        .crm-table th.turnover-sticky-right-actions,
+        .crm-table td.turnover-sticky-right-actions,
+        .crm-table th.roster-sticky-op,
+        .crm-table td.roster-sticky-op {
             width: var(--crm-op-col-width) !important;
             min-width: var(--crm-op-col-width) !important;
             max-width: var(--crm-op-col-width) !important;
-            padding-left: 0.25rem !important;
-            padding-right: 0.25rem !important;
+            padding-left: 0.35rem !important;
+            padding-right: 0.35rem !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
         }
         .crm-sticky-right-op button.mr-2,
-        .crm-sticky-right-op .mr-2 {
+        .crm-sticky-right-op .mr-2,
+        .turnover-sticky-right-actions button.mr-2,
+        .roster-sticky-op button.mr-2 {
             margin-right: 0.25rem !important;
         }
-        .crm-sticky-right-op {
+        .crm-sticky-right-op,
+        .turnover-sticky-right-actions,
+        .roster-sticky-op {
             position: sticky;
             right: 0;
             width: var(--crm-op-col-width) !important;
@@ -148,14 +172,20 @@
             max-width: var(--crm-op-col-width) !important;
             box-sizing: border-box;
             white-space: nowrap;
+            overflow: visible !important;
+            text-overflow: clip !important;
             background: #fff;
             border-left: 1px solid #e5e7eb;
             box-shadow: -8px 0 16px -10px rgba(15, 23, 42, 0.18);
         }
-        .crm-table tbody .crm-sticky-right-op {
+        .crm-table tbody .crm-sticky-right-op,
+        .crm-table tbody .turnover-sticky-right-actions,
+        .crm-table tbody .roster-sticky-op {
             z-index: 8 !important;
         }
-        .crm-table thead .crm-sticky-right-op {
+        .crm-table thead .crm-sticky-right-op,
+        .crm-table thead .turnover-sticky-right-actions,
+        .crm-table thead .roster-sticky-op {
             top: 0;
             right: 0;
             z-index: 15 !important;
@@ -163,13 +193,19 @@
             color: #fff;
             border-color: #1f5a94;
         }
-        .crm-table tbody .crm-sticky-right-op {
+        .crm-table tbody .crm-sticky-right-op,
+        .crm-table tbody .turnover-sticky-right-actions,
+        .crm-table tbody .roster-sticky-op {
             background: #fff;
         }
-        .crm-table tbody tr:nth-child(even) .crm-sticky-right-op {
+        .crm-table tbody tr:nth-child(even) .crm-sticky-right-op,
+        .crm-table tbody tr:nth-child(even) .turnover-sticky-right-actions,
+        .crm-table tbody tr:nth-child(even) .roster-sticky-op {
             background: #f6f8fa;
         }
-        .crm-table tbody tr:hover .crm-sticky-right-op {
+        .crm-table tbody tr:hover .crm-sticky-right-op,
+        .crm-table tbody tr:hover .turnover-sticky-right-actions,
+        .crm-table tbody tr:hover .roster-sticky-op {
             background: #eef6ff;
         }
         /* 操作列：三键（详情/修改/删除）固定宽 */
@@ -179,6 +215,8 @@
         .visit-table td.crm-op-col {
             padding-left: 0.35rem !important;
             padding-right: 0.35rem !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
         }
         .crm-op-col {
             width: var(--crm-op-col-width) !important;
@@ -186,6 +224,24 @@
             max-width: var(--crm-op-col-width) !important;
             white-space: nowrap;
             box-sizing: border-box;
+        }
+        .crm-op-col-wide {
+            width: var(--crm-op-col-width-wide) !important;
+            min-width: var(--crm-op-col-width-wide) !important;
+            max-width: var(--crm-op-col-width-wide) !important;
+            white-space: nowrap;
+            box-sizing: border-box;
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
+        .crm-op-col-xl {
+            width: var(--crm-op-col-width-xl) !important;
+            min-width: var(--crm-op-col-width-xl) !important;
+            max-width: var(--crm-op-col-width-xl) !important;
+            white-space: nowrap;
+            box-sizing: border-box;
+            overflow: visible !important;
+            text-overflow: clip !important;
         }
         .visit-table th.crm-op-col,
         .visit-table td.crm-op-col {
@@ -212,6 +268,8 @@
             white-space: nowrap;
             vertical-align: middle;
             text-align: center;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .crm-table th.crm-th:last-child { border-right: 1px solid #1f5a94; }
         .crm-table td.crm-td {
@@ -222,6 +280,8 @@
             border-top: 1px solid #d0d7de;
             vertical-align: top;
             background: #fff;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .crm-table td.crm-td.crm-name-cell {
             color: #0969da;
@@ -843,7 +903,7 @@
         }
     </style>
 </head>
-<body class="bg-[#f6f8fa] text-gray-800">
+<body class="bg-[#f6f8fa] text-gray-800" data-crm-auth-mode="{{ auth_mode|default('rbac') }}">
     <div id="login-overlay" class="crm-login-overlay fixed inset-0 z-[100] hidden flex items-center justify-center px-4 py-8 overflow-hidden">
         <div class="crm-login-blob crm-login-blob--a" aria-hidden="true"></div>
         <div class="crm-login-blob crm-login-blob--b" aria-hidden="true"></div>
@@ -958,9 +1018,85 @@
     {% endblock %}
 
     <script>
+        window.crmPermissions = [];
+        window.crmIsSuper = false;
+        window.crmAuthMode = (document.body && document.body.getAttribute('data-crm-auth-mode')) || 'rbac';
+        window.crmMeUser = null;
+
         window.crmAuthHeader = function () {
+            if (window.crmAuthMode === 'rbac') {
+                return {};
+            }
             var b = localStorage.getItem('crm_b64');
             return b ? { 'Authorization': 'Basic ' + b } : {};
+        };
+
+        window.crmHasPermission = function (code) {
+            if (window.crmAuthMode !== 'rbac') {
+                return true;
+            }
+            if (window.crmIsSuper) {
+                return true;
+            }
+            return (window.crmPermissions || []).indexOf(code) >= 0;
+        };
+
+        window.crmApplyNavPermissions = function () {
+            if (window.crmAuthMode !== 'rbac') {
+                return;
+            }
+            document.querySelectorAll('[data-crm-nav-perm],[data-crm-nav-any]').forEach(function (el) {
+                var ok = false;
+                var any = el.getAttribute('data-crm-nav-any');
+                if (any) {
+                    any.split(',').forEach(function (p) {
+                        if (window.crmHasPermission(p.trim())) {
+                            ok = true;
+                        }
+                    });
+                } else {
+                    var need = el.getAttribute('data-crm-nav-perm');
+                    ok = !need || window.crmHasPermission(need);
+                }
+                el.style.display = ok ? '' : 'none';
+            });
+        };
+        window.crmFileAccessUrl = function (storedPath) {
+            if (!storedPath) { return ''; }
+            return '/api/files/access?path=' + encodeURIComponent(storedPath);
+        };
+        window.crmFetchAuthenticatedBlob = async function (storedPathOrUrl) {
+            var path = String(storedPathOrUrl || '');
+            if (path.indexOf('/api/files/access') === 0) {
+                var u = new URL(path, window.location.origin);
+                path = u.searchParams.get('path') || '';
+            } else if (path.indexOf('/previews/') === 0) {
+                path = path.slice('/previews/'.length);
+            }
+            var url = path.indexOf('/api/') === 0 ? path : window.crmFileAccessUrl(path);
+            var r = await fetch(url, { headers: window.crmAuthHeader(), credentials: 'same-origin' });
+            if (!r.ok) { throw new Error('无法加载文件'); }
+            return await r.blob();
+        };
+        window.crmOpenAuthenticatedFile = async function (storedPathOrUrl) {
+            var blob = await window.crmFetchAuthenticatedBlob(storedPathOrUrl);
+            var obj = URL.createObjectURL(blob);
+            window.open(obj, '_blank');
+            setTimeout(function () { URL.revokeObjectURL(obj); }, 120000);
+        };
+        window.crmEnsureLegacySession = async function () {
+            var b = localStorage.getItem('crm_b64');
+            if (!b) { return false; }
+            try {
+                var r = await fetch('/api/auth/legacy-bootstrap', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Basic ' + b },
+                    credentials: 'same-origin',
+                });
+                return r.ok;
+            } catch (e) {
+                return false;
+            }
         };
         window.crmFilenameFromDisposition = function (disposition) {
             if (!disposition) { return ''; }
@@ -1024,6 +1160,17 @@
                     }
                 });
             }
+            var spcDrawer = document.getElementById('spc-drawer');
+            if (spcDrawer && spcDrawer.classList.contains('open')) {
+                candidates.push({
+                    z: 160,
+                    root: spcDrawer,
+                    close: function () {
+                        var btn = document.getElementById('drawer-close');
+                        if (btn) { btn.click(); }
+                    }
+                });
+            }
             var modalSel = '.crm-esc-modal, .delivery-detail-modal-overlay, .roster-detail-modal-overlay, .settlement-detail-modal-overlay';
             document.querySelectorAll(modalSel).forEach(function (el) {
                 if (!window.crmEscModalVisible(el)) { return; }
@@ -1073,9 +1220,11 @@
         };
 
         window.crmInitHandbookAssistant = function () {
-            var user = localStorage.getItem('crm_user') || '';
             var shell = document.getElementById('handbook-assistant');
-            if (!shell || user !== 'admin') {
+            var canUse = window.crmAuthMode !== 'rbac'
+                || window.crmIsSuper
+                || window.crmHasPermission('delivery.handbook.read');
+            if (!shell || !canUse) {
                 if (shell) { shell.classList.add('hidden'); }
                 return;
             }
@@ -1303,21 +1452,38 @@
                 else { errEl.classList.add('hidden'); }
             }
 
+            async function applyMe(data) {
+                window.crmAuthMode = data.auth_mode || 'legacy';
+                window.crmPermissions = data.permissions || [];
+                window.crmIsSuper = (data.roles || []).indexOf('SUPER_ADMIN') >= 0;
+                window.crmMeUser = data.user || null;
+                var u = (data.user && data.user.display_name) || (data.user && data.user.username) || '';
+                document.getElementById('header-user').textContent = u ? ('欢迎，' + u) : '';
+                window.crmApplyNavPermissions();
+            }
+
             async function verifySession() {
-                var b = localStorage.getItem('crm_b64');
-                if (!b) { showLogin(); return; }
                 try {
-                    var r = await fetch('/api/stats', { headers: { 'Authorization': 'Basic ' + b } });
+                    var r = await fetch('/api/me', { credentials: 'same-origin' });
                     if (!r.ok) {
                         localStorage.removeItem('crm_b64');
                         localStorage.removeItem('crm_user');
-                        showLogin('会话已失效，请重新登录');
+                        showLogin(r.status === 401 ? '会话已失效，请重新登录' : '无法验证登录状态');
                         return;
+                    }
+                    var data = await r.json();
+                    await applyMe(data);
+                    if (window.crmAuthMode === 'legacy') {
+                        await window.crmEnsureLegacySession();
                     }
                     overlay.classList.add('hidden');
                     shell.classList.remove('hidden');
-                    var u = localStorage.getItem('crm_user') || '';
-                    document.getElementById('header-user').textContent = u ? ('欢迎，' + u) : '';
+                    if (window.__crm_login_next) {
+                        var dest = window.__crm_login_next;
+                        window.__crm_login_next = '';
+                        window.location.replace(dest);
+                        return;
+                    }
                     window.crmInitHandbookAssistant();
                 } catch (e) {
                     showLogin('无法连接服务器');
@@ -1329,22 +1495,38 @@
                 var p = document.getElementById('login-pwd').value;
                 errEl.classList.add('hidden');
                 try {
+                    var lr = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ username: u, password: p }),
+                    });
+                    if (lr.ok) {
+                        localStorage.removeItem('crm_b64');
+                        localStorage.removeItem('crm_user');
+                        await verifySession();
+                        return;
+                    }
                     var b64 = btoa(u + ':' + p);
                     var r = await fetch('/api/stats', { headers: { 'Authorization': 'Basic ' + b64 } });
                     if (!r.ok) { showLogin('账号或密码错误'); return; }
                     localStorage.setItem('crm_b64', b64);
                     localStorage.setItem('crm_user', u);
+                    await window.crmEnsureLegacySession();
                     await verifySession();
                 } catch (e) { showLogin('服务器连接失败'); }
             };
 
-            document.getElementById('logout-btn').onclick = function () {
+            document.getElementById('logout-btn').onclick = async function () {
+                try {
+                    await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+                } catch (e) { /* ignore */ }
                 localStorage.removeItem('crm_b64');
                 localStorage.removeItem('crm_user');
                 document.getElementById('login-pwd').value = '';
                 window.crmHideHandbookAssistant();
                 resetPwdModal();
-                showLogin();
+                window.location.href = '/login';
             };
 
             document.getElementById('change-pwd-btn').onclick = function () {
@@ -1402,13 +1584,13 @@
 
             verifySession();
             window.addEventListener('pageshow', function () {
-                if (localStorage.getItem('crm_b64')) {
+                if (window.crmMeUser) {
                     window.crmInitHandbookAssistant();
                 }
             });
         })();
     </script>
     {% block page_scripts %}{% endblock %}
-    <script src="/static/js/crm-table-resize.js?v=9"></script>
+    <script src="/static/js/crm-table-resize.js?v=11"></script>
 </body>
 </html>

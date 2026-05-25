@@ -11,6 +11,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from auth import data_scope as ds
+from auth.data_scope_catalog import RESOURCE_DELIVERY_HANDOFF
+from auth.deps import get_current_context, require_permission
+from auth.service import AuthContext
 from handoff_core import (
     HANDOFF_REJECT_CODES,
     HANDOFF_STATUSES,
@@ -96,11 +100,18 @@ def register_handoff_routes(
     DeliveryPipelineInsightDemand,
     Contract=None,
     ContractMilestone=None,
+    review_dep: Optional[Callable] = None,
 ):
-    def _require_reviewer(user: str = Depends(authenticate)):
-        if not is_delivery_reviewer(user, effective_admin_username()):
-            raise HTTPException(status_code=403, detail="需要交付负责人权限")
-        return user
+    if review_dep is not None:
+
+        def _require_reviewer(user: str = Depends(review_dep)):
+            return user
+    else:
+
+        def _require_reviewer(user: str = Depends(authenticate)):
+            if not is_delivery_reviewer(user, effective_admin_username()):
+                raise HTTPException(status_code=403, detail="需要交付负责人权限")
+            return user
 
     def _get_handoff_or_404(db: Session, handoff_id: int) -> HandoffRequest:
         h = db.query(HandoffRequest).filter(HandoffRequest.id == handoff_id).first()
@@ -108,7 +119,9 @@ def register_handoff_routes(
             raise HTTPException(status_code=404, detail="交接单不存在")
         return h
 
-    def _get_client_or_404(db: Session, client_id: int):
+    def _get_client_or_404(db: Session, client_id: int, ctx: Optional[AuthContext] = None):
+        if ctx is not None:
+            ds.assert_client_in_scope(db, ctx, client_id, RESOURCE_DELIVERY_HANDOFF, "read")
         c = db.query(Client).filter(Client.id == client_id).first()
         if not c:
             raise HTTPException(status_code=404, detail="客户不存在")
@@ -144,22 +157,27 @@ def register_handoff_routes(
             .first()
         )
 
-    def _pending_handoffs_for_user(db: Session, user: str) -> List[Dict[str, Any]]:
-        """待审交接：交付负责人看指派给自己的；审核人另可见未指派项；管理员看全部。"""
+    def _pending_handoffs_for_user(db: Session, ctx: AuthContext) -> List[Dict[str, Any]]:
+        """待审交接：在数据范围过滤基础上，审核人可见未指派项。"""
+        user = ctx.username
         admin = effective_admin_username()
         is_rev = is_delivery_reviewer(user, admin)
-        rows = (
+        q = (
             db.query(HandoffRequest)
             .filter(HandoffRequest.status == "pending_review")
             .order_by(desc(HandoffRequest.submitted_at))
-            .all()
         )
+        if not ctx.is_super and user != admin:
+            q = ds.filter_query_by_client_scope(
+                q, db, ctx, RESOURCE_DELIVERY_HANDOFF, "read", HandoffRequest.client_id
+            )
+        rows = q.all()
         out: List[Dict[str, Any]] = []
         for h in rows:
             owner = (h.delivery_owner or "").strip()
-            if user == admin:
+            if ctx.is_super or user == admin:
                 pass
-            elif owner == user:
+            elif owner == user or (getattr(h, "delivery_owner_user_id", None) == ctx.user_id):
                 pass
             elif is_rev:
                 if owner and owner != user:
@@ -193,7 +211,7 @@ def register_handoff_routes(
         }
 
     @app.get("/api/handoff/config")
-    async def handoff_config(user: str = Depends(authenticate)):
+    async def handoff_config(user: str = Depends(require_permission("delivery.handoff.read"))):
         return {
             "reject_codes": [{"code": k, "label": v} for k, v in HANDOFF_REJECT_CODES.items()],
             "statuses": [{"code": s, "label": HANDOFF_STATUS_LABELS.get(s, s)} for s in sorted(HANDOFF_STATUSES)],
@@ -205,12 +223,20 @@ def register_handoff_routes(
         }
 
     @app.get("/api/clients/{client_id}/handoff-gate")
-    async def client_handoff_gate(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def client_handoff_gate(
+        client_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("delivery.handoff.read")),
+    ):
         _get_client_or_404(db, client_id)
         return _client_gate_status(db, client_id)
 
     @app.get("/api/clients/{client_id}/handoffs")
-    async def list_client_handoffs(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def list_client_handoffs(
+        client_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("delivery.handoff.read")),
+    ):
         client = _get_client_or_404(db, client_id)
         rows = (
             db.query(HandoffRequest)
@@ -221,7 +247,11 @@ def register_handoff_routes(
         return [_handoff_to_dict(h, client.name) for h in rows]
 
     @app.post("/api/clients/{client_id}/handoffs")
-    async def create_handoff(client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def create_handoff(
+        client_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("delivery.handoff.write")),
+    ):
         client = _get_client_or_404(db, client_id)
         latest = (
             db.query(HandoffRequest)
@@ -254,15 +284,27 @@ def register_handoff_routes(
         return _handoff_to_dict(h, client.name)
 
     @app.get("/api/handoffs/pending")
-    async def pending_handoffs(db: Session = Depends(get_db), user: str = Depends(_require_reviewer)):
-        return _pending_handoffs_for_user(db, user)
+    async def pending_handoffs(
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(_require_reviewer),
+    ):
+        return _pending_handoffs_for_user(db, ctx)
 
     @app.get("/api/delivery/handoffs/pending")
-    async def delivery_pending_handoffs(db: Session = Depends(get_db), user: str = Depends(authenticate)):
-        return _pending_handoffs_for_user(db, user)
+    async def delivery_pending_handoffs(
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("delivery.handoff.read")),
+    ):
+        return _pending_handoffs_for_user(db, ctx)
 
     @app.get("/api/handoffs/{handoff_id}")
-    async def get_handoff(handoff_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def get_handoff(
+        handoff_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("delivery.handoff.read")),
+    ):
         h = _get_handoff_or_404(db, handoff_id)
         client = db.query(Client).filter(Client.id == h.client_id).first()
         data = _handoff_to_dict(h, client.name if client else "")
@@ -300,7 +342,7 @@ def register_handoff_routes(
         handoff_id: int,
         body: HandoffUpdateBody,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        user: str = Depends(require_permission("delivery.handoff.write")),
     ):
         h = _get_handoff_or_404(db, handoff_id)
         if h.status not in ("draft", "rejected"):
@@ -320,7 +362,11 @@ def register_handoff_routes(
         return _handoff_to_dict(h, client.name if client else "")
 
     @app.post("/api/handoffs/{handoff_id}/submit")
-    async def submit_handoff(handoff_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def submit_handoff(
+        handoff_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("delivery.handoff.write")),
+    ):
         h = _get_handoff_or_404(db, handoff_id)
         if h.status not in ("draft", "rejected"):
             raise HTTPException(status_code=400, detail="当前状态不可提交")
@@ -407,7 +453,7 @@ def register_handoff_routes(
         handoff_id: int,
         body: HandoffAiParseBody = Body(default={}),
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        user: str = Depends(require_permission("delivery.handoff.write")),
     ):
         h = _get_handoff_or_404(db, handoff_id)
         if h.status not in ("draft", "rejected"):
@@ -472,7 +518,11 @@ def register_handoff_routes(
         return {"ok": True, "brief_md": brief_md, "gaps": gaps, "llm_available": llm.available}
 
     @app.post("/api/handoffs/{handoff_id}/sync-pipeline-demand")
-    async def sync_pipeline_demand(handoff_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def sync_pipeline_demand(
+        handoff_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("delivery.handoff.write")),
+    ):
         h = _get_handoff_or_404(db, handoff_id)
         if h.status != "approved":
             raise HTTPException(status_code=400, detail="仅已通过的交接单可同步")
@@ -517,7 +567,7 @@ def register_handoff_routes(
     async def list_notifications(
         unread: Optional[int] = None,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        user: str = Depends(require_permission("delivery.handoff.read")),
     ):
         q = db.query(CrmNotification).filter(CrmNotification.username == user)
         if unread:
@@ -538,7 +588,9 @@ def register_handoff_routes(
 
     @app.post("/api/notifications/{notification_id}/read")
     async def read_notification(
-        notification_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)
+        notification_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("delivery.handoff.read")),
     ):
         n = db.query(CrmNotification).filter(CrmNotification.id == notification_id, CrmNotification.username == user).first()
         if n and not n.read_at:
@@ -547,7 +599,11 @@ def register_handoff_routes(
         return {"ok": True}
 
     @app.get("/api/handoffs/{handoff_id}/export")
-    async def export_handoff(handoff_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def export_handoff(
+        handoff_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("delivery.handoff.read")),
+    ):
         h = _get_handoff_or_404(db, handoff_id)
         client = db.query(Client).filter(Client.id == h.client_id).first()
         data = _handoff_to_dict(h, client.name if client else "")
@@ -592,7 +648,10 @@ def register_handoff_routes(
     def extend_stats(stats_fn):
         """Wrap get_stats to add handoff counts."""
 
-        async def wrapped(db: Session = Depends(get_db), user: str = Depends(authenticate)):
+        async def wrapped(
+            db: Session = Depends(get_db),
+            user: str = Depends(require_permission("crm.clients.read")),
+        ):
             base = await stats_fn(db=db, user=user)
             pending = db.query(HandoffRequest).filter(HandoffRequest.status == "pending_review").count()
             rejected = db.query(HandoffRequest).filter(HandoffRequest.status == "rejected").count()

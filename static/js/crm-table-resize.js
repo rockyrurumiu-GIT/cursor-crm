@@ -3,18 +3,33 @@
  * 依赖：thead 末行 th、colgroup col、th[data-col] + .crm-th-resizable
  */
 (function () {
-    const MIN_WIDTH = 48;
+    const MIN_WIDTH = 64;
     /** 三键操作列（详情/修改/删除）固定宽 px */
-    const OP_COL_WIDTH = 92;
+    const OP_COL_WIDTH = 144;
+    const OP_COL_WIDTH_WIDE = 208;
+    const OP_COL_WIDTH_XL = 288;
     /** 花名册「打卡」列固定宽（内容用 crm-cell-clip 省略+悬停展开） */
     const CHECKIN_COL_WIDTH = 128;
     const COL_CONTENT_PAD = 14;
     const RESIZE_EDGE = 12;
+    /** 大表按内容测宽时抽样行数，避免上千行卡顿 */
+    const CONTENT_SAMPLE_ROWS = 48;
+    const STORAGE_VERSION = 'v4';
 
     function isOpColumnTh(th) {
         return th.classList.contains('crm-sticky-right-op')
             || th.classList.contains('turnover-sticky-right-actions')
-            || th.classList.contains('crm-op-col');
+            || th.classList.contains('roster-sticky-op')
+            || th.classList.contains('crm-op-col')
+            || th.classList.contains('crm-op-col-wide')
+            || th.classList.contains('crm-op-col-xl');
+    }
+
+    function opColumnWidthPx(th) {
+        if (!th) return OP_COL_WIDTH;
+        if (th.classList.contains('crm-op-col-xl')) return OP_COL_WIDTH_XL;
+        if (th.classList.contains('crm-op-col-wide')) return OP_COL_WIDTH_WIDE;
+        return OP_COL_WIDTH;
     }
 
     function isCheckinColumnTh(th) {
@@ -31,19 +46,62 @@
         return ths.findIndex((th) => isCheckinColumnTh(th));
     }
 
+    function cssLengthPx(el, prop) {
+        if (!el) return 0;
+        const value = parseFloat(getComputedStyle(el)[prop]);
+        return Number.isFinite(value) && value > 0 ? value : 0;
+    }
+
+    function headerTextMinWidth(th) {
+        const text = (th.textContent || '').replace(/\s+/g, '');
+        if (!text) return MIN_WIDTH;
+        return Math.max(MIN_WIDTH, Math.ceil(text.length * 14) + 24);
+    }
+
     function minWidthForTh(th, fallback) {
         const colMin = Number(th.dataset.colMin);
         const customMin = Number.isFinite(colMin) && colMin > 0 ? colMin : 0;
-        if (isOpColumnTh(th)) return customMin > 0 ? customMin : OP_COL_WIDTH;
+        if (isOpColumnTh(th)) return customMin > 0 ? customMin : opColumnWidthPx(th);
         if (isCheckinColumnTh(th)) return CHECKIN_COL_WIDTH;
-        if (customMin > 0) return customMin;
-        return fallback;
+        const cssMin = cssLengthPx(th, 'minWidth');
+        return Math.max(customMin, cssMin, headerTextMinWidth(th), fallback);
+    }
+
+    function measureCellWidth(el) {
+        if (!el) return 0;
+        return Math.max(
+            cssLengthPx(el, 'minWidth'),
+            cssLengthPx(el, 'width'),
+            el.offsetWidth || 0,
+            el.scrollWidth || 0,
+        );
     }
 
     function storageKeyFor(table) {
         if (table.dataset.tableResizeKey) return table.dataset.tableResizeKey;
         const id = table.dataset.tableId || [...table.classList].find((c) => c.endsWith('-table') && c !== 'crm-table') || 'crm-table';
-        return `crm-col-widths:${location.pathname}:${id}`;
+        return `crm-col-widths:${STORAGE_VERSION}:${location.pathname}:${id}`;
+    }
+
+    function tbodyDataRows(table) {
+        return [...table.querySelectorAll('tbody tr')].filter((tr) => {
+            const cells = tr.querySelectorAll(':scope > td');
+            if (cells.length <= 1) return false;
+            const first = cells[0];
+            const colspan = Number(first.getAttribute('colspan') || 1);
+            return !(colspan > 1);
+        });
+    }
+
+    function sampleBodyRows(table) {
+        const rows = tbodyDataRows(table);
+        if (rows.length <= CONTENT_SAMPLE_ROWS) return rows;
+        const picked = [];
+        const step = rows.length / CONTENT_SAMPLE_ROWS;
+        for (let i = 0; i < CONTENT_SAMPLE_ROWS; i += 1) {
+            picked.push(rows[Math.min(rows.length - 1, Math.floor(i * step))]);
+        }
+        return picked;
     }
 
     function leafHeaderCells(table) {
@@ -70,12 +128,16 @@
         return [...colgroup.querySelectorAll('col')];
     }
 
-    function tagOpColElement(col) {
+    function tagOpColElement(col, th) {
         if (!col) return;
-        col.classList.add('crm-col-op');
-        col.style.width = `${OP_COL_WIDTH}px`;
-        col.style.minWidth = `${OP_COL_WIDTH}px`;
-        col.style.maxWidth = `${OP_COL_WIDTH}px`;
+        const w = opColumnWidthPx(th);
+        col.classList.remove('crm-col-op', 'crm-col-op-wide', 'crm-col-op-xl');
+        if (th && th.classList.contains('crm-op-col-xl')) col.classList.add('crm-col-op-xl');
+        else if (th && th.classList.contains('crm-op-col-wide')) col.classList.add('crm-col-op-wide');
+        else col.classList.add('crm-col-op');
+        col.style.width = `${w}px`;
+        col.style.minWidth = `${w}px`;
+        col.style.maxWidth = `${w}px`;
     }
 
     function tagCheckinColElement(col) {
@@ -121,43 +183,60 @@
         return ths.length > 1 ? ths.length - 1 : -1;
     }
 
-    function measureDefaults(table, ths) {
-        table.style.tableLayout = 'fixed';
-        return ths.map((th) => {
-            if (isOpColumnTh(th)) return OP_COL_WIDTH;
-            if (isCheckinColumnTh(th)) return CHECKIN_COL_WIDTH;
-            const floor = minWidthForTh(th, MIN_WIDTH);
-            const w = Math.max(th.offsetWidth || 0, th.scrollWidth || 0);
-            return Math.max(floor, w);
+    function measureContentWidths(table, ths, cols) {
+        const bodyRows = sampleBodyRows(table);
+        const savedColWidths = cols.map((col) => col.style.width);
+        const prevLayout = table.style.tableLayout;
+        const prevWidth = table.style.width;
+
+        cols.forEach((col) => {
+            col.style.width = '';
+            col.style.minWidth = '';
+            col.style.maxWidth = '';
         });
+        table.style.tableLayout = 'auto';
+        table.style.width = 'max-content';
+
+        const widths = ths.map((th, i) => {
+            if (isOpColumnTh(th)) return opColumnWidthPx(th);
+            if (isCheckinColumnTh(th)) return CHECKIN_COL_WIDTH;
+            if (th.classList.contains('roster-col-position-zntx')) {
+                return Math.max(
+                    minWidthForTh(th, MIN_WIDTH),
+                    Math.round(cssLengthPx(th, 'width') || cssLengthPx(th, 'minWidth') || 240),
+                );
+            }
+            let w = Math.max(minWidthForTh(th, MIN_WIDTH), measureCellWidth(th));
+            bodyRows.forEach((tr) => {
+                const cells = tr.querySelectorAll(':scope > td');
+                if (cells.length !== ths.length) return;
+                const td = cells[i];
+                if (!td) return;
+                const clip = td.querySelector('.crm-cell-clip');
+                w = Math.max(w, measureCellWidth(td), clip ? measureCellWidth(clip) : 0);
+            });
+            return w + COL_CONTENT_PAD;
+        });
+
+        cols.forEach((col, i) => {
+            col.style.width = savedColWidths[i];
+        });
+        table.style.tableLayout = prevLayout || 'fixed';
+        if (prevWidth) table.style.width = prevWidth;
+
+        return widths;
     }
 
-    function measureColumnContentWidth(table, ths, cols, colIndex) {
-        const th = ths[colIndex];
-        if (th.classList.contains('roster-col-position-zntx')) {
-            return Math.round(parseFloat(getComputedStyle(th).width) || 240);
-        }
-        const col = cols[colIndex];
-        const prev = col ? col.style.width : '';
-        if (col) col.style.width = '1px';
-        let w = th.scrollWidth || 0;
-        table.querySelectorAll('tbody tr').forEach((tr) => {
-            const cells = tr.querySelectorAll(':scope > td');
-            if (cells.length !== ths.length) return;
-            const td = cells[colIndex];
-            if (!td) return;
-            const clip = td.querySelector('.crm-cell-clip');
-            w = Math.max(w, clip ? (clip.scrollWidth || 0) : (td.scrollWidth || 0));
-        });
-        if (col) col.style.width = prev;
-        return w + COL_CONTENT_PAD;
+    function clampWidthsToContent(table, ths, cols, widths) {
+        const mins = measureContentWidths(table, ths, cols);
+        return widths.map((w, i) => Math.max(Number(w) || 0, mins[i]));
     }
 
     function buildColumnHelpers(table, ths, cols, options) {
         const minW = options?.minWidth ?? MIN_WIDTH;
         const tableMin = Number(table.dataset.tableMinWidth) || 0;
         const readColWidth = (i) => {
-            if (isOpColumnTh(ths[i])) return OP_COL_WIDTH;
+            if (isOpColumnTh(ths[i])) return opColumnWidthPx(ths[i]);
             if (isCheckinColumnTh(ths[i])) return CHECKIN_COL_WIDTH;
             const w = parseFloat(cols[i].style.width);
             if (Number.isFinite(w) && w > 0) return w;
@@ -166,7 +245,7 @@
         };
         const setColWidth = (i, w) => {
             if (isOpColumnTh(ths[i])) {
-                tagOpColElement(cols[i]);
+                tagOpColElement(cols[i], ths[i]);
             } else if (isCheckinColumnTh(ths[i])) {
                 tagCheckinColElement(cols[i]);
             } else {
@@ -180,13 +259,24 @@
         const syncTableWidth = () => {
             let total = cols.reduce((sum, _c, i) => sum + readColWidth(i), 0);
             const target = Math.max(total, tableMin);
-            const extra = target - total;
+            let extra = target - total;
             if (extra > 0.5) {
-                const flexIdx = flexGrowColumnIndex(ths);
-                if (flexIdx >= 0 && !isOpColumnTh(ths[flexIdx]) && !isCheckinColumnTh(ths[flexIdx])) {
-                    const flexW = Math.round(readColWidth(flexIdx) + extra);
-                    cols[flexIdx].style.width = `${flexW}px`;
-                    total = target;
+                const growable = [];
+                for (let i = 0; i < cols.length; i += 1) {
+                    if (!isOpColumnTh(ths[i]) && !isCheckinColumnTh(ths[i])) growable.push(i);
+                }
+                if (growable.length) {
+                    const share = extra / growable.length;
+                    growable.forEach((i) => {
+                        setColWidth(i, readColWidth(i) + share);
+                    });
+                    total = cols.reduce((sum, _c, idx) => sum + readColWidth(idx), 0);
+                } else {
+                    const flexIdx = flexGrowColumnIndex(ths);
+                    if (flexIdx >= 0 && !isOpColumnTh(ths[flexIdx]) && !isCheckinColumnTh(ths[flexIdx])) {
+                        setColWidth(flexIdx, readColWidth(flexIdx) + extra);
+                        total = target;
+                    }
                 }
             }
             table.style.width = `${Math.max(total, tableMin)}px`;
@@ -195,8 +285,8 @@
         return { readColWidth, setColWidth, syncTableWidth };
     }
 
-    /** 按表体内容适配列宽（花名册：除打卡/操作外默认显示完整） */
-    function fitTableColumnsToContent(table) {
+    /** 按表头 + 表体内容适配列宽，保证默认不重叠 */
+    function fitTableColumnsToContent(table, options) {
         if (!table) return false;
         if (table.dataset.colResizeReady !== '1') {
             initCrmTableColumnResize(table);
@@ -207,23 +297,15 @@
         if (cols.length !== ths.length) cols = ensureColgroup(table, ths.length);
         table.style.tableLayout = 'fixed';
         const { setColWidth, syncTableWidth, readColWidth } = buildColumnHelpers(table, ths, cols, {});
-        const opIdx = opColumnIndex(ths);
-        const checkinIdx = checkinColumnIndex(ths);
-        ths.forEach((_th, i) => {
-            if (i === opIdx) {
-                setColWidth(i, OP_COL_WIDTH);
-            } else if (i === checkinIdx) {
-                setColWidth(i, CHECKIN_COL_WIDTH);
-            } else {
-                const w = measureColumnContentWidth(table, ths, cols, i);
-                setColWidth(i, Math.max(minWidthForTh(ths[i], MIN_WIDTH), w));
-            }
-        });
+        measureContentWidths(table, ths, cols).forEach((w, i) => setColWidth(i, w));
         syncTableWidth();
-        try {
-            const key = storageKeyFor(table);
-            localStorage.setItem(key, JSON.stringify(cols.map((_c, idx) => readColWidth(idx))));
-        } catch { /* ignore */ }
+        table.dataset.colContentFit = '1';
+        if (options?.persist !== false) {
+            try {
+                const key = storageKeyFor(table);
+                localStorage.setItem(key, JSON.stringify(cols.map((_c, idx) => readColWidth(idx))));
+            } catch { /* ignore */ }
+        }
         return true;
     }
 
@@ -237,15 +319,16 @@
         const { setColWidth, syncTableWidth } = buildColumnHelpers(table, ths, cols, {});
         const opIdx = opColumnIndex(ths);
         if (opIdx < 0) return false;
-        setColWidth(opIdx, OP_COL_WIDTH);
+        setColWidth(opIdx, opColumnWidthPx(ths[opIdx]));
         syncTableWidth();
         return true;
     }
 
-    function refreshOpColumnWidths(root) {
+    function refreshTableColumnWidths(root) {
         const scope = root && root.querySelectorAll ? root : document;
         scope.querySelectorAll('table.crm-table, table.visit-table').forEach((table) => {
-            if (table.classList.contains('roster-table') && table.dataset.rosterContentFit === '1') {
+            if (table.dataset.colResize === 'off') return;
+            if (tbodyDataRows(table).length > 0 && table.dataset.colContentFit !== '1') {
                 fitTableColumnsToContent(table);
             } else {
                 applyOpColumnWidth(table);
@@ -253,10 +336,14 @@
         });
     }
 
+    function refreshOpColumnWidths(root) {
+        refreshTableColumnWidths(root);
+    }
+
     function initCrmTableColumnResize(table, options) {
         if (!table || table.dataset.colResize === 'off') return false;
         if (table.dataset.colResizeReady === '1') {
-            if (table.classList.contains('roster-table') && table.dataset.rosterContentFit === '1') {
+            if (tbodyDataRows(table).length > 0 && table.dataset.colContentFit !== '1') {
                 fitTableColumnsToContent(table);
             } else {
                 applyOpColumnWidth(table);
@@ -275,7 +362,7 @@
         const minW = options?.minWidth ?? MIN_WIDTH;
         const edge = options?.edge ?? RESIZE_EDGE;
         const storageKey = options?.storageKey ?? storageKeyFor(table);
-        const rosterAutoFit = table.classList.contains('roster-table') && table.dataset.rosterContentFit === '1';
+        const hasBodyRows = tbodyDataRows(table).length > 0;
 
         table.style.tableLayout = 'fixed';
         table.dataset.colResizeReady = '1';
@@ -296,27 +383,40 @@
             saved = null;
         }
         const opIdx = opColumnIndex(ths);
-        if (rosterAutoFit) {
-            applyWidths(measureDefaults(table, ths));
-        } else if (Array.isArray(saved) && saved.length === cols.length) {
-            if (opIdx >= 0) saved[opIdx] = OP_COL_WIDTH;
-            const checkinIdx = checkinColumnIndex(ths);
-            if (checkinIdx >= 0) saved[checkinIdx] = CHECKIN_COL_WIDTH;
-            applyWidths(saved);
-        } else if (Array.isArray(options?.defaults) && options.defaults.length === cols.length) {
-            if (opIdx >= 0) options.defaults[opIdx] = OP_COL_WIDTH;
-            applyWidths(options.defaults);
-        } else {
-            applyWidths(measureDefaults(table, ths));
-        }
-        if (opIdx >= 0) setColWidth(opIdx, OP_COL_WIDTH);
         const checkinIdx = checkinColumnIndex(ths);
-        if (checkinIdx >= 0) setColWidth(checkinIdx, CHECKIN_COL_WIDTH);
-        syncTableWidth();
+        const contentWidths = () => measureContentWidths(table, ths, cols);
+        const normalizeSaved = (widths) => {
+            const next = [...widths];
+            if (opIdx >= 0) next[opIdx] = opColumnWidthPx(ths[opIdx]);
+            if (checkinIdx >= 0) next[checkinIdx] = CHECKIN_COL_WIDTH;
+            return next;
+        };
+        if (hasBodyRows) {
+            if (Array.isArray(saved) && saved.length === cols.length) {
+                applyWidths(clampWidthsToContent(table, ths, cols, normalizeSaved(saved)));
+                table.dataset.colContentFit = '1';
+            } else if (Array.isArray(options?.defaults) && options.defaults.length === cols.length) {
+                applyWidths(clampWidthsToContent(table, ths, cols, normalizeSaved(options.defaults)));
+                table.dataset.colContentFit = '1';
+            } else {
+                fitTableColumnsToContent(table);
+            }
+        } else if (Array.isArray(saved) && saved.length === cols.length) {
+            applyWidths(clampWidthsToContent(table, ths, cols, normalizeSaved(saved)));
+        } else if (Array.isArray(options?.defaults) && options.defaults.length === cols.length) {
+            applyWidths(clampWidthsToContent(table, ths, cols, normalizeSaved(options.defaults)));
+        } else {
+            applyWidths(contentWidths());
+        }
+        if (!hasBodyRows) {
+            if (opIdx >= 0) setColWidth(opIdx, opColumnWidthPx(ths[opIdx]));
+            if (checkinIdx >= 0) setColWidth(checkinIdx, CHECKIN_COL_WIDTH);
+            syncTableWidth();
+        }
 
         const persistWidths = () => {
             const payload = cols.map((_c, i) => readColWidth(i));
-            if (opIdx >= 0) payload[opIdx] = OP_COL_WIDTH;
+            if (opIdx >= 0) payload[opIdx] = opColumnWidthPx(ths[opIdx]);
             if (checkinIdx >= 0) payload[checkinIdx] = CHECKIN_COL_WIDTH;
             localStorage.setItem(storageKey, JSON.stringify(payload));
         };
@@ -384,6 +484,6 @@
     document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => schedule(document), 80);
         setTimeout(() => schedule(document), 700);
-        setTimeout(() => refreshOpColumnWidths(document), 1500);
+        setTimeout(() => refreshTableColumnWidths(document), 1500);
     });
 })();

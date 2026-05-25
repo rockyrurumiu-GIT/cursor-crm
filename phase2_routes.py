@@ -11,6 +11,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from auth import data_scope as ds
+from auth.data_scope_catalog import RESOURCE_CRM_CONTACT, RESOURCE_CRM_OPPORTUNITY
+from auth.deps import get_current_context, require_permission
+from auth.service import AuthContext
 from handoff_core import generate_brief_markdown, parse_requirement_json
 from phase2_core import (
     OPPORTUNITY_STAGE_LABELS,
@@ -149,11 +153,16 @@ def register_phase2_routes(
         client_id: Optional[int] = None,
         stage: Optional[str] = None,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.opportunities.read")),
     ):
         q = db.query(Opportunity)
         if client_id:
+            ds.assert_client_in_scope(db, ctx, client_id, RESOURCE_CRM_OPPORTUNITY, "read")
             q = q.filter(Opportunity.client_id == client_id)
+        q = ds.filter_query_by_client_scope(
+            q, db, ctx, RESOURCE_CRM_OPPORTUNITY, "read", Opportunity.client_id
+        )
         if stage:
             q = q.filter(Opportunity.stage == stage)
         rows = q.order_by(desc(Opportunity.created_at)).all()
@@ -167,10 +176,12 @@ def register_phase2_routes(
     async def create_opportunity(
         body: OpportunityBody,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.opportunities.write")),
     ):
         if body.stage not in OPPORTUNITY_STAGES:
             raise HTTPException(status_code=400, detail="无效商机阶段")
+        ds.assert_client_in_scope(db, ctx, body.client_id, RESOURCE_CRM_OPPORTUNITY, "write")
         client = db.query(Client).filter(Client.id == body.client_id).first()
         if not client:
             raise HTTPException(status_code=404, detail="客户不存在")
@@ -197,11 +208,13 @@ def register_phase2_routes(
         opp_id: int,
         body: OpportunityBody,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.opportunities.write")),
     ):
         o = db.query(Opportunity).filter(Opportunity.id == opp_id).first()
         if not o:
             raise HTTPException(status_code=404, detail="商机不存在")
+        ds.assert_client_in_scope(db, ctx, o.client_id, RESOURCE_CRM_OPPORTUNITY, "write")
         if body.stage not in OPPORTUNITY_STAGES:
             raise HTTPException(status_code=400, detail="无效商机阶段")
         o.name = body.name.strip()
@@ -222,11 +235,13 @@ def register_phase2_routes(
     async def delete_opportunity(
         opp_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.opportunities.write")),
     ):
         o = db.query(Opportunity).filter(Opportunity.id == opp_id).first()
         if not o:
             raise HTTPException(status_code=404, detail="商机不存在")
+        ds.assert_client_in_scope(db, ctx, o.client_id, RESOURCE_CRM_OPPORTUNITY, "write")
         client_id = o.client_id
         db.delete(o)
         db.commit()
@@ -235,7 +250,11 @@ def register_phase2_routes(
         return {"ok": True}
 
     @app.post("/api/opportunities/{opp_id}/create-handoff")
-    async def opp_create_handoff(opp_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def opp_create_handoff(
+        opp_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.opportunities.write")),
+    ):
         o = db.query(Opportunity).filter(Opportunity.id == opp_id).first()
         if not o:
             raise HTTPException(status_code=404, detail="商机不存在")
@@ -276,7 +295,7 @@ def register_phase2_routes(
     async def list_contracts(
         client_id: Optional[int] = None,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        user: str = Depends(require_permission("crm.opportunities.read")),
     ):
         q = db.query(Contract)
         if client_id:
@@ -290,7 +309,11 @@ def register_phase2_routes(
         return out
 
     @app.get("/api/contracts/{contract_id}")
-    async def get_contract(contract_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def get_contract(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.opportunities.read")),
+    ):
         c = db.query(Contract).filter(Contract.id == contract_id).first()
         if not c:
             raise HTTPException(status_code=404, detail="合同不存在")
@@ -303,7 +326,7 @@ def register_phase2_routes(
         contract_id: int,
         milestone_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        user: str = Depends(require_permission("crm.opportunities.write")),
     ):
         c = db.query(Contract).filter(Contract.id == contract_id).first()
         if not c:
@@ -322,11 +345,16 @@ def register_phase2_routes(
     async def list_contacts(
         client_id: Optional[int] = None,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.contacts.read")),
     ):
         q = db.query(Contact)
         if client_id:
+            ds.assert_client_in_scope(db, ctx, client_id, RESOURCE_CRM_CONTACT, "read")
             q = q.filter(Contact.client_id == client_id)
+        q = ds.filter_query_by_client_scope(
+            q, db, ctx, RESOURCE_CRM_CONTACT, "read", Contact.client_id
+        )
         rows = q.order_by(desc(Contact.created_at)).all()
         out = []
         for ct in rows:
@@ -338,8 +366,10 @@ def register_phase2_routes(
     async def create_contact(
         body: ContactBody,
         db: Session = Depends(get_db),
-        user: str = Depends(authenticate),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.contacts.write")),
     ):
+        ds.assert_client_in_scope(db, ctx, body.client_id, RESOURCE_CRM_CONTACT, "write")
         client = db.query(Client).filter(Client.id == body.client_id).first()
         if not client:
             raise HTTPException(status_code=404, detail="客户不存在")
@@ -358,17 +388,25 @@ def register_phase2_routes(
         return contact_to_dict(ct, client.name)
 
     @app.delete("/api/contacts/{contact_id}")
-    async def delete_contact(contact_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)):
+    async def delete_contact(
+        contact_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.contacts.write")),
+    ):
         ct = db.query(Contact).filter(Contact.id == contact_id).first()
         if not ct:
             raise HTTPException(status_code=404, detail="联系人不存在")
+        ds.assert_client_in_scope(db, ctx, ct.client_id, RESOURCE_CRM_CONTACT, "write")
         db.delete(ct)
         db.commit()
         return {"ok": True}
 
     @app.get("/api/clients/{client_id}/approved-handoff-summary")
     async def approved_handoff_summary(
-        client_id: int, db: Session = Depends(get_db), user: str = Depends(authenticate)
+        client_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.opportunities.read")),
     ):
         h = (
             db.query(HandoffRequest)

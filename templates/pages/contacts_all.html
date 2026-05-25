@@ -24,7 +24,7 @@
                     <th class="crm-th">电话</th>
                     <th class="crm-th">邮箱</th>
                     <th class="crm-th">关系/标签</th>
-                    <th class="crm-th">操作</th>
+                    <th class="crm-th crm-op-col">操作</th>
                 </tr>
             </thead>
             <tbody>
@@ -39,7 +39,7 @@
                         <span v-if="contactRelationship(c)" class="text-sm text-gray-600">{{ contactRelationship(c) }}</span>
                         <span v-if="c.tags !== '首要联系人' && !contactRelationship(c)" class="text-gray-400">—</span>
                     </td>
-                    <td class="crm-td"><button type="button" @click="remove(c)" class="text-red-600 text-sm">删除</button></td>
+                    <td class="crm-td crm-op-col whitespace-nowrap"><button type="button" @click="remove(c)" class="text-red-600 text-sm">删除</button></td>
                 </tr>
                 <tr v-if="!items.length"><td colspan="7" class="crm-td text-center text-gray-400 py-8">暂无联系人</td></tr>
             </tbody>
