@@ -2995,7 +2995,7 @@ async def clients_handoff_summary(
     return build_clients_handoff_summary(rows)
 
 
-from routes.clients import register_client_read_routes
+from routes.clients import register_client_read_routes, register_client_write_routes
 
 register_client_read_routes(
     app,
@@ -3008,179 +3008,21 @@ register_client_read_routes(
     set_csv_download_headers=_set_csv_download_headers,
 )
 
-
-@app.post("/api/clients")
-async def create_client(
-    name: str = Form(...),
-    industry: str = Form(...),
-    owner: str = Form(...),
-    scale: str = Form(...),
-    phase: str = Form(...),
-    description: str = Form(...),
-    contact_name: Optional[str] = Form(None),
-    contact_info: Optional[str] = Form(None),
-    contact_title: Optional[str] = Form(None),
-    contact_relationship: Optional[str] = Form(None),
-    city: Optional[str] = Form(None),
-    remarks: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-    ctx: AuthContext = Depends(get_current_context),
-    user: str = Depends(require_permission("crm.clients.write")),
-):
-    ds.assert_data_scope(ctx, RESOURCE_CRM_CLIENT, "write")
-    owner_fields = ds.default_owner_fields(ctx)
-    client = Client(
-        name=name,
-        industry=industry,
-        owner=owner,
-        scale=scale,
-        phase=phase,
-        description=description,
-        estimated_annual_amount="",
-        contact_name=(contact_name or "").strip(),
-        contact_info=(contact_info or "").strip(),
-        contact_title=(contact_title or "").strip(),
-        contact_relationship=(contact_relationship or "").strip(),
-        city=(city or "").strip(),
-        remarks=(remarks or "").strip(),
-        **owner_fields,
-    )
-    db.add(client)
-    db.commit()
-    db.refresh(client)
-    _sync_client_primary_contact(db, client)
-    log = AuditLog(client_id=client.id, operator=user, action=f"创建了客户: {name}")
-    db.add(log)
-    db.commit()
-    db.refresh(client)
-    return client
+register_client_write_routes(
+    app,
+    get_db=get_db,
+    Client=Client,
+    Contact=Contact,
+    Opportunity=Opportunity,
+    AuditLog=AuditLog,
+    VisitRecord=VisitRecord,
+    DeliveryHandbookFile=DeliveryHandbookFile,
+    upload_dir=UPLOAD_DIR,
+    trash_dir=TRASH_DIR,
+    sync_primary_contact=_sync_client_primary_contact,
+)
 
 
-
-
-@app.put("/api/clients/{client_id}")
-async def update_client(
-    client_id: int,
-    name: str = Form(...),
-    industry: str = Form(...),
-    owner: str = Form(...),
-    scale: str = Form(...),
-    phase: str = Form(...),
-    description: str = Form(...),
-    contact_name: Optional[str] = Form(None),
-    contact_info: Optional[str] = Form(None),
-    contact_title: Optional[str] = Form(None),
-    contact_relationship: Optional[str] = Form(None),
-    city: Optional[str] = Form(None),
-    remarks: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-    ctx: AuthContext = Depends(get_current_context),
-    user: str = Depends(require_permission("crm.clients.write")),
-):
-    from phase2_core import refresh_client_estimated_annual_amount
-
-    client = _ensure_client_access(db, ctx, client_id, action="write")
-    duplicate = _scoped_client_query(db, ctx, action="write").filter(Client.name == name, Client.id != client_id).first()
-    if duplicate:
-        raise HTTPException(status_code=400, detail="客户名称已存在")
-
-    old_name = client.name or ""
-    updates = []
-    if old_name != name:
-        updates.append(f"客户名称从[{old_name}]变更为[{name}]")
-    if client.industry != industry:
-        updates.append(f"行业从[{client.industry}]变更为[{industry}]")
-    if client.owner != owner:
-        updates.append(f"销售负责人从[{client.owner}]变更为[{owner}]")
-    if client.scale != scale:
-        updates.append(f"外包规模从[{client.scale}]变更为[{scale}]")
-    if client.phase != phase:
-        updates.append(f"阶段从[{client.phase}]变更为[{phase}]")
-    if client.description != description:
-        updates.append("更新了客户描述")
-    if (client.remarks or "") != (remarks or ""):
-        updates.append("更新了备注信息")
-    new_contact_name = (contact_name or "").strip()
-    new_contact_info = (contact_info or "").strip()
-    new_contact_title = (contact_title or "").strip()
-    new_contact_relationship = (contact_relationship or "").strip()
-    new_city = (city or "").strip()
-    if (client.contact_name or "") != new_contact_name:
-        updates.append(f"联系人姓名从[{client.contact_name or ''}]变更为[{new_contact_name}]")
-    if (client.contact_info or "") != new_contact_info:
-        updates.append("更新了联系方式")
-    if (client.contact_title or "") != new_contact_title:
-        updates.append(f"联系人职位从[{client.contact_title or ''}]变更为[{new_contact_title}]")
-    if (client.contact_relationship or "") != new_contact_relationship:
-        updates.append(f"联系人关系从[{client.contact_relationship or ''}]变更为[{new_contact_relationship}]")
-    if (client.city or "") != new_city:
-        updates.append(f"客户所在城市从[{client.city or ''}]变更为[{new_city}]")
-
-    client.name = name
-    client.industry = industry
-    client.owner = owner
-    client.scale = scale
-    client.phase = phase
-    client.description = description
-    client.contact_name = new_contact_name
-    client.contact_info = new_contact_info
-    client.contact_title = new_contact_title
-    client.contact_relationship = new_contact_relationship
-    client.city = new_city
-    client.remarks = remarks or ""
-
-    old_folder = f"{old_name}_{client_id}"
-    new_folder = f"{name}_{client_id}"
-    src_path = os.path.join(UPLOAD_DIR, old_folder)
-    dst_path = os.path.join(UPLOAD_DIR, new_folder)
-    if old_folder != new_folder and os.path.exists(src_path) and not os.path.exists(dst_path):
-        shutil.move(src_path, dst_path)
-        visits = db.query(VisitRecord).filter(VisitRecord.client_id == client_id).all()
-        for visit in visits:
-            if visit.attachment and visit.attachment.startswith(f"{old_folder}/"):
-                visit.attachment = visit.attachment.replace(f"{old_folder}/", f"{new_folder}/", 1)
-
-        old_hb_prefix = f"handbooks/{old_folder}/"
-        new_hb_prefix = f"handbooks/{new_folder}/"
-        old_hb_dir = os.path.join(UPLOAD_DIR, "handbooks", old_folder)
-        new_hb_dir = os.path.join(UPLOAD_DIR, "handbooks", new_folder)
-        if old_folder != new_folder and os.path.isdir(old_hb_dir) and not os.path.exists(new_hb_dir):
-            os.makedirs(os.path.join(UPLOAD_DIR, "handbooks"), exist_ok=True)
-            shutil.move(old_hb_dir, new_hb_dir)
-            hb_rows = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.client_id == client_id).all()
-            for hb in hb_rows:
-                if (hb.stored_path or "").startswith(old_hb_prefix):
-                    hb.stored_path = hb.stored_path.replace(old_hb_prefix, new_hb_prefix, 1)
-
-    if updates:
-        log = AuditLog(client_id=client_id, operator=user, action="; ".join(updates))
-        db.add(log)
-    _sync_client_primary_contact(db, client)
-    refresh_client_estimated_annual_amount(db, client_id, Client, Opportunity)
-    db.commit()
-    return {"status": "ok"}
-
-
-@app.delete("/api/clients/{client_id}")
-async def delete_client(
-    client_id: int,
-    db: Session = Depends(get_db),
-    ctx: AuthContext = Depends(get_current_context),
-    user: str = Depends(require_permission("crm.clients.write")),
-):
-    client = _ensure_client_access(db, ctx, client_id, action="write")
-    client_folder = f"{client.name}_{client.id}"
-    src_path = os.path.join(UPLOAD_DIR, client_folder)
-    if os.path.exists(src_path):
-        shutil.move(src_path, os.path.join(TRASH_DIR, f"{client_folder}_{int(time.time())}"))
-    hb_dir = os.path.join(UPLOAD_DIR, "handbooks", client_folder)
-    if os.path.isdir(hb_dir):
-        shutil.move(hb_dir, os.path.join(TRASH_DIR, f"handbooks_{client_folder}_{int(time.time())}"))
-    db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.client_id == client_id).delete()
-
-    db.delete(client)
-    db.commit()
-    return {"status": "deleted"}
 
 
 @app.get("/api/clients/{client_id}/details")
