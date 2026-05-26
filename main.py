@@ -1663,14 +1663,11 @@ def get_db():
         db.close()
 
 
+from services.clients import scoped_client_query as _scoped_client_query_svc, ensure_client_access as _ensure_client_access_svc
+
+
 def _scoped_client_query(db: Session, ctx: AuthContext, action: str = "read"):
-    allowed = ds.visible_client_ids(db, ctx, Client, action=action)
-    q = db.query(Client)
-    if allowed is None:
-        return q
-    if not allowed:
-        return q.filter(Client.id == -1)
-    return q.filter(Client.id.in_(allowed))
+    return _scoped_client_query_svc(db, ctx, Client, action=action)
 
 
 def _ensure_client_access(
@@ -1681,14 +1678,7 @@ def _ensure_client_access(
     resource: str = RESOURCE_CRM_CLIENT,
     action: str = "read",
 ) -> Client:
-    if resource == RESOURCE_CRM_CLIENT and action == "read":
-        ds.assert_client_visible(db, ctx, client_id, Client, action=action)
-    else:
-        ds.assert_client_in_scope(db, ctx, client_id, Client, resource, action)
-    client = db.query(Client).filter(Client.id == client_id).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="客户不存在")
-    return client
+    return _ensure_client_access_svc(db, ctx, client_id, Client, resource=resource, action=action)
 
 
 auth_deps.configure_auth(
@@ -2945,45 +2935,6 @@ def get_host_ip():
 # --- API 接口 (全量 CRUD) ---
 
 
-@app.get("/api/stats")
-async def get_stats(
-    db: Session = Depends(get_db),
-    ctx: AuthContext = Depends(get_current_context),
-    user: str = Depends(require_permission("crm.clients.read")),
-):
-    phases = ["初步接触", "方案/报价", "合同签订", "成交"]
-    stats = {
-        p: _scoped_client_query(db, ctx, action="read").filter(Client.phase == p).count()
-        for p in phases
-    }
-
-    trash_count = 0
-    trash_size = 0
-    if os.path.exists(TRASH_DIR):
-        for f in os.listdir(TRASH_DIR):
-            fp = os.path.join(TRASH_DIR, f)
-            trash_count += 1
-            trash_size += os.path.getsize(fp)
-
-    handoff_pending = db.query(HandoffRequest).filter(HandoffRequest.status == "pending_review").count()
-    handoff_rejected = db.query(HandoffRequest).filter(HandoffRequest.status == "rejected").count()
-    handoff_approved = db.query(HandoffRequest).filter(HandoffRequest.status == "approved").count()
-    notifications_unread = (
-        db.query(CrmNotification)
-        .filter(CrmNotification.username == user, CrmNotification.read_at.is_(None))
-        .count()
-    )
-
-    return {
-        "funnel": stats,
-        "trash": {"count": trash_count, "size": f"{trash_size/1024/1024:.2f} MB"},
-        "handoff": {
-            "pending_review": handoff_pending,
-            "rejected": handoff_rejected,
-            "approved": handoff_approved,
-        },
-        "notifications_unread": notifications_unread,
-    }
 
 
 PRIMARY_CONTACT_TAG = "首要联系人"
@@ -3031,42 +2982,6 @@ def _sync_client_primary_contact(db: Session, client: Client) -> None:
         )
 
 
-@app.get("/api/clients")
-async def list_clients(
-    phase: Optional[str] = None,
-    handoff_status: Optional[str] = None,
-    db: Session = Depends(get_db),
-    ctx: AuthContext = Depends(get_current_context),
-    user: str = Depends(auth_deps.require_permission("crm.clients.read")),
-):
-    from phase2_core import refresh_client_estimated_annual_amount
-
-    query = _scoped_client_query(db, ctx, action="read")
-    if phase:
-        query = query.filter(Client.phase == phase)
-    clients = query.order_by(desc(Client.created_at)).all()
-    for c in clients:
-        refresh_client_estimated_annual_amount(db, c.id, Client, Opportunity)
-    db.commit()
-    for c in clients:
-        db.refresh(c)
-    if not handoff_status:
-        return clients
-    hs = handoff_status.strip()
-    out = []
-    for c in clients:
-        latest = (
-            db.query(HandoffRequest)
-            .filter(HandoffRequest.client_id == c.id, HandoffRequest.status != "superseded")
-            .order_by(desc(HandoffRequest.version), desc(HandoffRequest.id))
-            .first()
-        )
-        cur = latest.status if latest else "none"
-        if hs == "none" and not latest:
-            out.append(c)
-        elif latest and cur == hs:
-            out.append(c)
-    return out
 
 
 @app.get("/api/clients/handoff-summary")
@@ -3078,6 +2993,20 @@ async def clients_handoff_summary(
 
     rows = db.query(HandoffRequest).filter(HandoffRequest.status != "superseded").all()
     return build_clients_handoff_summary(rows)
+
+
+from routes.clients import register_client_read_routes
+
+register_client_read_routes(
+    app,
+    get_db=get_db,
+    Client=Client,
+    Opportunity=Opportunity,
+    HandoffRequest=HandoffRequest,
+    CrmNotification=CrmNotification,
+    trash_dir=TRASH_DIR,
+    set_csv_download_headers=_set_csv_download_headers,
+)
 
 
 @app.post("/api/clients")
@@ -3127,20 +3056,6 @@ async def create_client(
     return client
 
 
-@app.get("/api/clients/{client_id}")
-async def get_client(
-    client_id: int,
-    db: Session = Depends(get_db),
-    ctx: AuthContext = Depends(get_current_context),
-    user: str = Depends(require_permission("crm.clients.read")),
-):
-    from phase2_core import refresh_client_estimated_annual_amount
-
-    client = _ensure_client_access(db, ctx, client_id, action="read")
-    refresh_client_estimated_annual_amount(db, client_id, Client, Opportunity)
-    db.commit()
-    db.refresh(client)
-    return client
 
 
 @app.put("/api/clients/{client_id}")
@@ -3327,44 +3242,6 @@ async def add_visit(
     return {"status": "ok"}
 
 
-@app.get("/api/export/clients")
-async def export_clients(
-    db: Session = Depends(get_db),
-    ctx: AuthContext = Depends(get_current_context),
-    user: str = Depends(require_permission("crm.clients.read")),
-):
-    from phase2_core import refresh_client_estimated_annual_amount
-
-    output = io.StringIO()
-    output.write("\ufeff")
-    writer = csv.writer(output)
-    writer.writerow([
-        "ID", "客户名称", "行业", "负责人", "外包规模", "开拓阶段",
-        "预估当年合作金额(万元)", "联系人姓名", "联系方式", "联系人职位", "联系人关系", "客户所在城市",
-        "创建时间",
-    ])
-    clients = _scoped_client_query(db, ctx, action="export").all()
-    for c in clients:
-        refresh_client_estimated_annual_amount(db, c.id, Client, Opportunity)
-    db.commit()
-    for c in clients:
-        db.refresh(c)
-        writer.writerow([
-            c.id, c.name, c.industry, c.owner, c.scale, c.phase,
-            c.estimated_annual_amount or "",
-            c.contact_name or "", c.contact_info or "", c.contact_title or "",
-            c.contact_relationship or "", c.city or "",
-            c.created_at.strftime("%Y-%m-%d"),
-        ])
-
-    response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    _set_csv_download_headers(
-        response,
-        chinese_filename=f"客户列表_{ts}.csv",
-        ascii_base=f"clients_{ts}",
-    )
-    return response
 
 
 @app.get("/api/clients/{client_id}/brief")
