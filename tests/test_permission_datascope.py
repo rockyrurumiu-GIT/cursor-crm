@@ -141,6 +141,9 @@ def test_sales_users_see_only_own_clients(client_rbac, admin_auth):
     detail_b = client_rbac.get(f"/api/clients/{client_b_id}", cookies=login_a.cookies)
     assert detail_b.status_code == 404
 
+    brief_b = client_rbac.get(f"/api/clients/{client_b_id}/brief", cookies=login_a.cookies)
+    assert brief_b.status_code == 404
+
 
 def test_super_admin_sees_all_clients(client_rbac, admin_auth):
     login = _login(client_rbac, admin_auth[0], admin_auth[1])

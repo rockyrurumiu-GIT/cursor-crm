@@ -347,3 +347,46 @@ def register_client_write_routes(
         db.delete(client)
         db.commit()
         return {"status": "deleted"}
+
+
+def register_client_related_routes(
+    app,
+    *,
+    get_db: Callable,
+    Client,
+    HandoffRequest,
+    VisitRecord,
+    AuditLog,
+):
+    """24C: handoff-summary, details, brief — must be registered BEFORE {client_id} routes."""
+
+    @app.get("/api/clients/handoff-summary")
+    async def clients_handoff_summary(
+        db: Session = Depends(get_db), user: str = Depends(require_permission("crm.clients.read"))
+    ):
+        from handoff_core import build_clients_handoff_summary
+
+        rows = db.query(HandoffRequest).filter(HandoffRequest.status != "superseded").all()
+        return build_clients_handoff_summary(rows)
+
+    @app.get("/api/clients/{client_id}/details")
+    async def get_details(
+        client_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.clients.read")),
+    ):
+        ensure_client_access(db, ctx, client_id, Client, action="read")
+        visits = db.query(VisitRecord).filter(VisitRecord.client_id == client_id).all()
+        logs = db.query(AuditLog).filter(AuditLog.client_id == client_id).order_by(desc(AuditLog.created_at)).all()
+        return {"visits": visits, "logs": logs}
+
+    @app.get("/api/clients/{client_id}/brief")
+    async def get_client_brief(
+        client_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.clients.read")),
+    ):
+        c = ensure_client_access(db, ctx, client_id, Client, action="read")
+        return {"id": c.id, "name": c.name, "owner": c.owner or "", "phase": c.phase or ""}

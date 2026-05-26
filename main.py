@@ -1663,24 +1663,6 @@ def get_db():
         db.close()
 
 
-from services.clients import scoped_client_query as _scoped_client_query_svc, ensure_client_access as _ensure_client_access_svc
-
-
-def _scoped_client_query(db: Session, ctx: AuthContext, action: str = "read"):
-    return _scoped_client_query_svc(db, ctx, Client, action=action)
-
-
-def _ensure_client_access(
-    db: Session,
-    ctx: AuthContext,
-    client_id: int,
-    *,
-    resource: str = RESOURCE_CRM_CLIENT,
-    action: str = "read",
-) -> Client:
-    return _ensure_client_access_svc(db, ctx, client_id, Client, resource=resource, action=action)
-
-
 auth_deps.configure_auth(
     get_db=get_db,
     legacy_verify=_verify_admin_login,
@@ -2984,18 +2966,16 @@ def _sync_client_primary_contact(db: Session, client: Client) -> None:
 
 
 
-@app.get("/api/clients/handoff-summary")
-async def clients_handoff_summary(
-    db: Session = Depends(get_db), user: str = Depends(require_permission("crm.clients.read"))
-):
-    """须在 /api/clients/{client_id} 之前注册，避免 handoff-summary 被当成 client_id。"""
-    from handoff_core import build_clients_handoff_summary
+from routes.clients import register_client_related_routes, register_client_read_routes, register_client_write_routes
 
-    rows = db.query(HandoffRequest).filter(HandoffRequest.status != "superseded").all()
-    return build_clients_handoff_summary(rows)
-
-
-from routes.clients import register_client_read_routes, register_client_write_routes
+register_client_related_routes(
+    app,
+    get_db=get_db,
+    Client=Client,
+    HandoffRequest=HandoffRequest,
+    VisitRecord=VisitRecord,
+    AuditLog=AuditLog,
+)
 
 register_client_read_routes(
     app,
@@ -3023,19 +3003,6 @@ register_client_write_routes(
 )
 
 
-
-
-@app.get("/api/clients/{client_id}/details")
-async def get_details(
-    client_id: int,
-    db: Session = Depends(get_db),
-    ctx: AuthContext = Depends(get_current_context),
-    user: str = Depends(require_permission("crm.clients.read")),
-):
-    _ensure_client_access(db, ctx, client_id, action="read")
-    visits = db.query(VisitRecord).filter(VisitRecord.client_id == client_id).all()
-    logs = db.query(AuditLog).filter(AuditLog.client_id == client_id).order_by(desc(AuditLog.created_at)).all()
-    return {"visits": visits, "logs": logs}
 
 
 @app.post("/api/visits")
@@ -3084,16 +3051,6 @@ async def add_visit(
     return {"status": "ok"}
 
 
-
-
-@app.get("/api/clients/{client_id}/brief")
-async def get_client_brief(
-    client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("crm.clients.read"))
-):
-    c = db.query(Client).filter(Client.id == client_id).first()
-    if not c:
-        raise HTTPException(status_code=404, detail="客户不存在")
-    return {"id": c.id, "name": c.name, "owner": c.owner or "", "phase": c.phase or ""}
 
 
 def _handbook_outline_coerce(raw: Optional[str]) -> List[Dict[str, Any]]:
