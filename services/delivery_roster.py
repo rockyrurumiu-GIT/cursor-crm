@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from auth import data_scope as ds
 from auth.data_scope_catalog import RESOURCE_DELIVERY_ROSTER
 from auth.service import AuthContext
+from services.csv_utils import strip_csv_header_noise as _strip_csv_header_noise
 from schemas.delivery_roster import (
     CHINESE_ROSTER_HEADER_MAP,
     ROSTER_CUSTOMER_ALIAS_RULES,
@@ -384,14 +385,6 @@ def decode_roster_upload_bytes(raw: bytes) -> str:
     except UnicodeDecodeError:
         return raw.decode("utf-8", errors="replace")
 
-
-def _strip_csv_header_noise(s: str) -> str:
-    """去掉 BOM、零宽字符、不间断空格等。"""
-    t = unicodedata.normalize("NFKC", str(s))
-    t = t.strip().strip("\ufeff")
-    t = t.replace("\u00a0", "").replace("\u3000", "")
-    t = "".join(ch for ch in t if unicodedata.category(ch) != "Cf")
-    return t.strip()
 
 
 def _is_gms_column_header(h: str) -> bool:
