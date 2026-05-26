@@ -158,10 +158,10 @@ def register_phase2_routes(
     ):
         q = db.query(Opportunity)
         if client_id:
-            ds.assert_client_in_scope(db, ctx, client_id, RESOURCE_CRM_OPPORTUNITY, "read")
+            ds.assert_client_in_scope(db, ctx, client_id, Client, RESOURCE_CRM_OPPORTUNITY, "read")
             q = q.filter(Opportunity.client_id == client_id)
         q = ds.filter_query_by_client_scope(
-            q, db, ctx, RESOURCE_CRM_OPPORTUNITY, "read", Opportunity.client_id
+            q, db, ctx, RESOURCE_CRM_OPPORTUNITY, "read", Opportunity.client_id, Client
         )
         if stage:
             q = q.filter(Opportunity.stage == stage)
@@ -181,7 +181,7 @@ def register_phase2_routes(
     ):
         if body.stage not in OPPORTUNITY_STAGES:
             raise HTTPException(status_code=400, detail="无效商机阶段")
-        ds.assert_client_in_scope(db, ctx, body.client_id, RESOURCE_CRM_OPPORTUNITY, "write")
+        ds.assert_client_in_scope(db, ctx, body.client_id, Client, RESOURCE_CRM_OPPORTUNITY, "write")
         client = db.query(Client).filter(Client.id == body.client_id).first()
         if not client:
             raise HTTPException(status_code=404, detail="客户不存在")
@@ -214,7 +214,7 @@ def register_phase2_routes(
         o = db.query(Opportunity).filter(Opportunity.id == opp_id).first()
         if not o:
             raise HTTPException(status_code=404, detail="商机不存在")
-        ds.assert_client_in_scope(db, ctx, o.client_id, RESOURCE_CRM_OPPORTUNITY, "write")
+        ds.assert_client_in_scope(db, ctx, o.client_id, Client, RESOURCE_CRM_OPPORTUNITY, "write")
         if body.stage not in OPPORTUNITY_STAGES:
             raise HTTPException(status_code=400, detail="无效商机阶段")
         o.name = body.name.strip()
@@ -241,7 +241,7 @@ def register_phase2_routes(
         o = db.query(Opportunity).filter(Opportunity.id == opp_id).first()
         if not o:
             raise HTTPException(status_code=404, detail="商机不存在")
-        ds.assert_client_in_scope(db, ctx, o.client_id, RESOURCE_CRM_OPPORTUNITY, "write")
+        ds.assert_client_in_scope(db, ctx, o.client_id, Client, RESOURCE_CRM_OPPORTUNITY, "write")
         client_id = o.client_id
         db.delete(o)
         db.commit()
@@ -350,10 +350,10 @@ def register_phase2_routes(
     ):
         q = db.query(Contact)
         if client_id:
-            ds.assert_client_in_scope(db, ctx, client_id, RESOURCE_CRM_CONTACT, "read")
+            ds.assert_client_in_scope(db, ctx, client_id, Client, RESOURCE_CRM_CONTACT, "read")
             q = q.filter(Contact.client_id == client_id)
         q = ds.filter_query_by_client_scope(
-            q, db, ctx, RESOURCE_CRM_CONTACT, "read", Contact.client_id
+            q, db, ctx, RESOURCE_CRM_CONTACT, "read", Contact.client_id, Client
         )
         rows = q.order_by(desc(Contact.created_at)).all()
         out = []
@@ -369,7 +369,7 @@ def register_phase2_routes(
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("crm.contacts.write")),
     ):
-        ds.assert_client_in_scope(db, ctx, body.client_id, RESOURCE_CRM_CONTACT, "write")
+        ds.assert_client_in_scope(db, ctx, body.client_id, Client, RESOURCE_CRM_CONTACT, "write")
         client = db.query(Client).filter(Client.id == body.client_id).first()
         if not client:
             raise HTTPException(status_code=404, detail="客户不存在")
@@ -397,7 +397,7 @@ def register_phase2_routes(
         ct = db.query(Contact).filter(Contact.id == contact_id).first()
         if not ct:
             raise HTTPException(status_code=404, detail="联系人不存在")
-        ds.assert_client_in_scope(db, ctx, ct.client_id, RESOURCE_CRM_CONTACT, "write")
+        ds.assert_client_in_scope(db, ctx, ct.client_id, Client, RESOURCE_CRM_CONTACT, "write")
         db.delete(ct)
         db.commit()
         return {"ok": True}

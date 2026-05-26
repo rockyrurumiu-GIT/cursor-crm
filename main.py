@@ -1126,6 +1126,8 @@ def _ensure_visits_schema_compat():
             "visit_summary": "TEXT DEFAULT ''",
             "created_at": "TEXT DEFAULT ''",
             "updated_at": "TEXT DEFAULT ''",
+            "owner_user_id": "INTEGER NULL",
+            "owner_dept_id": "INTEGER NULL",
         }
         for col, ddl in add_cols.items():
             if col not in existing:
@@ -1663,7 +1665,7 @@ def get_db():
 
 
 def _scoped_client_query(db: Session, ctx: AuthContext, action: str = "read"):
-    allowed = ds.visible_client_ids(db, ctx, action=action)
+    allowed = ds.visible_client_ids(db, ctx, Client, action=action)
     q = db.query(Client)
     if allowed is None:
         return q
@@ -1681,9 +1683,9 @@ def _ensure_client_access(
     action: str = "read",
 ) -> Client:
     if resource == RESOURCE_CRM_CLIENT and action == "read":
-        ds.assert_client_visible(db, ctx, client_id, action=action)
+        ds.assert_client_visible(db, ctx, client_id, Client, action=action)
     else:
-        ds.assert_client_in_scope(db, ctx, client_id, resource, action)
+        ds.assert_client_in_scope(db, ctx, client_id, Client, resource, action)
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
         raise HTTPException(status_code=404, detail="客户不存在")
@@ -1858,7 +1860,7 @@ def _roster_entries_union_of_all_clients(db: Session, ctx: Optional[AuthContext]
     )
     if ctx is not None:
         q = ds.filter_query_by_client_scope(
-            q, db, ctx, RESOURCE_DELIVERY_ROSTER, "read", RosterEntry.client_id
+            q, db, ctx, RESOURCE_DELIVERY_ROSTER, "read", RosterEntry.client_id, Client
         )
     return q.order_by(RosterEntry.id).all()
 
@@ -1868,7 +1870,7 @@ def _roster_entries_turnover_pool(db: Session, ctx: Optional[AuthContext] = None
     q = db.query(RosterEntry).filter(_sql_roster_employment_left())
     if ctx is not None:
         q = ds.filter_query_by_client_scope(
-            q, db, ctx, RESOURCE_DELIVERY_ROSTER, "read", RosterEntry.client_id
+            q, db, ctx, RESOURCE_DELIVERY_ROSTER, "read", RosterEntry.client_id, Client
         )
     return q.order_by(RosterEntry.id).all()
 
@@ -6587,7 +6589,7 @@ async def settlement_list(
 ):
     q = db.query(DeliverySettlementEntry).order_by(DeliverySettlementEntry.id)
     q = ds.filter_query_by_client_scope(
-        q, db, ctx, RESOURCE_DELIVERY_SETTLEMENT, "read", DeliverySettlementEntry.client_id
+        q, db, ctx, RESOURCE_DELIVERY_SETTLEMENT, "read", DeliverySettlementEntry.client_id, Client
     )
     rows = q.all()
     return [_settlement_entry_to_dict(r) for r in rows]

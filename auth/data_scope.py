@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Optional, Set, Type, TypeVar
+from typing import Any, List, Optional, Set, Type
 
 from fastapi import HTTPException
 from sqlalchemy import or_
@@ -18,8 +18,6 @@ from auth.data_scope_catalog import (
     merge_scope_types,
 )
 from auth.service import AuthContext
-
-T = TypeVar("T")
 
 
 def get_effective_data_scope(ctx: AuthContext, resource_code: str, action: str) -> str:
@@ -59,21 +57,27 @@ def _dept_subtree_ids(db: Session, dept_ids: List[int]) -> Set[int]:
     return out
 
 
-def _apply_scope_to_client_query(query: Query, scope: str, ctx: AuthContext, db: Session, *, sales: bool):
+def _apply_scope_to_client_query(
+    query: Query,
+    scope: str,
+    ctx: AuthContext,
+    db: Session,
+    client_model: Type[Any],
+    *,
+    sales: bool,
+):
     """Filter a Client ORM query by effective scope."""
-    from main import Client
-
     if scope == SCOPE_ALL:
         return query
     if scope == SCOPE_NONE:
-        return query.filter(Client.id == -1)
+        return query.filter(client_model.id == -1)
     if ctx.user_id is None:
-        return query.filter(Client.id == -1)
+        return query.filter(client_model.id == -1)
 
     owner_col, dept_col, assigned_col = client_scope_columns("sales" if sales else "delivery")
-    OwnerCol = getattr(Client, owner_col)
-    DeptCol = getattr(Client, dept_col)
-    AssignedCol = getattr(Client, assigned_col) if assigned_col else None
+    OwnerCol = getattr(client_model, owner_col)
+    DeptCol = getattr(client_model, dept_col)
+    AssignedCol = getattr(client_model, assigned_col) if assigned_col else None
 
     if scope == SCOPE_SELF:
         return query.filter(OwnerCol == ctx.user_id)
@@ -84,14 +88,14 @@ def _apply_scope_to_client_query(query: Query, scope: str, ctx: AuthContext, db:
     if scope == SCOPE_DEPT:
         dept_ids = ctx.dept_ids or ([ctx.primary_dept_id] if ctx.primary_dept_id else [])
         if not dept_ids:
-            return query.filter(Client.id == -1)
+            return query.filter(client_model.id == -1)
         return query.filter(DeptCol.in_(dept_ids))
     if scope == SCOPE_DEPT_AND_CHILD:
         dept_ids = list(_dept_subtree_ids(db, ctx.dept_ids or ([ctx.primary_dept_id] if ctx.primary_dept_id else [])))
         if not dept_ids:
-            return query.filter(Client.id == -1)
+            return query.filter(client_model.id == -1)
         return query.filter(DeptCol.in_(dept_ids))
-    return query.filter(Client.id == -1)
+    return query.filter(client_model.id == -1)
 
 
 def apply_client_scope(
@@ -100,10 +104,11 @@ def apply_client_scope(
     ctx: AuthContext,
     resource_code: str,
     action: str,
+    client_model: Type[Any],
 ) -> Query:
     scope = get_effective_data_scope(ctx, resource_code, action)
     sales = resource_code == RESOURCE_CRM_CLIENT or resource_code.startswith("crm.")
-    return _apply_scope_to_client_query(query, scope, ctx, db, sales=sales)
+    return _apply_scope_to_client_query(query, scope, ctx, db, client_model, sales=sales)
 
 
 def scoped_client_ids(
@@ -111,19 +116,23 @@ def scoped_client_ids(
     ctx: AuthContext,
     resource_code: str,
     action: str,
+    client_model: Type[Any],
 ) -> Optional[Set[int]]:
     """Return None if all clients visible, else set of allowed client ids (may be empty)."""
-    from main import Client
-
     scope = get_effective_data_scope(ctx, resource_code, action)
     if scope == SCOPE_ALL:
         return None
-    q = db.query(Client.id)
-    q = apply_client_scope(q, db, ctx, resource_code, action)
+    q = db.query(client_model.id)
+    q = apply_client_scope(q, db, ctx, resource_code, action, client_model)
     return {int(r[0]) for r in q.all()}
 
 
-def visible_client_ids(db: Session, ctx: AuthContext, action: str = "read") -> Optional[Set[int]]:
+def visible_client_ids(
+    db: Session,
+    ctx: AuthContext,
+    client_model: Type[Any],
+    action: str = "read",
+) -> Optional[Set[int]]:
     """Union of client ids visible via any mapped resource the user may access."""
     from auth.data_scope_catalog import PERMISSION_TO_RESOURCE, RESOURCE_FILE
 
@@ -145,7 +154,7 @@ def visible_client_ids(db: Session, ctx: AuthContext, action: str = "read") -> O
             continue
         elif action not in ("read", "write", "export"):
             continue
-        scoped = scoped_client_ids(db, ctx, resource, action)
+        scoped = scoped_client_ids(db, ctx, resource, action, client_model)
         checked = True
         if scoped is None:
             return None
@@ -159,10 +168,11 @@ def assert_client_visible(
     db: Session,
     ctx: AuthContext,
     client_id: int,
+    client_model: Type[Any],
     *,
     action: str = "read",
 ) -> None:
-    allowed = visible_client_ids(db, ctx, action=action)
+    allowed = visible_client_ids(db, ctx, client_model, action=action)
     if allowed is None:
         return
     if client_id not in allowed:
@@ -173,10 +183,11 @@ def assert_client_in_scope(
     db: Session,
     ctx: AuthContext,
     client_id: int,
+    client_model: Type[Any],
     resource_code: str,
     action: str,
 ) -> None:
-    allowed = scoped_client_ids(db, ctx, resource_code, action)
+    allowed = scoped_client_ids(db, ctx, resource_code, action, client_model)
     if allowed is None:
         return
     if client_id not in allowed:
@@ -190,8 +201,9 @@ def filter_query_by_client_scope(
     resource_code: str,
     action: str,
     client_id_column: Any,
+    client_model: Type[Any],
 ) -> Query:
-    allowed = scoped_client_ids(db, ctx, resource_code, action)
+    allowed = scoped_client_ids(db, ctx, resource_code, action, client_model)
     if allowed is None:
         return query
     if not allowed:

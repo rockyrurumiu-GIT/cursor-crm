@@ -338,13 +338,22 @@ createApp({
             }
         };
 
-        const openDetail = (c) => {
+        const openDetail = async (c) => {
             selectedClient.value = { ...c };
-            fetch(`/api/clients/${c.id}/details`, { headers: authHeader() }).then(r => r.json()).then(async (d) => {
+            try {
+                const r = await fetch(`/api/clients/${c.id}/details`, { headers: authHeader() });
+                if (!r.ok) {
+                    const err = await r.json().catch(() => ({}));
+                    alert(err.detail || '加载客户详情失败');
+                    return;
+                }
+                const d = await r.json();
                 details.value = d;
                 showDetail.value = true;
                 await preloadVisitAttachments(d.visits);
-            });
+            } catch (e) {
+                alert('加载客户详情失败');
+            }
         };
 
         const updateClient = (c) => {

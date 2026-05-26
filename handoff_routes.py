@@ -121,7 +121,7 @@ def register_handoff_routes(
 
     def _get_client_or_404(db: Session, client_id: int, ctx: Optional[AuthContext] = None):
         if ctx is not None:
-            ds.assert_client_in_scope(db, ctx, client_id, RESOURCE_DELIVERY_HANDOFF, "read")
+            ds.assert_client_in_scope(db, ctx, client_id, Client, RESOURCE_DELIVERY_HANDOFF, "read")
         c = db.query(Client).filter(Client.id == client_id).first()
         if not c:
             raise HTTPException(status_code=404, detail="客户不存在")
@@ -169,7 +169,7 @@ def register_handoff_routes(
         )
         if not ctx.is_super and user != admin:
             q = ds.filter_query_by_client_scope(
-                q, db, ctx, RESOURCE_DELIVERY_HANDOFF, "read", HandoffRequest.client_id
+                q, db, ctx, RESOURCE_DELIVERY_HANDOFF, "read", HandoffRequest.client_id, Client
             )
         rows = q.all()
         out: List[Dict[str, Any]] = []
