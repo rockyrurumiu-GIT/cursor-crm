@@ -23,6 +23,19 @@ uploads/
 .env.*
 .crm_admin_credentials.json
 
+# 本地模型/缓存
+.cache/
+
+# 本地业务备份导出
+backups/
+
+# 本地旧图标/素材备份
+icon_bk/
+
+# 临时素材/参考文件
+Throme logo1.png
+permission-archi.pdf
+
 # Pytest / Playwright 本地测试产物（勿提交）
 test-results/
 playwright-report/
