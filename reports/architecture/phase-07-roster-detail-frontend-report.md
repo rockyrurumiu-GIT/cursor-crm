@@ -67,15 +67,15 @@
 | 1 | `/customers/roster/0` 不白屏 | **PASS** | Playwright：`__ROSTER_CLIENT_ID__ === 0` |
 | 2 | 外置 JS 已加载 | **PASS** | `roster-detail.js` in document.scripts |
 | 3 | Console 无业务 JS error | **PASS** | Playwright hooks 为空 |
-| 4 | `/customers/roster/{client_id}` 客户入口 | **建议 spot-check** | 零重构；API 分支与客户日志 URL 不同，请在有客户数据环境点测 |
-| 5 | 筛选 / CRUD / 导入导出 / 日志 / 回滚 / 校验 / `?roster_add=1` | **建议 spot-check** | 逻辑未改；自动化未逐按钮点测 |
+| 4 | `/customers/roster/{client_id}` 客户入口 | **PASS** | 用户已完成手动网页验证，无异常 |
+| 5 | 筛选 / CRUD / 导入导出 / 日志 / 回滚 / 校验 / `?roster_add=1` | **PASS** | 用户已完成手动网页验证，无异常 |
 
 ## 剩余风险
 
 | 风险 | 级别 | 说明 |
 |------|------|------|
 | 误删配置脚本 | 中 | 已保留在 content block；外置 JS 勿含 `{{ client_id }}` |
-| 客户模式未自动化点测 | 中 | 依赖 `/customers/roster/{id}` 手工或 spot-check |
+| 客户模式未自动化点测 | 低 | 自动化未逐按钮覆盖；客户入口与完整 UI 流已由用户手动网页验证 PASS |
 | 外置 JS ~927 行仍偏大 | 低 | 可选 Phase 7b 接 `crm-api.js` 或拆模块 |
 
 ## 提交文件
