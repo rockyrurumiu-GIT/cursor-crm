@@ -65,7 +65,7 @@
 | 4 | Console 无业务 JS error | **PASS** | `pageerror` / `console.error` 为空 |
 | 5 | 离职池列表加载 | **PASS** | 页面渲染 + `GET /api/roster/turnover` 冒烟 |
 | 6 | 分析看板 API | **PASS** | `GET /api/roster/turnover/dashboard` 冒烟 |
-| 7 | 筛选 / CRUD / 导入导出 / 日志 / 回滚 UI | **建议 spot-check** | 零重构外置；交互逻辑未改，未在本轮自动化逐按钮点测 |
+| 7 | 筛选 / CRUD / 导入导出 / 日志 / 回滚 UI | **PASS** | 用户已完成手动网页验证，全部通过 |
 
 ## 剩余风险
 
@@ -73,7 +73,7 @@
 |------|------|------|
 | 浏览器缓存旧 inline 脚本 | 低 | 部署后建议硬刷新 |
 | 外置 JS ~977 行仍偏大 | 低 | 可选后续 Phase 6b：拆模块或接入 `crm-api.js` |
-| pytest 不覆盖完整 UI 流 | 中 | 依赖 API 冒烟 + 上表 spot-check |
+| pytest 不覆盖完整 UI 流 | 低 | 自动化依赖 API 冒烟；完整 UI 流已由用户手动网页验证 PASS |
 
 ## 提交文件
 
