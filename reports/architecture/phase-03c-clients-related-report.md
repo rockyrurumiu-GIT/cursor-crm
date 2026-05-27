@@ -14,7 +14,7 @@
 
 ### main.py 变化
 
-- 行数：6312 → 6287（减少 25 行）
+- 行数：6312 → 6269（减少 43 行）
 - 路由数：72 → 69（减少 3 个）
 - 新增注册调用 `register_client_related_routes()`，位于 `register_client_read_routes()` 之前
 
