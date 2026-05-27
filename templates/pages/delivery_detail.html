@@ -1767,15 +1767,39 @@
 </div>
 {% endraw %}
 <script>
-window.__DELIVERY_MODULE_KEY__ = "{{ module_key }}";
-window.__DELIVERY_MODULE_TITLE__ = "{{ module_title }}";
-window.__DELIVERY_CLIENT_ID__ = Number("{{ client_id }}");
-window.__HANDBOOK_ADMIN_CROSS_SEARCH__ = {{ handbook_admin_cross_search|default(false)|tojson }};
+window.__CRM_DELIVERY_DETAIL__ = {
+    clientId: {{ client_id }},
+    moduleKey: {{ module_key | tojson }},
+    moduleTitle: {{ module_title | tojson }},
+    handbookAdminCrossSearch: {{ handbook_admin_cross_search|default(false)|tojson }}
+};
 </script>
 {% endblock %}
 {% block page_scripts %}
+<script src="/static/js/core/crm-api.js"></script>
+<script src="/static/js/core/crm-download.js"></script>
+<script src="/static/js/pages/delivery-detail.js"></script>
+<script src="/static/js/pages/delivery-detail-settlement.js"></script>
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } = Vue;
+const {
+    todayInputDate,
+    extractLooseDateParts,
+    normalizeDateForInput,
+    displayDateSlash,
+    interviewDateRank,
+    normalizedDateToUtcMs,
+    diffDaysFromDate,
+    isEmptyOrNoValue,
+    csvCell,
+    multiSelectSummary,
+    interviewTextLength,
+    crmEscapeHtml,
+    crmHighlightSearchQuery,
+    readApiErrorMessage,
+    formatDate,
+    loadClientBrief,
+} = window.CrmDeliveryDetail;
 const PIPELINE_FIELDS = [
     { key: 'resume_time', label: '简历时间', type: 'date' },
     { key: 'date', label: '日期', type: 'period' },
@@ -1876,35 +1900,8 @@ function collectInterviewMissingRequiredKeys(form) {
     });
     return missing;
 }
-const SETTLEMENT_FIELDS = [
-    { key: 'serial_no', label: '序号' },
-    { key: 'progress_updated_at', label: '结算进度更新时间', type: 'date' },
-    { key: 'customer_name', label: '客户' },
-    { key: 'fee_month', label: '费用月份' },
-    { key: 'chase_month', label: '追款月份' },
-    { key: 'amount', label: '金额' },
-    { key: 'internal_attendance_confirm', label: '内部确认考勤' },
-    { key: 'client_confirm', label: '客户确认' },
-    { key: 'invoiced', label: '是否开票' },
-    { key: 'invoice_date', label: '开票日期', type: 'date' },
-    { key: 'paid', label: '是否回款' },
-    { key: 'expected_payment_date', label: '预计回款时间', type: 'date' },
-    { key: 'actual_payment_date', label: '实际回款时间', type: 'date' },
-    { key: 'payment_days', label: '回款天数' },
-    { key: 'payment_cycle', label: '回款周期' },
-    { key: 'payment_nature', label: '回款性质' },
-    { key: 'po_no', label: 'PO单' },
-    { key: 'invoice_no', label: '发票号' },
-    { key: 'remarks', label: '备注', type: 'textarea' },
-];
-const SETTLEMENT_TEXTAREA_KEYS = new Set(['remarks']);
-const SETTLEMENT_COMPACT_FIELDS = SETTLEMENT_FIELDS.filter((f) => !SETTLEMENT_TEXTAREA_KEYS.has(f.key));
-const SETTLEMENT_TEXTAREA_FIELDS = SETTLEMENT_FIELDS.filter((f) => SETTLEMENT_TEXTAREA_KEYS.has(f.key));
 const PIPELINE_DATE_FIELD_KEYS = new Set(
     PIPELINE_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
-);
-const SETTLEMENT_DATE_FIELD_KEYS = new Set(
-    SETTLEMENT_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
 );
 const INTERVIEW_DATE_FIELD_KEYS = new Set(
     INTERVIEW_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
@@ -1922,11 +1919,6 @@ function flattenHandbookOutline(nodes, depth = 0) {
     return out;
 }
 
-function emptySettlementForm() {
-    const f = {};
-    SETTLEMENT_FIELDS.forEach((x) => { f[x.key] = ''; });
-    return f;
-}
 function emptyPipelineForm() {
     const f = {};
     PIPELINE_FIELDS.forEach((x) => { f[x.key] = ''; });
@@ -1937,107 +1929,6 @@ function emptyInterviewForm() {
     const f = {};
     INTERVIEW_FIELDS.forEach((x) => { f[x.key] = ''; });
     return f;
-}
-function todayInputDate() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-}
-function extractLooseDateParts(raw) {
-    const s = String(raw || '').trim();
-    if (!s) return null;
-    const m = s.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
-    if (!m) return null;
-    return [m[1], m[2], m[3]];
-}
-function normalizeDateForInput(raw, fallbackTodayIfEmpty = false) {
-    const s = String(raw || '').trim();
-    if (!s) return fallbackTodayIfEmpty ? todayInputDate() : '';
-    const parts = extractLooseDateParts(s);
-    if (!parts) return s;
-    const y = parts[0];
-    const mo = String(parseInt(parts[1], 10)).padStart(2, '0');
-    const d = String(parseInt(parts[2], 10)).padStart(2, '0');
-    if (mo === 'NaN' || d === 'NaN') return s;
-    return `${y}-${mo}-${d}`;
-}
-function displayDateSlash(raw) {
-    const s = String(raw || '').trim();
-    if (!s) return '';
-    const parts = extractLooseDateParts(s);
-    if (!parts) return s;
-    return `${parts[0]}/${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}`;
-}
-function interviewDateRank(raw) {
-    const normalized = normalizeDateForInput(raw, false);
-    if (!normalized) return 0;
-    return Number(normalized.replace(/-/g, '')) || 0;
-}
-function normalizedDateToUtcMs(raw) {
-    const normalized = normalizeDateForInput(raw, false);
-    if (!normalized) return 0;
-    const m = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!m) return 0;
-    return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-}
-function diffDaysFromDate(raw, endRaw) {
-    const startMs = normalizedDateToUtcMs(raw);
-    const endMs = normalizedDateToUtcMs(endRaw);
-    if (!startMs || !endMs || endMs < startMs) return -1;
-    return Math.floor((endMs - startMs) / 86400000);
-}
-function isEmptyOrNoValue(raw) {
-    const s = String(raw || '').trim().toUpperCase();
-    return !s || s === 'N';
-}
-function csvCell(raw) {
-    const s = String(raw == null ? '' : raw);
-    if (/[",\n]/.test(s)) {
-        return `"${s.replace(/"/g, '""')}"`;
-    }
-    return s;
-}
-function settlementReminderLabel(row) {
-    const customer = String(row && row.customer_name != null ? row.customer_name : '').trim() || '客户';
-    const feeMonth = String(row && row.fee_month != null ? row.fee_month : '').trim() || '-';
-    const amount = String(row && row.amount != null ? row.amount : '').trim() || '-';
-    return `${customer}｜${feeMonth}｜${amount}`;
-}
-function buildSettlementReminderText(rows, pageClientName, todayDate) {
-    const followUpItems = [];
-    const overdueItems = [];
-    (Array.isArray(rows) ? rows : []).forEach((row) => {
-        const expectedDate = normalizeDateForInput(row && row.expected_payment_date != null ? String(row.expected_payment_date) : '', false);
-        if (!expectedDate) return;
-        const actualDate = normalizeDateForInput(row && row.actual_payment_date != null ? String(row.actual_payment_date) : '', false);
-        const paid = String(row && row.paid != null ? row.paid : '').trim();
-        if (actualDate || paid === '是') return;
-        const overdueDays = diffDaysFromDate(expectedDate, todayDate);
-        if (overdueDays <= 0) return;
-        const label = settlementReminderLabel(row);
-        if (overdueDays <= 7) {
-            followUpItems.push(label);
-        } else {
-            overdueItems.push(label);
-        }
-    });
-    if (!followUpItems.length && !overdueItems.length) return '';
-    const lines = [`【${String(pageClientName || '客户').trim() || '客户'} - 结算回款提示】`];
-    if (followUpItems.length) {
-        lines.push('催付');
-        followUpItems.forEach((item, idx) => {
-            lines.push(`${idx + 1}. ${item}`);
-        });
-    }
-    if (overdueItems.length) {
-        lines.push('超期AR');
-        overdueItems.forEach((item, idx) => {
-            lines.push(`${idx + 1}. ${item}`);
-        });
-    }
-    return lines.join('\n');
 }
 function flattenInterviewHintItems(hints) {
     const items = [];
@@ -2176,54 +2067,12 @@ function emptyInterviewFilter() {
         satisfaction: [],
     };
 }
-function multiSelectSummary(selected) {
-    const values = Array.isArray(selected) ? selected : [];
-    if (!values.length) return '全部';
-    if (values.length === 1) return values[0];
-    return `已选${values.length}项`;
-}
-function interviewTextLength(raw) {
-    return String(raw || '').trim().length;
-}
-function crmEscapeHtml(s) {
-    return String(s || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-/** 检索摘录高亮：escape 后包 mark；空格分隔多词均匹配（英文不区分大小写）。 */
-function crmHighlightSearchQuery(raw, query) {
-    const t = raw == null ? '' : String(raw);
-    const parts = String(query || '').trim().split(/\s+/).filter(Boolean);
-    if (!parts.length) return crmEscapeHtml(t);
-    const pattern = parts.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-    if (!pattern) return crmEscapeHtml(t);
-    let re;
-    try {
-        re = new RegExp(`(${pattern})`, 'gi');
-    } catch (_) {
-        return crmEscapeHtml(t);
-    }
-    let out = '';
-    let last = 0;
-    let m;
-    while ((m = re.exec(t)) !== null) {
-        out += crmEscapeHtml(t.slice(last, m.index));
-        out += '<mark class="crm-fs-hit rounded bg-amber-200 px-0.5 text-gray-900 ring-1 ring-amber-400/70">';
-        out += crmEscapeHtml(m[0]);
-        out += '</mark>';
-        last = m.index + m[0].length;
-        if (last === re.lastIndex) re.lastIndex++;
-    }
-    out += crmEscapeHtml(t.slice(last));
-    return out;
-}
 createApp({
     setup() {
-        const moduleKey = window.__DELIVERY_MODULE_KEY__;
-        const moduleTitle = window.__DELIVERY_MODULE_TITLE__;
-        const clientId = window.__DELIVERY_CLIENT_ID__;
+        const cfg = window.CrmDeliveryDetail.readConfig();
+        const moduleKey = cfg.moduleKey;
+        const moduleTitle = cfg.moduleTitle;
+        const clientId = cfg.clientId;
         const clientName = ref(`客户#${clientId}`);
         const requirementsSummary = ref(null);
         const returnToInsight = ref(false);
@@ -2248,7 +2097,7 @@ createApp({
         const handbookUploading = ref(false);
         const handbookUploadError = ref('');
         const handbookSelectedFiles = ref([]);
-        const handbookAdminCrossSearch = !!window.__HANDBOOK_ADMIN_CROSS_SEARCH__;
+        const handbookAdminCrossSearch = cfg.handbookAdminCrossSearch;
         const handbookFsPanelOpen = ref(false);
         const handbookFsQuery = ref('');
         const handbookFsResults = ref([]);
@@ -2743,60 +2592,38 @@ createApp({
         const showPipelineLogs = ref(false);
         const pipelineLogsLoading = ref(false);
         const pipelineLogs = ref([]);
-        const settlementRows = ref([]);
-        const showForm = ref(false);
-        const editingId = ref(null);
-        const settlementFormReadonly = ref(false);
-        const form = reactive(emptySettlementForm());
-        const loadBrief = async () => {
-            const r = await fetch(`/api/clients/${clientId}/brief`, { headers: window.crmAuthHeader() });
-            if (r.ok) {
-                const d = await r.json();
-                clientName.value = d.name || clientName.value;
-            }
-        };
-        const loadSettlementRows = async () => {
-            if (moduleKey !== 'settlement') return;
-            const r = await fetch('/api/delivery/settlement', { headers: window.crmAuthHeader() });
-            if (!r.ok) {
-                settlementRows.value = [];
-                return;
-            }
-            const all = await r.json();
-            const cid = Number(clientId);
-            settlementRows.value = Array.isArray(all)
-                ? all.filter((row) => Number(row.client_id) === cid)
-                : [];
-        };
-        const showSettlementReminders = async () => {
-            const text = buildSettlementReminderText(settlementRows.value, clientName.value, todayInputDate());
-            if (!text) {
-                alert('当前没有需要提示的回款记录');
-                return;
-            }
-            let copied = false;
-            try {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    await navigator.clipboard.writeText(text);
-                    copied = true;
-                } else {
-                    const ta = document.createElement('textarea');
-                    ta.value = text;
-                    ta.setAttribute('readonly', '');
-                    ta.style.position = 'fixed';
-                    ta.style.opacity = '0';
-                    document.body.appendChild(ta);
-                    ta.focus();
-                    ta.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(ta);
-                    copied = true;
-                }
-            } catch (err) {
-                copied = false;
-            }
-            alert(copied ? `${text}\n\n提示结果已复制` : text);
-        };
+        const loadBrief = () => loadClientBrief(clientId, clientName);
+        const settlement = window.CrmDeliveryDetailSettlement.createSettlementState({
+            ref,
+            reactive,
+            moduleKey,
+            clientId,
+            clientName,
+            normalizeDateForInput,
+            diffDaysFromDate,
+            todayInputDate,
+            readApiErrorMessage,
+            api: window.crmApi,
+            download: window.crmDownload,
+        });
+        const {
+            settlementRows,
+            settlementFields,
+            settlementCompactFields,
+            settlementTextareaFields,
+            showSettlementReminders,
+            showForm,
+            editingId,
+            settlementFormReadonly,
+            form,
+            loadSettlementRows,
+            openAdd,
+            openEdit,
+            openSettlementDetail,
+            saveForm,
+            removeRow,
+            clearSettlementDateField,
+        } = settlement;
         const loadPipelineRows = async () => {
             if (moduleKey !== 'pipeline') return;
             const r = await fetch(`/api/clients/${clientId}/delivery/pipeline`, { headers: window.crmAuthHeader() });
@@ -3286,22 +3113,6 @@ createApp({
             }
             return base;
         };
-        const readApiErrorMessage = async (response, fallback) => {
-            let msg = fallback;
-            try {
-                const err = await response.json();
-                if (typeof err.detail === 'string') {
-                    msg = err.detail;
-                } else if (Array.isArray(err.detail)) {
-                    msg = err.detail.map((x) => (x && x.msg) || JSON.stringify(x)).join('；') || msg;
-                } else if (err.detail != null) {
-                    msg = String(err.detail);
-                }
-            } catch (err) {
-                // Ignore parse failure and keep fallback message.
-            }
-            return msg;
-        };
         const validatePipelinePayload = (payload) => {
             const interviewed = String(payload.interviewed || '').trim();
             const interviewTime = String(payload.interview_time || '').trim();
@@ -3605,11 +3416,6 @@ createApp({
             alert(`已从备份 ${j.backup_file} 回滚，清空 ${j.cleared_existing || 0} 行，恢复 ${j.restored_rows || 0} 行`);
             await loadPipelineRows();
             await openPipelineLogs();
-        };
-        const formatDate = (ds) => {
-            if (!ds) return '-';
-            const t = new Date(ds);
-            return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
         };
         const handbookStatusLabel = (s) => ({ draft: '草稿', published: '已发布', deprecated: '已作废' }[s] || s || '—');
         const handbookStatusClass = (s) => {
@@ -4219,62 +4025,6 @@ createApp({
         const clearPipelineDateField = (key) => {
             pipelineForm[key] = '';
         };
-        const clearSettlementDateField = (key) => {
-            form[key] = '';
-        };
-        const openAdd = () => {
-            editingId.value = null;
-            settlementFormReadonly.value = false;
-            Object.assign(form, emptySettlementForm());
-            form.customer_name = clientName.value;
-            form.serial_no = String(settlementRows.value.length + 1);
-            showForm.value = true;
-        };
-        const openEdit = (row) => {
-            editingId.value = row.id;
-            settlementFormReadonly.value = false;
-            SETTLEMENT_FIELDS.forEach((f) => {
-                const raw = row[f.key] != null ? String(row[f.key]) : '';
-                form[f.key] = SETTLEMENT_DATE_FIELD_KEYS.has(f.key)
-                    ? normalizeDateForInput(raw, false)
-                    : raw;
-            });
-            showForm.value = true;
-        };
-        const openSettlementDetail = (row) => {
-            openEdit(row);
-            settlementFormReadonly.value = true;
-        };
-        const saveForm = async () => {
-            if (settlementFormReadonly.value) return;
-            const payload = {};
-            SETTLEMENT_FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
-            const url = editingId.value
-                ? `/api/delivery/settlement/row/${editingId.value}`
-                : '/api/delivery/settlement';
-            const method = editingId.value ? 'PUT' : 'POST';
-            const r = await fetch(url, {
-                method,
-                headers: { ...window.crmAuthHeader(), 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (!r.ok) {
-                alert('保存失败');
-                return;
-            }
-            showForm.value = false;
-            settlementFormReadonly.value = false;
-            await loadSettlementRows();
-        };
-        const removeRow = async (row) => {
-            if (!confirm('确定删除该条记录？')) return;
-            const r = await fetch(`/api/delivery/settlement/row/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
-            if (!r.ok) {
-                alert('删除失败');
-                return;
-            }
-            await loadSettlementRows();
-        };
         const onHandbookReaderEscape = async (e) => {
             if ((e.ctrlKey || e.metaKey) && String(e.key || '').toLowerCase() === 'f' && handbookReaderRow.value && handbookReaderRow.value.media_kind === 'pdf') {
                 e.preventDefault();
@@ -4362,7 +4112,7 @@ createApp({
             showPipelineForm, pipelineEditingId, pipelineFormReadonly, pipelineForm, returnToInsight,
             openPipelineDetail,
             showPipelineLogs, pipelineLogsLoading, pipelineLogs,
-            settlementRows, settlementFields: SETTLEMENT_FIELDS, settlementCompactFields: SETTLEMENT_COMPACT_FIELDS, settlementTextareaFields: SETTLEMENT_TEXTAREA_FIELDS,
+            settlementRows, settlementFields, settlementCompactFields, settlementTextareaFields,
             showSettlementReminders,
             showForm, editingId, settlementFormReadonly, form,
             openPipelineAdd, openPipelineEdit, savePipelineForm, removePipelineRow,
