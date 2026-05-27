@@ -93,6 +93,21 @@
         return `已选${values.length}项`;
     }
 
+    function uniqueSorted(rows, field) {
+        const set = new Set();
+        (rows || []).forEach((row) => {
+            const v = String(row[field] != null ? row[field] : '').trim();
+            if (v) set.add(v);
+        });
+        return [...set].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    }
+
+    function fuzzyMatch(haystack, needle) {
+        const n = String(needle || '').trim();
+        if (!n) return true;
+        return String(haystack || '').toLowerCase().includes(n.toLowerCase());
+    }
+
     function interviewTextLength(raw) {
         return String(raw || '').trim().length;
     }
@@ -176,6 +191,8 @@
         isEmptyOrNoValue,
         csvCell,
         multiSelectSummary,
+        uniqueSorted,
+        fuzzyMatch,
         interviewTextLength,
         crmEscapeHtml,
         crmHighlightSearchQuery,
