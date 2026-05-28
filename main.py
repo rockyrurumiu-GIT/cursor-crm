@@ -21,7 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, Streamin
 from starlette.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Float, desc, or_, not_, and_, func, text
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, ForeignKey, Float, Boolean, desc, or_, not_, and_, func, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel, Field
@@ -524,6 +524,19 @@ class DeliveryInterviewEntry(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class SocialInsuranceLocation(Base):
+    """GM 测算：参保地最低社保/公积金（管理员可维护）。"""
+
+    __tablename__ = "social_insurance_locations"
+    id = Column(Integer, primary_key=True, index=True)
+    location = Column(String, unique=True, nullable=False, index=True)
+    social_insurance = Column(Float, nullable=False, default=0)
+    housing_fund = Column(Float, nullable=False, default=0)
+    sort_order = Column(Integer, nullable=False, default=0)
+    is_active = Column(Boolean, nullable=False, default=True)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class DeliveryHandbookFile(Base):
     """客户交付手册：元数据 + 文件；PDF 存书签树；音视频可配时间锚点。"""
 
@@ -797,6 +810,15 @@ _ensure_pipeline_schema_compat()
 _ensure_clients_schema_compat()
 _ensure_contacts_schema_compat()
 _ensure_visits_schema_compat()
+
+from services.gm_insurance import ensure_social_insurance_schema, seed_social_insurance_locations
+
+ensure_social_insurance_schema(engine)
+_db_seed = SessionLocal()
+try:
+    seed_social_insurance_locations(_db_seed, SocialInsuranceLocation, base_dir=BASE_DIR)
+finally:
+    _db_seed.close()
 
 # Handbook FTS/search/background helpers: migrated to services/delivery_handbook.py (Phase 5D)
 
@@ -1334,6 +1356,14 @@ register_visit_routes(
     page_renderer=_page,
     Client=Client,
     VisitRecord=VisitRecord,
+)
+
+from routes.gm_config import register_gm_config_routes
+
+register_gm_config_routes(
+    app,
+    get_db=get_db,
+    SocialInsuranceLocation=SocialInsuranceLocation,
 )
 
 register_delivery_settlement_routes(

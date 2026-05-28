@@ -25,6 +25,7 @@
     data-can-users="{{ '1' if can_users else '0' }}"
     data-can-roles="{{ '1' if can_roles else '0' }}"
     data-can-audit="{{ '1' if can_audit else '0' }}"
+    data-can-insurance="{{ '1' if can_users else '0' }}"
     data-is-super="{{ '1' if is_super else '0' }}">
     <h1 class="text-2xl font-bold text-gray-900 mb-1">权限中心</h1>
     <p class="text-sm text-gray-600 mb-4">用户、角色、权限矩阵与审计日志统一管理。</p>
@@ -36,6 +37,7 @@
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="datascope" id="tab-btn-datascope">数据权限</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="preview" id="tab-btn-preview">权限预览</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="audit" id="tab-btn-audit">审计日志</button>
+        <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="insurance" id="tab-btn-insurance">社保参保地</button>
     </div>
 
     <p id="spc-global-msg" class="hidden text-sm mb-3"></p>
@@ -143,6 +145,32 @@
         <div id="preview-container" class="bg-white rounded-xl border border-gray-200 p-4 text-sm"></div>
     </section>
 
+    <!-- Tab: Social insurance locations -->
+    <section id="panel-insurance" class="spc-panel hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <p class="text-sm text-gray-600">GM 测算用最低社保/公积金；修改后毛利测算器即时生效。</p>
+            <button type="button" id="btn-insurance-new" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增参保地</button>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="crm-h-scroll">
+                <table class="crm-table w-full min-w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th class="crm-th">参保地</th>
+                            <th class="crm-th text-right">最低社保</th>
+                            <th class="crm-th text-right">最低公积金</th>
+                            <th class="crm-th text-center">排序</th>
+                            <th class="crm-th">状态</th>
+                            <th class="crm-th">更新时间</th>
+                            <th class="crm-th">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="insurance-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
     <!-- Tab: Audit -->
     <section id="panel-audit" class="spc-panel hidden">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
@@ -187,5 +215,6 @@
 </aside>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/system-permission-center.js?v=6"></script>
+<script src="/static/js/system-permission-center.js?v=7"></script>
+<script src="/static/js/gm-insurance-admin.js?v=1"></script>
 {% endblock %}

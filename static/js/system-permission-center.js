@@ -7,6 +7,7 @@
     var CAN_USERS = root.getAttribute('data-can-users') === '1';
     var CAN_ROLES = root.getAttribute('data-can-roles') === '1';
     var CAN_AUDIT = root.getAttribute('data-can-audit') === '1';
+    var CAN_INSURANCE = root.getAttribute('data-can-insurance') === '1';
     var IS_SUPER = root.getAttribute('data-is-super') === '1';
 
     var state = {
@@ -82,6 +83,9 @@
         if (name === 'datascope' && CAN_ROLES) loadDataScopeTab();
         if (name === 'preview' && CAN_USERS) loadPreviewTab();
         if (name === 'audit' && CAN_AUDIT) loadAudit();
+        if (name === 'insurance' && CAN_INSURANCE && typeof window.loadGmInsuranceAdmin === 'function') {
+            window.loadGmInsuranceAdmin();
+        }
     }
 
     function openDrawer(title, html, onSave) {
@@ -752,7 +756,14 @@
     }
     if (!CAN_USERS) document.getElementById('tab-btn-preview').style.display = 'none';
     if (!CAN_AUDIT) document.getElementById('tab-btn-audit').style.display = 'none';
+    if (!CAN_INSURANCE) {
+        var insTab = document.getElementById('tab-btn-insurance');
+        if (insTab) insTab.style.display = 'none';
+    }
 
-    var first = CAN_USERS ? 'users' : (CAN_ROLES ? 'roles' : (CAN_AUDIT ? 'audit' : 'users'));
+    window.spcOpenDrawer = openDrawer;
+    window.spcShowMsg = showMsg;
+
+    var first = CAN_USERS ? 'users' : (CAN_ROLES ? 'roles' : (CAN_INSURANCE ? 'insurance' : (CAN_AUDIT ? 'audit' : 'users')));
     switchTab(first);
 })();
