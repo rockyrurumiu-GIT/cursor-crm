@@ -38,6 +38,13 @@
         SETTLEMENT_FIELDS.forEach((x) => { f[x.key] = ''; });
         return f;
     }
+    function formatSettlementAmount(raw) {
+        const s = String(raw == null ? '' : raw).replace(/[¥￥,\s\u00a0]/g, '').trim();
+        if (!s) return '';
+        const n = Number(s);
+        if (!Number.isFinite(n)) return String(raw || '');
+        return `¥${Math.round(n).toLocaleString('zh-CN')}`;
+    }
 
     function settlementReminderLabel(row) {
         const customer = String(row && row.customer_name != null ? row.customer_name : '').trim() || '客户';
@@ -203,7 +210,12 @@
         }
 
         async function removeRow(row) {
-            if (!confirm('确定删除该条记录？')) return;
+            var ok = await window.crmConfirmDeleteDialog({
+                title: '确认删除记录',
+                targetText: '将删除当前结算记录',
+                hint: '删除后将从当前客户结算列表移除。',
+            });
+            if (!ok) return;
             try {
                 await api.del(`/api/delivery/settlement/row/${row.id}`);
             } catch (err) {
@@ -240,6 +252,7 @@
             buildSettlementReminderText,
             readApiErrorMessage,
             download,
+            formatSettlementAmount,
         };
     }
 

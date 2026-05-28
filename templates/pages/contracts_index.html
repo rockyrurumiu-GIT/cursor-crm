@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}合同 · ITO CRM V8{% endblock %}
+{% block title %}合同 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 {% endblock %}
@@ -26,7 +26,7 @@
                     <td class="crm-td">{{ c.contract_no }}</td>
                     <td class="crm-td">{{ c.client_name }}</td>
                     <td class="crm-td">{{ c.title }}</td>
-                    <td class="crm-td">{{ c.total_amount || '—' }}</td>
+                    <td class="crm-td">{{ displayAmount(c.total_amount) }}</td>
                     <td class="crm-td">{{ c.status_label }}</td>
                     <td class="crm-td">
                         <div v-for="m in c.milestones" :key="m.id" class="text-xs mb-1">
@@ -51,6 +51,13 @@ createApp({
     setup() {
         const items = ref([]);
         const auth = () => window.crmAuthHeader();
+        const displayAmount = (raw) => {
+            const digits = String(raw || '').replace(/[^\d.-]/g, '').trim();
+            if (!digits) return '—';
+            const n = Number(digits);
+            if (!Number.isFinite(n)) return String(raw || '—');
+            return n.toLocaleString('zh-CN');
+        };
         const load = async () => {
             const r = await fetch('/api/contracts', { headers: auth() });
             items.value = r.ok ? await r.json() : [];
@@ -60,7 +67,7 @@ createApp({
             if (r.ok) await load(); else alert((await r.json()).detail || '失败');
         };
         onMounted(load);
-        return { items, seed };
+        return { items, seed, displayAmount };
     },
 }).mount('#contracts-app');
 </script>

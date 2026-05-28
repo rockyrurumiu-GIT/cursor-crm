@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 OPPORTUNITY_STAGES = frozenset({"initial", "qualifying", "proposal", "negotiating", "won", "lost"})
+CONTACT_ACQUISITION_CHANNELS = frozenset({"个人", "公司", "其他"})
+PRIMARY_CONTACT_TAG = "首要联系人"
 OPPORTUNITY_STAGE_LABELS = {
     "initial": "商机确认 / 初步接触",
     "qualifying": "需求分析 / 方案匹配",
@@ -132,8 +134,129 @@ def contact_to_dict(c, client_name: str = "") -> Dict[str, Any]:
         "email": c.email or "",
         "tags": c.tags or "",
         "remarks": c.remarks or "",
+        "superior_contact": c.superior_contact or "",
+        "acquisition_channel": c.acquisition_channel or "",
+        "description": c.description or "",
         "created_at": c.created_at.isoformat() if c.created_at else "",
     }
+
+
+def parse_client_contact_info(contact_info: str) -> Tuple[str, str]:
+    info = (contact_info or "").strip()
+    if "@" in info:
+        return "", info
+    return info, ""
+
+
+def format_client_contact_info(phone: str, email: str) -> str:
+    phone = (phone or "").strip()
+    email = (email or "").strip()
+    if email:
+        return email
+    return phone
+
+
+def relationship_from_contact_remarks(remarks: str) -> str:
+    r = (remarks or "").strip()
+    return r[3:] if r.startswith("关系：") else ""
+
+
+def contact_remarks_from_relationship(relationship: str) -> str:
+    rel = (relationship or "").strip()
+    return f"关系：{rel}" if rel else ""
+
+
+def find_client_primary_contact(db, Contact, client_id: int, contact_name: str):
+    tagged = (
+        db.query(Contact)
+        .filter(Contact.client_id == client_id, Contact.tags == PRIMARY_CONTACT_TAG)
+        .first()
+    )
+    if tagged:
+        return tagged
+
+    name = (contact_name or "").strip()
+    if name:
+        by_name = (
+            db.query(Contact)
+            .filter(Contact.client_id == client_id, Contact.name == name)
+            .order_by(Contact.id)
+            .first()
+        )
+        if by_name:
+            return by_name
+
+    rows = (
+        db.query(Contact)
+        .filter(Contact.client_id == client_id)
+        .order_by(Contact.id)
+        .all()
+    )
+    if len(rows) == 1:
+        return rows[0]
+    return None
+
+
+def apply_client_contact_to_row(contact, client) -> None:
+    name = (client.contact_name or "").strip()
+    phone, email = parse_client_contact_info(client.contact_info)
+    contact.name = name
+    contact.title = (client.contact_title or "").strip()
+    contact.phone = phone
+    contact.email = email
+    contact.remarks = contact_remarks_from_relationship(client.contact_relationship)
+    contact.acquisition_channel = (client.contact_acquisition_channel or "").strip()
+    contact.superior_contact = (client.contact_superior_contact or "").strip()
+    contact.description = (client.contact_description or "").strip()
+    contact.tags = PRIMARY_CONTACT_TAG
+
+
+def sync_client_inline_from_contact(client, contact) -> None:
+    client.contact_name = (contact.name or "").strip()
+    client.contact_title = (contact.title or "").strip()
+    client.contact_info = format_client_contact_info(contact.phone, contact.email)
+    client.contact_relationship = relationship_from_contact_remarks(contact.remarks)
+    client.contact_acquisition_channel = (contact.acquisition_channel or "").strip()
+    client.contact_superior_contact = (contact.superior_contact or "").strip()
+    client.contact_description = (contact.description or "").strip()
+
+
+def sync_client_primary_contact(db, Contact, client) -> None:
+    """将 Client 内联联系人同步到 contacts 表（更新已有记录，避免重复）。"""
+    name = (client.contact_name or "").strip()
+    primary = find_client_primary_contact(db, Contact, client.id, name)
+
+    if not name:
+        if primary and (primary.tags or "") == PRIMARY_CONTACT_TAG:
+            db.delete(primary)
+        return
+
+    if primary:
+        apply_client_contact_to_row(primary, client)
+        db.query(Contact).filter(
+            Contact.client_id == client.id,
+            Contact.id != primary.id,
+            Contact.name == name,
+            Contact.tags != PRIMARY_CONTACT_TAG,
+        ).delete(synchronize_session=False)
+        return
+
+    phone, email = parse_client_contact_info(client.contact_info)
+    db.add(
+        Contact(
+            client_id=client.id,
+            name=name,
+            title=(client.contact_title or "").strip(),
+            phone=phone,
+            email=email,
+            tags=PRIMARY_CONTACT_TAG,
+            remarks=contact_remarks_from_relationship(client.contact_relationship),
+            acquisition_channel=(client.contact_acquisition_channel or "").strip(),
+            superior_contact=(client.contact_superior_contact or "").strip(),
+            description=(client.contact_description or "").strip(),
+            created_at=datetime.now(),
+        )
+    )
 
 
 def suggest_milestones_from_requirement(

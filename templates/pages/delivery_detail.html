@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ module_title }} · 交付 · ITO CRM V8{% endblock %}
+{% block title %}{{ module_title }} · 交付 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/plyr@3.7.8/dist/plyr.css" crossorigin="anonymous" />
@@ -384,6 +384,21 @@
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-customer {
         background: #eef6ff;
     }
+    /* 交付手册列表：各列宽约为默认值的 2/3 */
+    .handbook-table {
+        --handbook-col-text-max: calc(14rem * 2 / 3);
+        --handbook-op-col-width: calc(18rem * 2 / 3);
+    }
+    .handbook-table col.crm-col-op-xl,
+    .handbook-table th.crm-sticky-right-op,
+    .handbook-table td.crm-sticky-right-op {
+        width: var(--handbook-op-col-width) !important;
+        min-width: var(--handbook-op-col-width) !important;
+        max-width: var(--handbook-op-col-width) !important;
+    }
+    .handbook-table .handbook-col-text {
+        max-width: var(--handbook-col-text-max);
+    }
     /* 手册音视频：Plyr 极简条 + indigo 主色（与站内强调色一致） */
     .handbook-plyr-audio-wrap .plyr--audio .plyr__controls {
         padding: 8px 10px;
@@ -645,9 +660,11 @@
                         <td class="crm-td">{{ row.onboarded }}</td>
                         <td class="crm-td">{{ row.status_note }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
-                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openPipelineDetail(row)">详情</button>
-                            <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openPipelineEdit(row)">修改</button>
-                            <button type="button" class="text-red-600 text-xs hover:underline" @click="removePipelineRow(row)">删除</button>
+                            <div class="crm-op-actions">
+                                <button type="button" class="crm-op-btn-detail" @click="openPipelineDetail(row)">详情</button>
+                                <button type="button" class="crm-op-btn-edit" @click="openPipelineEdit(row)">修改</button>
+                                <button type="button" class="crm-op-btn-delete" @click="removePipelineRow(row)">删除</button>
+                            </div>
                         </td>
                     </tr>
                     <tr v-if="!filteredPipelineRows.length">
@@ -1054,9 +1071,11 @@
                         <td class="crm-td interview-col-tight">{{ row.followup_30d }}</td>
                         <td class="crm-td interview-col-tight">{{ row.followup_90d }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
-                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openInterviewDetail(row)">详情</button>
-                            <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openInterviewEdit(row)">修改</button>
-                            <button type="button" class="text-red-600 text-xs hover:underline" @click="removeInterviewRow(row)">删除</button>
+                            <div class="crm-op-actions">
+                                <button type="button" class="crm-op-btn-detail" @click="openInterviewDetail(row)">详情</button>
+                                <button type="button" class="crm-op-btn-edit" @click="openInterviewEdit(row)">修改</button>
+                                <button type="button" class="crm-op-btn-delete" @click="removeInterviewRow(row)">删除</button>
+                            </div>
                         </td>
                     </tr>
                     <tr v-if="!filteredInterviewRows.length">
@@ -1104,7 +1123,7 @@
                         <td class="crm-td crm-name-cell settlement-col-customer settlement-sticky-customer">{{ row.customer_name }}</td>
                         <td class="crm-td">{{ row.fee_month }}</td>
                         <td class="crm-td">{{ row.chase_month }}</td>
-                        <td class="crm-td crm-currency-cell">{{ row.amount }}</td>
+                        <td class="crm-td crm-currency-cell">{{ formatSettlementAmount(row.amount) }}</td>
                         <td class="crm-td">{{ row.internal_attendance_confirm }}</td>
                         <td class="crm-td">{{ row.client_confirm }}</td>
                         <td class="crm-td">{{ row.invoiced }}</td>
@@ -1119,9 +1138,11 @@
                         <td class="crm-td">{{ row.invoice_no }}</td>
                         <td class="crm-td">{{ row.remarks }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
-                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openSettlementDetail(row)">详情</button>
-                            <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
-                            <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
+                            <div class="crm-op-actions">
+                                <button type="button" class="crm-op-btn-detail" @click="openSettlementDetail(row)">详情</button>
+                                <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
+                                <button type="button" class="crm-op-btn-delete" @click="removeRow(row)">删除</button>
+                            </div>
                         </td>
                     </tr>
                     <tr v-if="!settlementRows.length">
@@ -1189,12 +1210,12 @@
                                 <th class="crm-th">全文索引</th>
                                 <th class="crm-th">标签 / 权限</th>
                                 <th class="crm-th">时间</th>
-                                <th class="crm-th text-right crm-op-col-xl">操作</th>
+                                <th class="crm-th crm-sticky-right-op crm-op-col-xl">操作</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="f in filteredHandbookFiles" :key="f.id">
-                                <td class="crm-td crm-name-cell max-w-[14rem]"><div class="crm-cell-clip">{{ f.original_filename }}</div></td>
+                                <td class="crm-td crm-name-cell handbook-col-text"><div class="crm-cell-clip">{{ f.original_filename }}</div></td>
                                 <td class="crm-td">{{ f.version_label || '—' }}</td>
                                 <td class="crm-td"><span class="rounded-full px-2 py-0.5 text-xs" :class="handbookStatusClass(f.status)">{{ handbookStatusLabel(f.status) }}</span></td>
                                 <td class="crm-td">{{ handbookMediaLabel(f) }}</td>
@@ -1203,7 +1224,7 @@
                                     <span v-if="f.search_method && f.search_status === 'indexed'" class="text-gray-500 ml-1">{{ f.search_method === 'ocr' ? 'OCR' : f.search_method === 'meta' ? '元数据' : '文本层' }}</span>
                                     <div v-if="f.search_error" class="crm-cell-clip text-amber-700 mt-0.5">{{ f.search_error }}</div>
                                 </td>
-                                <td class="crm-td text-xs max-w-[14rem]">
+                                <td class="crm-td text-xs handbook-col-text">
                                     <div class="crm-cell-clip">
                                         <span v-if="(f.tags||[]).length">标：{{ (f.tags||[]).join('、') }}<br /></span>
                                         <span v-if="(f.permission_departments||[]).length">部：{{ (f.permission_departments||[]).join('、') }}</span>
@@ -1212,13 +1233,15 @@
                                     </div>
                                 </td>
                                 <td class="crm-td text-xs whitespace-nowrap">{{ formatDate(f.created_at) }}</td>
-                                <td class="crm-td text-right whitespace-nowrap space-x-2 crm-op-col-xl">
-                                    <button v-if="f.media_kind === 'pdf'" type="button" class="text-indigo-600 hover:underline" @click="openHandbookReader(f)">阅读</button>
-                                    <button v-else-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="text-indigo-600 hover:underline" @click="openHandbookReader(f)">播放</button>
-                                    <button type="button" class="text-gray-700 hover:underline" @click="openHandbookMetaModal(f)">元数据</button>
-                                    <button v-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="text-gray-700 hover:underline" @click="openHandbookCuesModal(f)">锚点</button>
-                                    <button type="button" class="text-blue-600 hover:underline" @click="downloadHandbookFile(f)">下载</button>
-                                    <button type="button" class="text-red-600 hover:underline" @click="removeHandbook(f)">删除</button>
+                                <td class="crm-td whitespace-nowrap crm-sticky-right-op crm-op-col-xl">
+                                    <div class="crm-op-actions">
+                                        <button v-if="f.media_kind === 'pdf'" type="button" class="crm-op-btn-detail" @click="openHandbookReader(f)">阅读</button>
+                                        <button v-else-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="crm-op-btn-detail" @click="openHandbookReader(f)">播放</button>
+                                        <button type="button" class="crm-op-btn-handoff" @click="openHandbookMetaModal(f)">元数据</button>
+                                        <button v-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="crm-op-btn-handoff" @click="openHandbookCuesModal(f)">锚点</button>
+                                        <button type="button" class="crm-op-btn-edit" @click="downloadHandbookFile(f)">下载</button>
+                                        <button type="button" class="crm-op-btn-delete" @click="removeHandbook(f)">删除</button>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>

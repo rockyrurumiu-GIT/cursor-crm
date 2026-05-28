@@ -39,6 +39,23 @@
         el.classList.add(ok ? 'text-green-700' : 'text-red-600');
     }
 
+    function formatSpcDateTime(raw) {
+        if (raw == null || raw === '') return '—';
+        var s = String(raw).trim();
+        if (!s) return '—';
+        var d = new Date(s);
+        if (Number.isNaN(d.getTime())) {
+            return s.replace('T', ' ').replace(/Z$/i, '').replace(/\.\d{3}$/, '');
+        }
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-'
+            + pad(d.getMonth() + 1) + '-'
+            + pad(d.getDate()) + ' '
+            + pad(d.getHours()) + ':'
+            + pad(d.getMinutes()) + ':'
+            + pad(d.getSeconds());
+    }
+
     async function api(path, opts) {
         opts = opts || {};
         var r = await fetch(path, Object.assign({ credentials: 'same-origin', headers: headers() }, opts));
@@ -145,7 +162,7 @@
         if (prev) prev.disabled = state.userPage <= 0;
         if (next) next.disabled = (state.userPage + 1) * state.userPageSize >= state.usersTotal;
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="9" class="px-3 py-4 text-gray-500">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="crm-td text-center text-gray-400 py-8">暂无数据</td></tr>';
             return;
         }
         tbody.innerHTML = rows.map(function (u) {
@@ -156,22 +173,24 @@
             var mcp = u.must_change_password ? ' <span class="text-amber-700 text-xs">须改密</span>' : '';
             var checked = state.selectedUserIds.has(u.id) ? ' checked' : '';
             var ops = CAN_USERS
-                ? '<button type="button" class="text-blue-600 hover:underline btn-edit-user" data-id="' + u.id + '">编辑</button>'
-                + ' <button type="button" class="text-amber-700 hover:underline btn-reset-pwd" data-id="' + u.id + '">重置密码</button>'
+                ? '<div class="crm-op-actions">'
+                + '<button type="button" class="crm-op-btn-edit btn-edit-user" data-id="' + u.id + '">编辑</button>'
+                + '<button type="button" class="crm-op-btn-handoff btn-reset-pwd" data-id="' + u.id + '">重置密码</button>'
                 + (u.status === 'active'
-                    ? ' <button type="button" class="text-red-600 hover:underline btn-disable-user" data-id="' + u.id + '">禁用</button>'
-                    : ' <button type="button" class="text-green-700 hover:underline btn-enable-user" data-id="' + u.id + '">启用</button>')
+                    ? '<button type="button" class="crm-op-btn-delete btn-disable-user" data-id="' + u.id + '">禁用</button>'
+                    : '<button type="button" class="crm-op-btn-edit btn-enable-user" data-id="' + u.id + '">启用</button>')
+                + '</div>'
                 : '';
             return '<tr data-user-id="' + u.id + '">'
-                + '<td class="px-3 py-2"><input type="checkbox" class="user-row-check" data-id="' + u.id + '"' + checked + '></td>'
-                + '<td class="px-3 py-2 font-medium">' + u.username + mcp + '</td>'
-                + '<td class="px-3 py-2">' + (u.display_name || '') + '</td>'
-                + '<td class="px-3 py-2">' + u.status + '</td>'
-                + '<td class="px-3 py-2 text-gray-600">' + deptLabel + '</td>'
-                + '<td class="px-3 py-2">' + chips + '</td>'
-                + '<td class="px-3 py-2 text-gray-500">' + (u.last_login_at || '—') + '</td>'
-                + '<td class="px-3 py-2 text-gray-500">' + (u.created_at || '') + '</td>'
-                + '<td class="px-3 py-2 whitespace-nowrap">' + ops + '</td></tr>';
+                + '<td class="crm-td text-center"><input type="checkbox" class="user-row-check" data-id="' + u.id + '"' + checked + '></td>'
+                + '<td class="crm-td font-medium">' + u.username + mcp + '</td>'
+                + '<td class="crm-td">' + (u.display_name || '') + '</td>'
+                + '<td class="crm-td">' + u.status + '</td>'
+                + '<td class="crm-td text-gray-600">' + deptLabel + '</td>'
+                + '<td class="crm-td">' + chips + '</td>'
+                + '<td class="crm-td text-gray-500 whitespace-nowrap">' + formatSpcDateTime(u.last_login_at) + '</td>'
+                + '<td class="crm-td text-gray-500 whitespace-nowrap">' + formatSpcDateTime(u.created_at) + '</td>'
+                + '<td class="crm-td crm-sticky-right-op crm-op-col-xl whitespace-nowrap">' + ops + '</td></tr>';
         }).join('');
     }
 
@@ -487,7 +506,7 @@
         var tbody = document.getElementById('audit-tbody');
         if (!append) tbody.innerHTML = '';
         if (!rows.length && !append) {
-            tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-4 text-gray-500">无记录</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="crm-td text-center text-gray-400 py-8">无记录</td></tr>';
             return;
         }
         auditOffset += rows.length;
@@ -500,12 +519,12 @@
                     + '<pre id="' + detailId + '" class="hidden mt-1 text-xs bg-gray-50 p-2 rounded max-h-40 overflow-auto">'
                     + JSON.stringify({ before: log.before, after: log.after }, null, 2) + '</pre>';
             }
-            return '<tr><td class="px-3 py-2 whitespace-nowrap">' + log.created_at + '</td>'
-                + '<td class="px-3 py-2">' + log.actor_username + '</td>'
-                + '<td class="px-3 py-2">' + log.action + '</td>'
-                + '<td class="px-3 py-2">' + log.target_type + '#' + log.target_id + '</td>'
-                + '<td class="px-3 py-2">' + (log.detail || '') + '</td>'
-                + '<td class="px-3 py-2">' + beforeAfter + '</td></tr>';
+            return '<tr><td class="crm-td whitespace-nowrap">' + formatSpcDateTime(log.created_at) + '</td>'
+                + '<td class="crm-td">' + log.actor_username + '</td>'
+                + '<td class="crm-td">' + log.action + '</td>'
+                + '<td class="crm-td">' + log.target_type + '#' + log.target_id + '</td>'
+                + '<td class="crm-td">' + (log.detail || '') + '</td>'
+                + '<td class="crm-td">' + beforeAfter + '</td></tr>';
         }).join('');
         tbody.insertAdjacentHTML('beforeend', html);
         var moreBtn = document.getElementById('btn-audit-more');

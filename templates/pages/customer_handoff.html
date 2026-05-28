@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}销售-交付交接 · ITO CRM V8{% endblock %}
+{% block title %}销售-交付交接 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -117,7 +117,7 @@
                                 <option v-for="u in spec.enums.billing_unit" :key="u" :value="u">{{ u }}</option>
                             </select>
                             <input v-model="p.start_date" :disabled="!editable" type="date" class="border rounded p-2 text-sm">
-                            <button v-if="editable" type="button" @click="removePosition(idx)" class="text-red-600 text-sm">删除</button>
+                            <button v-if="editable" type="button" @click="requestRemovePosition(idx)" class="text-red-600 text-sm">删除</button>
                         </div>
                         <input v-model="p.skills" :disabled="!editable" placeholder="技能硬要求" class="w-full border rounded p-2 text-sm">
                     </div>
@@ -137,7 +137,7 @@
                     <h3 class="font-bold border-l-4 border-green-600 pl-2 pt-2">商务前置</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <input v-model="form.requirement.commercial.quote_ref" :disabled="!editable" placeholder="报价单编号" class="border rounded p-2 text-sm">
-                        <input v-model="form.requirement.commercial.estimated_amount" :disabled="!editable" placeholder="预计合同金额" class="border rounded p-2 text-sm">
+                        <input :value="form.requirement.commercial.estimated_amount" @input="onEstimatedAmountInput" :disabled="!editable" placeholder="预计合同金额" class="border rounded p-2 text-sm">
                         <select v-model="form.requirement.commercial.payment_cycle" :disabled="!editable" class="crm-form-control text-sm">
                             <option value="">付款周期</option>
                             <option v-for="pc in spec.enums.payment_cycle" :key="pc" :value="pc">{{ pc }}</option>
@@ -228,6 +228,7 @@
             </div>
         </div>
     </div>
+
 </div>
 {% endraw %}
 <script>
@@ -235,5 +236,5 @@ window.__CRM_HANDOFF__ = { clientId: {{ client_id }}, handoffId: {% if handoff_i
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/customer_handoff.js"></script>
+<script src="/static/js/pages/customer-handoff.js"></script>
 {% endblock %}

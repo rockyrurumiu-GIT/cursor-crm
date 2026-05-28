@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}客户列表 · ITO CRM V8{% endblock %}
+{% block title %}客户列表 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -11,11 +11,25 @@
     }
     #page-app .customers-table .customers-op-col {
         width: 1%;
-        min-width: 23rem;
+        min-width: calc(23rem * 2 / 3 * 3 / 5);
         white-space: nowrap;
         vertical-align: middle;
         overflow: visible !important;
         text-overflow: clip !important;
+        text-align: center;
+    }
+    #page-app .customers-table th.customers-op-col,
+    #page-app .customers-table td.customers-op-col {
+        position: sticky;
+        right: 0;
+        border-left: 1px solid #e5e7eb;
+        box-shadow: -8px 0 16px -10px rgba(15, 23, 42, 0.18);
+    }
+    #page-app .customers-table thead th.customers-op-col {
+        z-index: 15;
+    }
+    #page-app .customers-table tbody td.customers-op-col {
+        z-index: 8;
     }
 </style>
 {% endblock %}
@@ -82,11 +96,11 @@
                             <span v-else class="text-gray-400 text-xs">未提交</span>
                         </td>
                         <td class="crm-td customers-op-col">
-                            <div class="inline-flex items-center gap-3 flex-nowrap whitespace-nowrap">
-                                <button type="button" @click="openDetail(c)" class="text-blue-600 text-sm hover:underline">客户详情/拜访记录</button>
-                                <a :href="`/customers/${c.id}/handoff`" class="text-gray-700 text-sm hover:text-gray-900 hover:underline">交接</a>
-                                <a :href="`/customers/${c.id}/edit`" class="text-amber-600 text-sm hover:underline">修改</a>
-                                <button type="button" @click="confirmDelete(c)" class="text-red-600 text-sm hover:underline">删除</button>
+                            <div class="crm-op-actions">
+                                <button type="button" @click="openDetail(c)" class="crm-op-btn-detail">详情</button>
+                                <a :href="`/customers/${c.id}/handoff`" class="crm-op-btn-handoff">交接</a>
+                                <a :href="`/customers/${c.id}/edit`" class="crm-op-btn-edit">修改</a>
+                                <button type="button" @click="confirmDelete(c)" class="crm-op-btn-delete">删除</button>
                             </div>
                         </td>
                     </tr>
@@ -296,7 +310,13 @@ createApp({
         };
 
         const fmtDash = (v) => (v && String(v).trim()) ? String(v).trim() : '—';
-        const fmtAmount = (c) => fmtDash(c && c.estimated_annual_amount) === '—' ? '—' : `${c.estimated_annual_amount} 万元`;
+        const fmtAmount = (c) => {
+            const raw = c && c.estimated_annual_amount != null ? String(c.estimated_annual_amount).trim() : '';
+            if (!raw) return '—';
+            const n = Number(raw.replace(/[^\d.-]/g, ''));
+            if (!Number.isFinite(n)) return `${raw} 万元`;
+            return `${n.toLocaleString('zh-CN')} 万元`;
+        };
         const fmtPrimaryContact = (c) => {
             const name = (c && c.contact_name ? String(c.contact_name) : '').trim();
             const title = (c && c.contact_title ? String(c.contact_title) : '').trim();
@@ -321,6 +341,9 @@ createApp({
             fd.append('contact_info', c.contact_info || '');
             fd.append('contact_title', c.contact_title || '');
             fd.append('contact_relationship', c.contact_relationship || '');
+            fd.append('contact_acquisition_channel', c.contact_acquisition_channel || '');
+            fd.append('contact_superior_contact', c.contact_superior_contact || '');
+            fd.append('contact_description', c.contact_description || '');
             fd.append('city', c.city || '');
             fd.append('remarks', c.remarks || '');
         };

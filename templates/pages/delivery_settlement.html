@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ module_title }} · 交付 · ITO CRM V8{% endblock %}
+{% block title %}{{ module_title }} · 交付 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -330,9 +330,11 @@
                         <td class="crm-td">{{ row.invoice_no }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.remarks }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
-                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openDetail(row)">详情</button>
-                            <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
-                            <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
+                            <div class="crm-op-actions">
+                                <button type="button" class="crm-op-btn-detail" @click="openDetail(row)">详情</button>
+                                <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
+                                <button type="button" class="crm-op-btn-delete" @click="removeRow(row)">删除</button>
+                            </div>
                         </td>
                     </tr>
                     <tr v-if="!filteredRows.length">

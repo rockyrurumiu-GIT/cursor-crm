@@ -19,13 +19,17 @@ from handoff_core import generate_brief_markdown, parse_requirement_json
 from phase2_core import (
     OPPORTUNITY_STAGE_LABELS,
     OPPORTUNITY_STAGES,
+    CONTACT_ACQUISITION_CHANNELS,
+    PRIMARY_CONTACT_TAG,
     build_contract_from_handoff,
     contact_to_dict,
     contract_to_dict,
+    find_client_primary_contact,
     milestone_to_dict,
     opportunity_to_dict,
     refresh_client_estimated_annual_amount,
     suggest_milestones_from_requirement,
+    sync_client_inline_from_contact,
 )
 
 
@@ -41,6 +45,8 @@ class OpportunityBody(BaseModel):
     remarks: str = ""
 
 
+
+
 class ContactBody(BaseModel):
     client_id: int
     name: str
@@ -49,6 +55,9 @@ class ContactBody(BaseModel):
     email: str = ""
     tags: str = ""
     remarks: str = ""
+    superior_contact: str = ""
+    acquisition_channel: str = ""
+    description: str = ""
 
 
 def create_contract_from_handoff(
@@ -373,6 +382,9 @@ def register_phase2_routes(
         client = db.query(Client).filter(Client.id == body.client_id).first()
         if not client:
             raise HTTPException(status_code=404, detail="客户不存在")
+        channel = (body.acquisition_channel or "").strip()
+        if channel and channel not in CONTACT_ACQUISITION_CHANNELS:
+            raise HTTPException(status_code=400, detail="获客渠道须为：个人、公司、其他")
         ct = Contact(
             client_id=body.client_id,
             name=body.name.strip(),
@@ -381,8 +393,52 @@ def register_phase2_routes(
             email=body.email,
             tags=body.tags,
             remarks=body.remarks,
+            superior_contact=(body.superior_contact or "").strip(),
+            acquisition_channel=channel,
+            description=(body.description or "").strip(),
+            created_at=datetime.now(),
         )
         db.add(ct)
+        db.commit()
+        db.refresh(ct)
+        return contact_to_dict(ct, client.name)
+
+    @app.put("/api/contacts/{contact_id}")
+    async def update_contact(
+        contact_id: int,
+        body: ContactBody,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.contacts.write")),
+    ):
+        ct = db.query(Contact).filter(Contact.id == contact_id).first()
+        if not ct:
+            raise HTTPException(status_code=404, detail="联系人不存在")
+        ds.assert_client_in_scope(db, ctx, ct.client_id, Client, RESOURCE_CRM_CONTACT, "write")
+        ds.assert_client_in_scope(db, ctx, body.client_id, Client, RESOURCE_CRM_CONTACT, "write")
+        client = db.query(Client).filter(Client.id == body.client_id).first()
+        if not client:
+            raise HTTPException(status_code=404, detail="客户不存在")
+        channel = (body.acquisition_channel or "").strip()
+        if channel and channel not in CONTACT_ACQUISITION_CHANNELS:
+            raise HTTPException(status_code=400, detail="获客渠道须为：个人、公司、其他")
+        resolved_primary = find_client_primary_contact(db, Contact, ct.client_id, client.contact_name)
+        was_primary = (ct.tags or "") == PRIMARY_CONTACT_TAG or (
+            resolved_primary is not None and resolved_primary.id == ct.id
+        )
+        ct.client_id = body.client_id
+        ct.name = body.name.strip()
+        ct.title = body.title
+        ct.phone = body.phone
+        ct.email = body.email
+        ct.tags = body.tags
+        ct.remarks = body.remarks
+        ct.superior_contact = (body.superior_contact or "").strip()
+        ct.acquisition_channel = channel
+        ct.description = (body.description or "").strip()
+        if was_primary or (ct.tags or "") == PRIMARY_CONTACT_TAG:
+            ct.tags = PRIMARY_CONTACT_TAG
+            sync_client_inline_from_contact(client, ct)
         db.commit()
         db.refresh(ct)
         return contact_to_dict(ct, client.name)

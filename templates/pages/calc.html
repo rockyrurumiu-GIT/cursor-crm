@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}费用折算器 · ITO CRM V8{% endblock %}
+{% block title %}费用折算器 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style> html { scroll-behavior: smooth; } #calc-remark { scroll-margin-top: 5rem; } </style>
@@ -64,7 +64,10 @@ createApp({
         const calcResult = computed(() => {
             if (!calc.value.totalDays || !calc.value.price) return { amount: 0, formula: '-' };
             const res = (calc.value.price / calc.value.totalDays * calc.value.actDays).toFixed(2);
-            return { amount: res, formula: `${calc.value.price} / ${calc.value.totalDays} * ${calc.value.actDays}` };
+            const amountNum = Number(res);
+            const amountText = Number.isFinite(amountNum) ? amountNum.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : res;
+            const priceText = Number(calc.value.price || 0).toLocaleString('zh-CN');
+            return { amount: amountText, formula: `${priceText} / ${calc.value.totalDays} * ${calc.value.actDays}` };
         });
 
         const saveCalcToRemark = () => {

@@ -10,6 +10,14 @@
     .spc-matrix th, .spc-matrix td { border: 1px solid #d0d7de; padding: 8px 10px; font-size: 13px; }
     .spc-matrix th { background: #f6f8fa; font-weight: 600; }
     .spc-code-hint { font-size: 10px; color: #656d76; }
+    /* 用户管理：操作列宽约为 xl 默认值的 2/3 */
+    #panel-users table[data-table-id="system-users"] col.crm-col-op-xl,
+    #panel-users table[data-table-id="system-users"] th.crm-sticky-right-op.crm-op-col-xl,
+    #panel-users table[data-table-id="system-users"] td.crm-sticky-right-op.crm-op-col-xl {
+        width: calc(var(--crm-op-col-width-xl) * 2 / 3) !important;
+        min-width: calc(var(--crm-op-col-width-xl) * 2 / 3) !important;
+        max-width: calc(var(--crm-op-col-width-xl) * 2 / 3) !important;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -51,23 +59,25 @@
             </div>
         </div>
         <p id="user-page-info" class="text-xs text-gray-500 mb-2"></p>
-        <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-            <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 text-left text-gray-600">
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="crm-h-scroll">
+            <table class="crm-table w-full min-w-full text-sm" data-table-id="system-users">
+                <thead>
                     <tr>
-                        <th class="px-3 py-2 w-8"><input type="checkbox" id="user-select-all" title="全选"></th>
-                        <th class="px-3 py-2">用户名</th>
-                        <th class="px-3 py-2">显示名</th>
-                        <th class="px-3 py-2">状态</th>
-                        <th class="px-3 py-2">部门</th>
-                        <th class="px-3 py-2">角色</th>
-                        <th class="px-3 py-2">最后登录</th>
-                        <th class="px-3 py-2">创建时间</th>
-                        <th class="px-3 py-2">操作</th>
+                        <th class="crm-th w-8"><input type="checkbox" id="user-select-all" title="全选"></th>
+                        <th class="crm-th">用户名</th>
+                        <th class="crm-th">显示名</th>
+                        <th class="crm-th">状态</th>
+                        <th class="crm-th">部门</th>
+                        <th class="crm-th">角色</th>
+                        <th class="crm-th">最后登录</th>
+                        <th class="crm-th">创建时间</th>
+                        <th class="crm-th crm-sticky-right-op crm-op-col-xl">操作</th>
                     </tr>
                 </thead>
                 <tbody id="users-tbody"></tbody>
             </table>
+            </div>
         </div>
         <div class="flex justify-end gap-2 mt-3">
             <button type="button" id="btn-user-prev" class="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-40">上一页</button>
@@ -142,20 +152,22 @@
             <input id="audit-to" type="date" class="border rounded-lg px-3 py-2 text-sm">
         </div>
         <button type="button" id="btn-audit-search" class="mb-3 rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50">查询</button>
-        <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-            <table class="min-w-full text-sm">
-                <thead class="bg-gray-50 text-left">
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="crm-h-scroll">
+            <table class="crm-table w-full min-w-full text-sm" data-table-id="system-audit">
+                <thead>
                     <tr>
-                        <th class="px-3 py-2">时间</th>
-                        <th class="px-3 py-2">操作人</th>
-                        <th class="px-3 py-2">操作</th>
-                        <th class="px-3 py-2">目标</th>
-                        <th class="px-3 py-2">摘要</th>
-                        <th class="px-3 py-2">详情</th>
+                        <th class="crm-th">时间</th>
+                        <th class="crm-th">操作人</th>
+                        <th class="crm-th">操作</th>
+                        <th class="crm-th">目标</th>
+                        <th class="crm-th">摘要</th>
+                        <th class="crm-th">详情</th>
                     </tr>
                 </thead>
                 <tbody id="audit-tbody"></tbody>
             </table>
+            </div>
         </div>
     </section>
 </div>
@@ -175,5 +187,5 @@
 </aside>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/system-permission-center.js?v=4"></script>
+<script src="/static/js/system-permission-center.js?v=6"></script>
 {% endblock %}

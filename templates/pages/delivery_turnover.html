@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}离职率分析 · 交付 · ITO CRM V8{% endblock %}
+{% block title %}离职率分析 · 交付 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -40,30 +40,7 @@
     .crm-table.turnover-table tbody tr:hover .roster-sticky-left-serial {
         background: #eef6ff;
     }
-    /* 末列「操作」：横向滚动时固定在最右侧 */
-    .crm-table.turnover-table .turnover-sticky-right-actions {
-        position: sticky;
-        right: 0;
-        background: #fff;
-        border-left: 1px solid #e5e7eb;
-        box-shadow: -8px 0 16px -10px rgba(15, 23, 42, 0.18);
-        background-clip: padding-box;
-    }
-    .crm-table.turnover-table tbody .turnover-sticky-right-actions {
-        z-index: 2;
-    }
-    .crm-table.turnover-table thead .turnover-sticky-right-actions {
-        top: 0;
-        z-index: 30;
-        background: #2f75b5;
-    }
-    .crm-table.turnover-table tbody tr:hover .turnover-sticky-right-actions {
-        background: #eef6ff;
-    }
-    .crm-table.turnover-table tfoot .turnover-sticky-right-actions {
-        z-index: 2;
-        background: #f9fafb;
-    }
+    /* 末列「操作」：沿用全局 crm-sticky-right-op（见 base.html） */
     .crm-table.turnover-table .crm-th.turnover-tenure-col,
     .crm-table.turnover-table .crm-td.turnover-tenure-col {
         width: auto !important;
@@ -679,7 +656,7 @@
                         <th class="crm-th">薪资</th>
                         <th class="crm-th">GM$</th>
                         <th class="crm-th">GM%</th>
-                        <th class="crm-th turnover-sticky-right-actions crm-sticky-right-op">操作</th>
+                        <th class="crm-th crm-sticky-right-op">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -710,15 +687,17 @@
                         <td class="crm-td turnover-col-text"><div class="crm-cell-clip">{{ row.delivery_communication || '—' }}</div></td>
                         <td class="crm-td turnover-col-text"><div class="crm-cell-clip">{{ row.business_action || '—' }}</div></td>
                         <td class="crm-td turnover-col-text"><div class="crm-cell-clip">{{ row.bp_involved || '—' }}</div></td>
-                        <td class="crm-td">{{ row.zntx_compensation_amount }}</td>
-                        <td class="crm-td">{{ row.monthly_quote_tax }}</td>
-                        <td class="crm-td">{{ row.pre_tax_salary }}</td>
-                        <td class="crm-td">{{ row.gms }}</td>
+                        <td class="crm-td">{{ formatAmount(parseAmount(row.zntx_compensation_amount)) || '—' }}</td>
+                        <td class="crm-td">{{ formatAmount(parseAmount(row.monthly_quote_tax)) || '—' }}</td>
+                        <td class="crm-td">{{ formatAmount(parseAmount(row.pre_tax_salary)) || '—' }}</td>
+                        <td class="crm-td">{{ formatAmount(parseAmount(row.gms)) || '—' }}</td>
                         <td class="crm-td">{{ row.gm_pct }}</td>
-                        <td class="crm-td whitespace-nowrap turnover-sticky-right-actions crm-sticky-right-op">
-                            <button type="button" class="text-gray-700 text-xs hover:underline mr-2" @click="openDetail(row)">详情</button>
-                            <button type="button" class="text-blue-600 text-xs hover:underline mr-2" @click="openEdit(row)">修改</button>
-                            <button type="button" class="text-red-600 text-xs hover:underline" @click="removeRow(row)">删除</button>
+                        <td class="crm-td whitespace-nowrap crm-sticky-right-op">
+                            <div class="crm-op-actions">
+                                <button type="button" class="crm-op-btn-detail" @click="openDetail(row)">详情</button>
+                                <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
+                                <button type="button" class="crm-op-btn-delete" @click="removeRow(row)">删除</button>
+                            </div>
                         </td>
                     </tr>
                     <tr v-if="!loading && !filteredRows.length">
@@ -736,7 +715,7 @@
                         <td class="crm-td"></td>
                         <td class="crm-td font-semibold text-gray-700">{{ formatAmount(totalProfit) }}</td>
                         <td class="crm-td font-semibold text-gray-700">{{ totalProfitRate }}</td>
-                        <td class="crm-td turnover-sticky-right-actions crm-sticky-right-op"></td>
+                        <td class="crm-td crm-sticky-right-op"></td>
                     </tr>
                 </tfoot>
             </table>
@@ -1068,10 +1047,10 @@
                     <label class="flex flex-col gap-1"><span class="text-gray-600">交付沟通</span><input v-model.trim="addForm.delivery_communication" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">业务处理动作</span><input v-model.trim="addForm.business_action" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">BP参与动作</span><input v-model.trim="addForm.bp_involved" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">补偿金</span><input v-model.trim="addForm.zntx_compensation_amount" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">报价<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.monthly_quote_tax" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">薪资<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.pre_tax_salary" class="crm-form-control" :disabled="addFormReadonly" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">GM$<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.gms" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">补偿金</span><input :value="addForm.zntx_compensation_amount" @input="onAmountFieldInput('zntx_compensation_amount', $event)" type="text" inputmode="numeric" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">报价<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input :value="addForm.monthly_quote_tax" @input="onAmountFieldInput('monthly_quote_tax', $event)" type="text" inputmode="numeric" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">薪资<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input :value="addForm.pre_tax_salary" @input="onAmountFieldInput('pre_tax_salary', $event)" type="text" inputmode="numeric" class="crm-form-control" :disabled="addFormReadonly" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-gray-600">GM$<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input :value="addForm.gms" @input="onAmountFieldInput('gms', $event)" type="text" inputmode="numeric" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">GM%<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.gm_pct" class="crm-form-control" :disabled="addFormReadonly" /></label>
                 </div>
             </div>

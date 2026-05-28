@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}花名册详情 · ITO CRM V8{% endblock %}
+{% block title %}花名册详情 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -198,6 +198,13 @@
         word-break: break-word;
         overflow-wrap: anywhere;
     }
+    /* Vue 未挂载前：避免 v-if 未编译的弹层挡住全页点击 */
+    #roster-detail-app:not([data-roster-mounted="1"]) .roster-detail-modal-overlay,
+    #roster-detail-app:not([data-roster-mounted="1"]) > .crm-esc-modal {
+        display: none !important;
+        pointer-events: none !important;
+        visibility: hidden !important;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -298,7 +305,7 @@
                             <th v-if="showStdReleaseLeaveCols" class="crm-th min-w-[7rem]">公司离职日期</th>
                             <th v-if="showStdReleaseLeaveCols" class="crm-th min-w-[14rem]">离职或释放原因</th>
                             <th class="crm-th min-w-[10rem] max-w-[15rem]">备注</th>
-                            <th class="crm-th sticky right-0 z-20 roster-sticky-op crm-sticky-right-op">操作</th>
+                            <th class="crm-th roster-sticky-op crm-sticky-right-op">操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -340,10 +347,12 @@
                             <td v-if="showStdReleaseLeaveCols" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ displayRosterDate(row.company_resign_date) }}</td>
                             <td v-if="showStdReleaseLeaveCols" class="crm-td px-3 py-3 min-w-[14rem] max-w-[18rem] text-gray-700 align-top leading-snug">{{ row.leave_reason }}</td>
                             <td class="crm-td px-3 py-3 max-w-[13rem] break-words text-gray-700 align-top leading-snug">{{ row.remarks }}</td>
-                            <td class="crm-td px-3 py-3 whitespace-nowrap align-top sticky right-0 z-10 border-l border-gray-100 bg-white group-hover:bg-stone-50/90 roster-sticky-op crm-sticky-right-op">
-                                <button type="button" class="text-gray-700 hover:text-gray-900 hover:underline text-xs mr-2" @click="openRosterDetail(row)">详情</button>
-                                <button type="button" class="text-blue-600 hover:text-blue-800 hover:underline text-xs mr-2" @click="openEdit(row)">修改</button>
-                                <button type="button" class="text-red-600 hover:text-red-700 hover:underline text-xs" @click="confirmDelete(row)">删除</button>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap align-top roster-sticky-op crm-sticky-right-op">
+                                <div class="crm-op-actions">
+                                    <button type="button" class="crm-op-btn-detail" @click="openRosterDetail(row)">详情</button>
+                                    <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
+                                    <button type="button" class="crm-op-btn-delete" @click="confirmDelete(row)">删除</button>
+                                </div>
                             </td>
                         </tr>
                         <tr v-if="!loading && !filteredRows.length">
@@ -366,7 +375,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
                                 <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td :colspan="rosterFooterRemarkColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                                <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                             <tr class="text-sm font-medium">
                                 <td colspan="10" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
@@ -379,7 +388,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgGmPct }}</td>
                                 <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td :colspan="rosterFooterRemarkColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                                <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                         </template>
                         <template v-else>
@@ -397,7 +406,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
                                 <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td colspan="1" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                                <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                             <tr class="text-sm font-medium">
                                 <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
@@ -410,7 +419,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgGmPct }}</td>
                                 <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td colspan="1" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td class="crm-td sticky right-0 z-10 border-l border-slate-200 bg-slate-50 border-t border-slate-200 roster-sticky-op"></td>
+                                <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                         </template>
                     </tfoot>
@@ -485,6 +494,18 @@
                             >清空</button>
                         </div>
                         <input
+                            v-else-if="isAmountField(f.key)"
+                            :value="form[f.key]"
+                            type="text"
+                            inputmode="numeric"
+                            :disabled="formReadonly"
+                            @input="onAmountFieldInput(f.key, $event)"
+                            :class="[
+                                'crm-form-control',
+                                getFieldError(f.key) ? 'crm-form-control--error' : '',
+                            ]"
+                        />
+                        <input
                             v-else
                             v-model="form[f.key]"
                             type="text"
@@ -535,12 +556,13 @@
 
     <!-- 删除确认（整体/单客户花名册共用） -->
     <div v-if="showDel" class="crm-esc-modal fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" @click.self="cancelDelete">
-        <div class="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full text-center" role="dialog" aria-modal="true" aria-labelledby="roster-del-title">
-            <h3 id="roster-del-title" class="text-lg font-semibold text-gray-900 mb-2">确认删除</h3>
-            <p class="text-gray-600 text-sm mb-4">确定删除该条花名册记录？删除后不可恢复。</p>
-            <div class="flex gap-2 justify-center">
-                <button type="button" class="flex-1 py-2 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50" @click="cancelDelete">取消</button>
-                <button type="button" class="flex-1 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700" @click="doDelete">确认删除</button>
+        <div class="bg-white rounded-lg shadow-xl p-4 sm:p-5 w-full max-w-md" role="dialog" aria-modal="true" aria-labelledby="roster-del-title">
+            <h3 id="roster-del-title" class="font-semibold text-lg text-gray-800 mb-3">确认删除记录</h3>
+            <p class="text-sm text-gray-600 mb-2">将删除当前花名册记录</p>
+            <p class="text-xs text-gray-400 mb-4">删除后将从当前花名册列表移除。</p>
+            <div class="flex gap-2">
+                <button type="button" class="flex-1 py-2 rounded-md bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200" @click="cancelDelete">取消</button>
+                <button type="button" class="flex-1 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700" @click="doDelete">确认删除</button>
             </div>
         </div>
     </div>
@@ -577,5 +599,5 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/roster-detail.js"></script>
+<script src="/static/js/pages/roster-detail.js?v=12"></script>
 {% endblock %}

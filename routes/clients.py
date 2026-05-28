@@ -19,7 +19,15 @@ from auth import deps as auth_deps
 from auth.data_scope_catalog import RESOURCE_CRM_CLIENT
 from auth.deps import get_current_context, require_permission
 from auth.service import AuthContext
+from phase2_core import CONTACT_ACQUISITION_CHANNELS
 from services.clients import ensure_client_access, scoped_client_query
+
+
+def _normalize_contact_channel(raw: Optional[str]) -> str:
+    channel = (raw or "").strip()
+    if channel and channel not in CONTACT_ACQUISITION_CHANNELS:
+        raise HTTPException(status_code=400, detail="获客渠道须为：个人、公司、其他")
+    return channel
 
 
 def register_client_read_routes(
@@ -191,6 +199,9 @@ def register_client_write_routes(
         contact_info: Optional[str] = Form(None),
         contact_title: Optional[str] = Form(None),
         contact_relationship: Optional[str] = Form(None),
+        contact_acquisition_channel: Optional[str] = Form(None),
+        contact_superior_contact: Optional[str] = Form(None),
+        contact_description: Optional[str] = Form(None),
         city: Optional[str] = Form(None),
         remarks: Optional[str] = Form(None),
         db: Session = Depends(get_db),
@@ -211,6 +222,9 @@ def register_client_write_routes(
             contact_info=(contact_info or "").strip(),
             contact_title=(contact_title or "").strip(),
             contact_relationship=(contact_relationship or "").strip(),
+            contact_acquisition_channel=_normalize_contact_channel(contact_acquisition_channel),
+            contact_superior_contact=(contact_superior_contact or "").strip(),
+            contact_description=(contact_description or "").strip(),
             city=(city or "").strip(),
             remarks=(remarks or "").strip(),
             **owner_fields,
@@ -238,6 +252,9 @@ def register_client_write_routes(
         contact_info: Optional[str] = Form(None),
         contact_title: Optional[str] = Form(None),
         contact_relationship: Optional[str] = Form(None),
+        contact_acquisition_channel: Optional[str] = Form(None),
+        contact_superior_contact: Optional[str] = Form(None),
+        contact_description: Optional[str] = Form(None),
         city: Optional[str] = Form(None),
         remarks: Optional[str] = Form(None),
         db: Session = Depends(get_db),
@@ -271,6 +288,9 @@ def register_client_write_routes(
         new_contact_info = (contact_info or "").strip()
         new_contact_title = (contact_title or "").strip()
         new_contact_relationship = (contact_relationship or "").strip()
+        new_contact_acquisition_channel = _normalize_contact_channel(contact_acquisition_channel)
+        new_contact_superior_contact = (contact_superior_contact or "").strip()
+        new_contact_description = (contact_description or "").strip()
         new_city = (city or "").strip()
         if (client.contact_name or "") != new_contact_name:
             updates.append(f"\u8054\u7cfb\u4eba\u59d3\u540d\u4ece[{client.contact_name or ''}]\u53d8\u66f4\u4e3a[{new_contact_name}]")
@@ -293,6 +313,9 @@ def register_client_write_routes(
         client.contact_info = new_contact_info
         client.contact_title = new_contact_title
         client.contact_relationship = new_contact_relationship
+        client.contact_acquisition_channel = new_contact_acquisition_channel
+        client.contact_superior_contact = new_contact_superior_contact
+        client.contact_description = new_contact_description
         client.city = new_city
         client.remarks = remarks or ""
 

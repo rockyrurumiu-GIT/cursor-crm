@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}商机 · ITO CRM V8{% endblock %}
+{% block title %}商机 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 {% endblock %}
@@ -26,9 +26,9 @@
                     <th class="crm-th">阶段</th>
                     <th class="crm-th">负责人</th>
                     <th class="crm-th">预计成交日期</th>
-                    <th class="crm-th">下一步动作</th>
-                    <th class="crm-th">创建时间</th>
-                    <th class="crm-th crm-op-col-wide">操作</th>
+                    <th class="crm-th crm-col-remarks" data-col-min="192">下一步动作</th>
+                    <th class="crm-th crm-col-created-at" data-col-min="144">创建时间</th>
+                    <th class="crm-th crm-sticky-right-op">操作</th>
                 </tr>
             </thead>
             <tbody>
@@ -41,13 +41,15 @@
                     <td class="crm-td"><span class="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-800">{{ o.stage_label || '—' }}</span></td>
                     <td class="crm-td">{{ o.owner || '—' }}</td>
                     <td class="crm-td">{{ o.expected_close_date || '—' }}</td>
-                    <td class="crm-td"><div class="crm-cell-clip max-w-[12rem]">{{ o.remarks || '—' }}</div></td>
-                    <td class="crm-td whitespace-nowrap">{{ formatDate(o.created_at) }}</td>
-                    <td class="crm-td whitespace-nowrap crm-op-col-wide">
-                        <button type="button" class="text-gray-700 hover:text-gray-900 hover:underline text-xs mr-2" @click="openDetail(o)">详情</button>
-                        <button type="button" class="text-blue-600 hover:text-blue-800 hover:underline text-xs mr-2" @click="openEdit(o)">修改</button>
-                        <button type="button" class="text-red-600 hover:text-red-700 hover:underline text-xs" @click="remove(o)">删除</button>
-                        <button v-if="o.stage==='won'" type="button" class="text-green-700 hover:text-green-800 hover:underline text-xs ml-2" @click="createHandoff(o)">发起交接</button>
+                    <td class="crm-td crm-col-remarks"><div class="crm-cell-clip">{{ o.remarks || '—' }}</div></td>
+                    <td class="crm-td crm-col-created-at whitespace-nowrap">{{ formatDate(o.created_at) }}</td>
+                    <td class="crm-td whitespace-nowrap crm-sticky-right-op">
+                        <div class="crm-op-actions">
+                            <button type="button" class="crm-op-btn-detail" @click="openDetail(o)">详情</button>
+                            <button type="button" class="crm-op-btn-edit" @click="openEdit(o)">修改</button>
+                            <button type="button" class="crm-op-btn-delete" @click="remove(o)">删除</button>
+                            <button v-if="o.stage==='won'" type="button" class="crm-op-btn-handoff" @click="createHandoff(o)">交接</button>
+                        </div>
                     </td>
                 </tr>
                 <tr v-if="!items.length"><td colspan="11" class="crm-td text-center text-gray-400 py-8">暂无商机</td></tr>
@@ -104,11 +106,11 @@
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1">预估单价(人月)</label>
-                <input v-model="form.amount" inputmode="numeric" placeholder="例如：6000" class="w-full border rounded p-2 text-sm">
+                <input :value="form.amount" @input="onAmountInput('amount', $event)" inputmode="numeric" placeholder="例如：6,000" class="w-full border rounded p-2 text-sm">
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1">预估当年金额</label>
-                <input v-model="form.estimated_current_year_amount" inputmode="numeric" placeholder="例如：500000" class="w-full border rounded p-2 text-sm">
+                <input :value="form.estimated_current_year_amount" @input="onAmountInput('estimated_current_year_amount', $event)" inputmode="numeric" placeholder="例如：500,000" class="w-full border rounded p-2 text-sm">
             </div>
             <div>
                 <label class="block text-sm font-medium mb-1">阶段</label>
@@ -231,6 +233,10 @@ createApp({
             }
             form.value = { ...form.value, probability: v };
         };
+        const onAmountInput = (field, e) => {
+            const formatted = formatAmountThousands(e && e.target ? e.target.value : '');
+            form.value = { ...form.value, [field]: formatted };
+        };
 
         const openNewForm = () => {
             form.value = emptyForm();
@@ -246,8 +252,8 @@ createApp({
                 id: o.id,
                 client_id: o.client_id || '',
                 name: o.name || '',
-                amount: o.amount || '',
-                estimated_current_year_amount: o.estimated_current_year_amount || '',
+                amount: formatAmountThousands(o.amount || ''),
+                estimated_current_year_amount: formatAmountThousands(o.estimated_current_year_amount || ''),
                 stage: o.stage || 'initial',
                 probability: normalizeWinRateForSave(String(o.probability || '').replace(/%/g, '')),
                 owner: o.owner || '',
@@ -289,7 +295,12 @@ createApp({
         };
 
         const remove = async (o) => {
-            if (!confirm(`确定删除商机「${o.name || ''}」？`)) return;
+            const ok = await window.crmConfirmDeleteDialog({
+                title: '确认删除商机',
+                targetText: `将删除商机：${o.name || '未命名商机'}`,
+                hint: '删除后将从商机列表移除。',
+            });
+            if (!ok) return;
             const r = await fetch(`/api/opportunities/${o.id}`, { method: 'DELETE', headers: auth() });
             if (r.ok) {
                 if (detailRow.value && detailRow.value.id === o.id) detailRow.value = null;
@@ -322,6 +333,7 @@ createApp({
             save,
             remove,
             createHandoff,
+            onAmountInput,
             onWinRateInput,
             displayAmount,
             displayWinRate,

@@ -469,7 +469,12 @@ function emptyPipelineFilter() {
             await loadPipelineRows();
         };
         const removePipelineRow = async (row) => {
-            if (!confirm('确定删除该条记录？')) return;
+            const ok = await window.crmConfirmDeleteDialog({
+                title: '确认删除记录',
+                targetText: `将删除候选人：${row.full_name || '未命名'}`,
+                hint: '删除后将从当前客户交付管道列表移除。',
+            });
+            if (!ok) return;
             const r = await fetch(`/api/delivery/pipeline/row/${row.id}`, { method: 'DELETE', headers: hdr() });
             if (!r.ok) {
                 alert('删除失败');

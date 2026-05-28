@@ -733,7 +733,12 @@ function emptyInterviewFilter() {
             await loadInterviewRows();
         };
         const removeInterviewRow = async (row) => {
-            if (!confirm('确定删除该条记录？')) return;
+            const ok = await window.crmConfirmDeleteDialog({
+                title: '确认删除记录',
+                targetText: `将删除访谈记录：${row.full_name || '未命名'}`,
+                hint: '删除后将从当前客户员工访谈列表移除。',
+            });
+            if (!ok) return;
             const r = await fetch(`/api/delivery/interviews/row/${row.id}`, { method: 'DELETE', headers: hdr() });
             if (!r.ok) {
                 alert('删除失败');

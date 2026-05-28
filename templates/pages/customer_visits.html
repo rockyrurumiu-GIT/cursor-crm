@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}客户拜访 · ITO CRM V8{% endblock %}
+{% block title %}客户拜访 · ITO CRM{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -17,7 +17,7 @@
         text-align: center;
         vertical-align: middle;
     }
-    .visit-table th.visit-th-resizable {
+    .visit-table th.visit-th-resizable:not(.crm-sticky-right-op) {
         position: relative;
         overflow: visible;
     }
@@ -98,8 +98,9 @@
         <span class="text-xs text-gray-400 ml-auto">共 {{ items.length }} 条</span>
     </div>
 
-    <div class="bg-white border rounded-lg overflow-x-auto">
-        <table class="visit-table min-w-[1672px] border-collapse">
+    <div class="bg-white border rounded-lg overflow-hidden">
+        <div class="crm-h-scroll">
+        <table class="visit-table w-full min-w-[1672px]" data-table-id="customer-visits">
             <colgroup>
                 <col class="visit-col" data-col="0">
                 <col class="visit-col" data-col="1">
@@ -131,7 +132,7 @@
                     <th class="visit-th visit-th-resizable" data-col="10">拜访目标是否达成</th>
                     <th class="visit-th visit-th-resizable" data-col="11">拜访纪要</th>
                     <th class="visit-th visit-th-resizable" data-col="12">下一步行动</th>
-                    <th class="visit-th visit-th-resizable crm-op-col" data-col="13">操作</th>
+                    <th class="visit-th crm-sticky-right-op" data-col="13">操作</th>
                 </tr>
             </thead>
             <tbody>
@@ -149,10 +150,12 @@
                     <td class="visit-td">{{ row.result || '—' }}</td>
                     <td class="visit-td"><div class="crm-cell-clip">{{ row.visit_summary || '—' }}</div></td>
                     <td class="visit-td"><div class="crm-cell-clip">{{ row.next_plan || '—' }}</div></td>
-                    <td class="visit-td crm-op-col whitespace-nowrap">
-                        <button type="button" @click="openDetail(row)" class="text-[#0969da] text-xs mr-2">详情</button>
-                        <button type="button" @click="openEdit(row)" class="text-[#0969da] text-xs mr-2">修改</button>
-                        <button type="button" @click="remove(row)" class="text-red-600 text-xs">删除</button>
+                    <td class="visit-td crm-sticky-right-op whitespace-nowrap">
+                        <div class="crm-op-actions">
+                            <button type="button" @click="openDetail(row)" class="crm-op-btn-detail">详情</button>
+                            <button type="button" @click="openEdit(row)" class="crm-op-btn-edit">修改</button>
+                            <button type="button" @click="remove(row)" class="crm-op-btn-delete">删除</button>
+                        </div>
                     </td>
                 </tr>
                 <tr v-if="!items.length">
@@ -160,6 +163,7 @@
                 </tr>
             </tbody>
         </table>
+        </div>
     </div>
 
     <div v-if="detailRow" class="crm-esc-modal fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="detailRow=null">
@@ -168,7 +172,10 @@
             <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                 <template v-for="f in detailFields" :key="f.key">
                     <dt class="text-gray-500">{{ f.label }}</dt>
-                    <dd class="text-gray-900 mb-2 sm:mb-0">{{ detailRow[f.key] || '—' }}</dd>
+                    <dd
+                        class="text-gray-900 mb-2 sm:mb-0"
+                        :class="(f.key === 'visit_summary' || f.key === 'next_plan') ? 'whitespace-pre-line break-words' : ''"
+                    >{{ detailRow[f.key] || '—' }}</dd>
                 </template>
             </dl>
             <button type="button" @click="detailRow=null" class="mt-4 w-full bg-gray-100 py-2 rounded">关闭</button>

@@ -164,7 +164,12 @@ createApp({
         };
 
         const remove = async (row) => {
-            if (!confirm(`确定删除「${row.client_name}」的拜访记录？`)) return;
+            const ok = await window.crmConfirmDeleteDialog({
+                title: '确认删除记录',
+                targetText: `将删除记录：${row.client_name || '未命名客户'}`,
+                hint: '删除后将从当前拜访记录列表移除。',
+            });
+            if (!ok) return;
             const r = await fetch(`/api/customer-visits/${row.id}`, { method: 'DELETE', headers: auth() });
             if (r.ok) {
                 await loadFilters();

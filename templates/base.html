@@ -3,13 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}ITO CRM V8{% endblock %}</title>
+    <title>{% block title %}ITO CRM{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
     {% block head_extra %}{% endblock %}
     <style>
+        /* Critical fallback when Tailwind CDN is unavailable. */
+        .hidden { display: none !important; }
+        [v-cloak] { display: none !important; }
         .funnel-layer:hover { filter: brightness(1.1); cursor: pointer; }
         /* 父级若 overflow 非 visible，下拉会被裁切 — nav 禁止横向 overflow 裁剪 */
         .crm-header-nav-wrap { overflow: visible; min-width: 0; }
@@ -122,9 +125,20 @@
         }
         /* 三键操作列固定宽（colgroup + 单元格双保险） */
         :root {
-            --crm-op-col-width: 9rem;
+            --crm-op-col-width: 6.75rem;
             --crm-op-col-width-wide: 13rem;
             --crm-op-col-width-xl: 18rem;
+            --crm-col-remarks-min: 12rem;
+            --crm-col-created-at-min: 9rem;
+        }
+        .crm-table th.crm-col-remarks,
+        .crm-table td.crm-col-remarks {
+            min-width: var(--crm-col-remarks-min);
+        }
+        .crm-table th.crm-col-created-at,
+        .crm-table td.crm-col-created-at {
+            min-width: var(--crm-col-created-at-min);
+            white-space: nowrap;
         }
         col.crm-col-op {
             width: var(--crm-op-col-width) !important;
@@ -141,13 +155,13 @@
             min-width: var(--crm-op-col-width-xl) !important;
             max-width: var(--crm-op-col-width-xl) !important;
         }
-        /* 通用：操作列固定在最右侧（表头/表体分层） */
+        /* 通用：操作列固定在最右侧（与花名册 crm-sticky-right-op 一致） */
         .crm-table th.crm-sticky-right-op,
         .crm-table td.crm-sticky-right-op,
-        .crm-table th.turnover-sticky-right-actions,
-        .crm-table td.turnover-sticky-right-actions,
         .crm-table th.roster-sticky-op,
-        .crm-table td.roster-sticky-op {
+        .crm-table td.roster-sticky-op,
+        .visit-table th.crm-sticky-right-op,
+        .visit-table td.crm-sticky-right-op {
             width: var(--crm-op-col-width) !important;
             min-width: var(--crm-op-col-width) !important;
             max-width: var(--crm-op-col-width) !important;
@@ -156,14 +170,30 @@
             overflow: visible !important;
             text-overflow: clip !important;
         }
+        .crm-table th.crm-sticky-right-op.crm-op-col-wide,
+        .crm-table td.crm-sticky-right-op.crm-op-col-wide,
+        .visit-table th.crm-sticky-right-op.crm-op-col-wide,
+        .visit-table td.crm-sticky-right-op.crm-op-col-wide,
+        .crm-sticky-right-op.crm-op-col-wide {
+            width: var(--crm-op-col-width-wide) !important;
+            min-width: var(--crm-op-col-width-wide) !important;
+            max-width: var(--crm-op-col-width-wide) !important;
+        }
+        .crm-table th.crm-sticky-right-op.crm-op-col-xl,
+        .crm-table td.crm-sticky-right-op.crm-op-col-xl,
+        .visit-table th.crm-sticky-right-op.crm-op-col-xl,
+        .visit-table td.crm-sticky-right-op.crm-op-col-xl,
+        .crm-sticky-right-op.crm-op-col-xl {
+            width: var(--crm-op-col-width-xl) !important;
+            min-width: var(--crm-op-col-width-xl) !important;
+            max-width: var(--crm-op-col-width-xl) !important;
+        }
         .crm-sticky-right-op button.mr-2,
         .crm-sticky-right-op .mr-2,
-        .turnover-sticky-right-actions button.mr-2,
         .roster-sticky-op button.mr-2 {
             margin-right: 0.25rem !important;
         }
         .crm-sticky-right-op,
-        .turnover-sticky-right-actions,
         .roster-sticky-op {
             position: sticky;
             right: 0;
@@ -172,43 +202,63 @@
             max-width: var(--crm-op-col-width) !important;
             box-sizing: border-box;
             white-space: nowrap;
-            overflow: visible !important;
+            overflow: hidden !important;
             text-overflow: clip !important;
             background: #fff;
+            background-clip: padding-box;
             border-left: 1px solid #e5e7eb;
-            box-shadow: -8px 0 16px -10px rgba(15, 23, 42, 0.18);
+            box-shadow: -6px 0 12px -10px rgba(15, 23, 42, 0.14);
+            text-align: center;
+        }
+        .crm-sticky-right-op .crm-op-actions {
+            overflow: visible;
         }
         .crm-table tbody .crm-sticky-right-op,
-        .crm-table tbody .turnover-sticky-right-actions,
-        .crm-table tbody .roster-sticky-op {
+        .crm-table tbody .roster-sticky-op,
+        .visit-table tbody .crm-sticky-right-op {
             z-index: 8 !important;
         }
         .crm-table thead .crm-sticky-right-op,
-        .crm-table thead .turnover-sticky-right-actions,
-        .crm-table thead .roster-sticky-op {
+        .crm-table thead .roster-sticky-op,
+        .visit-table thead .crm-sticky-right-op {
             top: 0;
             right: 0;
             z-index: 15 !important;
             background: #2f75b5;
             color: #fff;
             border-color: #1f5a94;
+            overflow: visible !important;
+            text-overflow: clip !important;
+        }
+        .crm-table thead th.crm-sticky-right-op,
+        .crm-table thead th.roster-sticky-op,
+        .visit-table thead th.crm-sticky-right-op {
+            position: sticky !important;
+            right: 0 !important;
+            overflow: visible !important;
+            text-overflow: clip !important;
         }
         .crm-table tbody .crm-sticky-right-op,
-        .crm-table tbody .turnover-sticky-right-actions,
-        .crm-table tbody .roster-sticky-op {
+        .crm-table tbody .roster-sticky-op,
+        .visit-table tbody .crm-sticky-right-op {
             background: #fff;
         }
         .crm-table tbody tr:nth-child(even) .crm-sticky-right-op,
-        .crm-table tbody tr:nth-child(even) .turnover-sticky-right-actions,
-        .crm-table tbody tr:nth-child(even) .roster-sticky-op {
+        .crm-table tbody tr:nth-child(even) .roster-sticky-op,
+        .visit-table tbody tr:nth-child(even) .crm-sticky-right-op {
             background: #f6f8fa;
         }
         .crm-table tbody tr:hover .crm-sticky-right-op,
-        .crm-table tbody tr:hover .turnover-sticky-right-actions,
-        .crm-table tbody tr:hover .roster-sticky-op {
+        .crm-table tbody tr:hover .roster-sticky-op,
+        .visit-table tbody tr:hover .crm-sticky-right-op {
             background: #eef6ff;
         }
-        /* 操作列：三键（详情/修改/删除）固定宽 */
+        .crm-table tfoot .crm-sticky-right-op,
+        .crm-table tfoot .roster-sticky-op {
+            z-index: 8 !important;
+            background: #f9fafb;
+        }
+        /* 操作列宽辅助类（与 crm-sticky-right-op 组合使用） */
         .crm-table th.crm-op-col,
         .crm-table td.crm-op-col,
         .visit-table th.crm-op-col,
@@ -224,6 +274,7 @@
             max-width: var(--crm-op-col-width) !important;
             white-space: nowrap;
             box-sizing: border-box;
+            text-align: center;
         }
         .crm-op-col-wide {
             width: var(--crm-op-col-width-wide) !important;
@@ -233,6 +284,7 @@
             box-sizing: border-box;
             overflow: visible !important;
             text-overflow: clip !important;
+            text-align: center;
         }
         .crm-op-col-xl {
             width: var(--crm-op-col-width-xl) !important;
@@ -242,19 +294,63 @@
             box-sizing: border-box;
             overflow: visible !important;
             text-overflow: clip !important;
+            text-align: center;
         }
-        .visit-table th.crm-op-col,
-        .visit-table td.crm-op-col {
-            width: var(--crm-op-col-width) !important;
-            min-width: var(--crm-op-col-width) !important;
-            max-width: var(--crm-op-col-width) !important;
+        .crm-op-actions {
+            width: 100%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.45rem;
             white-space: nowrap;
+            position: relative;
+            z-index: 2;
+            pointer-events: auto;
+        }
+        .crm-op-actions button,
+        .crm-op-actions a {
+            pointer-events: auto;
+        }
+        .crm-op-btn-detail,
+        .crm-op-btn-edit,
+        .crm-op-btn-delete,
+        .crm-op-btn-handoff {
+            font-size: 0.75rem;
+            line-height: 1.25;
+            font-weight: 500;
+            transition: color 0.12s ease;
+            text-decoration: none;
+        }
+        .crm-op-btn-detail { color: #374151; }
+        .crm-op-btn-detail:hover {
+            color: #111827;
+            text-decoration: underline;
+        }
+        .crm-op-btn-edit { color: #2563eb; }
+        .crm-op-btn-edit:hover {
+            color: #1d4ed8;
+            text-decoration: underline;
+        }
+        .crm-op-btn-delete { color: #dc2626; }
+        .crm-op-btn-delete:hover {
+            color: #b91c1c;
+            text-decoration: underline;
+        }
+        .crm-op-btn-handoff { color: #b45309; }
+        .crm-op-btn-handoff:hover {
+            text-decoration: underline;
         }
         /* 全局表格：蓝表头、斑马纹、整行悬停高亮（客户拜访 / 员工访谈等统一风格） */
         .crm-table {
             width: 100%;
             border-collapse: collapse;
             text-align: left;
+        }
+        /* sticky 操作列与 collapse 组合会导致列边界错位、表头无法横向冻结 */
+        .crm-table:has(.crm-sticky-right-op),
+        .visit-table:has(.crm-sticky-right-op) {
+            border-collapse: separate;
+            border-spacing: 0;
         }
         .crm-table th.crm-th {
             padding: 0.5rem 0.65rem;
@@ -615,7 +711,28 @@
             scale: 0.92;
         }
         /* 登录遮罩：深色玻璃拟态 + 紫罗兰光晕（与 AI 控制台类视觉一致） */
+        #login-overlay.hidden,
+        #pwd-change-overlay.hidden {
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+        #main-shell.hidden {
+            display: none !important;
+            pointer-events: none !important;
+        }
+        #main-shell:not(.hidden) {
+            display: flex;
+            flex-direction: column;
+        }
+        .crm-login-overlay:not(.hidden) {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
         .crm-login-overlay {
+            position: fixed; inset: 0;
+            box-sizing: border-box; padding: 2rem 1rem; overflow: hidden;
             background-color: #0a0a14;
             background-image:
                 radial-gradient(ellipse 130% 70% at 50% -25%, rgba(88, 28, 135, 0.38), transparent 55%),
@@ -652,14 +769,23 @@
             caret-color: #e9d5ff;
             transition: background-color 5000s ease-in-out 0s;
         }
-        .crm-login-logo {
+        .crm-login-logo-wrap {
             display: block;
             width: min(78%, 12rem);
             max-height: 4.75rem;
             margin: 0 auto 0.75rem;
+            overflow: hidden;
+            line-height: 0;
+        }
+        .crm-login-logo {
+            display: block;
+            width: 100%;
+            max-height: 4.75rem;
+            margin: 0;
             object-fit: contain;
+            object-position: center center;
             background: transparent;
-            filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.5));
+            filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.5)) brightness(0.92) contrast(1.04);
         }
         .crm-brand-logo {
             display: block;
@@ -751,7 +877,7 @@
             height: 1px;
             margin: 0 0 1.125rem;
             border: 0;
-            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
         }
         .crm-login-lead {
             margin: 0 0 0.25rem;
@@ -763,10 +889,45 @@
         }
         .crm-login-form {
             margin-top: 1.35rem;
+            display: flex; flex-direction: column; gap: 1rem;
+        }
+        .crm-login-input {
+            display: block; width: 100%; box-sizing: border-box; border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.1); background: rgba(0, 0, 0, 0.3);
+            padding: 0.75rem 1rem; font-size: 0.9375rem; line-height: 1.35; color: #f1f5f9; outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .crm-login-input::placeholder { color: rgba(221, 214, 254, 0.45); }
+        .crm-login-input:focus { border-color: rgba(167, 139, 250, 0.5); box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25); }
+        #login-err,
+        #pwd-change-err {
+            text-align: center; font-size: 0.875rem; font-weight: 500; color: rgba(251, 113, 133, 0.96);
         }
         /* 改密弹窗：弱化浏览器将字符渲染成可读字形的情况（兜底掩码） */
-        #pwd-change-overlay .crm-pwd-change-form input[type='password'] {
-            -webkit-text-security: disc;
+        #pwd-change-overlay { z-index: 110; }
+        #pwd-change-overlay .crm-login-panel { max-width: 28rem; }
+        #pwd-change-overlay .crm-pwd-change-form > div { display: flex; flex-direction: column; gap: 0.25rem; }
+        #pwd-change-overlay .crm-pwd-change-form label {
+            font-size: 0.75rem; font-weight: 500; color: rgba(221, 214, 254, 0.82);
+        }
+        #pwd-change-overlay .crm-pwd-change-form input[type='password'] { -webkit-text-security: disc; }
+        #pwd-change-form > div:last-child { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem; }
+        #pwd-change-cancel,
+        #pwd-change-save {
+            width: 100%; border-radius: 9999px; border: 1px solid rgba(255, 255, 255, 0.18);
+            padding: 0.75rem 1.25rem; font-size: 0.9375rem; font-weight: 600; transition: background 0.15s ease; cursor: pointer;
+        }
+        #pwd-change-cancel { background: rgba(0, 0, 0, 0.25); color: #f1f5f9; }
+        #pwd-change-cancel:hover { background: rgba(255, 255, 255, 0.1); }
+        #pwd-change-save {
+            background: rgba(91, 65, 145, 0.82); color: #ffffff; box-shadow: 0 10px 28px rgba(61, 40, 110, 0.45);
+        }
+        #pwd-change-save:hover { background: rgba(105, 75, 165, 0.9); }
+        @media (min-width: 640px) {
+            #pwd-change-form > div:last-child {
+                flex-direction: row; justify-content: flex-end; gap: 0.75rem;
+            }
+            #pwd-change-cancel, #pwd-change-save { width: auto; }
         }
         .crm-handbook-chat-shell {
             position: fixed;
@@ -904,35 +1065,39 @@
     </style>
 </head>
 <body class="bg-[#f6f8fa] text-gray-800" data-crm-auth-mode="{{ auth_mode|default('rbac') }}">
-    <div id="login-overlay" class="crm-login-overlay fixed inset-0 z-[100] hidden flex items-center justify-center px-4 py-8 overflow-hidden">
+    <div id="login-overlay" class="crm-login-overlay fixed inset-0 z-[100] hidden px-4 py-8 overflow-hidden">
         <div class="crm-login-blob crm-login-blob--a" aria-hidden="true"></div>
         <div class="crm-login-blob crm-login-blob--b" aria-hidden="true"></div>
         <div class="crm-login-panel">
             <div class="crm-login-panel-head text-center">
-                <img src="/static/images/throme-logo.png?v=logo2" class="crm-login-logo" width="484" height="384" alt="Throme" decoding="async">
+                <div class="crm-login-logo-wrap">
+                    <img src="/static/images/throme-logo.png?v=logo4" class="crm-login-logo" width="484" height="384" alt="Throme" decoding="async">
+                </div>
                 <h2 class="crm-login-title">登录</h2>
             </div>
             <div class="crm-login-divider" role="presentation"></div>
             <p class="crm-login-lead">使用已有账号进入系统</p>
-            <div class="crm-login-form flex flex-col gap-4">
+            <form id="login-form" class="crm-login-form flex flex-col gap-4" autocomplete="on">
                 <input id="login-user" type="text" name="username" placeholder="用户名" autocomplete="username"
                     class="crm-login-input w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[0.9375rem] text-slate-100 placeholder:text-violet-200/35 outline-none transition focus:border-violet-400/50 focus:ring-2 focus:ring-violet-500/25">
                 <input id="login-pwd" type="password" name="password" placeholder="密码" autocomplete="current-password"
                     class="crm-login-input w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[0.9375rem] text-slate-100 placeholder:text-violet-200/35 outline-none transition focus:border-violet-400/50 focus:ring-2 focus:ring-violet-500/25">
                 <p id="login-err" class="hidden text-center text-sm font-medium text-rose-400/95"></p>
-                <button type="button" id="login-btn" class="crm-login-btn">
+                <button type="submit" id="login-btn" class="crm-login-btn">
                     进入系统
                 </button>
-            </div>
+            </form>
         </div>
     </div>
 
-    <div id="pwd-change-overlay" class="crm-esc-modal crm-login-overlay fixed inset-0 z-[110] hidden flex items-center justify-center px-4 py-8 overflow-hidden">
+    <div id="pwd-change-overlay" class="crm-esc-modal crm-login-overlay fixed inset-0 z-[110] hidden px-4 py-8 overflow-hidden">
         <div class="crm-login-blob crm-login-blob--a" aria-hidden="true"></div>
         <div class="crm-login-blob crm-login-blob--b" aria-hidden="true"></div>
         <div class="crm-login-panel w-full max-w-md">
             <div class="crm-login-panel-head text-center">
-                <img src="/static/images/throme-logo.png?v=logo2" class="crm-login-logo" width="484" height="384" alt="Throme" decoding="async">
+                <div class="crm-login-logo-wrap">
+                    <img src="/static/images/throme-logo.png?v=logo4" class="crm-login-logo" width="484" height="384" alt="Throme" decoding="async">
+                </div>
                 <h2 class="crm-login-title">修改密码</h2>
             </div>
             <div class="crm-login-divider" role="presentation"></div>
@@ -967,13 +1132,13 @@
         </div>
     </div>
 
-    <div id="main-shell" class="min-h-screen flex flex-col hidden">
+    <div id="main-shell" class="min-h-screen hidden">
         <header class="border-b border-[#30363d] bg-[#010409] text-[#e6edf3] shrink-0 relative z-[100] overflow-visible">
             <div class="max-w-[1280px] mx-auto px-4 flex items-center justify-between min-h-[3.5rem] gap-4 overflow-visible">
                 <div class="crm-header-nav-wrap flex items-center flex-1 min-w-0">
                     <a href="/home" class="inline-flex items-center gap-2 text-white font-semibold tracking-tight shrink-0 mr-4 md:mr-8">
-                        <img src="/static/images/throme-logo.png?v=logo2" class="crm-brand-logo" width="484" height="384" alt="Throme" decoding="async">
-                        <span>ITO CRM{% block brand_badge %}<span class="text-[#8b949e] font-normal text-xs ml-1.5">V8</span>{% endblock %}</span>
+                        <img src="/static/images/throme-logo.png?v=logo4" class="crm-brand-logo" width="484" height="384" alt="Throme" decoding="async">
+                        <span>ITO CRM</span>
                     </a>
                     {% include "partials/nav.html" %}
                 </div>
@@ -1116,6 +1281,73 @@
             a.click();
             URL.revokeObjectURL(url);
         };
+        window.crmConfirmDeleteDialog = function (opts) {
+            var options = opts || {};
+            var title = String(options.title || '确认删除');
+            var targetText = String(options.targetText || '').trim();
+            var hint = String(options.hint || '').trim();
+            var zIndex = Number(options.zIndex || 90);
+            var confirmText = String(options.confirmText || '确认删除');
+            var cancelText = String(options.cancelText || '取消');
+            return new Promise(function (resolve) {
+                var done = false;
+                function finish(ok) {
+                    if (done) { return; }
+                    done = true;
+                    document.removeEventListener('keydown', onKeyDown, true);
+                    if (overlay && overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                    }
+                    resolve(!!ok);
+                }
+                function onKeyDown(e) {
+                    if (e.key !== 'Escape') { return; }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    finish(false);
+                }
+
+                var overlay = document.createElement('div');
+                overlay.className = 'crm-esc-modal fixed inset-0 bg-black/40 flex items-center justify-center p-4';
+                overlay.style.zIndex = String(zIndex);
+                var panel = document.createElement('div');
+                panel.className = 'bg-white rounded-lg shadow-xl w-full max-w-md p-4 sm:p-5';
+                var h3 = document.createElement('h3');
+                h3.className = 'font-semibold text-lg text-gray-800 mb-3';
+                h3.textContent = title;
+                var pTarget = document.createElement('p');
+                pTarget.className = 'text-sm text-gray-600 mb-2';
+                pTarget.textContent = targetText || '确认后将执行删除操作。';
+                var pHint = document.createElement('p');
+                pHint.className = 'text-xs text-gray-400 mb-4';
+                pHint.textContent = hint || '删除后将从当前列表移除。';
+                var actions = document.createElement('div');
+                actions.className = 'flex gap-2';
+                var cancelBtn = document.createElement('button');
+                cancelBtn.type = 'button';
+                cancelBtn.className = 'flex-1 py-2 rounded-md bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200';
+                cancelBtn.textContent = cancelText;
+                cancelBtn.setAttribute('data-crm-esc-close', '1');
+                var confirmBtn = document.createElement('button');
+                confirmBtn.type = 'button';
+                confirmBtn.className = 'flex-1 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700';
+                confirmBtn.textContent = confirmText;
+                actions.appendChild(cancelBtn);
+                actions.appendChild(confirmBtn);
+                panel.appendChild(h3);
+                panel.appendChild(pTarget);
+                panel.appendChild(pHint);
+                panel.appendChild(actions);
+                overlay.appendChild(panel);
+                overlay.addEventListener('click', function (e) {
+                    if (e.target === overlay) { finish(false); }
+                });
+                cancelBtn.addEventListener('click', function () { finish(false); });
+                confirmBtn.addEventListener('click', function () { finish(true); });
+                document.addEventListener('keydown', onKeyDown, true);
+                document.body.appendChild(overlay);
+            });
+        };
         window.crmEscModalVisible = function (el) {
             if (!el || el.classList.contains('hidden')) { return false; }
             var st = window.getComputedStyle(el);
@@ -1203,10 +1435,16 @@
 
         window.crmExportCsv = async function (e) {
             if (e) { e.preventDefault(); }
-            var b = localStorage.getItem('crm_b64');
-            if (!b) { alert('请先登录'); return; }
+            if (window.crmAuthMode === 'legacy' && !localStorage.getItem('crm_b64')) {
+                alert('请先登录');
+                return;
+            }
             try {
-                var r = await fetch('/api/export/clients', { headers: { 'Authorization': 'Basic ' + b } });
+                var r = await fetch('/api/export/clients', {
+                    headers: window.crmAuthHeader(),
+                    credentials: 'same-origin',
+                });
+                if (r.status === 401) { alert('请先登录'); return; }
                 if (!r.ok) { alert('导出失败'); return; }
                 var disposition = r.headers.get('Content-Disposition') || '';
                 var blob = await r.blob();
@@ -1443,9 +1681,34 @@
                 pwdOverlay.classList.remove('hidden');
             }
 
+            function hideLoginOverlay() {
+                if (!overlay) { return; }
+                overlay.classList.add('hidden');
+                overlay.setAttribute('aria-hidden', 'true');
+                overlay.style.pointerEvents = 'none';
+                overlay.style.display = 'none';
+            }
+
+            function showMainShell() {
+                if (!shell) { return; }
+                shell.classList.remove('hidden');
+                shell.removeAttribute('aria-hidden');
+                shell.style.pointerEvents = '';
+                shell.style.display = '';
+                window.dispatchEvent(new Event('crm-shell-ready'));
+            }
+
             function showLogin(msg) {
                 shell.classList.add('hidden');
-                overlay.classList.remove('hidden');
+                shell.setAttribute('aria-hidden', 'true');
+                shell.style.pointerEvents = 'none';
+                shell.style.display = 'none';
+                if (overlay) {
+                    overlay.classList.remove('hidden');
+                    overlay.removeAttribute('aria-hidden');
+                    overlay.style.pointerEvents = '';
+                    overlay.style.display = '';
+                }
                 if (pwdOverlay) { pwdOverlay.classList.add('hidden'); }
                 window.crmHideHandbookAssistant();
                 if (msg) { errEl.textContent = msg; errEl.classList.remove('hidden'); }
@@ -1476,8 +1739,8 @@
                     if (window.crmAuthMode === 'legacy') {
                         await window.crmEnsureLegacySession();
                     }
-                    overlay.classList.add('hidden');
-                    shell.classList.remove('hidden');
+                    hideLoginOverlay();
+                    showMainShell();
                     if (window.__crm_login_next) {
                         var dest = window.__crm_login_next;
                         window.__crm_login_next = '';
@@ -1490,7 +1753,7 @@
                 }
             }
 
-            document.getElementById('login-btn').onclick = async function () {
+            async function submitLogin() {
                 var u = document.getElementById('login-user').value.trim();
                 var p = document.getElementById('login-pwd').value;
                 errEl.classList.add('hidden');
@@ -1515,7 +1778,15 @@
                     await window.crmEnsureLegacySession();
                     await verifySession();
                 } catch (e) { showLogin('服务器连接失败'); }
-            };
+            }
+
+            var loginForm = document.getElementById('login-form');
+            if (loginForm) {
+                loginForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    submitLogin();
+                });
+            }
 
             document.getElementById('logout-btn').onclick = async function () {
                 try {
@@ -1591,6 +1862,6 @@
         })();
     </script>
     {% block page_scripts %}{% endblock %}
-    <script src="/static/js/crm-table-resize.js?v=11"></script>
+    <script src="/static/js/crm-table-resize.js?v=13"></script>
 </body>
 </html>

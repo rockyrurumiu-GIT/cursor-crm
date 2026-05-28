@@ -297,6 +297,20 @@ createApp({
             const n = parseFloat(s);
             return Number.isFinite(n) ? n : NaN;
         };
+        const TURNOVER_AMOUNT_FIELD_KEYS = new Set([
+            'monthly_quote_tax', 'pre_tax_salary', 'gms', 'zntx_compensation_amount',
+        ]);
+        const normalizeAmountText = (raw) => String(raw || '').replace(/[¥￥,\s\u00a0]/g, '').trim();
+        const formatAmountThousandsInput = (raw) => {
+            const digits = normalizeAmountText(raw);
+            if (!digits) return '';
+            const n = Number(digits);
+            if (!Number.isFinite(n)) return String(raw || '');
+            return n.toLocaleString('zh-CN', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
+        };
+        const onAmountFieldInput = (key, e) => {
+            addForm[key] = formatAmountThousandsInput(e && e.target ? e.target.value : '');
+        };
         const formatAmount = (value) => {
             if (!Number.isFinite(value)) return '';
             return `¥${Math.round(value).toLocaleString('zh-CN')}`;
@@ -746,9 +760,9 @@ createApp({
                 position_title: String(row.position_title || ''),
                 business_line: String(row.business_line || ''),
                 entry_date: String(row.entry_date || ''),
-                monthly_quote_tax: String(row.monthly_quote_tax || ''),
-                pre_tax_salary: String(row.pre_tax_salary || ''),
-                gms: String(row.gms || ''),
+                monthly_quote_tax: formatAmountThousandsInput(row.monthly_quote_tax),
+                pre_tax_salary: formatAmountThousandsInput(row.pre_tax_salary),
+                gms: formatAmountThousandsInput(row.gms),
                 gm_pct: String(row.gm_pct || ''),
                 employee_plus1: String(row.employee_plus1 || ''),
                 project_release_date: String(row.project_release_date || ''),
@@ -758,7 +772,7 @@ createApp({
                 delivery_communication: String(row.delivery_communication || ''),
                 business_action: String(row.business_action || ''),
                 bp_involved: String(row.bp_involved || ''),
-                zntx_compensation_amount: String(row.zntx_compensation_amount || ''),
+                zntx_compensation_amount: formatAmountThousandsInput(row.zntx_compensation_amount),
             });
         };
         const openDetail = (row) => {
@@ -806,6 +820,9 @@ createApp({
                         ? '离职'
                         : '在职',
                 };
+                TURNOVER_AMOUNT_FIELD_KEYS.forEach((key) => {
+                    payload[key] = normalizeAmountText(payload[key]);
+                });
                 const isEdit = editingId.value != null;
                 const r = await fetch(isEdit ? `/api/roster/${editingId.value}` : '/api/roster', {
                     method: isEdit ? 'PUT' : 'POST',
@@ -828,7 +845,12 @@ createApp({
             }
         };
         const removeRow = async (row) => {
-            if (!window.confirm('确定删除该条记录？')) return;
+            const ok = await window.crmConfirmDeleteDialog({
+                title: '确认删除记录',
+                targetText: '将删除当前离职档案记录',
+                hint: '删除后将从离职档案池移除。',
+            });
+            if (!ok) return;
             const r = await fetch(`/api/roster/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
             if (!r.ok) {
                 alert('删除失败');
@@ -960,7 +982,7 @@ createApp({
             clearFilters,
             showOnlyChecked, displayCountHint, emptyStateText,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,
-            totalCompensation, totalQuote, totalProfit, totalProfitRate, formatAmount,
+            totalCompensation, totalQuote, totalProfit, totalProfitRate, formatAmount, parseAmount,
             fileInput, triggerImport, onImportFile, exportCsv, restoreLatestBackup,
             showDashboard, dashLoading, dashError, dashData, dashScope, dashBusinessKey, dashTrendMonths,
             dashPeriodStart, dashPeriodEnd, businessOptions,
@@ -969,7 +991,7 @@ createApp({
             moveTurnoverDashTT, hideTurnoverDashTT, onTurnoverDashTTEnter, onTurnoverDashTTLeave,
             openDashboard, closeDashboard, loadDashboard, resetDashboardFilters, onDashScopeChange, dashTrendRollingShareText, dashTrendRollingShareBarStyle, monthlyRateCell, dashTenureBarPct, dashBusinessBarPct,
             turnoverDepartureLinesForTooltip, analysisPeriodTooltipLines,
-            showAddModal, addForm, addSaving, addFormReadonly, editingId, addTenurePreview, openAddForm, closeAddForm, saveAddForm,
+            showAddModal, addForm, addSaving, addFormReadonly, editingId, addTenurePreview, openAddForm, closeAddForm, saveAddForm, onAmountFieldInput,
             openDetail, openEdit, removeRow,
             showLogs, logsLoading, logs, openLogs, closeLogs, formatDate,
         };

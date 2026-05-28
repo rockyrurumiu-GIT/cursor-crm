@@ -106,6 +106,14 @@ function parseAmountCell(str) {
 function normalizeAmountText(str) {
     return String(str || '').replace(/[¥￥,\s\u00a0]/g, '').trim();
 }
+const ROSTER_AMOUNT_FIELD_KEYS = new Set(['monthly_quote_tax', 'pre_tax_salary', 'gms']);
+function formatAmountThousandsInput(raw) {
+    const digits = normalizeAmountText(raw);
+    if (!digits) return '';
+    const n = Number(digits);
+    if (!Number.isFinite(n)) return String(raw || '');
+    return n.toLocaleString('zh-CN', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
+}
 function isValidSalaryAmountInput(raw) {
     const normalized = normalizeAmountText(raw);
     return /^\d{4,6}$/.test(normalized);
@@ -189,7 +197,7 @@ function formatRatioAsPercent(ratio) {
     if (!Number.isFinite(ratio)) return '—';
     return (ratio * 100).toFixed(2) + '%';
 }
-createApp({
+const rosterDetailApp = createApp({
     setup() {
         const rows = ref([]);
         const brief = ref({ name: '', owner: '' });
@@ -529,6 +537,11 @@ createApp({
             }
             return 'text';
         };
+        const isAmountField = (key) => ROSTER_AMOUNT_FIELD_KEYS.has(key);
+        const onAmountFieldInput = (key, e) => {
+            form[key] = formatAmountThousandsInput(e && e.target ? e.target.value : '');
+            markTouched(key);
+        };
         const clearDateField = (key) => {
             form[key] = '';
             markTouched(key);
@@ -607,9 +620,13 @@ createApp({
             formReadonly.value = false;
             FORM_FIELDS.forEach((f) => {
                 const raw = row[f.key] != null ? String(row[f.key]) : '';
-                form[f.key] = DATE_FIELD_KEYS.has(f.key)
-                    ? normalizeDateForInput(raw, false)
-                    : raw;
+                if (DATE_FIELD_KEYS.has(f.key)) {
+                    form[f.key] = normalizeDateForInput(raw, false);
+                } else if (ROSTER_AMOUNT_FIELD_KEYS.has(f.key)) {
+                    form[f.key] = formatAmountThousandsInput(raw);
+                } else {
+                    form[f.key] = raw;
+                }
             });
             clearTouched();
             showForm.value = true;
@@ -918,10 +935,35 @@ createApp({
             IS_GLOBAL_ROSTER,
             rosterCustomerSelectOptions,
             openAdd, openEdit, openRosterDetail, formReadonly, saveForm, confirmDelete, cancelDelete, doDelete,
-            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, fieldInputType, markTouched, getFieldError,
+            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, onAmountFieldInput, fieldInputType, markTouched, getFieldError,
             showRosterValidation,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,
             clearDateField, displayAmountInteger, displayRosterDate,
         };
     },
-}).mount('#roster-detail-app');
+});
+
+function mountRosterDetailApp() {
+    if (typeof Vue === 'undefined') { return false; }
+    const root = document.getElementById('roster-detail-app');
+    if (!root || root.__vue_app__) { return !!root?.__vue_app__; }
+    const shell = document.getElementById('main-shell');
+    if (shell && shell.classList.contains('hidden')) { return false; }
+    rosterDetailApp.mount(root);
+    root.setAttribute('data-roster-mounted', '1');
+    return true;
+}
+
+function scheduleRosterMount() {
+    if (mountRosterDetailApp()) { return; }
+    let tries = 0;
+    const timer = window.setInterval(function () {
+        tries += 1;
+        if (mountRosterDetailApp() || tries >= 50) {
+            window.clearInterval(timer);
+        }
+    }, 100);
+}
+
+scheduleRosterMount();
+window.addEventListener('crm-shell-ready', mountRosterDetailApp);

@@ -4,7 +4,7 @@
  */
 (function () {
     const MIN_WIDTH = 64;
-    /** 三键操作列（详情/修改/删除）固定宽 px */
+    /** 三键操作列（详情/修改/删除）固定宽 px，默认与 base.html CSS 变量一致 */
     const OP_COL_WIDTH = 144;
     const OP_COL_WIDTH_WIDE = 208;
     const OP_COL_WIDTH_XL = 288;
@@ -14,22 +14,42 @@
     const RESIZE_EDGE = 12;
     /** 大表按内容测宽时抽样行数，避免上千行卡顿 */
     const CONTENT_SAMPLE_ROWS = 48;
-    const STORAGE_VERSION = 'v4';
+    const STORAGE_VERSION = 'v5';
+
+    function readCssLengthPx(varName, fallbackPx) {
+        const root = getComputedStyle(document.documentElement);
+        const raw = (root.getPropertyValue(varName) || '').trim();
+        const num = parseFloat(raw);
+        if (!Number.isFinite(num) || num <= 0) return fallbackPx;
+        if (raw.includes('rem')) {
+            const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            return Math.round(num * remPx);
+        }
+        return Math.round(num);
+    }
 
     function isOpColumnTh(th) {
         return th.classList.contains('crm-sticky-right-op')
-            || th.classList.contains('turnover-sticky-right-actions')
             || th.classList.contains('roster-sticky-op')
-            || th.classList.contains('crm-op-col')
             || th.classList.contains('crm-op-col-wide')
             || th.classList.contains('crm-op-col-xl');
     }
 
     function opColumnWidthPx(th) {
-        if (!th) return OP_COL_WIDTH;
-        if (th.classList.contains('crm-op-col-xl')) return OP_COL_WIDTH_XL;
-        if (th.classList.contains('crm-op-col-wide')) return OP_COL_WIDTH_WIDE;
-        return OP_COL_WIDTH;
+        const narrow = readCssLengthPx('--crm-op-col-width', OP_COL_WIDTH);
+        const wide = readCssLengthPx('--crm-op-col-width-wide', OP_COL_WIDTH_WIDE);
+        const xl = readCssLengthPx('--crm-op-col-width-xl', OP_COL_WIDTH_XL);
+        if (!th) return narrow;
+        if (th && th.closest('.handbook-table')) {
+            const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            return 12 * rem;
+        }
+        if (th && th.closest('table[data-table-id="system-users"]')) {
+            return Math.round(xl * (2 / 3));
+        }
+        if (th.classList.contains('crm-op-col-xl')) return xl;
+        if (th.classList.contains('crm-op-col-wide')) return wide;
+        return narrow;
     }
 
     function isCheckinColumnTh(th) {
@@ -176,7 +196,7 @@
             for (let i = opIdx - 1; i >= 0; i--) {
                 if (isCheckinColumnTh(ths[i])) continue;
                 const label = (ths[i].textContent || '').trim();
-                if (label === '备注' || label.includes('原因') || label.includes('纪要') || label.includes('沟通')) return i;
+                if (label === '备注' || label === '说明' || label.includes('原因') || label.includes('纪要') || label.includes('沟通')) return i;
             }
             return opIdx - 1;
         }
@@ -261,21 +281,21 @@
             const target = Math.max(total, tableMin);
             let extra = target - total;
             if (extra > 0.5) {
-                const growable = [];
-                for (let i = 0; i < cols.length; i += 1) {
-                    if (!isOpColumnTh(ths[i]) && !isCheckinColumnTh(ths[i])) growable.push(i);
-                }
-                if (growable.length) {
-                    const share = extra / growable.length;
-                    growable.forEach((i) => {
-                        setColWidth(i, readColWidth(i) + share);
-                    });
-                    total = cols.reduce((sum, _c, idx) => sum + readColWidth(idx), 0);
+                const flexIdx = flexGrowColumnIndex(ths);
+                if (flexIdx >= 0 && !isOpColumnTh(ths[flexIdx]) && !isCheckinColumnTh(ths[flexIdx])) {
+                    setColWidth(flexIdx, readColWidth(flexIdx) + extra);
+                    total = target;
                 } else {
-                    const flexIdx = flexGrowColumnIndex(ths);
-                    if (flexIdx >= 0 && !isOpColumnTh(ths[flexIdx]) && !isCheckinColumnTh(ths[flexIdx])) {
-                        setColWidth(flexIdx, readColWidth(flexIdx) + extra);
-                        total = target;
+                    const growable = [];
+                    for (let i = 0; i < cols.length; i += 1) {
+                        if (!isOpColumnTh(ths[i]) && !isCheckinColumnTh(ths[i])) growable.push(i);
+                    }
+                    if (growable.length) {
+                        const share = extra / growable.length;
+                        growable.forEach((i) => {
+                            setColWidth(i, readColWidth(i) + share);
+                        });
+                        total = cols.reduce((sum, _c, idx) => sum + readColWidth(idx), 0);
                     }
                 }
             }

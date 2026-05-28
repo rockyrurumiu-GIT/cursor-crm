@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set is_edit = client_id is defined %}
-{% block title %}{{ "修改客户" if is_edit else "新增客户" }} · ITO CRM V8{% endblock %}
+{% block title %}{{ "修改客户" if is_edit else "新增客户" }} · ITO CRM{% endblock %}
 {% block content %}
 <div class="container mx-auto p-6 max-w-xl">
     <h1 class="text-2xl font-bold text-gray-900 mb-6">{{ "修改客户" if is_edit else "新增客户" }}</h1>
@@ -62,6 +62,23 @@
             </select>
         </div>
         <div>
+            <label class="block text-sm font-medium mb-1">获客渠道</label>
+            <select name="contact_acquisition_channel" class="crm-form-control">
+                <option value="">请选择</option>
+                <option value="个人">个人</option>
+                <option value="公司">公司</option>
+                <option value="其他">其他</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">联系人+1</label>
+            <input name="contact_superior_contact" class="w-full p-2 border rounded" placeholder="联系人的上级">
+        </div>
+        <div>
+            <label class="block text-sm font-medium mb-1">联系人说明</label>
+            <textarea name="contact_description" rows="3" class="w-full p-2 border rounded" placeholder="联系人的具体情况"></textarea>
+        </div>
+        <div>
             <label class="block text-sm font-medium mb-1">客户所在城市</label>
             <input name="city" class="w-full p-2 border rounded" placeholder="例如：深圳">
         </div>
@@ -93,7 +110,13 @@
     function setEstimatedAmountDisplay(value) {
         if (!amountDisplay) return;
         var v = (value || '').trim();
-        amountDisplay.value = v || '';
+        var digits = v.replace(/[^\d.-]/g, '');
+        if (digits) {
+            var n = Number(digits);
+            amountDisplay.value = Number.isFinite(n) ? n.toLocaleString('zh-CN') : v;
+        } else {
+            amountDisplay.value = '';
+        }
         amountDisplay.placeholder = clientId ? '暂无商机数据' : '保存后由名下商机自动汇总';
     }
 
@@ -113,8 +136,9 @@
             }
             var data = await r.json();
             ['name', 'industry', 'owner', 'scale', 'phase',
-             'contact_name', 'contact_info', 'contact_title', 'contact_relationship', 'city',
-             'description', 'remarks'].forEach(function (key) {
+             'contact_name', 'contact_info', 'contact_title', 'contact_relationship',
+             'contact_acquisition_channel', 'contact_superior_contact', 'contact_description',
+             'city', 'description', 'remarks'].forEach(function (key) {
                 if (form.elements[key]) form.elements[key].value = data[key] || '';
             });
             setEstimatedAmountDisplay(data.estimated_annual_amount);

@@ -229,6 +229,9 @@ class Client(Base):
     contact_info = Column(String, default="")
     contact_title = Column(String, default="")
     contact_relationship = Column(String, default="")
+    contact_acquisition_channel = Column(String, default="")
+    contact_superior_contact = Column(String, default="")
+    contact_description = Column(Text, default="")
     city = Column(String, default="")
     description = Column(Text)
     remarks = Column(Text, default="")
@@ -334,6 +337,9 @@ class Contact(Base):
     email = Column(String, default="")
     tags = Column(String, default="")
     remarks = Column(Text, default="")
+    superior_contact = Column(String, default="")
+    acquisition_channel = Column(String, default="")
+    description = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -706,6 +712,9 @@ def _ensure_clients_schema_compat():
             "contact_info": "TEXT DEFAULT ''",
             "contact_title": "TEXT DEFAULT ''",
             "contact_relationship": "TEXT DEFAULT ''",
+            "contact_acquisition_channel": "TEXT DEFAULT ''",
+            "contact_superior_contact": "TEXT DEFAULT ''",
+            "contact_description": "TEXT DEFAULT ''",
             "city": "TEXT DEFAULT ''",
             "owner_user_id": "INTEGER NULL",
             "owner_dept_id": "INTEGER NULL",
@@ -716,6 +725,23 @@ def _ensure_clients_schema_compat():
         for col, ddl in add_cols.items():
             if col not in existing:
                 conn.exec_driver_sql(f"ALTER TABLE clients ADD COLUMN {col} {ddl}")
+
+
+def _ensure_contacts_schema_compat():
+    """补齐 contacts 表新增字段，兼容旧库。"""
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(contacts)").fetchall()}
+        except Exception:
+            return
+        add_cols = {
+            "superior_contact": "TEXT DEFAULT ''",
+            "acquisition_channel": "TEXT DEFAULT ''",
+            "description": "TEXT DEFAULT ''",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE contacts ADD COLUMN {col} {ddl}")
 
 
 def _ensure_visits_schema_compat():
@@ -769,6 +795,7 @@ _ensure_handoff_phase2_schema_compat()
 _ensure_opportunities_schema_compat()
 _ensure_pipeline_schema_compat()
 _ensure_clients_schema_compat()
+_ensure_contacts_schema_compat()
 _ensure_visits_schema_compat()
 
 # Handbook FTS/search/background helpers: migrated to services/delivery_handbook.py (Phase 5D)
@@ -1070,49 +1097,11 @@ def get_host_ip():
 
 
 
-PRIMARY_CONTACT_TAG = "首要联系人"
-
-
 def _sync_client_primary_contact(db: Session, client: Client) -> None:
-    """将 Client 内联联系人同步到 contacts 表（tags=首要联系人）。"""
-    primary = (
-        db.query(Contact)
-        .filter(Contact.client_id == client.id, Contact.tags == PRIMARY_CONTACT_TAG)
-        .first()
-    )
-    name = (client.contact_name or "").strip()
-    if not name:
-        if primary:
-            db.delete(primary)
-        return
+    """将 Client 内联联系人同步到 contacts 表。"""
+    from phase2_core import sync_client_primary_contact
 
-    contact_info = (client.contact_info or "").strip()
-    if "@" in contact_info:
-        phone, email = "", contact_info
-    else:
-        phone, email = contact_info, ""
-
-    relationship = (client.contact_relationship or "").strip()
-    remarks = f"关系：{relationship}" if relationship else ""
-
-    if primary:
-        primary.name = name
-        primary.title = (client.contact_title or "").strip()
-        primary.phone = phone
-        primary.email = email
-        primary.remarks = remarks
-    else:
-        db.add(
-            Contact(
-                client_id=client.id,
-                name=name,
-                title=(client.contact_title or "").strip(),
-                phone=phone,
-                email=email,
-                tags=PRIMARY_CONTACT_TAG,
-                remarks=remarks,
-            )
-        )
+    sync_client_primary_contact(db, Contact, client)
 
 
 
