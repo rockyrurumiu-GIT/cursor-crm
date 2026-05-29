@@ -4,6 +4,43 @@ import os
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TAX_DIVISOR = 1.0672
+MONTHLY_WORK_DAYS_2026 = 20.67
+MONTHLY_HOURS_2026 = 165.36
+
+
+def normalize_quote_to_monthly(quote_raw, quote_unit, monthly_hours=0):
+    raw = float(quote_raw or 0)
+    if raw <= 0:
+        return 0.0
+    if quote_unit == "day":
+        return raw * MONTHLY_WORK_DAYS_2026
+    if quote_unit == "hour":
+        return raw * MONTHLY_HOURS_2026
+    if quote_unit == "custom":
+        hours = float(monthly_hours or 0)
+        if hours <= 0:
+            return 0.0
+        return raw * hours
+    return raw
+
+
+def compute_custom_social_cost(base, rate_pct):
+    return float(base or 0) * float(rate_pct or 0) / 100
+
+
+def compute_custom_housing_cost(base, rate_pct):
+    return float(base or 0) * float(rate_pct or 0) / 100
+
+
+def resolve_insurance_costs(custom_insurance, social_base, social_rate, housing_base, housing_rate, location_rates):
+    if custom_insurance:
+        return (
+            compute_custom_social_cost(social_base, social_rate),
+            compute_custom_housing_cost(housing_base, housing_rate),
+        )
+    if not location_rates:
+        return 0.0, 0.0
+    return float(location_rates["social_insurance"]), float(location_rates["housing_fund"])
 
 
 def annual_leave(salary):
@@ -33,6 +70,48 @@ def test_tax_divisor_sample():
     assert abs(Y - (17807 + leave)) < 1
     assert margin is not None
     assert 0.25 < margin < 0.30
+
+
+def test_quote_month_no_conversion():
+    assert normalize_quote_to_monthly(26500, "month") == 26500
+
+
+def test_quote_day_conversion():
+    assert abs(normalize_quote_to_monthly(1000, "day") - 20670) < 0.01
+
+
+def test_quote_hour_conversion():
+    assert abs(normalize_quote_to_monthly(100, "hour") - 100 * 165.36) < 0.01
+
+
+def test_quote_custom_conversion():
+    assert abs(normalize_quote_to_monthly(100, "custom", 160) - 16000) < 0.01
+
+
+def test_quote_custom_missing_hours():
+    assert normalize_quote_to_monthly(100, "custom", 0) == 0
+
+
+def test_custom_social_cost():
+    assert abs(compute_custom_social_cost(10000, 16.25) - 1625) < 0.01
+
+
+def test_custom_housing_cost():
+    assert abs(compute_custom_housing_cost(8000, 12) - 960) < 0.01
+
+
+def test_custom_insurance_zero_when_disabled():
+    loc = {"social_insurance": 1207, "housing_fund": 120}
+    social, housing = resolve_insurance_costs(False, 10000, 16.25, 8000, 12, loc)
+    assert social == 1207
+    assert housing == 120
+
+
+def test_custom_insurance_ignores_location_when_enabled():
+    loc = {"social_insurance": 1207, "housing_fund": 120}
+    social, housing = resolve_insurance_costs(True, 10000, 16.25, 8000, 12, loc)
+    assert abs(social - 1625) < 0.01
+    assert abs(housing - 960) < 0.01
 
 
 def test_xlsx_parse_has_wuhan():

@@ -8,6 +8,13 @@
     .gm-loc-dropdown { position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px); max-height: 14rem; overflow-y: auto; }
     .gm-loc-option { padding: 0.5rem 0.75rem; cursor: pointer; }
     .gm-loc-option:hover, .gm-loc-option.active { background: #eff6ff; }
+    .gm-quote-row { display: flex; gap: 0.5rem; align-items: stretch; }
+    .gm-quote-row input { flex: 1; min-width: 0; }
+    .gm-quote-unit { width: 6rem; flex-shrink: 0; }
+    .gm-mode-input { background-color: #fffbeb; border-color: #fde68a; }
+    .gm-pct-wrap { position: relative; }
+    .gm-input-suffix { padding-right: 3rem; }
+    .gm-pct-suffix { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); color: #9ca3af; font-size: 0.875rem; pointer-events: none; }
 </style>
 {% endblock %}
 {% block content %}
@@ -15,36 +22,106 @@
 <div id="page-app" class="container mx-auto p-6 max-w-[1280px]">
     <h1 class="text-2xl font-bold text-gray-900 mb-6">毛利测算器</h1>
     <div id="section-calc" class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-lg border border-gray-200 border-t-4 border-blue-600">
-        <h2 class="text-2xl font-bold mb-2 flex items-center">
-            <span class="mr-2">🧮</span> GM 毛利测算
-        </h2>
-        <p class="text-xs text-gray-500 mb-6">不含税报价 = 含税报价 ÷ 1.0672；毛利率 = 毛利额 ÷ 不含税报价；年假 = 月薪 ÷ 21.75 × 5 ÷ 12（公司承担，与 Excel 一致）</p>
+        <div class="flex items-start justify-between gap-4 mb-2">
+            <h2 class="text-2xl font-bold flex items-center">
+                <span class="mr-2">🧮</span> GM 毛利测算
+            </h2>
+            <div class="flex shrink-0 gap-2">
+                <button type="button" @click="toggleCustomInsurance"
+                    class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+                    :class="{ 'ring-2 ring-red-300': form.customInsurance }">
+                    自定义金险
+                </button>
+                <button type="button" @click="resetForm"
+                    class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+                    重置
+                </button>
+            </div>
+        </div>
+        <p class="text-xs text-gray-500 mb-6">不含税报价 = 含税报价 ÷ 1.0672；毛利率 = 毛利额 ÷ 不含税报价；年假 = 月薪 ÷ 21.75 × 5 ÷ 12</p>
         <div class="space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">含税报价 (元/月)</label>
-                    <input type="text" inputmode="decimal" autocomplete="off" class="w-full p-2 border rounded"
-                        :value="moneyDisplay.quoteTaxIncluded"
-                        @input="onMoneyInput('quoteTaxIncluded', $event)"
-                        @blur="onMoneyBlur('quoteTaxIncluded')">
+                    <label class="block text-sm font-medium mb-1">含税报价</label>
+                    <div class="gm-quote-row">
+                        <div class="gm-pct-wrap flex-1 min-w-0">
+                            <input type="text" inputmode="decimal" autocomplete="off" class="w-full p-2 border rounded"
+                                :class="{ 'gm-input-suffix': form.quoteUnit === 'custom' }"
+                                :value="moneyDisplay.quoteTaxIncluded"
+                                @input="onMoneyInput('quoteTaxIncluded', $event)"
+                                @blur="onMoneyBlur('quoteTaxIncluded')">
+                            <span v-if="form.quoteUnit === 'custom'" class="gm-pct-suffix">元/时</span>
+                        </div>
+                        <select v-model="form.quoteUnit" class="gm-quote-unit p-2 border rounded text-sm bg-white">
+                            <option value="month">元/月</option>
+                            <option value="day">元/天</option>
+                            <option value="hour">元/时</option>
+                            <option value="custom">自选</option>
+                        </select>
+                    </div>
+                    <p v-if="quoteUnitWarning" class="text-xs text-amber-600 mt-1">{{ quoteUnitWarning }}</p>
+                    <div v-if="form.quoteUnit === 'custom'" class="mt-3">
+                        <label class="block text-sm font-medium mb-1">月小时数（小时/月）</label>
+                        <input type="text" inputmode="decimal" autocomplete="off" class="gm-mode-input w-full p-2 border rounded"
+                            :value="monthlyHoursDisplay"
+                            @input="onMonthlyHoursInput"
+                            @blur="onMonthlyHoursBlur">
+                    </div>
                 </div>
                 <div class="relative">
                     <label class="block text-sm font-medium mb-1">参保地</label>
-                    <input type="text" autocomplete="off" class="crm-form-control w-full" placeholder="输入搜索参保地…"
+                    <input type="text" autocomplete="off" class="crm-form-control w-full disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-100" placeholder="输入搜索参保地…"
                         v-model="locationQuery"
+                        :disabled="form.customInsurance"
                         @input="onLocationInput"
-                        @focus="locationDropdownOpen = true"
+                        @focus="onLocationFocus"
                         @blur="onLocationBlur"
                         @keydown.down.prevent="moveLocationHighlight(1)"
                         @keydown.up.prevent="moveLocationHighlight(-1)"
                         @keydown.enter.prevent="confirmLocationHighlight">
-                    <ul v-if="locationDropdownOpen && filteredLocations.length" class="gm-loc-dropdown bg-white border border-gray-200 rounded-lg shadow-lg text-sm">
+                    <ul v-if="!form.customInsurance && locationDropdownOpen && filteredLocations.length" class="gm-loc-dropdown bg-white border border-gray-200 rounded-lg shadow-lg text-sm">
                         <li v-for="(loc, idx) in filteredLocations" :key="loc.id"
                             class="gm-loc-option"
                             :class="{ active: idx === locationHighlightIndex }"
                             @mousedown.prevent="pickLocation(loc)">{{ loc.location }}</li>
                     </ul>
-                    <p v-if="locationWarning" class="text-xs text-amber-600 mt-1">{{ locationWarning }}</p>
+                    <p v-if="!form.customInsurance && locationWarning" class="text-xs text-amber-600 mt-1">{{ locationWarning }}</p>
+                </div>
+                <div v-if="form.customInsurance" class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">社保基数</label>
+                        <input type="text" inputmode="decimal" autocomplete="off" class="gm-mode-input w-full p-2 border rounded"
+                            :value="moneyDisplay.socialBase"
+                            @input="onMoneyInput('socialBase', $event)"
+                            @blur="onMoneyBlur('socialBase')">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">社保公司比例</label>
+                        <div class="gm-pct-wrap">
+                            <input type="text" inputmode="decimal" autocomplete="off" class="gm-mode-input gm-input-suffix w-full p-2 border rounded"
+                                :value="socialRateDisplay"
+                                @input="onSocialRateInput"
+                                @blur="onSocialRateBlur">
+                            <span class="gm-pct-suffix">%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">公积金基数</label>
+                        <input type="text" inputmode="decimal" autocomplete="off" class="gm-mode-input w-full p-2 border rounded"
+                            :value="moneyDisplay.housingBase"
+                            @input="onMoneyInput('housingBase', $event)"
+                            @blur="onMoneyBlur('housingBase')">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">公积金公司比例</label>
+                        <div class="gm-pct-wrap">
+                            <input type="text" inputmode="numeric" autocomplete="off" class="gm-mode-input gm-input-suffix w-full p-2 border rounded"
+                                :value="housingRateDisplay"
+                                @input="onHousingRateInput"
+                                @blur="onHousingRateBlur">
+                            <span class="gm-pct-suffix">%</span>
+                        </div>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">月薪 (元)</label>
@@ -97,14 +174,14 @@
                 </div>
             </div>
 
-            <details class="text-sm border rounded-lg p-3 bg-gray-50" open>
+            <details class="text-sm border rounded-lg p-3 bg-gray-50">
                 <summary class="cursor-pointer font-medium text-gray-700">成本明细（计入成本合计）</summary>
                 <table class="w-full mt-2 text-sm">
                     <tbody>
                         <tr><td class="py-1 text-gray-600">月薪</td><td class="text-right">¥ {{ result.salaryText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">年终奖（元/月）</td><td class="text-right">¥ {{ result.bonusText }}</td></tr>
-                        <tr><td class="py-1 text-gray-600">社保（参保地自动）</td><td class="text-right">¥ {{ result.socialText }}</td></tr>
-                        <tr><td class="py-1 text-gray-600">公积金（参保地自动）</td><td class="text-right">¥ {{ result.housingText }}</td></tr>
+                        <tr><td class="py-1 text-gray-600">{{ result.socialLabel }}</td><td class="text-right">¥ {{ result.socialText }}</td></tr>
+                        <tr><td class="py-1 text-gray-600">{{ result.housingLabel }}</td><td class="text-right">¥ {{ result.housingText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">年假（自动）</td><td class="text-right">¥ {{ result.annualLeaveText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">福利</td><td class="text-right">¥ {{ result.welfareText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">电脑折旧</td><td class="text-right">¥ {{ result.laptopText }}</td></tr>
@@ -140,7 +217,7 @@
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/gm-calculator.js?v=2"></script>
+<script src="/static/js/pages/gm-calculator.js?v=5"></script>
 <script>
 const { createApp, ref, computed, onMounted } = Vue;
 const core = window.GmCalculatorCore;
@@ -157,6 +234,8 @@ createApp({
         const locations = ref([]);
         const form = ref({
             quoteTaxIncluded: 0,
+            quoteUnit: 'month',
+            monthlyHours: 0,
             location: '',
             salary: 0,
             bonusMonthly: 0,
@@ -165,9 +244,17 @@ createApp({
             recruitment: 0,
             capital: 0,
             other: 0,
+            customInsurance: false,
+            socialBase: 0,
+            socialCompanyRate: 0,
+            housingBase: 0,
+            housingCompanyRate: 0,
             targetClientId: '',
         });
         const moneyDisplay = ref(emptyMoneyDisplay());
+        const monthlyHoursDisplay = ref('0');
+        const socialRateDisplay = ref('0');
+        const housingRateDisplay = ref('0');
         const locationQuery = ref('');
         const locationDropdownOpen = ref(false);
         const locationHighlightIndex = ref(0);
@@ -197,7 +284,13 @@ createApp({
             locationHighlightIndex.value = 0;
         }
 
+        function onLocationFocus() {
+            if (form.value.customInsurance) return;
+            locationDropdownOpen.value = true;
+        }
+
         function onLocationInput() {
+            if (form.value.customInsurance) return;
             locationDropdownOpen.value = true;
             locationHighlightIndex.value = 0;
             syncLocationFromQuery();
@@ -236,12 +329,81 @@ createApp({
             moneyDisplay.value[key] = core.formatMoneyInput(form.value[key]);
         }
 
+        function onMonthlyHoursInput(ev) {
+            const n = core.parseMoneyInput(ev.target.value);
+            form.value.monthlyHours = n;
+            const raw = String(ev.target.value || '').trim();
+            monthlyHoursDisplay.value = raw === '' ? '' : core.formatMoneyInput(n);
+        }
+
+        function onMonthlyHoursBlur() {
+            monthlyHoursDisplay.value = core.formatMoneyInput(form.value.monthlyHours);
+        }
+
+        function onSocialRateInput(ev) {
+            const n = core.parsePercentInput(ev.target.value);
+            form.value.socialCompanyRate = n;
+            const raw = String(ev.target.value || '').trim();
+            socialRateDisplay.value = raw === '' ? '' : core.formatPercentInput(n, 2);
+        }
+
+        function onSocialRateBlur() {
+            socialRateDisplay.value = core.formatPercentInput(form.value.socialCompanyRate, 2);
+        }
+
+        function onHousingRateInput(ev) {
+            const n = core.parsePercentInput(ev.target.value);
+            form.value.housingCompanyRate = n;
+            const raw = String(ev.target.value || '').trim();
+            housingRateDisplay.value = raw === '' ? '' : core.formatPercentInput(n, 0);
+        }
+
+        function onHousingRateBlur() {
+            form.value.housingCompanyRate = Math.round(num(form.value.housingCompanyRate));
+            housingRateDisplay.value = core.formatPercentInput(form.value.housingCompanyRate, 0);
+        }
+
+        function initCustomInsuranceDisplay() {
+            socialRateDisplay.value = core.formatPercentInput(form.value.socialCompanyRate, 2);
+            housingRateDisplay.value = core.formatPercentInput(form.value.housingCompanyRate, 0);
+        }
+
+        function toggleCustomInsurance() {
+            form.value.customInsurance = !form.value.customInsurance;
+            locationDropdownOpen.value = false;
+        }
+
         function initMoneyDisplay() {
             const d = emptyMoneyDisplay();
             core.MONEY_FIELD_KEYS.forEach((k) => {
                 d[k] = core.formatMoneyInput(form.value[k]);
             });
             moneyDisplay.value = d;
+        }
+
+        function resetForm() {
+            form.value.quoteTaxIncluded = 0;
+            form.value.quoteUnit = 'month';
+            form.value.monthlyHours = 0;
+            form.value.location = '';
+            form.value.salary = 0;
+            form.value.bonusMonthly = 0;
+            form.value.welfare = 0;
+            form.value.laptop = 0;
+            form.value.recruitment = 0;
+            form.value.capital = 0;
+            form.value.other = 0;
+            form.value.customInsurance = false;
+            form.value.socialBase = 0;
+            form.value.socialCompanyRate = 0;
+            form.value.housingBase = 0;
+            form.value.housingCompanyRate = 0;
+            locationQuery.value = '';
+            locationDropdownOpen.value = false;
+            locationHighlightIndex.value = 0;
+            initMoneyDisplay();
+            monthlyHoursDisplay.value = '0';
+            initCustomInsuranceDisplay();
         }
 
         const selectedRates = computed(() => {
@@ -255,17 +417,54 @@ createApp({
             return '';
         });
 
+        const quoteUnitWarning = computed(() => {
+            if (form.value.quoteUnit !== 'custom') return '';
+            if (num(form.value.monthlyHours) > 0) return '';
+            if (num(form.value.quoteTaxIncluded) > 0) return '请填写月小时数';
+            return '';
+        });
+
+        function num(v) {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : 0;
+        }
+
+        function buildQuoteConversionNote(r) {
+            const raw = core.money(r.quoteRaw);
+            if (r.quoteUnit === 'day') {
+                return `人月含税 L = ${raw} × ${core.MONTHLY_WORK_DAYS_2026} = ${core.money(r.L)}`;
+            }
+            if (r.quoteUnit === 'hour') {
+                return `人月含税 L = ${raw} × ${core.MONTHLY_HOURS_2026} = ${core.money(r.L)}`;
+            }
+            if (r.quoteUnit === 'custom') {
+                return `人月含税 L = ${raw} × ${core.money(r.monthlyHours)} = ${core.money(r.L)}`;
+            }
+            return '';
+        }
+
+        function quoteUnitLabel(unit) {
+            if (unit === 'day') return '元/天';
+            if (unit === 'hour') return '元/时';
+            if (unit === 'custom') return '自选（元/时）';
+            return '元/月';
+        }
+
         const result = computed(() => {
             const r = core.compute(form.value, selectedRates.value);
             const leaveNote = r.salary > 0
                 ? `；年假 ${core.money(r.salary)} / 21.75 × 5 / 12 = ${core.money(r.annualLeave)}`
                 : '';
+            const conversionNote = buildQuoteConversionNote(r);
+            const conversionPrefix = conversionNote ? `${conversionNote}；` : '';
             return {
                 netQuoteText: core.money(r.M),
                 salaryText: core.money(r.salary),
                 bonusText: core.money(r.bonusMonthly),
                 socialText: core.money(r.social),
                 housingText: core.money(r.housing),
+                socialLabel: r.customInsurance ? '社保（自定义）' : '社保（参保地自动）',
+                housingLabel: r.customInsurance ? '公积金（自定义）' : '公积金（参保地自动）',
                 annualLeaveText: core.money(r.annualLeave),
                 welfareText: core.money(r.welfare),
                 laptopText: core.money(r.laptop),
@@ -276,8 +475,8 @@ createApp({
                 profitText: core.money(r.Z),
                 marginText: core.pct(r.margin),
                 formula: r.M > 0
-                    ? `M = ${core.money(r.L)} / 1.0672 = ${core.money(r.M)}；Y = 各项成本之和 = ${core.money(r.Y)}；GM% = ${core.money(r.Z)} / ${core.money(r.M)}${leaveNote}`
-                    : '—',
+                    ? `${conversionPrefix}M = ${core.money(r.L)} / 1.0672 = ${core.money(r.M)}；Y = 各项成本之和 = ${core.money(r.Y)}；GM% = ${core.money(r.Z)} / ${core.money(r.M)}${leaveNote}`
+                    : (conversionNote || '—'),
             };
         });
 
@@ -298,11 +497,22 @@ createApp({
             if (!target) return;
             const r = core.compute(form.value, selectedRates.value);
             const timestamp = new Date().toLocaleString();
+            const quoteLabel = quoteUnitLabel(r.quoteUnit);
+            const quotePart = r.quoteUnit === 'hour'
+                ? `含税报价 ${core.money(r.quoteRaw)} 元/时 → 人月 ¥${core.money(r.L)}`
+                : (r.quoteUnit === 'custom'
+                    ? `含税报价 ${core.money(r.quoteRaw)} 元/时（月小时数=${core.money(r.monthlyHours)}）→ 人月 ¥${core.money(r.L)}`
+                    : (r.quoteUnit === 'day'
+                        ? `含税报价 ${core.money(r.quoteRaw)} ${quoteLabel} → 人月 ¥${core.money(r.L)}`
+                        : `含税报价 ¥${core.money(r.L)}`));
+            const insurancePart = r.customInsurance
+                ? `自定义金险：社保基数 ¥${core.money(r.socialBase)} × ${core.formatPercentInput(r.socialCompanyRate, 2)}% = ¥${core.money(r.social)}；公积金基数 ¥${core.money(r.housingBase)} × ${core.formatPercentInput(r.housingCompanyRate, 0)}% = ¥${core.money(r.housing)}`
+                : `参保地 ${form.value.location || '—'}`;
             const line = [
                 `[GM测算 ${timestamp}]`,
-                `含税报价 ¥${core.money(r.L)}`,
+                quotePart,
                 `不含税 ¥${core.money(r.M)}`,
-                `参保地 ${form.value.location || '—'}`,
+                insurancePart,
                 `成本合计 ¥${core.money(r.Y)}（含年假 ¥${core.money(r.annualLeave)}）`,
                 `毛利额 ¥${core.money(r.Z)}`,
                 `毛利率 ${core.pct(r.margin)}`,
@@ -320,6 +530,8 @@ createApp({
 
         onMounted(() => {
             initMoneyDisplay();
+            monthlyHoursDisplay.value = core.formatMoneyInput(form.value.monthlyHours);
+            initCustomInsuranceDisplay();
             loadClients();
             loadLocations();
         });
@@ -329,19 +541,32 @@ createApp({
             locations,
             form,
             moneyDisplay,
+            monthlyHoursDisplay,
+            socialRateDisplay,
+            housingRateDisplay,
             locationQuery,
             locationDropdownOpen,
             locationHighlightIndex,
             filteredLocations,
             result,
             locationWarning,
+            quoteUnitWarning,
             onMoneyInput,
             onMoneyBlur,
+            onMonthlyHoursInput,
+            onMonthlyHoursBlur,
+            onSocialRateInput,
+            onSocialRateBlur,
+            onHousingRateInput,
+            onHousingRateBlur,
             onLocationInput,
+            onLocationFocus,
             onLocationBlur,
             pickLocation,
             moveLocationHighlight,
             confirmLocationHighlight,
+            toggleCustomInsurance,
+            resetForm,
             saveToRemark,
         };
     },
