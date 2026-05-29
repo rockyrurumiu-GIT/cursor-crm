@@ -194,6 +194,15 @@ function isValidGmPctInput(raw) {
     const n = parseFloat(normalized);
     return Number.isFinite(n) && n >= 0 && n <= 100;
 }
+/** GM% 展示/提交：数字部分自动补全 % 后缀 */
+function formatGmPctWithSymbol(raw) {
+    const s = String(raw || '').trim().replace(/％/g, '%');
+    if (!s) return '';
+    const digits = s.endsWith('%') ? s.slice(0, -1).trim() : s;
+    if (!digits) return '';
+    return digits + '%';
+}
+const GM_PCT_COMPLETE_RE = /^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)$/;
 /** 比率转百分比展示，与行内「79.55%」形式一致 */
 function formatRatioAsPercent(ratio) {
     if (!Number.isFinite(ratio)) return '—';
@@ -430,6 +439,7 @@ const rosterDetailApp = createApp({
         const emptyStateText = computed(() => {
             if (showOnlyChecked.value) return checkedCount.value ? '暂无符合筛选条件的勾选条目' : '暂无勾选条目';
             if (Object.values(filters).some((value) => String(value || '').trim() !== '')) return '暂无符合筛选条件的数据';
+            if (IS_GLOBAL_ROSTER) return '暂无数据，可通过「导入 CSV」批量维护；新增员工请进入对应客户的花名册';
             return '暂无数据，请点击「新增行」或「导入 CSV」';
         });
         const rosterFooter = computed(() => {
@@ -552,9 +562,29 @@ const rosterDetailApp = createApp({
             return 'text';
         };
         const isAmountField = (key) => ROSTER_AMOUNT_FIELD_KEYS.has(key);
+        const isGmPctField = (key) => key === 'gm_pct';
         const onAmountFieldInput = (key, e) => {
             form[key] = formatAmountThousandsInput(e && e.target ? e.target.value : '');
             markTouched(key);
+        };
+        const onGmPctFieldInput = (e) => {
+            let v = String(e && e.target ? e.target.value : '').replace(/％/g, '%').replace(/%/g, '').trim();
+            if (!v) {
+                form.gm_pct = '';
+            } else if (GM_PCT_COMPLETE_RE.test(v)) {
+                form.gm_pct = v + '%';
+            } else {
+                form.gm_pct = v;
+            }
+            markTouched('gm_pct');
+        };
+        const onGmPctFieldBlur = () => {
+            const v = String(form.gm_pct || '').trim();
+            if (!v) return;
+            if (!v.includes('%')) {
+                form.gm_pct = formatGmPctWithSymbol(v);
+            }
+            markTouched('gm_pct');
         };
         const clearDateField = (key) => {
             form[key] = '';
@@ -613,6 +643,7 @@ const rosterDetailApp = createApp({
                 .finally(() => { loading.value = false; });
         };
         const openAdd = () => {
+            if (IS_GLOBAL_ROSTER) return;
             editingId.value = null;
             formReadonly.value = false;
             calcFieldsLocked.value = false;
@@ -639,6 +670,8 @@ const rosterDetailApp = createApp({
                     form[f.key] = normalizeDateForInput(raw, false);
                 } else if (ROSTER_AMOUNT_FIELD_KEYS.has(f.key)) {
                     form[f.key] = formatAmountThousandsInput(raw);
+                } else if (f.key === 'gm_pct') {
+                    form[f.key] = formatGmPctWithSymbol(raw);
                 } else {
                     form[f.key] = raw;
                 }
@@ -652,6 +685,10 @@ const rosterDetailApp = createApp({
         };
         const saveForm = async () => {
             if (formReadonly.value) return;
+            if (!editingId.value && IS_GLOBAL_ROSTER) {
+                alert('整体花名册不支持新增员工，请进入对应客户的花名册创建。');
+                return;
+            }
             if (!editingId.value && missingRequiredFields.value.length) {
                 const missingLabels = missingRequiredFields.value.map((k) => requiredFieldLabelMap.value[k] || k);
                 alert(`请先完整填写必填项：${missingLabels.join('、')}`);
@@ -668,6 +705,7 @@ const rosterDetailApp = createApp({
             payload.monthly_quote_tax = normalizeAmountText(payload.monthly_quote_tax);
             payload.pre_tax_salary = normalizeAmountText(payload.pre_tax_salary);
             payload.gms = normalizeAmountText(payload.gms);
+            payload.gm_pct = formatGmPctWithSymbol(payload.gm_pct);
             const url = editingId.value
                 ? `/api/roster/${editingId.value}`
                 : (IS_GLOBAL_ROSTER ? '/api/roster' : `/api/clients/${CLIENT_ID}/roster`);
@@ -941,7 +979,7 @@ const rosterDetailApp = createApp({
                 }
                 const gmPctRaw = params.get('prefill_gm_pct');
                 if (gmPctRaw != null && String(gmPctRaw).trim() !== '') {
-                    form.gm_pct = String(gmPctRaw).trim();
+                    form.gm_pct = formatGmPctWithSymbol(gmPctRaw);
                 }
                 if (params.get('from_calc') === '1') {
                     calcFieldsLocked.value = true;
@@ -972,7 +1010,7 @@ const rosterDetailApp = createApp({
             IS_GLOBAL_ROSTER,
             rosterCustomerSelectOptions,
             openAdd, openEdit, openRosterDetail, formReadonly, calcFieldsLocked, saveForm, confirmDelete, cancelDelete, doDelete,
-            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, onAmountFieldInput, fieldInputType, markTouched, getFieldError,
+            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
             showRosterValidation,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,
             clearDateField, displayAmountInteger, displayRosterDate,

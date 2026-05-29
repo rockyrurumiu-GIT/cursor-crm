@@ -213,7 +213,7 @@
     <div class="max-w-[100vw] mx-auto px-3 py-4 md:px-6 flex-1 min-h-0 flex flex-col w-full">
         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-4 shrink-0">
             <div>
-                <a href="/customers" class="text-sm text-blue-600 hover:underline">← 返回客户列表</a>
+                <a href="/customers/roster" class="text-sm text-blue-600 hover:underline">← 返回花名册列表</a>
                 <h1 class="mt-2 text-xl md:text-2xl font-bold text-gray-900">
                     {{ brief.name || '加载中…' }}
                     <span class="text-gray-400 font-normal text-base">· 花名册</span>
@@ -222,7 +222,7 @@
                 <p class="text-sm text-gray-500 mt-1">总条目 {{ rows.length }} 条<span v-if="displayCountHint">{{ displayCountHint }}</span></p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <button type="button" @click="openAdd" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增行</button>
+                <button v-if="!IS_GLOBAL_ROSTER" type="button" @click="openAdd" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增行</button>
                 <button
                     type="button"
                     class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
@@ -507,6 +507,20 @@
                             ]"
                         />
                         <input
+                            v-else-if="isGmPctField(f.key)"
+                            :value="form[f.key]"
+                            type="text"
+                            inputmode="decimal"
+                            :disabled="formReadonly || (calcFieldsLocked && ['monthly_quote_tax','pre_tax_salary','gms','gm_pct'].includes(f.key))"
+                            @input="onGmPctFieldInput($event)"
+                            @blur="onGmPctFieldBlur"
+                            :class="[
+                                'crm-form-control',
+                                getFieldError(f.key) ? 'crm-form-control--error' : '',
+                                (calcFieldsLocked && ['monthly_quote_tax','pre_tax_salary','gms','gm_pct'].includes(f.key)) ? 'bg-gray-50' : '',
+                            ]"
+                        />
+                        <input
                             v-else
                             v-model="form[f.key]"
                             type="text"
@@ -601,5 +615,5 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/roster-detail.js?v=14"></script>
+<script src="/static/js/pages/roster-detail.js?v=16"></script>
 {% endblock %}
