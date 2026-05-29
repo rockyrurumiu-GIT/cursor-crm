@@ -498,23 +498,25 @@
                             :value="form[f.key]"
                             type="text"
                             inputmode="numeric"
-                            :disabled="formReadonly"
+                            :disabled="formReadonly || (calcFieldsLocked && ['monthly_quote_tax','pre_tax_salary','gms','gm_pct'].includes(f.key))"
                             @input="onAmountFieldInput(f.key, $event)"
                             :class="[
                                 'crm-form-control',
                                 getFieldError(f.key) ? 'crm-form-control--error' : '',
+                                (calcFieldsLocked && ['monthly_quote_tax','pre_tax_salary','gms','gm_pct'].includes(f.key)) ? 'bg-gray-50' : '',
                             ]"
                         />
                         <input
                             v-else
                             v-model="form[f.key]"
                             type="text"
-                            :disabled="formReadonly || f.key === 'salary_quote_ratio'"
+                            :disabled="formReadonly || f.key === 'salary_quote_ratio' || (calcFieldsLocked && ['monthly_quote_tax','pre_tax_salary','gms','gm_pct'].includes(f.key))"
                             @input="markTouched(f.key)"
                             @change="markTouched(f.key)"
                             :class="[
                                 'crm-form-control',
                                 getFieldError(f.key) ? 'crm-form-control--error' : '',
+                                (calcFieldsLocked && ['monthly_quote_tax','pre_tax_salary','gms','gm_pct'].includes(f.key)) ? 'bg-gray-50' : '',
                             ]"
                         />
                         <span v-if="getFieldError(f.key)" class="text-xs text-red-500">{{ getFieldError(f.key) }}</span>
@@ -599,5 +601,5 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/roster-detail.js?v=12"></script>
+<script src="/static/js/pages/roster-detail.js?v=14"></script>
 {% endblock %}

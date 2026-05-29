@@ -202,13 +202,16 @@
             </div>
 
             <div id="calc-remark" class="mt-4 pt-4 border-t">
-                <label class="block text-sm font-medium mb-1">保存测算结果到客户备注</label>
+                <label class="block text-sm font-medium mb-1">为以下客户创建新员工条目</label>
                 <div class="flex space-x-2 flex-wrap gap-y-2">
                     <select v-model="form.targetClientId" class="crm-form-control flex-1 min-w-[12rem]">
                         <option value="">-- 请选择客户 --</option>
                         <option v-for="c in clients" :key="c.id" :value="c.id">{{ c.name }}</option>
                     </select>
-                    <button type="button" @click="saveToRemark" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">追加到备注</button>
+                    <button type="button" @click="goCreateRosterEntry"
+                        :disabled="!canCreateRosterEntry"
+                        class="px-4 py-2 rounded text-white"
+                        :class="canCreateRosterEntry ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'">创建新员工</button>
                 </div>
             </div>
         </div>
@@ -443,13 +446,6 @@ createApp({
             return '';
         }
 
-        function quoteUnitLabel(unit) {
-            if (unit === 'day') return '元/天';
-            if (unit === 'hour') return '元/时';
-            if (unit === 'custom') return '自选（元/时）';
-            return '元/月';
-        }
-
         const result = computed(() => {
             const r = core.compute(form.value, selectedRates.value);
             const leaveNote = r.salary > 0
@@ -491,41 +487,28 @@ createApp({
                 .catch(() => { locations.value = []; });
         };
 
-        const saveToRemark = () => {
-            if (!form.value.targetClientId) return alert('请先选择目标客户');
-            const target = clients.value.find((c) => c.id == form.value.targetClientId);
-            if (!target) return;
+        const canCreateRosterEntry = computed(() => !!form.value.targetClientId);
+
+        const goCreateRosterEntry = () => {
+            if (!form.value.targetClientId) return;
             const r = core.compute(form.value, selectedRates.value);
-            const timestamp = new Date().toLocaleString();
-            const quoteLabel = quoteUnitLabel(r.quoteUnit);
-            const quotePart = r.quoteUnit === 'hour'
-                ? `含税报价 ${core.money(r.quoteRaw)} 元/时 → 人月 ¥${core.money(r.L)}`
-                : (r.quoteUnit === 'custom'
-                    ? `含税报价 ${core.money(r.quoteRaw)} 元/时（月小时数=${core.money(r.monthlyHours)}）→ 人月 ¥${core.money(r.L)}`
-                    : (r.quoteUnit === 'day'
-                        ? `含税报价 ${core.money(r.quoteRaw)} ${quoteLabel} → 人月 ¥${core.money(r.L)}`
-                        : `含税报价 ¥${core.money(r.L)}`));
-            const insurancePart = r.customInsurance
-                ? `自定义金险：社保基数 ¥${core.money(r.socialBase)} × ${core.formatPercentInput(r.socialCompanyRate, 2)}% = ¥${core.money(r.social)}；公积金基数 ¥${core.money(r.housingBase)} × ${core.formatPercentInput(r.housingCompanyRate, 0)}% = ¥${core.money(r.housing)}`
-                : `参保地 ${form.value.location || '—'}`;
-            const line = [
-                `[GM测算 ${timestamp}]`,
-                quotePart,
-                `不含税 ¥${core.money(r.M)}`,
-                insurancePart,
-                `成本合计 ¥${core.money(r.Y)}（含年假 ¥${core.money(r.annualLeave)}）`,
-                `毛利额 ¥${core.money(r.Z)}`,
-                `毛利率 ${core.pct(r.margin)}`,
-            ].join('；');
-            const newRemark = (target.remarks || '') + '\n' + line;
-            const fd = new FormData();
-            fd.append('name', target.name);
-            fd.append('phase', target.phase);
-            fd.append('remarks', newRemark);
-            fetch(`/api/clients/${target.id}`, { method: 'PUT', headers: authHeader(), body: fd }).then(() => {
-                alert('已追加至该客户备注中');
-                loadClients();
+            const params = new URLSearchParams({
+                roster_add: '1',
+                from_calc: '1',
             });
+            if (Number.isFinite(r.L) && r.L !== 0) {
+                params.set('prefill_monthly_quote_tax', String(Math.round(r.L)));
+            }
+            if (Number.isFinite(r.salary) && r.salary !== 0) {
+                params.set('prefill_pre_tax_salary', String(Math.round(r.salary)));
+            }
+            if (Number.isFinite(r.Z)) {
+                params.set('prefill_gms', String(Math.round(r.Z)));
+            }
+            if (Number.isFinite(r.margin)) {
+                params.set('prefill_gm_pct', (r.margin * 100).toFixed(2));
+            }
+            window.location.href = `/customers/roster/${form.value.targetClientId}?${params.toString()}`;
         };
 
         onMounted(() => {
@@ -567,7 +550,8 @@ createApp({
             confirmLocationHighlight,
             toggleCustomInsurance,
             resetForm,
-            saveToRemark,
+            canCreateRosterEntry,
+            goCreateRosterEntry,
         };
     },
 }).mount('#page-app');

@@ -7,6 +7,8 @@
 const { createApp, ref, onMounted, reactive, computed, watch, nextTick } = Vue;
 const CLIENT_ID = window.__ROSTER_CLIENT_ID__;
 const IS_GLOBAL_ROSTER = !CLIENT_ID || Number(CLIENT_ID) === 0;
+/** 与 GM 测算器一致：不含税月报价 = 含税月报价 ÷ 1.0672 */
+const TAX_DIVISOR = 1.0672;
 const STANDARD_FORM_FIELDS = [
     { key: 'serial_no', label: '序号' },
     { key: 'full_name', label: '姓名' },
@@ -197,6 +199,15 @@ function formatRatioAsPercent(ratio) {
     if (!Number.isFinite(ratio)) return '—';
     return (ratio * 100).toFixed(2) + '%';
 }
+const ROSTER_ADD_QUERY_KEYS = [
+    'roster_add',
+    'prefill_full_name',
+    'from_calc',
+    'prefill_monthly_quote_tax',
+    'prefill_pre_tax_salary',
+    'prefill_gms',
+    'prefill_gm_pct',
+];
 const rosterDetailApp = createApp({
     setup() {
         const rows = ref([]);
@@ -207,6 +218,7 @@ const rosterDetailApp = createApp({
         const showForm = ref(false);
         const editingId = ref(null);
         const formReadonly = ref(false);
+        const calcFieldsLocked = ref(false);
         const form = reactive(emptyForm());
         watch(
             () => [form.monthly_quote_tax, form.pre_tax_salary],
@@ -448,12 +460,14 @@ const rosterDetailApp = createApp({
             const rp = Math.round(sumPre);
             const rg = Math.round(sumGm);
             const salaryRatio = rq > 0 ? rp / rq : NaN;
-            const gmRatio = rq > 0 ? rg / rq : NaN;
+            const netQuoteTotal = rq / TAX_DIVISOR;
+            const gmRatio = netQuoteTotal > 0 ? rg / netQuoteTotal : NaN;
             const avgQuote = countQuote > 0 ? sumQuote / countQuote : NaN;
             const avgPre = countPre > 0 ? sumPre / countPre : NaN;
             const avgGm = countGm > 0 ? sumGm / countGm : NaN;
             const avgSalaryRatio = Number.isFinite(avgQuote) && avgQuote > 0 ? avgPre / avgQuote : NaN;
-            const avgGmRatio = Number.isFinite(avgQuote) && avgQuote > 0 ? avgGm / avgQuote : NaN;
+            const netQuoteAvg = Number.isFinite(avgQuote) ? avgQuote / TAX_DIVISOR : NaN;
+            const avgGmRatio = netQuoteAvg > 0 ? avgGm / netQuoteAvg : NaN;
             return {
                 quote: formatYuanInteger(sumQuote),
                 pre: formatYuanInteger(sumPre),
@@ -601,6 +615,7 @@ const rosterDetailApp = createApp({
         const openAdd = () => {
             editingId.value = null;
             formReadonly.value = false;
+            calcFieldsLocked.value = false;
             Object.assign(form, emptyForm());
             clearTouched();
             const nextNo = nextSerialNo();
@@ -677,6 +692,7 @@ const rosterDetailApp = createApp({
             }
             showForm.value = false;
             formReadonly.value = false;
+            calcFieldsLocked.value = false;
             loadRows();
         };
         const confirmDelete = (row) => {
@@ -893,15 +909,14 @@ const rosterDetailApp = createApp({
         const stripRosterAddQueryFromUrl = () => {
             try {
                 const params = new URLSearchParams(window.location.search);
-                if (!params.has('roster_add') && !params.has('prefill_full_name')) return;
-                params.delete('roster_add');
-                params.delete('prefill_full_name');
+                if (!ROSTER_ADD_QUERY_KEYS.some((k) => params.has(k))) return;
+                ROSTER_ADD_QUERY_KEYS.forEach((k) => params.delete(k));
                 const qs = params.toString();
                 const newUrl = window.location.pathname + (qs ? `?${qs}` : '') + (window.location.hash || '');
                 window.history.replaceState(null, '', newUrl);
             } catch (e) { /* ignore */ }
         };
-        const applyRosterAddFromQuery = () => {
+        const applyRosterAddFromQuery = async () => {
             if (IS_GLOBAL_ROSTER) return;
             try {
                 const params = new URLSearchParams(window.location.search);
@@ -912,6 +927,28 @@ const rosterDetailApp = createApp({
                 if (nameDecoded) {
                     form.full_name = nameDecoded;
                 }
+                const quoteRaw = params.get('prefill_monthly_quote_tax');
+                if (quoteRaw != null && String(quoteRaw).trim() !== '') {
+                    form.monthly_quote_tax = formatAmountThousandsInput(quoteRaw);
+                }
+                const salaryRaw = params.get('prefill_pre_tax_salary');
+                if (salaryRaw != null && String(salaryRaw).trim() !== '') {
+                    form.pre_tax_salary = formatAmountThousandsInput(salaryRaw);
+                }
+                const gmsRaw = params.get('prefill_gms');
+                if (gmsRaw != null && String(gmsRaw).trim() !== '') {
+                    form.gms = formatAmountThousandsInput(gmsRaw);
+                }
+                const gmPctRaw = params.get('prefill_gm_pct');
+                if (gmPctRaw != null && String(gmPctRaw).trim() !== '') {
+                    form.gm_pct = String(gmPctRaw).trim();
+                }
+                if (params.get('from_calc') === '1') {
+                    calcFieldsLocked.value = true;
+                }
+                await nextTick();
+            } catch (e) {
+                console.error('applyRosterAddFromQuery failed:', e);
             } finally {
                 stripRosterAddQueryFromUrl();
             }
@@ -920,7 +957,7 @@ const rosterDetailApp = createApp({
             await loadBrief();
             await loadRows();
             loadCrmClients();
-            applyRosterAddFromQuery();
+            await applyRosterAddFromQuery();
             window.crmScheduleTableColumnResize?.();
             nextTick(() => {
                 const table = document.querySelector('.roster-table');
@@ -934,7 +971,7 @@ const rosterDetailApp = createApp({
             showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors, showOnlyChecked, displayCountHint, emptyStateText,
             IS_GLOBAL_ROSTER,
             rosterCustomerSelectOptions,
-            openAdd, openEdit, openRosterDetail, formReadonly, saveForm, confirmDelete, cancelDelete, doDelete,
+            openAdd, openEdit, openRosterDetail, formReadonly, calcFieldsLocked, saveForm, confirmDelete, cancelDelete, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, onAmountFieldInput, fieldInputType, markTouched, getFieldError,
             showRosterValidation,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,
