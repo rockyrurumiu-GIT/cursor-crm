@@ -130,6 +130,8 @@ def contact_to_dict(c, client_name: str = "") -> Dict[str, Any]:
         "client_name": client_name,
         "name": c.name or "",
         "title": c.title or "",
+        "city": (getattr(c, "city", None) or "").strip(),
+        "created_by": (getattr(c, "created_by", None) or "").strip(),
         "phone": c.phone or "",
         "email": c.email or "",
         "tags": c.tags or "",

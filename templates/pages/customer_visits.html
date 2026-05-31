@@ -182,9 +182,12 @@
         </div>
     </div>
 
-    <div v-if="showForm" class="crm-esc-modal fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="showForm=false">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-            <h3 class="font-bold text-lg mb-4">{{ form.id ? '修改拜访记录' : '新增拜访记录' }}</h3>
+    <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-50" @click.self="showForm=false">
+        <div class="crm-form-modal-panel max-w-2xl" @click.stop>
+            <div class="crm-form-modal-header">
+                <h3 class="font-bold text-lg">{{ form.id ? '修改拜访记录' : '新增拜访记录' }}</h3>
+            </div>
+            <div class="crm-form-modal-body">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div class="sm:col-span-2">
                     <label class="text-xs text-gray-500">客户 *</label>
@@ -231,7 +234,8 @@
                 <div class="sm:col-span-2"><label class="text-xs text-gray-500">拜访纪要</label><textarea v-model="form.visit_summary" rows="3" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
                 <div class="sm:col-span-2"><label class="text-xs text-gray-500">下一步行动</label><textarea v-model="form.next_plan" rows="2" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
             </div>
-            <div class="flex gap-2 mt-4">
+            </div>
+            <div class="crm-form-modal-footer">
                 <button type="button" @click="showForm=false" class="flex-1 bg-gray-100 py-2 rounded">取消</button>
                 <button type="button" @click="save" class="flex-1 bg-[#0969da] text-white py-2 rounded">保存</button>
             </div>

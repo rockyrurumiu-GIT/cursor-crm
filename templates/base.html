@@ -519,6 +519,115 @@
             color: #6b7280;
             margin-bottom: 0.25rem;
         }
+        /* 新建/编辑表单弹窗：顶栏下 5.5rem、底边 2.5rem 留白（与花名册/交付详情一致） */
+        .crm-form-modal-overlay {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            overflow-y: auto;
+            background: rgba(0, 0, 0, 0.45);
+            padding: 5.5rem 1rem 2.5rem;
+            box-sizing: border-box;
+        }
+        .crm-form-modal-panel {
+            width: 100%;
+            max-height: calc(100vh - 8rem);
+            margin-bottom: auto;
+            border-radius: 0.5rem;
+            background: #ffffff;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .crm-form-modal-header {
+            flex-shrink: 0;
+            padding: 1.5rem 1.5rem 0.75rem;
+        }
+        .crm-form-modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 0 1.5rem 1rem;
+        }
+        .crm-form-modal-footer {
+            flex-shrink: 0;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid #f3f4f6;
+            display: flex;
+            gap: 0.5rem;
+        }
+        /* 输入框灰色提示 + 红色必填星号（placeholder 无法分段着色，用 overlay 实现） */
+        .crm-input-hint-wrap {
+            position: relative;
+        }
+        .crm-input-hint-wrap > input,
+        .crm-input-hint-wrap > textarea {
+            width: 100%;
+        }
+        .crm-input-hint-wrap > input::placeholder,
+        .crm-input-hint-wrap > textarea::placeholder {
+            color: transparent;
+        }
+        .crm-input-hint-label {
+            position: absolute;
+            left: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: #9ca3af;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+        }
+        .crm-input-hint-wrap > textarea + .crm-input-hint-label {
+            top: 0.5rem;
+            transform: none;
+        }
+        .crm-input-hint-label .crm-req-star {
+            color: #ef4444;
+        }
+        .crm-input-hint-wrap > input:focus + .crm-input-hint-label,
+        .crm-input-hint-wrap > input:not(:placeholder-shown) + .crm-input-hint-label,
+        .crm-input-hint-wrap > textarea:focus + .crm-input-hint-label,
+        .crm-input-hint-wrap > textarea:not(:placeholder-shown) + .crm-input-hint-label {
+            display: none;
+        }
+        /* 右侧详情边栏：顶贴导航栏底、底贴窗口底（高度由 --crm-header-height 动态同步） */
+        :root {
+            --crm-header-height: 3.5rem;
+        }
+        .crm-right-drawer-backdrop {
+            position: fixed;
+            top: var(--crm-header-height);
+            right: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 150;
+        }
+        .crm-right-drawer {
+            position: fixed;
+            top: var(--crm-header-height);
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            max-width: 28rem;
+            z-index: 160;
+            background: #ffffff;
+            box-shadow: -8px 0 24px rgba(15, 23, 42, 0.12);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border-top-left-radius: 0.75rem;
+            border-bottom-left-radius: 0.75rem;
+            transform: translateX(100%);
+            transition: transform 0.2s ease;
+        }
+        .crm-right-drawer.open {
+            transform: translateX(0);
+        }
         /* 全局下拉框：浅蓝描边 + 圆角 + 右侧双箭头（表单 / 筛选 / 弹窗统一） */
         #main-shell select:not([multiple]):not([size]),
         select.crm-form-control,
@@ -1196,6 +1305,31 @@
             return b ? { 'Authorization': 'Basic ' + b } : {};
         };
 
+        window.crmSyncHeaderHeight = function () {
+            var header = document.querySelector('#main-shell > header');
+            if (!header) {
+                document.documentElement.style.setProperty('--crm-header-height', '3.5rem');
+                return;
+            }
+            var shell = document.getElementById('main-shell');
+            if (shell && shell.classList.contains('hidden')) {
+                return;
+            }
+            document.documentElement.style.setProperty(
+                '--crm-header-height',
+                header.getBoundingClientRect().bottom + 'px'
+            );
+        };
+        window.addEventListener('resize', window.crmSyncHeaderHeight);
+        document.addEventListener('DOMContentLoaded', function () {
+            window.crmSyncHeaderHeight();
+            var header = document.querySelector('#main-shell > header');
+            if (header && typeof ResizeObserver !== 'undefined') {
+                new ResizeObserver(window.crmSyncHeaderHeight).observe(header);
+            }
+        });
+        document.addEventListener('crm-shell-ready', window.crmSyncHeaderHeight);
+
         window.crmHasPermission = function (code) {
             if (window.crmAuthMode !== 'rbac') {
                 return true;
@@ -1695,6 +1829,7 @@
                 shell.removeAttribute('aria-hidden');
                 shell.style.pointerEvents = '';
                 shell.style.display = '';
+                if (window.crmSyncHeaderHeight) { window.crmSyncHeaderHeight(); }
                 window.dispatchEvent(new Event('crm-shell-ready'));
             }
 

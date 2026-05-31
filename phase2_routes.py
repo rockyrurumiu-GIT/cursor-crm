@@ -51,6 +51,8 @@ class ContactBody(BaseModel):
     client_id: int
     name: str
     title: str = ""
+    city: str = ""
+    created_by: str = ""
     phone: str = ""
     email: str = ""
     tags: str = ""
@@ -389,6 +391,7 @@ def register_phase2_routes(
             client_id=body.client_id,
             name=body.name.strip(),
             title=body.title,
+            city=(body.city or "").strip(),
             phone=body.phone,
             email=body.email,
             tags=body.tags,
@@ -396,6 +399,7 @@ def register_phase2_routes(
             superior_contact=(body.superior_contact or "").strip(),
             acquisition_channel=channel,
             description=(body.description or "").strip(),
+            created_by=(body.created_by or "").strip(),
             created_at=datetime.now(),
         )
         db.add(ct)
@@ -429,6 +433,8 @@ def register_phase2_routes(
         ct.client_id = body.client_id
         ct.name = body.name.strip()
         ct.title = body.title
+        ct.city = (body.city or "").strip()
+        ct.created_by = (body.created_by or "").strip()
         ct.phone = body.phone
         ct.email = body.email
         ct.tags = body.tags

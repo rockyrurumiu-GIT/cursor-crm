@@ -3,33 +3,68 @@
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
-    /* 客户列表横向滚动；操作列固定最小宽度避免挤压 */
+    /* 客户列表横向滚动 */
     #page-app .customers-table {
         width: max-content;
         min-width: 100%;
         table-layout: auto;
     }
-    #page-app .customers-table .customers-op-col {
-        width: 1%;
-        min-width: calc(23rem * 2 / 3 * 3 / 5);
+    #page-app .customers-table .customers-handoff-col {
+        width: calc(6.5rem * 3 / 4);
+        min-width: calc(6.5rem * 3 / 4);
+        max-width: calc(6.5rem * 3 / 4);
         white-space: nowrap;
-        vertical-align: middle;
-        overflow: visible !important;
-        text-overflow: clip !important;
-        text-align: center;
+        padding-left: 0.25rem !important;
+        padding-right: 0.25rem !important;
     }
-    #page-app .customers-table th.customers-op-col,
-    #page-app .customers-table td.customers-op-col {
-        position: sticky;
-        right: 0;
-        border-left: 1px solid #e5e7eb;
-        box-shadow: -8px 0 16px -10px rgba(15, 23, 42, 0.18);
+    #page-app .customers-table td.customers-handoff-col {
+        text-align: left;
     }
-    #page-app .customers-table thead th.customers-op-col {
-        z-index: 15;
+    #page-app .opp-drawer-section-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #1f2328;
+        margin-bottom: 8px;
     }
-    #page-app .customers-table tbody td.customers-op-col {
-        z-index: 8;
+    #page-app .opp-drawer-field {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    #page-app .opp-drawer-field:last-child {
+        border-bottom: none;
+    }
+    #page-app .opp-drawer-field-label {
+        width: 7rem;
+        flex-shrink: 0;
+        color: #656d76;
+        font-size: 13px;
+    }
+    #page-app .opp-drawer-field-value {
+        flex: 1;
+        min-width: 0;
+        color: #1f2328;
+        font-size: 13px;
+        word-break: break-word;
+    }
+    #page-app .customers-toolbar .customers-toolbar-control {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 2.25rem;
+        min-height: 2.25rem;
+        padding: 0 1rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        font-weight: 500;
+        border-radius: 0.5rem;
+        white-space: nowrap;
+    }
+    #page-app .customers-toolbar select.customers-toolbar-control {
+        padding-right: 2rem;
+        width: 100%;
     }
 </style>
 {% endblock %}
@@ -39,7 +74,7 @@
     <div class="container mx-auto p-6 max-w-[1280px] space-y-4">
         <div class="flex justify-between items-center flex-wrap gap-2">
             <h1 class="text-2xl font-bold text-gray-900">客户列表</h1>
-            <div class="flex items-center flex-wrap gap-2">
+            <div class="flex items-center flex-wrap gap-2 customers-toolbar">
                 <span v-if="filterPhase" class="inline-flex items-center h-9 bg-blue-100 text-blue-700 px-3 rounded-lg text-sm font-medium">
                     筛选: {{ filterPhase }} <button type="button" @click="clearPhase" class="ml-1 text-red-500">×</button>
                 </span>
@@ -47,7 +82,7 @@
                     交接: {{ handoffFilterLabel }} <button type="button" @click="clearHandoffFilter" class="ml-1 text-red-500">×</button>
                 </span>
                 <div class="min-w-[7.5rem] shrink-0">
-                    <select v-model="filterHandoffQuick" @change="applyHandoffFilter" class="crm-form-control">
+                    <select v-model="filterHandoffQuick" @change="applyHandoffFilter" class="crm-form-control customers-toolbar-control">
                         <option value="">交接状态</option>
                         <option value="pending_review">待审</option>
                         <option value="approved">已通过</option>
@@ -56,11 +91,11 @@
                     </select>
                 </div>
                 <a href="/customers/new"
-                    class="inline-flex items-center justify-center h-9 px-4 text-sm font-medium rounded-lg border border-blue-600 bg-blue-600 text-white hover:bg-blue-700">+ 新增客户</a>
+                    class="customers-toolbar-control border border-blue-600 bg-blue-600 text-white hover:bg-blue-700">+ 新增客户</a>
                 <a href="/customers/reviews"
-                    class="inline-flex items-center justify-center h-9 px-4 text-sm font-medium rounded-lg border border-amber-500 bg-white text-amber-700 hover:bg-amber-50">待审交接</a>
+                    class="customers-toolbar-control border border-amber-500 bg-white text-amber-700 hover:bg-amber-50">待审交接</a>
                 <button type="button" @click="exportCSV"
-                    class="inline-flex items-center justify-center h-9 px-4 text-sm font-medium rounded-lg border border-blue-600 bg-white text-blue-600 hover:bg-blue-50">导出全量名单 (CSV)</button>
+                    class="customers-toolbar-control border border-blue-600 bg-white text-blue-600 hover:bg-blue-50">导出全量名单 (CSV)</button>
             </div>
         </div>
 
@@ -76,10 +111,10 @@
                         <th class="crm-th">预估金额</th>
                         <th class="crm-th">城市</th>
                         <th class="crm-th">首要联系人</th>
-                        <th class="crm-th">创建时间</th>
                         <th class="crm-th">商机</th>
-                        <th class="crm-th">交接状态</th>
-                        <th class="crm-th customers-op-col">操作</th>
+                        <th class="crm-th customers-handoff-col">交接状态</th>
+                        <th class="crm-th">创建时间</th>
+                        <th class="crm-th crm-sticky-right-op">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -93,18 +128,24 @@
                         <td class="crm-td">{{ fmtAmount(c) }}</td>
                         <td class="crm-td">{{ fmtDash(c.city) }}</td>
                         <td class="crm-td">{{ fmtPrimaryContact(c) }}</td>
+                        <td class="crm-td">
+                            <template v-if="clientOpportunities(c.id).length">
+                                <template v-for="(o, i) in clientOpportunities(c.id)" :key="o.id">
+                                    <button type="button" class="text-[#0969da] hover:underline" @click="openOppDrawer(o, c)">{{ o.name || '—' }}</button>
+                                    <span v-if="i < clientOpportunities(c.id).length - 1">、</span>
+                                </template>
+                            </template>
+                            <span v-else class="text-gray-400">—</span>
+                        </td>
+                        <td class="crm-td customers-handoff-col">
+                            <a :href="`/customers/${c.id}/handoff`"
+                                :class="handoffBadge(handoffEntry(c.id) ? handoffEntry(c.id).status : 'none')"
+                                class="inline-block px-2 py-1 rounded text-xs hover:underline">{{ handoffEntry(c.id) ? handoffEntry(c.id).status_label : '未提交' }}</a>
+                        </td>
                         <td class="crm-td text-gray-500 whitespace-nowrap">{{ formatDateOnly(c.created_at) }}</td>
-                        <td class="crm-td">
-                            <div class="crm-cell-clip" :title="fmtOpportunities(c.id)">{{ fmtOpportunities(c.id) }}</div>
-                        </td>
-                        <td class="crm-td">
-                            <span v-if="handoffEntry(c.id)" :class="handoffBadge(handoffEntry(c.id).status)" class="px-2 py-1 rounded text-xs">{{ handoffEntry(c.id).status_label }}</span>
-                            <span v-else class="text-gray-400 text-xs">未提交</span>
-                        </td>
-                        <td class="crm-td customers-op-col">
+                        <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div class="crm-op-actions">
                                 <button type="button" @click="openDetail(c)" class="crm-op-btn-detail">详情</button>
-                                <a :href="`/customers/${c.id}/handoff`" class="crm-op-btn-handoff">交接</a>
                                 <a :href="`/customers/${c.id}/edit`" class="crm-op-btn-edit">修改</a>
                                 <button type="button" @click="confirmDelete(c)" class="crm-op-btn-delete">删除</button>
                             </div>
@@ -117,7 +158,7 @@
     </div>
 
     <div v-if="showDetail" class="crm-esc-modal fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-6 sm:p-8">
-        <div class="bg-white rounded-lg shadow-2xl w-[min(90vw,1200px)] max-h-[calc(100vh-5rem)] flex flex-col">
+        <div class="bg-white rounded-lg shadow-2xl w-[min(90vw,1200px)] max-h-[calc(100vh-5rem)] flex flex-col overflow-hidden">
             <div class="p-4 border-b flex justify-between items-center bg-gray-50 shrink-0">
                 <h3 class="text-xl font-bold">{{ selectedClient.name }} - 全景档案</h3>
                 <button type="button" @click="showDetail=false" class="text-gray-500 hover:text-black text-2xl">×</button>
@@ -184,38 +225,99 @@
                         <textarea v-model="selectedClient.remarks" class="w-full h-32 p-2 border rounded text-sm bg-yellow-50" placeholder="点击保存按钮同步修改..."></textarea>
                         <button type="button" @click="updateClient(selectedClient)" class="mt-2 w-full bg-orange-500 text-white text-sm py-1 rounded">保存备注及阶段修改</button>
                     </div>
-                    <div>
-                        <h4 class="font-bold border-l-4 border-gray-400 pl-2 mb-4">字段变更记录 (审计)</h4>
-                        <div class="text-xs space-y-3">
-                            <div v-for="log in details.logs" :key="log.id" class="flex items-start">
-                                <div class="w-2 h-2 bg-gray-300 rounded-full mt-1.5 mr-2"></div>
-                                <div class="flex-1">
-                                    <p class="text-gray-400">{{ formatDate(log.created_at) }} - {{ log.operator }}</p>
-                                    <p class="text-gray-700">{{ log.action }}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div v-if="showAddVisit" class="crm-esc-modal fixed inset-0 z-[210] bg-black/40 flex items-center justify-center p-6">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
-            <h3 class="font-bold mb-4">新增拜访记录</h3>
-            <div class="space-y-3">
+    <div v-if="showAddVisit" class="crm-esc-modal crm-form-modal-overlay z-[210]" @click.self="showAddVisit=false">
+        <div class="crm-form-modal-panel max-w-md" @click.stop>
+            <div class="crm-form-modal-header">
+                <h3 class="font-bold">新增拜访记录</h3>
+            </div>
+            <div class="crm-form-modal-body space-y-3">
                 <input v-model="visitForm.date" type="date" class="w-full p-2 border rounded">
                 <input v-model="visitForm.location" placeholder="地点" class="w-full p-2 border rounded">
                 <textarea v-model="visitForm.content" placeholder="内容" rows="4" class="w-full p-2 border rounded"></textarea>
                 <input type="file" @change="onVisitFileChange" class="text-sm">
             </div>
-            <div class="flex gap-2 mt-4">
+            <div class="crm-form-modal-footer">
                 <button type="button" @click="showAddVisit=false" class="flex-1 bg-gray-200 py-2 rounded">取消</button>
                 <button type="button" @click="submitVisit" class="flex-1 bg-blue-600 text-white py-2 rounded">保存</button>
             </div>
         </div>
     </div>
+
+    <div v-if="showOppDrawer" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeOppDrawer"></div>
+    <aside v-if="showOppDrawer && selectedOpp" class="crm-esc-modal crm-right-drawer open">
+        <div class="flex items-start justify-between border-b px-4 py-4 shrink-0">
+            <div class="min-w-0 pr-3">
+                <h3 class="text-lg font-semibold text-gray-900 truncate">{{ selectedOpp.name || '—' }}</h3>
+                <p class="text-xs text-gray-500 mt-1">创建于 {{ formatDateOnly(selectedOpp.created_at) }}</p>
+            </div>
+            <button type="button" @click="closeOppDrawer" class="text-2xl leading-none text-gray-400 hover:text-gray-700 shrink-0" aria-label="关闭">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto px-4 py-3 space-y-5 text-sm">
+            <section>
+                <div class="opp-drawer-section-title">商机</div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">预估单价(人月)</div>
+                    <div class="opp-drawer-field-value">{{ displayAmount(selectedOpp.amount) }}</div>
+                </div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">预估当年金额</div>
+                    <div class="opp-drawer-field-value">{{ displayAmount(selectedOpp.estimated_current_year_amount) }}</div>
+                </div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">赢单率</div>
+                    <div class="opp-drawer-field-value">{{ displayWinRate(selectedOpp.probability) }}</div>
+                </div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">阶段</div>
+                    <div class="opp-drawer-field-value">
+                        <span :class="oppStageBadgeClass(selectedOpp.stage)" class="inline-block px-2 py-0.5 rounded text-xs">{{ selectedOpp.stage_label || '—' }}</span>
+                    </div>
+                </div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">预计成交日期</div>
+                    <div class="opp-drawer-field-value">{{ formatDateOnly(selectedOpp.expected_close_date) }}</div>
+                </div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">下一步动作</div>
+                    <div class="opp-drawer-field-value whitespace-pre-wrap">{{ selectedOpp.remarks || '—' }}</div>
+                </div>
+            </section>
+            <section>
+                <div class="opp-drawer-section-title">关联</div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">客户</div>
+                    <div class="opp-drawer-field-value">
+                        <a v-if="relatedClient && relatedClient.id" :href="`/customers/${relatedClient.id}/handoff`" class="text-[#0969da] hover:underline">{{ selectedOpp.client_name || relatedClient.name || '—' }}</a>
+                        <span v-else>{{ selectedOpp.client_name || '—' }}</span>
+                    </div>
+                </div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">首要联系人</div>
+                    <div class="opp-drawer-field-value">{{ fmtPrimaryContact(relatedClient) }}</div>
+                </div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">负责人</div>
+                    <div class="opp-drawer-field-value">{{ selectedOpp.owner || '—' }}</div>
+                </div>
+            </section>
+            <section>
+                <div class="opp-drawer-section-title">系统</div>
+                <div class="opp-drawer-field">
+                    <div class="opp-drawer-field-label">创建时间</div>
+                    <div class="opp-drawer-field-value">{{ formatDateOnly(selectedOpp.created_at) }}</div>
+                </div>
+            </section>
+        </div>
+        <div class="border-t px-4 py-3 flex justify-end gap-2 shrink-0">
+            <button type="button" @click="closeOppDrawer" class="rounded-lg border px-4 py-2 text-sm">关闭</button>
+            <a href="/opportunity/leads" class="rounded-lg bg-[#0969da] px-4 py-2 text-sm text-white hover:bg-[#0550ae]">在商机管理中打开</a>
+        </div>
+    </aside>
 
     <div v-if="showDelete" class="crm-esc-modal fixed inset-0 z-[210] bg-black/50 flex items-center justify-center p-6">
         <div class="bg-white p-6 rounded shadow-lg w-80 text-center">
@@ -236,6 +338,16 @@
 <script>
 const { createApp, ref, computed, onMounted } = Vue;
 
+function parseAmountDigits(raw) {
+    return String(raw || '').replace(/[^\d]/g, '');
+}
+
+function formatAmountThousands(raw) {
+    const digits = parseAmountDigits(raw);
+    if (!digits) return '';
+    return Number(digits).toLocaleString('zh-CN');
+}
+
 createApp({
     setup() {
         const params = new URLSearchParams(window.location.search);
@@ -250,8 +362,11 @@ createApp({
         const showDetail = ref(false);
         const showAddVisit = ref(false);
         const showDelete = ref(false);
+        const showOppDrawer = ref(false);
+        const selectedOpp = ref(null);
+        const relatedClient = ref(null);
         const selectedClient = ref({});
-        const details = ref({ visits: [], logs: [] });
+        const details = ref({ visits: [] });
         const deleteCaptcha = ref('');
         const deleteInput = ref('');
         const clientToDelete = ref(null);
@@ -290,13 +405,29 @@ createApp({
                     if (cid == null) continue;
                     const key = String(cid);
                     if (!map[key]) map[key] = [];
-                    const name = (o.name || '').trim();
-                    if (name) map[key].push(name);
+                    map[key].push(o);
                 }
                 opportunitiesByClient.value = map;
             } else {
                 opportunitiesByClient.value = {};
             }
+        };
+
+        const clientOpportunities = (clientId) => opportunitiesByClient.value[String(clientId)] || [];
+
+        const openOppDrawer = (opp, client) => {
+            selectedOpp.value = { ...opp };
+            relatedClient.value = client ? { ...client } : null;
+            showOppDrawer.value = true;
+            if (window.crmSyncHeaderHeight) {
+                requestAnimationFrame(() => window.crmSyncHeaderHeight());
+            }
+        };
+
+        const closeOppDrawer = () => {
+            showOppDrawer.value = false;
+            selectedOpp.value = null;
+            relatedClient.value = null;
         };
 
         const applyHandoffFilter = () => {
@@ -317,11 +448,12 @@ createApp({
         const handoffEntry = (cid) => handoffMap.value[String(cid)] || null;
 
         const handoffBadge = (s) => ({
-            draft: 'bg-gray-100 text-gray-700',
+            none: 'bg-red-100 text-red-800',
+            draft: 'bg-gray-100 text-gray-600',
             pending_review: 'bg-amber-100 text-amber-800',
             rejected: 'bg-red-100 text-red-800',
             approved: 'bg-green-100 text-green-800',
-        }[s] || 'bg-gray-100');
+        }[s] || 'bg-gray-100 text-gray-600');
 
         const clearPhase = () => {
             filterPhase.value = '';
@@ -365,10 +497,21 @@ createApp({
             const pad = (n) => String(n).padStart(2, '0');
             return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
         };
-        const fmtOpportunities = (clientId) => {
-            const names = opportunitiesByClient.value[String(clientId)] || [];
-            return names.length ? names.join('、') : '—';
+        const displayAmount = (raw) => {
+            const formatted = formatAmountThousands(raw);
+            return formatted || '—';
         };
+        const displayWinRate = (raw) => {
+            const v = String(raw || '').trim();
+            return v ? `${v}%` : '—';
+        };
+        const oppStageBadgeClass = (stage) => ({
+            won: 'bg-green-50 text-green-800',
+            lost: 'bg-gray-100 text-gray-600',
+            negotiating: 'bg-purple-50 text-purple-800',
+            proposal: 'bg-indigo-50 text-indigo-800',
+            qualifying: 'bg-amber-50 text-amber-800',
+        }[stage] || 'bg-blue-50 text-blue-800');
         const hasPrimaryContact = (c) => !!(c && (
             (c.contact_name && String(c.contact_name).trim()) ||
             (c.contact_info && String(c.contact_info).trim()) ||
@@ -471,18 +614,19 @@ createApp({
 
         const isImage = (path) => /\.(jpg|jpeg|png|gif|webp)$/i.test(path);
         const viewFull = (path) => window.crmOpenAuthenticatedFile(path);
-        const formatDate = (ds) => new Date(ds).toLocaleString();
 
         onMounted(loadClients);
 
         return {
             clients, handoffMap, filterPhase, filterHandoff, filterHandoffQuick, handoffFilterLabel,
-            showDetail, showAddVisit, showDelete, selectedClient, details,
+            showDetail, showAddVisit, showDelete, showOppDrawer, selectedOpp, relatedClient,
+            selectedClient, details,
             deleteCaptcha, deleteInput, visitForm, onVisitFileChange,
             loadClients, clearPhase, applyHandoffFilter, clearHandoffFilter, phaseColor, handoffEntry, handoffBadge,
-            fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, fmtOpportunities, hasPrimaryContact,
+            clientOpportunities, openOppDrawer, closeOppDrawer,
+            fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, displayAmount, displayWinRate, oppStageBadgeClass, hasPrimaryContact,
             openDetail, updateClient, confirmDelete, executeDelete,
-            submitVisit, exportCSV, isImage, viewFull, formatDate, visitAttachmentUrls
+            submitVisit, exportCSV, isImage, viewFull, visitAttachmentUrls
         };
     }
 }).mount('#page-app');

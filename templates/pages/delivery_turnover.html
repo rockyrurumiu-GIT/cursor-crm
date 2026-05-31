@@ -1023,13 +1023,13 @@
         </div>
     </div>
 
-    <div v-if="showAddModal" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+    <div v-if="showAddModal" class="crm-esc-modal crm-form-modal-overlay z-50">
+        <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ addFormReadonly ? '离职档案详情' : (editingId != null ? '修改离职档案' : '新增离职档案行') }}</h3>
                 <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="closeAddForm">&times;</button>
             </div>
-            <div class="overflow-y-auto p-5">
+            <div class="flex-1 min-h-0 overflow-y-auto p-5">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                     <label class="flex flex-col gap-1"><span class="text-gray-600">姓名<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.full_name" class="crm-form-control" :disabled="addFormReadonly" /></label>
                     <label class="flex flex-col gap-1"><span class="text-gray-600">联系方式<span class="turnover-form-required-star" aria-hidden="true">*</span></span><input v-model.trim="addForm.contact_info" class="crm-form-control" :disabled="addFormReadonly" /></label>

@@ -4,8 +4,6 @@
 <style>
     .spc-tab { border-bottom: 2px solid transparent; color: #656d76; }
     .spc-tab.active { border-color: #0969da; color: #0969da; font-weight: 600; }
-    .spc-drawer { transform: translateX(100%); transition: transform 0.2s ease; }
-    .spc-drawer.open { transform: translateX(0); }
     .spc-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #f6f8fa; border: 1px solid #d0d7de; }
     .spc-matrix th, .spc-matrix td { border: 1px solid #d0d7de; padding: 8px 10px; font-size: 13px; }
     .spc-matrix th { background: #f6f8fa; font-weight: 600; }
@@ -201,8 +199,8 @@
 </div>
 
 <!-- Drawer overlay -->
-<div id="spc-drawer-backdrop" class="fixed inset-0 z-[150] hidden bg-black/40"></div>
-<aside id="spc-drawer" class="spc-drawer fixed top-0 right-0 z-[160] h-full w-full max-w-md bg-white shadow-xl flex flex-col">
+<div id="spc-drawer-backdrop" class="crm-right-drawer-backdrop hidden bg-black/40"></div>
+<aside id="spc-drawer" class="crm-right-drawer spc-drawer flex flex-col">
     <div class="flex items-center justify-between border-b px-4 py-3">
         <h3 id="drawer-title" class="font-semibold">编辑用户</h3>
         <button type="button" id="drawer-close" class="text-2xl leading-none text-gray-400 hover:text-gray-700">&times;</button>

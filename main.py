@@ -333,6 +333,7 @@ class Contact(Base):
     client_id = Column(Integer, ForeignKey("clients.id"), index=True)
     name = Column(String, default="")
     title = Column(String, default="")
+    city = Column(String, default="")
     phone = Column(String, default="")
     email = Column(String, default="")
     tags = Column(String, default="")
@@ -340,6 +341,7 @@ class Contact(Base):
     superior_contact = Column(String, default="")
     acquisition_channel = Column(String, default="")
     description = Column(Text, default="")
+    created_by = Column(String, default="")
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -751,6 +753,8 @@ def _ensure_contacts_schema_compat():
             "superior_contact": "TEXT DEFAULT ''",
             "acquisition_channel": "TEXT DEFAULT ''",
             "description": "TEXT DEFAULT ''",
+            "created_by": "TEXT DEFAULT ''",
+            "city": "TEXT DEFAULT ''",
         }
         for col, ddl in add_cols.items():
             if col not in existing:
