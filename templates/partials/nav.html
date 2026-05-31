@@ -101,27 +101,6 @@
             </div>
         </div>
     </div>
-    <!-- 联系人 -->
-    <div class="gh-nav-item{% if path.startswith('/contacts') %} nav-active{% endif %}">
-        <span class="nav-trigger cursor-default">联系人
-            <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-        </span>
-        <div class="gh-mega">
-            <div class="gh-mega-panel p-4">
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                    <div>
-                        <div class="gh-mega-col-h">通讯录与关系</div>
-                        <a class="gh-mega-link" href="/contacts/all">全部联系人</a>
-                        <a class="gh-mega-link" href="/contacts/tags">分组与标签</a>
-                        <a class="gh-mega-link" href="/contacts/import">导入与导出</a>
-                    </div>
-                </div>
-                <div class="gh-mega-footer">
-                    <a href="/contacts/all" class="text-sm font-medium text-[#0969da] hover:underline">联系人库（标签/导入已合并入口）→</a>
-                </div>
-            </div>
-        </div>
-    </div>
     <!-- 交付 -->
     <div class="gh-nav-item{% if path.startswith('/delivery') or path.startswith('/customers/roster') %} nav-active{% endif %}" data-crm-nav-perm="delivery.roster.read">
         <span class="nav-trigger cursor-default">交付

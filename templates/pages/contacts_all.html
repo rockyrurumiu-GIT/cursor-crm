@@ -156,7 +156,7 @@
                     <th class="crm-th crm-th-resizable" data-col="3">城市</th>
                     <th class="crm-th crm-th-resizable" data-col="4">创建人</th>
                     <th class="crm-th crm-th-resizable" data-col="5">电话</th>
-                    <th class="crm-th crm-th-resizable" data-col="6">邮箱</th>
+                    <th class="crm-th crm-th-resizable" data-col="6">微信/邮箱</th>
                     <th class="crm-th crm-th-resizable" data-col="7">关系/标签</th>
                     <th class="crm-th crm-th-resizable" data-col="8">获客渠道</th>
                     <th class="crm-th crm-th-resizable" data-col="9">联系人+1</th>
@@ -170,7 +170,7 @@
                     <td class="crm-td">
                         <button type="button" class="text-[#0969da] hover:underline text-left" @click="openDetail(c)">{{ c.name }}</button>
                     </td>
-                    <td class="crm-td"><a :href="`/customers/${c.client_id}/handoff`" class="text-[#0969da]">{{ c.client_name }}</a></td>
+                    <td class="crm-td">{{ c.client_name || '—' }}</td>
                     <td class="crm-td">{{ c.title || '—' }}</td>
                     <td class="crm-td">{{ c.city || '—' }}</td>
                     <td class="crm-td">{{ c.created_by || '—' }}</td>
@@ -235,7 +235,7 @@
             <section>
                 <div class="contact-drawer-section-title">基本信息</div>
                 <div class="contact-drawer-field">
-                    <div class="contact-drawer-field-label">邮箱</div>
+                    <div class="contact-drawer-field-label">微信/邮箱</div>
                     <div class="contact-drawer-field-value">
                         <div v-if="detailRow.email" class="contacts-copy-field max-w-full">
                             <span class="contacts-copy-value" :title="detailRow.email">{{ detailRow.email }}</span>
@@ -273,10 +273,7 @@
                 <div class="contact-drawer-section-title">工作</div>
                 <div class="contact-drawer-field">
                     <div class="contact-drawer-field-label">客户</div>
-                    <div class="contact-drawer-field-value">
-                        <a v-if="detailRow.client_id" :href="`/customers/${detailRow.client_id}/handoff`" class="text-[#0969da] hover:underline">{{ detailRow.client_name || '—' }}</a>
-                        <span v-else>{{ detailRow.client_name || '—' }}</span>
-                    </div>
+                    <div class="contact-drawer-field-value">{{ detailRow.client_name || '—' }}</div>
                 </div>
                 <div class="contact-drawer-field">
                     <div class="contact-drawer-field-label">职位</div>
@@ -358,7 +355,7 @@
                 </div>
                 <div class="crm-input-hint-wrap">
                     <input v-model="form.email" required type="email" placeholder=" " class="w-full border rounded p-2 text-sm">
-                    <span class="crm-input-hint-label">邮箱 <span class="crm-req-star">*</span></span>
+                    <span class="crm-input-hint-label">微信/邮箱 <span class="crm-req-star">*</span></span>
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-1">联系人关系 <span class="text-red-500">*</span></label>
