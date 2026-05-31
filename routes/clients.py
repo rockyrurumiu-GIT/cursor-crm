@@ -7,9 +7,9 @@ import os
 import shutil
 import time
 from datetime import datetime
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Union
 
-from fastapi import Depends, Form, HTTPException
+from fastapi import Depends, Form, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -21,6 +21,20 @@ from auth.deps import get_current_context, require_permission
 from auth.service import AuthContext
 from phase2_core import CONTACT_ACQUISITION_CHANNELS
 from services.clients import ensure_client_access, scoped_client_query
+
+
+def _parse_handoff_status_filter(raw: Optional[Union[str, List[str]]]) -> set[str]:
+    """多选交接状态：任一命中即保留（OR）。"""
+    statuses: set[str] = set()
+    if not raw:
+        return statuses
+    items = raw if isinstance(raw, list) else [raw]
+    for item in items:
+        for part in str(item).split(","):
+            t = part.strip()
+            if t:
+                statuses.add(t)
+    return statuses
 
 
 def _normalize_contact_channel(raw: Optional[str]) -> str:
@@ -84,11 +98,12 @@ def register_client_read_routes(
     @app.get("/api/clients")
     async def list_clients(
         phase: Optional[str] = None,
-        handoff_status: Optional[str] = None,
+        handoff_status: Optional[List[str]] = Query(None),
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(auth_deps.require_permission("crm.clients.read")),
     ):
+        from handoff_core import resolve_client_handoff_status
         from phase2_core import refresh_client_estimated_annual_amount
 
         query = scoped_client_query(db, ctx, Client, action="read")
@@ -100,9 +115,9 @@ def register_client_read_routes(
         db.commit()
         for c in clients:
             db.refresh(c)
-        if not handoff_status:
+        statuses = _parse_handoff_status_filter(handoff_status)
+        if not statuses:
             return clients
-        hs = handoff_status.strip()
         out = []
         for c in clients:
             latest = (
@@ -111,10 +126,9 @@ def register_client_read_routes(
                 .order_by(desc(HandoffRequest.version), desc(HandoffRequest.id))
                 .first()
             )
-            cur = latest.status if latest else "none"
-            if hs == "none" and not latest:
-                out.append(c)
-            elif latest and cur == hs:
+            cur = resolve_client_handoff_status(latest)
+            # OR：待审 / 草稿 / 未提交等任一命中即展示
+            if cur in statuses:
                 out.append(c)
         return out
 

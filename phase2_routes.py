@@ -1,12 +1,14 @@
 """Phase 2 CRM routes: Opportunity, Contract, Contact."""
 from __future__ import annotations
 
+import csv
+import io
 import json
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import Body, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import Body, Depends, File, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -22,15 +24,38 @@ from phase2_core import (
     CONTACT_ACQUISITION_CHANNELS,
     PRIMARY_CONTACT_TAG,
     build_contract_from_handoff,
+    contact_remarks_from_relationship,
     contact_to_dict,
     contract_to_dict,
     find_client_primary_contact,
     milestone_to_dict,
     opportunity_to_dict,
     refresh_client_estimated_annual_amount,
+    relationship_from_contact_remarks,
     suggest_milestones_from_requirement,
     sync_client_inline_from_contact,
 )
+from services.delivery_roster import decode_roster_upload_bytes
+
+CONTACT_EXPORT_HEADERS = [
+    "ID",
+    "姓名",
+    "客户",
+    "职位",
+    "城市",
+    "创建人",
+    "电话",
+    "邮箱",
+    "关系",
+    "分组标签",
+    "获客渠道",
+    "联系人+1",
+    "说明",
+    "创建时间",
+]
+
+CONTACT_RELATIONSHIP_OPTIONS = frozenset({"普通", "良好", "密切"})
+CONTACT_TAG_IMPORT_OPTIONS = frozenset({"首要", "次要", "一般"})
 
 
 class OpportunityBody(BaseModel):
@@ -42,6 +67,7 @@ class OpportunityBody(BaseModel):
     expected_close_date: str = ""
     stage: str = "initial"
     owner: str = ""
+    contact_id: Optional[int] = None
     remarks: str = ""
 
 
@@ -145,6 +171,58 @@ def seed_settlement_from_milestone(
     return entry.id
 
 
+def _resolve_opportunity_contact(db: Session, Contact, contact_id: Optional[int], client_id: int) -> Optional[Any]:
+    if not contact_id:
+        return None
+    ct = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not ct:
+        raise HTTPException(status_code=400, detail="联系人不存在")
+    if ct.client_id != client_id:
+        raise HTTPException(status_code=400, detail="联系人不属于所选客户")
+    return ct
+
+
+def _opportunity_contact_name(db: Session, Contact, contact_id: Optional[int]) -> str:
+    if not contact_id:
+        return ""
+    ct = db.query(Contact).filter(Contact.id == contact_id).first()
+    return (ct.name or "") if ct else ""
+
+
+def _strip_excel_sep_directive(text: str) -> str:
+    lines = text.splitlines()
+    if len(lines) >= 2 and lines[0].strip().lower().startswith("sep="):
+        return "\n".join(lines[1:])
+    return text
+
+
+def _contact_tags_export_label(tags: str) -> str:
+    t = (tags or "").strip()
+    if t in (PRIMARY_CONTACT_TAG, "首要"):
+        return "首要"
+    if t in ("次要", "一般"):
+        return t
+    return t
+
+
+def _contact_tags_from_import(label: str) -> str:
+    t = (label or "").strip()
+    if t == "首要":
+        return PRIMARY_CONTACT_TAG
+    return t
+
+
+def _contact_created_at_export(raw) -> str:
+    if raw is None:
+        return ""
+    if hasattr(raw, "strftime"):
+        return raw.strftime("%Y-%m-%d")
+    s = str(raw).strip()
+    if not s:
+        return ""
+    return s.replace("T", " ").replace("Z", "").split(".")[0][:10]
+
+
 def register_phase2_routes(
     app,
     *,
@@ -158,6 +236,8 @@ def register_phase2_routes(
     ContractMilestone,
     HandoffRequest,
     DeliverySettlementEntry,
+    set_csv_download_headers: Callable,
+    max_file_size: int,
 ):
     @app.get("/api/opportunities")
     async def list_opportunities(
@@ -180,7 +260,8 @@ def register_phase2_routes(
         out = []
         for o in rows:
             c = db.query(Client).filter(Client.id == o.client_id).first()
-            out.append(opportunity_to_dict(o, c.name if c else ""))
+            contact_name = _opportunity_contact_name(db, Contact, getattr(o, "contact_id", None))
+            out.append(opportunity_to_dict(o, c.name if c else "", contact_name))
         return out
 
     @app.post("/api/opportunities")
@@ -196,6 +277,7 @@ def register_phase2_routes(
         client = db.query(Client).filter(Client.id == body.client_id).first()
         if not client:
             raise HTTPException(status_code=404, detail="客户不存在")
+        _resolve_opportunity_contact(db, Contact, body.contact_id, body.client_id)
         o = Opportunity(
             client_id=body.client_id,
             name=body.name.strip(),
@@ -205,6 +287,7 @@ def register_phase2_routes(
             expected_close_date=body.expected_close_date,
             stage=body.stage,
             owner=body.owner or client.owner or user,
+            contact_id=body.contact_id,
             remarks=body.remarks,
         )
         db.add(o)
@@ -212,7 +295,8 @@ def register_phase2_routes(
         db.refresh(o)
         refresh_client_estimated_annual_amount(db, body.client_id, Client, Opportunity)
         db.commit()
-        return opportunity_to_dict(o, client.name)
+        contact_name = _opportunity_contact_name(db, Contact, o.contact_id)
+        return opportunity_to_dict(o, client.name, contact_name)
 
     @app.put("/api/opportunities/{opp_id}")
     async def update_opportunity(
@@ -228,6 +312,10 @@ def register_phase2_routes(
         ds.assert_client_in_scope(db, ctx, o.client_id, Client, RESOURCE_CRM_OPPORTUNITY, "write")
         if body.stage not in OPPORTUNITY_STAGES:
             raise HTTPException(status_code=400, detail="无效商机阶段")
+        if body.client_id != o.client_id:
+            ds.assert_client_in_scope(db, ctx, body.client_id, Client, RESOURCE_CRM_OPPORTUNITY, "write")
+        _resolve_opportunity_contact(db, Contact, body.contact_id, body.client_id)
+        o.client_id = body.client_id
         o.name = body.name.strip()
         o.amount = body.amount
         o.estimated_current_year_amount = body.estimated_current_year_amount
@@ -235,12 +323,14 @@ def register_phase2_routes(
         o.expected_close_date = body.expected_close_date
         o.stage = body.stage
         o.owner = body.owner
+        o.contact_id = body.contact_id
         o.remarks = body.remarks
         db.commit()
         refresh_client_estimated_annual_amount(db, o.client_id, Client, Opportunity)
         db.commit()
         client = db.query(Client).filter(Client.id == o.client_id).first()
-        return opportunity_to_dict(o, client.name if client else "")
+        contact_name = _opportunity_contact_name(db, Contact, o.contact_id)
+        return opportunity_to_dict(o, client.name if client else "", contact_name)
 
     @app.delete("/api/opportunities/{opp_id}")
     async def delete_opportunity(
@@ -406,6 +496,220 @@ def register_phase2_routes(
         db.commit()
         db.refresh(ct)
         return contact_to_dict(ct, client.name)
+
+    @app.get("/api/export/contacts")
+    async def export_contacts_csv(
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.contacts.read")),
+    ):
+        q = db.query(Contact)
+        q = ds.filter_query_by_client_scope(
+            q, db, ctx, RESOURCE_CRM_CONTACT, "read", Contact.client_id, Client
+        )
+        rows = q.order_by(desc(Contact.created_at)).all()
+        output = io.StringIO()
+        output.write("\ufeff")
+        writer = csv.writer(output)
+        writer.writerow(CONTACT_EXPORT_HEADERS)
+        for ct in rows:
+            client = db.query(Client).filter(Client.id == ct.client_id).first()
+            writer.writerow([
+                ct.id,
+                ct.name or "",
+                client.name if client else "",
+                ct.title or "",
+                (getattr(ct, "city", None) or "").strip(),
+                (getattr(ct, "created_by", None) or "").strip(),
+                ct.phone or "",
+                ct.email or "",
+                relationship_from_contact_remarks(ct.remarks or ""),
+                _contact_tags_export_label(ct.tags or ""),
+                ct.acquisition_channel or "",
+                ct.superior_contact or "",
+                ct.description or "",
+                _contact_created_at_export(ct.created_at),
+            ])
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
+        set_csv_download_headers(
+            response,
+            chinese_filename=f"联系人列表_{ts}.csv",
+            ascii_base=f"contacts_{ts}",
+        )
+        return response
+
+    @app.post("/api/import/contacts")
+    async def import_contacts_csv(
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.contacts.write")),
+    ):
+        raw = await file.read()
+        if len(raw) > max_file_size:
+            raise HTTPException(status_code=400, detail="文件超过大小限制")
+        text = _strip_excel_sep_directive(decode_roster_upload_bytes(raw))
+        reader = csv.DictReader(io.StringIO(text))
+        if not reader.fieldnames:
+            raise HTTPException(status_code=400, detail="CSV 缺少表头")
+        imported = 0
+        updated = 0
+        skipped_details: List[Dict[str, str]] = []
+
+        def _row_label(row_index: int, name: str) -> str:
+            shown = (name or "").strip()
+            return shown if shown else f"CSV第{row_index}行"
+
+        def _resolve_client(client_name: str) -> Any:
+            cn = (client_name or "").strip()
+            if not cn:
+                raise ValueError("客户不能为空")
+            q = db.query(Client).filter(Client.name == cn)
+            q = ds.filter_query_by_client_scope(
+                q, db, ctx, RESOURCE_CRM_CONTACT, "write", Client.id, Client
+            )
+            matches = q.all()
+            if not matches:
+                raise ValueError(f"客户「{cn}」不存在或无写入权限")
+            if len(matches) > 1:
+                raise ValueError(f"客户名称「{cn}」存在多条，请使用唯一客户名")
+            return matches[0]
+
+        def _parse_row(row: Dict[str, str], row_index: int) -> Dict[str, str]:
+            get = lambda key: str(row.get(key, "") or "").strip()
+            relationship = get("关系")
+            if relationship and relationship not in CONTACT_RELATIONSHIP_OPTIONS:
+                raise ValueError("关系须为：普通、良好、密切")
+            tag_label = get("分组标签")
+            if tag_label and tag_label not in CONTACT_TAG_IMPORT_OPTIONS:
+                raise ValueError("分组标签须为：首要、次要、一般")
+            channel = get("获客渠道")
+            if channel and channel not in CONTACT_ACQUISITION_CHANNELS:
+                raise ValueError("获客渠道须为：个人、公司、其他")
+            required = {
+                "客户": get("客户"),
+                "姓名": get("姓名"),
+                "职位": get("职位"),
+                "城市": get("城市"),
+                "创建人": get("创建人"),
+                "电话": get("电话"),
+                "邮箱": get("邮箱"),
+                "关系": relationship,
+                "分组标签": tag_label,
+                "获客渠道": channel,
+                "说明": get("说明"),
+            }
+            for label, val in required.items():
+                if not val:
+                    raise ValueError(f"请填写{label}")
+            return {
+                "id_raw": get("ID"),
+                "client_name": required["客户"],
+                "name": required["姓名"],
+                "title": required["职位"],
+                "city": required["城市"],
+                "created_by": required["创建人"],
+                "phone": required["电话"],
+                "email": required["邮箱"],
+                "relationship": relationship,
+                "tags": _contact_tags_from_import(tag_label),
+                "acquisition_channel": channel,
+                "superior_contact": get("联系人+1"),
+                "description": required["说明"],
+                "row_label": _row_label(row_index, required["姓名"]),
+            }
+
+        for row_index, row in enumerate(reader, start=2):
+            if not any(str(v or "").strip() for v in row.values()):
+                continue
+            try:
+                parsed = _parse_row(row, row_index)
+            except ValueError as exc:
+                skipped_details.append({"row": _row_label(row_index, str(row.get("姓名", ""))), "reason": str(exc)})
+                continue
+            try:
+                client = _resolve_client(parsed["client_name"])
+            except ValueError as exc:
+                skipped_details.append({"row": parsed["row_label"], "reason": str(exc)})
+                continue
+
+            contact_id = None
+            if parsed["id_raw"]:
+                try:
+                    contact_id = int(parsed["id_raw"])
+                except ValueError:
+                    skipped_details.append({"row": parsed["row_label"], "reason": "ID 格式无效"})
+                    continue
+
+            ct = None
+            if contact_id is not None:
+                ct = db.query(Contact).filter(Contact.id == contact_id).first()
+                if not ct:
+                    skipped_details.append({"row": parsed["row_label"], "reason": f"联系人 ID {contact_id} 不存在"})
+                    continue
+                try:
+                    ds.assert_client_in_scope(db, ctx, ct.client_id, Client, RESOURCE_CRM_CONTACT, "write")
+                    ds.assert_client_in_scope(db, ctx, client.id, Client, RESOURCE_CRM_CONTACT, "write")
+                except HTTPException:
+                    skipped_details.append({"row": parsed["row_label"], "reason": "联系人不属于可写入范围"})
+                    continue
+            else:
+                dup_q = db.query(Contact).filter(Contact.client_id == client.id)
+                if parsed["phone"]:
+                    ct = dup_q.filter(Contact.phone == parsed["phone"]).first()
+                elif parsed["email"]:
+                    ct = dup_q.filter(Contact.email == parsed["email"]).first()
+                if ct:
+                    skipped_details.append({
+                        "row": parsed["row_label"],
+                        "reason": "同客户下电话或邮箱已存在",
+                    })
+                    continue
+
+            remarks = contact_remarks_from_relationship(parsed["relationship"])
+            if ct:
+                ct.client_id = client.id
+                ct.name = parsed["name"]
+                ct.title = parsed["title"]
+                ct.city = parsed["city"]
+                ct.created_by = parsed["created_by"]
+                ct.phone = parsed["phone"]
+                ct.email = parsed["email"]
+                ct.tags = parsed["tags"]
+                ct.remarks = remarks
+                ct.superior_contact = parsed["superior_contact"]
+                ct.acquisition_channel = parsed["acquisition_channel"]
+                ct.description = parsed["description"]
+                if (ct.tags or "") == PRIMARY_CONTACT_TAG:
+                    sync_client_inline_from_contact(client, ct)
+                updated += 1
+            else:
+                db.add(Contact(
+                    client_id=client.id,
+                    name=parsed["name"],
+                    title=parsed["title"],
+                    city=parsed["city"],
+                    created_by=parsed["created_by"],
+                    phone=parsed["phone"],
+                    email=parsed["email"],
+                    tags=parsed["tags"],
+                    remarks=remarks,
+                    superior_contact=parsed["superior_contact"],
+                    acquisition_channel=parsed["acquisition_channel"],
+                    description=parsed["description"],
+                    created_at=datetime.now(),
+                ))
+                imported += 1
+
+        db.commit()
+        skip_total = len(skipped_details)
+        return {
+            "imported": imported,
+            "updated": updated,
+            "skipped_total": skip_total,
+            "skipped_details": skipped_details,
+        }
 
     @app.put("/api/contacts/{contact_id}")
     async def update_contact(

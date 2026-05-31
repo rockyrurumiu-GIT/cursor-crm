@@ -358,6 +358,7 @@ class Opportunity(Base):
     owner = Column(String, default="")
     owner_user_id = Column(Integer, nullable=True, index=True)
     owner_dept_id = Column(Integer, nullable=True, index=True)
+    contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=True, index=True)
     remarks = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.now)
 
@@ -697,6 +698,7 @@ def _ensure_opportunities_schema_compat():
             "estimated_current_year_amount": "TEXT DEFAULT ''",
             "owner_user_id": "INTEGER NULL",
             "owner_dept_id": "INTEGER NULL",
+            "contact_id": "INTEGER NULL",
         }
         for col, ddl in add_cols.items():
             if col not in existing:
@@ -1351,6 +1353,8 @@ register_phase2_routes(
     ContractMilestone=ContractMilestone,
     HandoffRequest=HandoffRequest,
     DeliverySettlementEntry=DeliverySettlementEntry,
+    set_csv_download_headers=_set_csv_download_headers,
+    max_file_size=MAX_FILE_SIZE,
 )
 
 register_visit_routes(

@@ -30,6 +30,11 @@ HANDOFF_STATUS_LABELS = {
 }
 
 
+def resolve_client_handoff_status(latest_handoff: Any) -> str:
+    """客户当前交接状态；无有效交接单时为 none（未提交）。"""
+    return latest_handoff.status if latest_handoff else "none"
+
+
 def build_clients_handoff_summary(handoff_rows: List[Any]) -> Dict[str, Dict[str, Any]]:
     """按客户汇总最新交接状态（供 /api/clients/handoff-summary 使用）。"""
     by_client: Dict[int, Any] = {}

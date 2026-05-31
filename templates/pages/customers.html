@@ -66,6 +66,34 @@
         padding-right: 2rem;
         width: 100%;
     }
+    #page-app .customers-handoff-filter {
+        position: relative;
+        min-width: 7.5rem;
+    }
+    #page-app .customers-handoff-filter-panel {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 4px);
+        z-index: 40;
+        width: 9rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.5rem;
+        background: #fff;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+        padding: 0.25rem 0;
+    }
+    #page-app .customers-handoff-filter-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.65rem;
+        font-size: 0.875rem;
+        color: #374151;
+        cursor: pointer;
+    }
+    #page-app .customers-handoff-filter-item:hover {
+        background: #f9fafb;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -78,17 +106,39 @@
                 <span v-if="filterPhase" class="inline-flex items-center h-9 bg-blue-100 text-blue-700 px-3 rounded-lg text-sm font-medium">
                     筛选: {{ filterPhase }} <button type="button" @click="clearPhase" class="ml-1 text-red-500">×</button>
                 </span>
-                <span v-if="filterHandoff" class="inline-flex items-center h-9 bg-amber-100 text-amber-800 px-3 rounded-lg text-sm font-medium">
+                <span v-if="filterHandoffStatuses.length" class="inline-flex items-center h-9 bg-amber-100 text-amber-800 px-3 rounded-lg text-sm font-medium">
                     交接: {{ handoffFilterLabel }} <button type="button" @click="clearHandoffFilter" class="ml-1 text-red-500">×</button>
                 </span>
-                <div class="min-w-[7.5rem] shrink-0">
-                    <select v-model="filterHandoffQuick" @change="applyHandoffFilter" class="crm-form-control customers-toolbar-control">
-                        <option value="">交接状态</option>
-                        <option value="pending_review">待审</option>
-                        <option value="approved">已通过</option>
-                        <option value="rejected">已驳回</option>
-                        <option value="none">未提交</option>
-                    </select>
+                <div ref="handoffFilterRef" class="customers-handoff-filter shrink-0">
+                    <button
+                        type="button"
+                        class="crm-form-control customers-toolbar-control w-full text-left flex items-center justify-between"
+                        @click="toggleHandoffFilterDropdown"
+                    >
+                        <span class="truncate">{{ handoffFilterSummary }}</span>
+                        <span class="text-gray-400 ml-1 shrink-0">{{ handoffFilterDropdownOpen ? '▴' : '▾' }}</span>
+                    </button>
+                    <div v-if="handoffFilterDropdownOpen" class="customers-handoff-filter-panel">
+                        <label
+                            v-for="opt in handoffFilterOptions"
+                            :key="opt.value"
+                            class="customers-handoff-filter-item"
+                            @click.prevent="toggleHandoffFilterOption(opt.value)"
+                        >
+                            <input
+                                type="checkbox"
+                                tabindex="-1"
+                                :checked="filterHandoffStatuses.includes(opt.value)"
+                                @click.prevent
+                            />
+                            <span>{{ opt.label }}</span>
+                        </label>
+                        <button
+                            type="button"
+                            class="w-full text-left px-2.5 py-1.5 text-xs text-blue-600 hover:bg-blue-50 border-t border-gray-100"
+                            @click="clearHandoffFilter"
+                        >清空</button>
+                    </div>
                 </div>
                 <a href="/customers/new"
                     class="customers-toolbar-control border border-blue-600 bg-blue-600 text-white hover:bg-blue-700">+ 新增客户</a>
@@ -139,8 +189,8 @@
                         </td>
                         <td class="crm-td customers-handoff-col">
                             <a :href="`/customers/${c.id}/handoff`"
-                                :class="handoffBadge(handoffEntry(c.id) ? handoffEntry(c.id).status : 'none')"
-                                class="inline-block px-2 py-1 rounded text-xs hover:underline">{{ handoffEntry(c.id) ? handoffEntry(c.id).status_label : '未提交' }}</a>
+                                :class="handoffBadge(resolveHandoffStatus(c.id))"
+                                class="inline-block px-2 py-1 rounded text-xs hover:underline">{{ handoffStatusLabel(c.id) }}</a>
                         </td>
                         <td class="crm-td text-gray-500 whitespace-nowrap">{{ formatDateOnly(c.created_at) }}</td>
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
@@ -336,7 +386,26 @@
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, computed, onMounted } = Vue;
+const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+const HANDOFF_FILTER_OPTIONS = [
+    { value: 'pending_review', label: '待审' },
+    { value: 'approved', label: '已通过' },
+    { value: 'rejected', label: '已驳回' },
+    { value: 'draft', label: '草稿' },
+    { value: 'none', label: '未提交' },
+];
+
+function parseHandoffStatusesFromParams(params) {
+    const parts = [];
+    params.getAll('handoff_status').forEach((v) => {
+        String(v).split(',').forEach((s) => {
+            const t = s.trim();
+            if (t) parts.push(t);
+        });
+    });
+    return [...new Set(parts)];
+}
 
 function parseAmountDigits(raw) {
     return String(raw || '').replace(/[^\d]/g, '');
@@ -355,10 +424,18 @@ createApp({
         const handoffMap = ref({});
         const opportunitiesByClient = ref({});
         const filterPhase = ref(params.get('phase') || '');
-        const filterHandoff = ref(params.get('handoff_status') || '');
-        const filterHandoffQuick = ref(params.get('handoff_status') || '');
-        const handoffFilterLabels = { pending_review: '待审', approved: '已通过', rejected: '已驳回', none: '未提交' };
-        const handoffFilterLabel = computed(() => handoffFilterLabels[filterHandoff.value] || filterHandoff.value);
+        const filterHandoffStatuses = ref(parseHandoffStatusesFromParams(params));
+        const handoffFilterLabels = Object.fromEntries(HANDOFF_FILTER_OPTIONS.map((o) => [o.value, o.label]));
+        const handoffFilterLabel = computed(() =>
+            filterHandoffStatuses.value.map((s) => handoffFilterLabels[s] || s).join('、'));
+        const handoffFilterSummary = computed(() => {
+            const sel = filterHandoffStatuses.value;
+            if (!sel.length) return '交接状态';
+            if (sel.length === 1) return handoffFilterLabels[sel[0]] || sel[0];
+            return `已选${sel.length}项`;
+        });
+        const handoffFilterDropdownOpen = ref(false);
+        const handoffFilterRef = ref(null);
         const showDetail = ref(false);
         const showAddVisit = ref(false);
         const showDelete = ref(false);
@@ -379,24 +456,33 @@ createApp({
 
         const authHeader = () => window.crmAuthHeader();
 
+        const resolveHandoffStatus = (clientId) => {
+            const entry = handoffMap.value[String(clientId)];
+            return entry ? entry.status : 'none';
+        };
+
         const loadClients = async () => {
             let url = '/api/clients';
-            const qs = [];
-            if (filterPhase.value) qs.push('phase=' + encodeURIComponent(filterPhase.value));
-            if (filterHandoff.value) qs.push('handoff_status=' + encodeURIComponent(filterHandoff.value));
-            if (qs.length) url += '?' + qs.join('&');
+            if (filterPhase.value) {
+                url += '?phase=' + encodeURIComponent(filterPhase.value);
+            }
             const [clientsRes, handoffRes, oppRes] = await Promise.all([
                 fetch(url, { headers: authHeader() }),
                 fetch('/api/clients/handoff-summary', { headers: authHeader() }),
                 fetch('/api/opportunities', { headers: authHeader() }),
             ]);
-            clients.value = clientsRes.ok ? await clientsRes.json() : [];
             if (handoffRes.ok) {
                 const d = await handoffRes.json();
                 handoffMap.value = d && !d.detail ? d : {};
             } else {
                 handoffMap.value = {};
             }
+            let rows = clientsRes.ok ? await clientsRes.json() : [];
+            if (filterHandoffStatuses.value.length) {
+                const allowed = new Set(filterHandoffStatuses.value);
+                rows = rows.filter((c) => allowed.has(resolveHandoffStatus(c.id)));
+            }
+            clients.value = rows;
             if (oppRes.ok) {
                 const opps = await oppRes.json();
                 const map = {};
@@ -431,21 +517,46 @@ createApp({
         };
 
         const applyHandoffFilter = () => {
-            filterHandoff.value = filterHandoffQuick.value;
             const qs = new URLSearchParams();
             if (filterPhase.value) qs.set('phase', filterPhase.value);
-            if (filterHandoff.value) qs.set('handoff_status', filterHandoff.value);
+            filterHandoffStatuses.value.forEach((s) => qs.append('handoff_status', s));
             window.history.replaceState({}, '', qs.toString() ? '/customers?' + qs : '/customers');
             loadClients();
         };
 
-        const clearHandoffFilter = () => {
-            filterHandoff.value = '';
-            filterHandoffQuick.value = '';
+        const toggleHandoffFilterDropdown = () => {
+            handoffFilterDropdownOpen.value = !handoffFilterDropdownOpen.value;
+        };
+
+        const toggleHandoffFilterOption = (value) => {
+            const sel = filterHandoffStatuses.value;
+            const idx = sel.indexOf(value);
+            if (idx >= 0) {
+                filterHandoffStatuses.value = sel.filter((v) => v !== value);
+            } else {
+                filterHandoffStatuses.value = [...sel, value];
+            }
             applyHandoffFilter();
         };
 
+        const clearHandoffFilter = () => {
+            filterHandoffStatuses.value = [];
+            handoffFilterDropdownOpen.value = false;
+            applyHandoffFilter();
+        };
+
+        const onDocumentClick = (e) => {
+            if (!handoffFilterDropdownOpen.value) return;
+            const root = handoffFilterRef.value;
+            if (root && !root.contains(e.target)) handoffFilterDropdownOpen.value = false;
+        };
+
         const handoffEntry = (cid) => handoffMap.value[String(cid)] || null;
+
+        const handoffStatusLabel = (cid) => {
+            const entry = handoffEntry(cid);
+            return entry ? entry.status_label : '未提交';
+        };
 
         const handoffBadge = (s) => ({
             none: 'bg-red-100 text-red-800',
@@ -615,14 +726,21 @@ createApp({
         const isImage = (path) => /\.(jpg|jpeg|png|gif|webp)$/i.test(path);
         const viewFull = (path) => window.crmOpenAuthenticatedFile(path);
 
-        onMounted(loadClients);
+        onMounted(() => {
+            loadClients();
+            document.addEventListener('click', onDocumentClick);
+        });
+        onUnmounted(() => document.removeEventListener('click', onDocumentClick));
 
         return {
-            clients, handoffMap, filterPhase, filterHandoff, filterHandoffQuick, handoffFilterLabel,
+            clients, handoffMap, filterPhase, filterHandoffStatuses, handoffFilterOptions: HANDOFF_FILTER_OPTIONS,
+            handoffFilterLabel, handoffFilterSummary, handoffFilterDropdownOpen, handoffFilterRef,
+            toggleHandoffFilterDropdown, toggleHandoffFilterOption,
             showDetail, showAddVisit, showDelete, showOppDrawer, selectedOpp, relatedClient,
             selectedClient, details,
             deleteCaptcha, deleteInput, visitForm, onVisitFileChange,
-            loadClients, clearPhase, applyHandoffFilter, clearHandoffFilter, phaseColor, handoffEntry, handoffBadge,
+            loadClients, clearPhase, applyHandoffFilter, clearHandoffFilter, phaseColor,
+            handoffEntry, handoffStatusLabel, resolveHandoffStatus, handoffBadge,
             clientOpportunities, openOppDrawer, closeOppDrawer,
             fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, displayAmount, displayWinRate, oppStageBadgeClass, hasPrimaryContact,
             openDetail, updateClient, confirmDelete, executeDelete,

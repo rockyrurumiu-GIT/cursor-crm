@@ -69,11 +69,13 @@ def refresh_client_estimated_annual_amount(db, client_id: int, Client, Opportuni
     return new_val
 
 
-def opportunity_to_dict(o, client_name: str = "") -> Dict[str, Any]:
+def opportunity_to_dict(o, client_name: str = "", contact_name: str = "") -> Dict[str, Any]:
     return {
         "id": o.id,
         "client_id": o.client_id,
         "client_name": client_name,
+        "contact_id": getattr(o, "contact_id", None),
+        "contact_name": contact_name,
         "name": o.name or "",
         "amount": o.amount or "",
         "estimated_current_year_amount": o.estimated_current_year_amount or "",

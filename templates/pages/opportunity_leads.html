@@ -23,6 +23,7 @@
                     <th class="crm-th">预估单价(人月)</th>
                     <th class="crm-th">预估当年金额</th>
                     <th class="crm-th">赢单率</th>
+                    <th class="crm-th">联系人</th>
                     <th class="crm-th">阶段</th>
                     <th class="crm-th">负责人</th>
                     <th class="crm-th">预计成交日期</th>
@@ -34,10 +35,11 @@
             <tbody>
                 <tr v-for="o in items" :key="o.id">
                     <td class="crm-td">{{ o.name || '—' }}</td>
-                    <td class="crm-td">{{ o.client_name || '—' }}</td>
+                    <td class="crm-td crm-name-cell">{{ o.client_name || '—' }}</td>
                     <td class="crm-td">{{ displayAmount(o.amount) }}</td>
                     <td class="crm-td">{{ displayAmount(o.estimated_current_year_amount) }}</td>
                     <td class="crm-td">{{ displayWinRate(o.probability) }}</td>
+                    <td class="crm-td">{{ o.contact_name || '—' }}</td>
                     <td class="crm-td"><span class="px-2 py-0.5 rounded text-xs bg-blue-50 text-blue-800">{{ o.stage_label || '—' }}</span></td>
                     <td class="crm-td">{{ o.owner || '—' }}</td>
                     <td class="crm-td">{{ o.expected_close_date || '—' }}</td>
@@ -52,7 +54,7 @@
                         </div>
                     </td>
                 </tr>
-                <tr v-if="!items.length"><td colspan="11" class="crm-td text-center text-gray-400 py-8">暂无商机</td></tr>
+                <tr v-if="!items.length"><td colspan="12" class="crm-td text-center text-gray-400 py-8">暂无商机</td></tr>
             </tbody>
         </table>
         </div>
@@ -78,6 +80,8 @@
                 <dd class="text-gray-900">{{ detailRow.owner || '—' }}</dd>
                 <dt class="text-gray-500">预计成交日期</dt>
                 <dd class="text-gray-900">{{ detailRow.expected_close_date || '—' }}</dd>
+                <dt class="text-gray-500">联系人</dt>
+                <dd class="text-gray-900">{{ detailRow.contact_name || '—' }}</dd>
                 <dt class="text-gray-500 sm:col-span-2">下一步动作</dt>
                 <dd class="text-gray-900 sm:col-span-2 whitespace-pre-wrap">{{ detailRow.remarks || '—' }}</dd>
                 <dt class="text-gray-500">创建时间</dt>
@@ -142,6 +146,13 @@
                 <input v-model="form.expected_close_date" type="date" class="w-full border rounded p-2 text-sm">
             </div>
             <div>
+                <label class="block text-sm font-medium mb-1">联系人</label>
+                <select :value="String(form.contact_id || '')" @change="onContactChange" class="crm-form-control text-sm w-full" :disabled="!form.client_id">
+                    <option value="">请选择联系人</option>
+                    <option v-for="ct in filteredContacts" :key="ct.id" :value="String(ct.id)">{{ contactLabel(ct) }}</option>
+                </select>
+            </div>
+            <div>
                 <label class="block text-sm font-medium mb-1">下一步动作</label>
                 <textarea v-model="form.remarks" rows="3" class="w-full border rounded p-2 text-sm" placeholder="例如：安排客户演示、提交报价"></textarea>
             </div>
@@ -157,7 +168,7 @@
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, onMounted } = Vue;
+const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
 
 function parseAmountDigits(raw) {
     return String(raw || '').replace(/[^\d]/g, '');
@@ -182,6 +193,7 @@ createApp({
     setup() {
         const items = ref([]);
         const clients = ref([]);
+        const contacts = ref([]);
         const showForm = ref(false);
         const detailRow = ref(null);
         const emptyForm = () => ({
@@ -194,14 +206,44 @@ createApp({
             probability: '',
             owner: '',
             expected_close_date: '',
+            contact_id: '',
             remarks: '',
         });
         const form = ref(emptyForm());
         const auth = () => window.crmAuthHeader();
+        let skipContactReset = false;
+
+        const filteredContacts = computed(() => {
+            const cid = form.value.client_id;
+            if (!cid) return [];
+            return contacts.value.filter((ct) => String(ct.client_id) === String(cid));
+        });
+
+        const contactLabel = (ct) => {
+            const name = (ct && ct.name) || '';
+            const title = (ct && ct.title) || '';
+            return title ? `${name} · ${title}` : name;
+        };
+
+        const onContactChange = (e) => {
+            const v = e && e.target ? e.target.value : '';
+            form.value = { ...form.value, contact_id: v };
+        };
+
+        watch(() => form.value.client_id, () => {
+            if (skipContactReset || !form.value.contact_id) return;
+            const ok = filteredContacts.value.some((ct) => String(ct.id) === String(form.value.contact_id));
+            if (!ok) form.value = { ...form.value, contact_id: '' };
+        });
 
         const loadClients = async () => {
             const r = await fetch('/api/clients', { headers: auth() });
             clients.value = r.ok ? await r.json() : [];
+        };
+
+        const loadContacts = async () => {
+            const r = await fetch('/api/contacts', { headers: auth() });
+            contacts.value = r.ok ? await r.json() : [];
         };
 
         const load = async () => {
@@ -252,9 +294,10 @@ createApp({
         };
 
         const openEdit = (o) => {
+            skipContactReset = true;
             form.value = {
                 id: o.id,
-                client_id: o.client_id || '',
+                client_id: o.client_id != null ? String(o.client_id) : '',
                 name: o.name || '',
                 amount: formatAmountThousands(o.amount || ''),
                 estimated_current_year_amount: formatAmountThousands(o.estimated_current_year_amount || ''),
@@ -262,9 +305,24 @@ createApp({
                 probability: normalizeWinRateForSave(String(o.probability || '').replace(/%/g, '')),
                 owner: o.owner || '',
                 expected_close_date: o.expected_close_date || '',
+                contact_id: o.contact_id != null && o.contact_id !== '' ? String(o.contact_id) : '',
                 remarks: o.remarks || '',
             };
             showForm.value = true;
+            nextTick(() => { skipContactReset = false; });
+        };
+
+        const parseApiError = async (r) => {
+            try {
+                const j = await r.json();
+                const detail = j && j.detail;
+                if (Array.isArray(detail)) {
+                    return detail.map((d) => d.msg || String(d)).join('；') || '保存失败';
+                }
+                return detail || '保存失败';
+            } catch (_) {
+                return '保存失败';
+            }
         };
 
         const save = async () => {
@@ -273,6 +331,7 @@ createApp({
                 return;
             }
             const estimatedAmount = normalizeAmountForSave(form.value.estimated_current_year_amount);
+            const rawContactId = String(form.value.contact_id || '').trim();
             const body = {
                 client_id: Number(form.value.client_id),
                 name: (form.value.name || '').trim(),
@@ -282,19 +341,24 @@ createApp({
                 owner: form.value.owner || '',
                 probability: normalizeWinRateForSave(form.value.probability),
                 expected_close_date: (form.value.expected_close_date || '').trim(),
+                contact_id: rawContactId ? Number(rawContactId) : null,
                 remarks: (form.value.remarks || '').trim(),
             };
             const url = form.value.id ? `/api/opportunities/${form.value.id}` : '/api/opportunities';
-            const r = await fetch(url, {
-                method: form.value.id ? 'PUT' : 'POST',
-                headers: { ...auth(), 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
-            if (r.ok) {
-                showForm.value = false;
-                await load();
-            } else {
-                alert((await r.json()).detail || '保存失败');
+            try {
+                const r = await fetch(url, {
+                    method: form.value.id ? 'PUT' : 'POST',
+                    headers: { ...auth(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (r.ok) {
+                    showForm.value = false;
+                    await load();
+                } else {
+                    alert(await parseApiError(r));
+                }
+            } catch (_) {
+                alert('保存失败，请稍后重试');
             }
         };
 
@@ -322,12 +386,16 @@ createApp({
         };
 
         onMounted(async () => {
-            await Promise.all([load(), loadClients()]);
+            await Promise.all([load(), loadClients(), loadContacts()]);
         });
 
         return {
             items,
             clients,
+            contacts,
+            filteredContacts,
+            contactLabel,
+            onContactChange,
             showForm,
             detailRow,
             form,
