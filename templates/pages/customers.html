@@ -76,6 +76,8 @@
                         <th class="crm-th">预估金额</th>
                         <th class="crm-th">城市</th>
                         <th class="crm-th">首要联系人</th>
+                        <th class="crm-th">创建时间</th>
+                        <th class="crm-th">商机</th>
                         <th class="crm-th">交接状态</th>
                         <th class="crm-th customers-op-col">操作</th>
                     </tr>
@@ -91,6 +93,10 @@
                         <td class="crm-td">{{ fmtAmount(c) }}</td>
                         <td class="crm-td">{{ fmtDash(c.city) }}</td>
                         <td class="crm-td">{{ fmtPrimaryContact(c) }}</td>
+                        <td class="crm-td text-gray-500 whitespace-nowrap">{{ formatDateOnly(c.created_at) }}</td>
+                        <td class="crm-td">
+                            <div class="crm-cell-clip" :title="fmtOpportunities(c.id)">{{ fmtOpportunities(c.id) }}</div>
+                        </td>
                         <td class="crm-td">
                             <span v-if="handoffEntry(c.id)" :class="handoffBadge(handoffEntry(c.id).status)" class="px-2 py-1 rounded text-xs">{{ handoffEntry(c.id).status_label }}</span>
                             <span v-else class="text-gray-400 text-xs">未提交</span>
@@ -235,6 +241,7 @@ createApp({
         const params = new URLSearchParams(window.location.search);
         const clients = ref([]);
         const handoffMap = ref({});
+        const opportunitiesByClient = ref({});
         const filterPhase = ref(params.get('phase') || '');
         const filterHandoff = ref(params.get('handoff_status') || '');
         const filterHandoffQuick = ref(params.get('handoff_status') || '');
@@ -257,16 +264,39 @@ createApp({
 
         const authHeader = () => window.crmAuthHeader();
 
-        const loadClients = () => {
+        const loadClients = async () => {
             let url = '/api/clients';
             const qs = [];
             if (filterPhase.value) qs.push('phase=' + encodeURIComponent(filterPhase.value));
             if (filterHandoff.value) qs.push('handoff_status=' + encodeURIComponent(filterHandoff.value));
             if (qs.length) url += '?' + qs.join('&');
-            fetch(url, { headers: authHeader() }).then(r => r.json()).then(d => { clients.value = d; });
-            fetch('/api/clients/handoff-summary', { headers: authHeader() })
-                .then((r) => (r.ok ? r.json() : {}))
-                .then((d) => { handoffMap.value = d && !d.detail ? d : {}; });
+            const [clientsRes, handoffRes, oppRes] = await Promise.all([
+                fetch(url, { headers: authHeader() }),
+                fetch('/api/clients/handoff-summary', { headers: authHeader() }),
+                fetch('/api/opportunities', { headers: authHeader() }),
+            ]);
+            clients.value = clientsRes.ok ? await clientsRes.json() : [];
+            if (handoffRes.ok) {
+                const d = await handoffRes.json();
+                handoffMap.value = d && !d.detail ? d : {};
+            } else {
+                handoffMap.value = {};
+            }
+            if (oppRes.ok) {
+                const opps = await oppRes.json();
+                const map = {};
+                for (const o of Array.isArray(opps) ? opps : []) {
+                    const cid = o.client_id;
+                    if (cid == null) continue;
+                    const key = String(cid);
+                    if (!map[key]) map[key] = [];
+                    const name = (o.name || '').trim();
+                    if (name) map[key].push(name);
+                }
+                opportunitiesByClient.value = map;
+            } else {
+                opportunitiesByClient.value = {};
+            }
         };
 
         const applyHandoffFilter = () => {
@@ -322,6 +352,22 @@ createApp({
             const title = (c && c.contact_title ? String(c.contact_title) : '').trim();
             if (!name) return '—';
             return title ? `${name}(${title})` : name;
+        };
+        const formatDateOnly = (raw) => {
+            if (raw == null || raw === '') return '—';
+            const s = String(raw).trim();
+            if (!s) return '—';
+            const d = new Date(s);
+            if (Number.isNaN(d.getTime())) {
+                const normalized = s.replace('T', ' ').replace(/Z$/i, '').replace(/\.\d{3}$/, '');
+                return normalized.length >= 10 ? normalized.slice(0, 10) : normalized;
+            }
+            const pad = (n) => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        };
+        const fmtOpportunities = (clientId) => {
+            const names = opportunitiesByClient.value[String(clientId)] || [];
+            return names.length ? names.join('、') : '—';
         };
         const hasPrimaryContact = (c) => !!(c && (
             (c.contact_name && String(c.contact_name).trim()) ||
@@ -434,7 +480,7 @@ createApp({
             showDetail, showAddVisit, showDelete, selectedClient, details,
             deleteCaptcha, deleteInput, visitForm, onVisitFileChange,
             loadClients, clearPhase, applyHandoffFilter, clearHandoffFilter, phaseColor, handoffEntry, handoffBadge,
-            fmtDash, fmtAmount, fmtPrimaryContact, hasPrimaryContact,
+            fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, fmtOpportunities, hasPrimaryContact,
             openDetail, updateClient, confirmDelete, executeDelete,
             submitVisit, exportCSV, isImage, viewFull, formatDate, visitAttachmentUrls
         };

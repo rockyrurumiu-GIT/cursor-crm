@@ -167,10 +167,11 @@ createApp({
             if (!s) return '—';
             const d = new Date(s);
             if (Number.isNaN(d.getTime())) {
-                return s.replace('T', ' ').replace(/Z$/i, '').replace(/\.\d{3}$/, '');
+                const normalized = s.replace('T', ' ').replace(/Z$/i, '').replace(/\.\d{3}$/, '');
+                return normalized.length >= 10 ? normalized.slice(0, 10) : normalized;
             }
             const pad = (n) => String(n).padStart(2, '0');
-            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
         };
         const syncContactsTableLayout = () => {
             const table = document.querySelector('#contacts-app table[data-table-id="contacts"]');
