@@ -32,6 +32,8 @@ ALL_PERMISSION_CODES: FrozenSet[str] = frozenset({
     "system.users.manage",
     "system.roles.manage",
     "system.audit.read",
+    "dashboard.read",
+    "dashboard.write",
 })
 
 ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {
@@ -45,6 +47,7 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {
         "crm.contacts.write",
         "crm.visits.read",
         "crm.visits.write",
+        "dashboard.read",
     }),
     ROLE_DELIVERY: frozenset({
         "crm.clients.read",
@@ -61,6 +64,7 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {
         "delivery.interviews.write",
         "delivery.settlement.read",
         "delivery.settlement.write",
+        "dashboard.read",
     }),
     ROLE_VIEWER: frozenset({
         "crm.clients.read",
@@ -73,6 +77,7 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {
         "delivery.handoff.read",
         "delivery.interviews.read",
         "delivery.settlement.read",
+        "dashboard.read",
     }),
 }
 
@@ -83,5 +88,6 @@ NAV_SECTION_PERMISSIONS: dict[str, str] = {
     "opportunity": "crm.opportunities.read",
     "goals": "crm.opportunities.read",
     "delivery": "delivery.roster.read",
+    "dashboards": "dashboard.read",
     "system": "system.users.manage",
 }

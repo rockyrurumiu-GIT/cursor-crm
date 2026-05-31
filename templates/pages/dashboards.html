@@ -1,0 +1,373 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 · ITO CRM{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+.dash-root { display: flex; flex-direction: column; min-height: calc(100vh - 110px); background: #fafafa; }
+
+/* Toolbar */
+.dash-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 1.25rem; background: #fff; border-bottom: 1px solid #e6e8eb; }
+.dash-breadcrumb { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; color: #4b5563; }
+.crumb-home { color: #6b7280; }
+.crumb-sep { color: #c4c8cd; }
+.dash-select { position: relative; }
+.dash-select-btn { display: flex; align-items: center; gap: 0.35rem; font-weight: 600; color: #1f2328; padding: 0.25rem 0.5rem; border-radius: 6px; cursor: pointer; }
+.dash-select-btn:hover { background: #f2f3f5; }
+.dash-menu { position: absolute; top: 110%; left: 0; min-width: 220px; background: #fff; border: 1px solid #e6e8eb; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,0.12); padding: 0.35rem; z-index: 40; }
+.dash-menu li { padding: 0.45rem 0.6rem; border-radius: 6px; font-size: 0.875rem; cursor: pointer; color: #374151; }
+.dash-menu li:hover { background: #f2f3f5; }
+.dash-menu li.add { color: #2563eb; border-top: 1px solid #eef0f2; margin-top: 0.25rem; }
+.dash-toolbar-right { display: flex; align-items: center; gap: 0.4rem; }
+.tbtn { display: inline-flex; align-items: center; justify-content: center; height: 32px; min-width: 32px; padding: 0 0.65rem; border-radius: 8px; border: 1px solid #e0e2e6; background: #fff; color: #374151; font-size: 0.85rem; cursor: pointer; }
+.tbtn:hover { background: #f2f3f5; }
+.tbtn:disabled { opacity: 0.4; cursor: default; }
+.tbtn-primary { background: #1f2328; color: #fff; border-color: #1f2328; }
+.tbtn-primary:hover { background: #000; }
+.tbtn-danger { color: #cf222e; border-color: #f0c4c4; }
+.tbtn-danger:hover { background: #fdf0f0; }
+
+/* Tabs */
+.dash-tabs { display: flex; align-items: center; gap: 0.25rem; padding: 0.5rem 1.25rem; background: #fff; border-bottom: 1px solid #e6e8eb; flex-wrap: wrap; }
+.tab-pill { padding: 0.35rem 0.8rem; border-radius: 8px; font-size: 0.85rem; color: #5b6370; cursor: pointer; border: 1px solid transparent; background: transparent; }
+.tab-pill:hover { background: #f2f3f5; }
+.tab-pill.active { background: #eef2ff; color: #1f2328; font-weight: 600; }
+
+/* Canvas + grid */
+.dash-canvas { flex: 1; padding: 1.25rem; overflow: auto; }
+.dash-grid { display: grid; grid-template-columns: repeat(12, 1fr); grid-auto-rows: 64px; gap: 14px; max-width: 1440px; margin: 0 auto; }
+.dash-card { background: #fff; border: 1px solid #ebedf0; border-radius: 12px; padding: 1.1rem 1.25rem; display: flex; flex-direction: column; min-height: 0; box-shadow: none; transition: box-shadow .15s, border-color .15s; }
+.dash-card.editing { border-style: dashed; border-color: #d5d9de; }
+.dash-card.editing:hover { border-color: #9aa9bd; box-shadow: 0 2px 10px rgba(16,24,40,0.06); }
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.6rem; }
+.card-title { font-weight: 600; font-size: 0.875rem; color: #374151; }
+.card-actions { display: flex; gap: 0.25rem; }
+.icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: #6b7280; cursor: pointer; font-size: 0.85rem; }
+.icon-btn:hover { background: #f2f3f5; color: #1f2328; }
+.icon-btn.danger:hover { background: #fdf0f0; color: #cf222e; }
+.card-body { flex: 1; display: flex; min-height: 0; position: relative; }
+
+/* number widget */
+.num-wrap { display: flex; flex-direction: column; justify-content: center; gap: 0.35rem; width: 100%; }
+.num-value { font-size: 2rem; line-height: 1.1; font-weight: 600; color: #1f2328; }
+.num-sub { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: #98a2b3; }
+.num-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+/* rich text */
+.rich-text { width: 100%; align-self: flex-start; }
+.rich-title { font-size: 0.95rem; font-weight: 600; color: #1f2328; margin-bottom: 0.5rem; line-height: 1.4; }
+.rich-body { font-size: 0.9rem; line-height: 1.7; color: #6b7280; white-space: pre-wrap; }
+
+/* iframe */
+.dash-iframe { width: 100%; height: 100%; min-height: 220px; border: 0; border-radius: 8px; }
+
+/* chart layout: canvas on top, light legend row beneath */
+.chart-area { display: flex; flex-direction: column; width: 100%; min-height: 0; gap: 0.6rem; }
+.chart-canvas-wrap { position: relative; flex: 1; min-width: 0; min-height: 0; }
+.chart-legend { flex-shrink: 0; }
+.legend-items { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; justify-content: center; }
+.legend-row { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.76rem; color: #6b7280; }
+.legend-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.legend-label { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend-val { color: #aab0b8; }
+
+.state-msg { width: 100%; text-align: center; align-self: center; font-size: 0.85rem; color: #98a2b3; }
+.state-forbidden { color: #cf222e; }
+.empty-canvas { text-align: center; color: #98a2b3; padding: 4rem 0; }
+
+/* slide-over panel */
+.panel-scrim { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; justify-content: flex-end; }
+.config-panel { width: 380px; max-width: 92vw; height: 100%; background: #fff; box-shadow: -8px 0 28px rgba(0,0,0,0.12); display: flex; flex-direction: column; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.1rem; border-bottom: 1px solid #eef0f2; }
+.panel-head h3 { font-weight: 700; font-size: 0.95rem; }
+.panel-body { flex: 1; overflow-y: auto; padding: 1.1rem; }
+.panel-foot { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 0.9rem 1.1rem; border-top: 1px solid #eef0f2; }
+.panel-section { margin-bottom: 1.25rem; }
+.panel-section h4 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: .06em; color: #98a2b3; margin-bottom: 0.6rem; }
+.field { margin-bottom: 0.75rem; }
+.field label { display: block; font-size: 0.78rem; color: #5b6370; margin-bottom: 0.25rem; }
+.field input, .field select, .field textarea { width: 100%; border: 1px solid #d8dce0; border-radius: 8px; padding: 0.4rem 0.55rem; font-size: 0.85rem; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.12); }
+.type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
+.type-cell { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.5rem 0; border: 1px solid #e0e2e6; border-radius: 8px; font-size: 0.72rem; color: #5b6370; cursor: pointer; }
+.type-cell.active { border-color: #2563eb; background: #eff4ff; color: #1d4ed8; }
+.color-row { display: flex; gap: 0.5rem; }
+.color-swatch { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+.color-swatch.active { border-color: #1f2328; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0; font-size: 0.83rem; color: #374151; }
+.filter-row { display: grid; grid-template-columns: 1fr 70px 1fr 24px; gap: 0.35rem; margin-bottom: 0.4rem; align-items: center; }
+.filter-row select, .filter-row input { padding: 0.3rem 0.4rem; font-size: 0.78rem; border: 1px solid #d8dce0; border-radius: 6px; }
+.filter-del { color: #cf222e; cursor: pointer; text-align: center; }
+.add-filter { font-size: 0.78rem; color: #2563eb; cursor: pointer; }
+
+/* simple modal (dashboard/tab) */
+.modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; align-items: center; justify-content: center; }
+.modal-panel { background: #fff; border-radius: 14px; padding: 1.25rem; width: 90%; max-width: 420px; }
+</style>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="page-app" class="dash-root">
+    <!-- Toolbar -->
+    <div class="dash-toolbar">
+        <div class="dash-breadcrumb">
+            <span class="crumb-home">仪表盘</span>
+            <span class="crumb-sep">/</span>
+            <div class="dash-select" v-click-outside="closeDashMenu">
+                <div class="dash-select-btn" @click="dashMenuOpen = !dashMenuOpen">
+                    <span>{{ activeDashboard ? activeDashboard.name : '—' }}</span>
+                    <span v-if="activeDashboard && activeDashboard.tabs.length" style="font-size:.8rem;color:#aab0b8;font-weight:400">({{ tabIndex }}/{{ activeDashboard.tabs.length }})</span>
+                    <span style="font-size:.7rem;color:#9aa0a6">▾</span>
+                </div>
+                <ul v-if="dashMenuOpen" class="dash-menu">
+                    <li v-for="d in dashboards" :key="d.id" @click="selectDashboard(d.id); dashMenuOpen=false">{{ d.name }}</li>
+                    <li v-if="canWrite" class="add" @click="openDashboardModal(); dashMenuOpen=false">+ 新建看板</li>
+                </ul>
+            </div>
+        </div>
+        <div class="dash-toolbar-right">
+            <button class="tbtn" @click="stepDashboard(-1)" :disabled="dashboards.length < 2" title="上一个">‹</button>
+            <button class="tbtn" @click="stepDashboard(1)" :disabled="dashboards.length < 2" title="下一个">›</button>
+            <button class="tbtn" disabled title="收藏（即将上线）">☆</button>
+            <template v-if="canWrite">
+                <button v-if="!editMode" class="tbtn tbtn-primary" @click="editMode = true">编辑</button>
+                <button v-else class="tbtn tbtn-primary" @click="editMode = false">完成</button>
+            </template>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="dash-tabs" v-if="activeDashboard">
+        <button v-for="t in activeDashboard.tabs" :key="t.id" @click="activeTabId = t.id"
+                :class="['tab-pill', activeTabId === t.id ? 'active' : '']">{{ t.name }}</button>
+        <button v-if="editMode" class="tab-pill" @click="openTabModal()">+ 标签页</button>
+        <div class="ml-auto flex gap-2" v-if="editMode">
+            <button class="tbtn" @click="openWidgetPanel()" :disabled="!activeTabId">+ 组件</button>
+            <button class="tbtn tbtn-danger" @click="deleteActiveDashboard()">删除看板</button>
+        </div>
+    </div>
+
+    <!-- Canvas -->
+    <div class="dash-canvas">
+        <div v-if="activeTab && activeTab.widgets.length" class="dash-grid">
+            <div v-for="w in activeTab.widgets" :key="w.id" class="dash-card" :class="{editing: editMode}" :style="cardStyle(w)">
+                <div class="card-head">
+                    <span class="card-title">{{ w.title }}</span>
+                    <div v-if="editMode" class="card-actions">
+                        <span class="icon-btn" @click="openWidgetPanel(w)" title="编辑">✎</span>
+                        <span class="icon-btn danger" @click="deleteWidget(w.id)" title="删除">✕</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <template v-if="widgetData[w.id] && widgetData[w.id].status === 'forbidden'">
+                        <p class="state-msg state-forbidden">无权限查看</p>
+                    </template>
+                    <template v-else-if="widgetData[w.id] && widgetData[w.id].status === 'error'">
+                        <p class="state-msg">加载失败</p>
+                    </template>
+                    <template v-else-if="w.widget_type === 'number'">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ widgetData[w.id] ? widgetData[w.id].display : '—' }}</span>
+                            <span class="num-sub"><span class="num-dot" :style="{background: themeColor(w)}"></span>{{ sourceLabel(w.source_key) }}</span>
+                        </div>
+                    </template>
+                    <template v-else-if="w.widget_type === 'rich_text'">
+                        <div class="rich-text">
+                            <div v-if="richTitle(widgetData[w.id] && widgetData[w.id].content)" class="rich-title">{{ richTitle(widgetData[w.id] && widgetData[w.id].content) }}</div>
+                            <div class="rich-body">{{ richBody(widgetData[w.id] && widgetData[w.id].content) }}</div>
+                        </div>
+                    </template>
+                    <template v-else-if="w.widget_type === 'iframe'">
+                        <iframe v-if="widgetData[w.id] && widgetData[w.id].url" class="dash-iframe" :src="widgetData[w.id].url" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+                    </template>
+                    <template v-else-if="['bar','pie','line'].includes(w.widget_type)">
+                        <div class="chart-area">
+                            <div class="chart-canvas-wrap">
+                                <canvas :id="'chart-' + w.id"></canvas>
+                            </div>
+                            <div v-if="w.widget_type === 'pie' && showLegend(w) && legendOf(w).length" class="chart-legend">
+                                <div class="legend-items">
+                                    <span v-for="item in legendOf(w)" :key="item.label" class="legend-row">
+                                        <span class="legend-dot" :style="{background: item.color}"></span>
+                                        <span class="legend-label" :title="item.label">{{ item.label }}</span>
+                                        <span class="legend-val">{{ item.value }}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <template v-else>
+                        <span class="state-msg">加载中…</span>
+                    </template>
+                </div>
+            </div>
+        </div>
+        <div v-else-if="activeDashboard && !activeTab" class="empty-canvas">暂无标签页{{ editMode ? '，点击上方「+ 标签页」新建。' : '。' }}</div>
+        <div v-else-if="activeTab" class="empty-canvas">暂无组件{{ editMode ? '，点击上方「+ 组件」添加。' : '。' }}</div>
+        <div v-else class="empty-canvas">暂无仪表盘。</div>
+    </div>
+
+    <!-- Slide-over config panel -->
+    <div v-if="panelOpen" class="panel-scrim" @click.self="closePanel()">
+        <aside class="config-panel">
+            <div class="panel-head">
+                <h3>{{ widgetForm.id ? '编辑组件' : '新建组件' }}</h3>
+                <span class="icon-btn" @click="closePanel()">✕</span>
+            </div>
+            <div class="panel-body">
+                <div class="panel-section">
+                    <h4>类型</h4>
+                    <div class="type-grid">
+                        <div v-for="t in metadata.widget_types" :key="t"
+                             :class="['type-cell', widgetForm.widget_type === t ? 'active' : '']"
+                             @click="widgetForm.widget_type = t">
+                            <span style="font-size:1rem">{{ typeIcon(t) }}</span>
+                            <span>{{ typeLabel(t) }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h4>基础</h4>
+                    <div class="field"><label>标题</label><input v-model="widgetForm.title" /></div>
+                </div>
+
+                <template v-if="needsDataSource">
+                    <div class="panel-section">
+                        <h4>数据</h4>
+                        <div class="field"><label>数据源</label>
+                            <select v-model="widgetForm.source_key">
+                                <option value="">—</option>
+                                <option v-for="s in metadata.sources" :key="s.key" :value="s.key">{{ s.label }}</option>
+                            </select>
+                        </div>
+                        <div class="field"><label>聚合</label>
+                            <select v-model="widgetForm.config.metric">
+                                <option v-for="m in metadata.metrics" :key="m" :value="m">{{ metricLabel(m) }}</option>
+                            </select>
+                        </div>
+                        <div v-if="needsField" class="field"><label>字段</label>
+                            <select v-model="widgetForm.config.field">
+                                <option value="">—</option>
+                                <option v-for="f in numericFields" :key="f.key" :value="f.key">{{ f.label }}</option>
+                            </select>
+                        </div>
+                        <div v-if="needsGroupBy" class="field"><label>分组</label>
+                            <select v-model="widgetForm.config.group_by">
+                                <option value="">—</option>
+                                <option v-for="f in groupByFields" :key="f.key" :value="f.key">{{ f.label }}</option>
+                            </select>
+                        </div>
+                        <div v-if="isDateGroup" class="field"><label>时间粒度</label>
+                            <select v-model="widgetForm.config.date_group">
+                                <option v-for="g in metadata.date_groups" :key="g" :value="g">{{ g }}</option>
+                            </select>
+                        </div>
+
+                        <!-- minimal filters: eq / in / contains -->
+                        <label style="font-size:.78rem;color:#5b6370;">筛选</label>
+                        <div v-for="(f, idx) in widgetForm.config.filters" :key="idx" class="filter-row">
+                            <select v-model="f.field">
+                                <option value="">字段</option>
+                                <option v-for="fld in sourceFields" :key="fld.key" :value="fld.key">{{ fld.label }}</option>
+                            </select>
+                            <select v-model="f.op">
+                                <option value="eq">=</option>
+                                <option value="in">包含于</option>
+                                <option value="contains">包含</option>
+                            </select>
+                            <input v-model="f.value" :placeholder="f.op === 'in' ? '逗号分隔' : '值'" />
+                            <span class="filter-del" @click="widgetForm.config.filters.splice(idx,1)">✕</span>
+                        </div>
+                        <span class="add-filter" @click="addFilter()">+ 添加筛选</span>
+                    </div>
+                </template>
+
+                <template v-if="widgetForm.widget_type === 'iframe'">
+                    <div class="panel-section">
+                        <h4>内容</h4>
+                        <div class="field"><label>URL（仅 https）</label><input v-model="widgetForm.config.url" placeholder="https://" /></div>
+                    </div>
+                </template>
+                <template v-if="widgetForm.widget_type === 'rich_text'">
+                    <div class="panel-section">
+                        <h4>内容</h4>
+                        <div class="field"><textarea v-model="widgetForm.config.content" rows="5"></textarea></div>
+                    </div>
+                </template>
+
+                <template v-if="isChart">
+                    <div class="panel-section">
+                        <h4>样式</h4>
+                        <div class="field"><label>配色</label>
+                            <div class="color-row">
+                                <span v-for="c in metadata.colors" :key="c"
+                                      :class="['color-swatch', widgetForm.config.color === c ? 'active' : '']"
+                                      :style="{background: swatchColor(c)}"
+                                      @click="widgetForm.config.color = c"></span>
+                            </div>
+                        </div>
+                        <div class="field"><label>排序</label>
+                            <select v-model="widgetForm.config.sort">
+                                <option value="value_desc">数值降序</option>
+                                <option value="value_asc">数值升序</option>
+                                <option value="label_asc">标签升序</option>
+                                <option value="label_desc">标签降序</option>
+                            </select>
+                        </div>
+                        <div class="toggle-row"><span>显示图例</span><input type="checkbox" v-model="widgetForm.config.show_legend" /></div>
+                        <div v-if="widgetForm.widget_type === 'pie'" class="toggle-row"><span>中心显示总计</span><input type="checkbox" v-model="widgetForm.config.show_value_center" /></div>
+                        <div v-if="widgetForm.widget_type !== 'pie'" class="toggle-row"><span>显示数值标签</span><input type="checkbox" v-model="widgetForm.config.data_labels" /></div>
+                        <div class="toggle-row"><span>隐藏空值</span><input type="checkbox" v-model="widgetForm.config.hide_empty" /></div>
+                    </div>
+                </template>
+
+                <div class="panel-section">
+                    <h4>布局（栅格 12 列）</h4>
+                    <div class="type-grid" style="grid-template-columns: repeat(4, 1fr)">
+                        <div class="field" style="margin:0"><label>x</label><input type="number" min="0" max="11" v-model.number="widgetForm.x" /></div>
+                        <div class="field" style="margin:0"><label>y</label><input type="number" min="0" v-model.number="widgetForm.y" /></div>
+                        <div class="field" style="margin:0"><label>宽</label><input type="number" min="1" max="12" v-model.number="widgetForm.w" /></div>
+                        <div class="field" style="margin:0"><label>高</label><input type="number" min="1" v-model.number="widgetForm.h" /></div>
+                    </div>
+                </div>
+            </div>
+            <div class="panel-foot">
+                <button class="tbtn" @click="closePanel()">取消</button>
+                <button class="tbtn tbtn-primary" @click="saveWidget()">保存</button>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Dashboard modal -->
+    <div v-if="showDashboardModal" class="modal-overlay" @click.self="showDashboardModal = false">
+        <div class="modal-panel">
+            <h3 class="font-bold mb-3">{{ dashboardForm.id ? '编辑看板' : '新建看板' }}</h3>
+            <div class="field"><label>名称</label><input v-model="dashboardForm.name" /></div>
+            <div class="field"><label>描述</label><textarea v-model="dashboardForm.description" rows="2"></textarea></div>
+            <div class="flex justify-end gap-2 mt-2">
+                <button class="tbtn" @click="showDashboardModal = false">取消</button>
+                <button class="tbtn tbtn-primary" @click="saveDashboard()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab modal -->
+    <div v-if="showTabModal" class="modal-overlay" @click.self="showTabModal = false">
+        <div class="modal-panel">
+            <h3 class="font-bold mb-3">新建标签页</h3>
+            <div class="field"><label>名称</label><input v-model="tabForm.name" /></div>
+            <div class="flex justify-end gap-2 mt-2">
+                <button class="tbtn" @click="showTabModal = false">取消</button>
+                <button class="tbtn tbtn-primary" @click="saveTab()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block handbook_assistant %}{% endblock %}
+{% block page_scripts %}
+<script src="/static/js/pages/dashboards.js?v=3"></script>
+{% endblock %}

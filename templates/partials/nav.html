@@ -101,6 +101,10 @@
             </div>
         </div>
     </div>
+    <!-- 仪表盘 -->
+    <div class="gh-nav-item{% if path.startswith('/dashboards') %} nav-active{% endif %}" data-crm-nav-perm="dashboard.read">
+        <a class="nav-trigger" href="/dashboards">仪表盘</a>
+    </div>
     <!-- 交付 -->
     <div class="gh-nav-item{% if path.startswith('/delivery') or path.startswith('/customers/roster') %} nav-active{% endif %}" data-crm-nav-perm="delivery.roster.read">
         <span class="nav-trigger cursor-default">交付

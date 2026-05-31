@@ -527,6 +527,46 @@ class DeliveryInterviewEntry(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class DashboardDashboard(Base):
+    """团队共享仪表盘定义。"""
+
+    __tablename__ = "dashboard_dashboards"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text, default="")
+    layout_json = Column(Text, default="{}")
+    created_by = Column(String, default="")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class DashboardTab(Base):
+    __tablename__ = "dashboard_tabs"
+    id = Column(Integer, primary_key=True, index=True)
+    dashboard_id = Column(Integer, ForeignKey("dashboard_dashboards.id"), index=True, nullable=False)
+    name = Column(String, nullable=False)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class DashboardWidget(Base):
+    __tablename__ = "dashboard_widgets"
+    id = Column(Integer, primary_key=True, index=True)
+    tab_id = Column(Integer, ForeignKey("dashboard_tabs.id"), index=True, nullable=False)
+    title = Column(String, nullable=False)
+    widget_type = Column(String, nullable=False)
+    source_key = Column(String, default="")
+    config_json = Column(Text, default="{}")
+    x = Column(Integer, default=0)
+    y = Column(Integer, default=0)
+    w = Column(Integer, default=4)
+    h = Column(Integer, default=3)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class SocialInsuranceLocation(Base):
     """GM 测算：参保地最低社保/公积金（管理员可维护）。"""
 
@@ -578,6 +618,18 @@ auth_service.bootstrap_after_migrate(
     admin_username=_effective_admin_username(),
     admin_password=ADMIN_USER["password"],
 )
+
+from services.dashboards import seed_default_dashboards
+
+_db_seed_dashboards = SessionLocal()
+try:
+    seed_default_dashboards(_db_seed_dashboards, DashboardDashboard, DashboardTab, DashboardWidget)
+    _db_seed_dashboards.commit()
+except Exception:
+    _db_seed_dashboards.rollback()
+    raise
+finally:
+    _db_seed_dashboards.close()
 
 
 def _ensure_interview_schema_compat():
@@ -1386,6 +1438,26 @@ register_delivery_settlement_routes(
     strip_excel_sep=_strip_excel_sep_directive,
     pick_latest_backup=_pick_latest_backup,
     set_csv_download_headers=_set_csv_download_headers,
+)
+
+from routes.dashboards import register_dashboard_routes
+
+register_dashboard_routes(
+    app,
+    get_db=get_db,
+    page_renderer=_page,
+    DashboardDashboard=DashboardDashboard,
+    DashboardTab=DashboardTab,
+    DashboardWidget=DashboardWidget,
+    Client=Client,
+    Contact=Contact,
+    Opportunity=Opportunity,
+    VisitRecord=VisitRecord,
+    HandoffRequest=HandoffRequest,
+    DeliveryPipelineEntry=DeliveryPipelineEntry,
+    RosterEntry=RosterEntry,
+    DeliverySettlementEntry=DeliverySettlementEntry,
+    DeliveryInterviewEntry=DeliveryInterviewEntry,
 )
 
 

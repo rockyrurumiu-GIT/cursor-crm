@@ -107,6 +107,16 @@ _MATRIX_ROWS: List[Dict[str, Any]] = [
         "approve": ["delivery.handoff.review"],
     },
     {
+        "module": "dashboards",
+        "module_label": "仪表盘",
+        "label": "仪表盘搭建",
+        "read": ["dashboard.read"],
+        "write": ["dashboard.write"],
+        "delete": ["dashboard.write"],
+        "import_export": [],
+        "approve": [],
+    },
+    {
         "module": "system",
         "module_label": "系统",
         "label": "用户管理",

@@ -1,0 +1,499 @@
+/**
+ * Dashboard builder page (Twenty-parity B: polish + slide-over config panel).
+ * Requires: Vue 3 CDN, Chart.js 4.4.9, chartjs-plugin-datalabels 2.2.0, window.crmAuthHeader()
+ */
+(function () {
+  "use strict";
+
+  const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
+  const chartInstances = {};
+
+  // Low-saturation accent per color key. Keys match the backend whitelist; only the
+  // rendered hex is muted (Twenty-style). `base` is the single accent for bar/line/number.
+  const COLOR_THEMES = {
+    blue:   { base: "#7B96B8" }, // dusty blue
+    green:  { base: "#88A992" }, // sage
+    orange: { base: "#D6A461" }, // amber
+    red:    { base: "#CD9180" }, // terracotta
+    purple: { base: "#9389AE" }, // mauve
+    gray:   { base: "#9AA0A6" }, // warm gray
+  };
+  const DEFAULT_THEME = "blue";
+
+  // Soft categorical palette for pie/doughnut segments. Pie intentionally IGNORES the
+  // widget `color` setting and always uses this multi-hue palette — categorical charts
+  // should be multi-colored. `color` only affects bar / line / number accent. This is a
+  // design choice, not a bug.
+  const CATEGORICAL = ["#7B96B8", "#88A992", "#D6A461", "#CD9180", "#9389AE", "#9AA0A6", "#A9B7C9", "#C2B59B"];
+
+  function themeOf(color) {
+    return COLOR_THEMES[color] || COLOR_THEMES[DEFAULT_THEME];
+  }
+  function paletteFor(color, n) {
+    // Categorical (pie) palette — `color` arg is ignored by design (see CATEGORICAL note).
+    const out = [];
+    for (let i = 0; i < n; i++) out.push(CATEGORICAL[i % CATEGORICAL.length]);
+    return out;
+  }
+
+  // Register datalabels plugin globally (disabled by default per-chart).
+  if (typeof Chart !== "undefined" && typeof ChartDataLabels !== "undefined") {
+    Chart.register(ChartDataLabels);
+    Chart.defaults.set("plugins.datalabels", { display: false });
+  }
+
+  // Center-total plugin for doughnut charts.
+  const centerTotalPlugin = {
+    id: "centerTotal",
+    afterDraw: function (chart) {
+      const opt = chart.options.plugins.centerTotal;
+      if (!opt || !opt.display) return;
+      const ctx = chart.ctx;
+      const meta = chart.getDatasetMeta(0);
+      if (!meta || !meta.data || !meta.data[0]) return;
+      const x = meta.data[0].x, y = meta.data[0].y;
+      ctx.save();
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#1f2328";
+      ctx.font = "600 26px system-ui, sans-serif";
+      ctx.fillText(opt.text, x, y - 7);
+      ctx.fillStyle = "#98a2b3";
+      ctx.font = "400 11px system-ui, sans-serif";
+      ctx.fillText("总计", x, y + 15);
+      ctx.restore();
+    },
+  };
+  if (typeof Chart !== "undefined") Chart.register(centerTotalPlugin);
+
+  function api(method, url, body) {
+    const opts = {
+      method: method,
+      headers: Object.assign({ "Content-Type": "application/json" }, window.crmAuthHeader ? window.crmAuthHeader() : {}),
+      credentials: "same-origin",
+    };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    return fetch(url, opts).then(function (r) {
+      if (!r.ok) return r.json().then(function (e) { throw new Error(e.detail || r.statusText); });
+      return r.json();
+    });
+  }
+
+  const METRIC_LABELS = { count: "计数", sum: "求和", avg: "平均", min: "最小", max: "最大" };
+  const TYPE_LABELS = { number: "数字", bar: "柱状", pie: "环形", line: "折线", rich_text: "文本", iframe: "网页" };
+  const TYPE_ICONS = { number: "#", bar: "▮", pie: "◔", line: "📈", rich_text: "¶", iframe: "▭" };
+
+  createApp({
+    directives: {
+      "click-outside": {
+        mounted(el, binding) {
+          el._cob = function (e) { if (!el.contains(e.target)) binding.value(); };
+          document.addEventListener("click", el._cob, true);
+        },
+        unmounted(el) { document.removeEventListener("click", el._cob, true); },
+      },
+    },
+    setup: function () {
+      const dashboards = ref([]);
+      const activeDashboardId = ref(null);
+      const activeTabId = ref(null);
+      const metadata = ref({ sources: [], widget_types: [], metrics: [], date_groups: [], colors: [], sorts: [] });
+      const widgetData = ref({});
+      const canWrite = ref(false);
+      const editMode = ref(false);
+      const dashMenuOpen = ref(false);
+
+      const showDashboardModal = ref(false);
+      const showTabModal = ref(false);
+      const panelOpen = ref(false);
+      const dashboardForm = ref({ id: null, name: "", description: "" });
+      const tabForm = ref({ name: "" });
+      const widgetForm = ref(blankWidget());
+
+      function blankWidget() {
+        return {
+          id: null,
+          title: "新组件",
+          widget_type: "number",
+          source_key: "clients",
+          config: {
+            metric: "count", field: "", group_by: "", date_group: "month",
+            filters: [], color: DEFAULT_THEME, sort: "value_desc",
+            show_legend: true, show_value_center: true, data_labels: false, hide_empty: false,
+            url: "", content: "", prefix: "", suffix: "",
+          },
+          x: 0, y: 0, w: 4, h: 4,
+        };
+      }
+
+      const activeDashboard = computed(function () {
+        return dashboards.value.find(function (d) { return d.id === activeDashboardId.value; }) || null;
+      });
+      const activeTab = computed(function () {
+        if (!activeDashboard.value) return null;
+        return activeDashboard.value.tabs.find(function (t) { return t.id === activeTabId.value; }) || null;
+      });
+      const tabIndex = computed(function () {
+        if (!activeDashboard.value) return 0;
+        const i = activeDashboard.value.tabs.findIndex(function (t) { return t.id === activeTabId.value; });
+        return i < 0 ? 1 : i + 1;
+      });
+
+      const needsDataSource = computed(function () {
+        return ["number", "bar", "pie", "line"].indexOf(widgetForm.value.widget_type) >= 0;
+      });
+      const needsField = computed(function () {
+        return ["sum", "avg", "min", "max"].indexOf(widgetForm.value.config.metric) >= 0;
+      });
+      const needsGroupBy = computed(function () {
+        return ["bar", "pie", "line"].indexOf(widgetForm.value.widget_type) >= 0;
+      });
+      const isChart = computed(function () {
+        return ["bar", "pie", "line"].indexOf(widgetForm.value.widget_type) >= 0;
+      });
+      const sourceFields = computed(function () {
+        const src = metadata.value.sources.find(function (s) { return s.key === widgetForm.value.source_key; });
+        return src ? src.fields : [];
+      });
+      const numericFields = computed(function () {
+        return sourceFields.value.filter(function (f) { return f.kind === "numeric"; });
+      });
+      const groupByFields = computed(function () {
+        return sourceFields.value.filter(function (f) { return f.kind === "text" || f.kind === "datetime"; });
+      });
+      const isDateGroup = computed(function () {
+        const f = sourceFields.value.find(function (x) { return x.key === widgetForm.value.config.group_by; });
+        return needsGroupBy.value && f && f.kind === "datetime";
+      });
+
+      // Line charts require a date_group group_by; keep frontend honest by forcing line type for datetime groups.
+      watch(function () { return [widgetForm.value.widget_type, widgetForm.value.config.group_by]; }, function () {
+        if (isDateGroup.value && widgetForm.value.widget_type !== "line") {
+          // allow but default to month grouping
+          if (!widgetForm.value.config.date_group) widgetForm.value.config.date_group = "month";
+        }
+      });
+
+      function cardStyle(w) {
+        const x = Math.max(0, Math.min(11, w.x || 0));
+        const ww = Math.max(1, Math.min(12, w.w || 4));
+        return {
+          gridColumn: (x + 1) + " / span " + ww,
+          gridRow: ((w.y || 0) + 1) + " / span " + Math.max(1, w.h || 4),
+        };
+      }
+
+      function themeColor(w) { return themeOf((w.config || {}).color).base; }
+      function swatchColor(c) { return themeOf(c).base; }
+      function sourceLabel(key) {
+        const s = metadata.value.sources.find(function (x) { return x.key === key; });
+        return s ? s.label : "";
+      }
+      // First line is the title only when the content has multiple lines.
+      function richTitle(text) {
+        const t = (text || "").trim();
+        const nl = t.indexOf("\n");
+        return nl < 0 ? "" : t.slice(0, nl).trim();
+      }
+      function richBody(text) {
+        const t = (text || "").trim();
+        const nl = t.indexOf("\n");
+        return nl < 0 ? t : t.slice(nl + 1).trim();
+      }
+      function metricLabel(m) { return METRIC_LABELS[m] || m; }
+      function typeLabel(t) { return TYPE_LABELS[t] || t; }
+      function typeIcon(t) { return TYPE_ICONS[t] || "▢"; }
+      function showLegend(w) { return (w.config || {}).show_legend !== false; }
+
+      function legendOf(w) {
+        const d = widgetData.value[w.id];
+        if (!d || d.kind !== "series") return [];
+        const colors = paletteFor((w.config || {}).color, (d.labels || []).length);
+        return (d.labels || []).map(function (lab, i) {
+          return { label: lab, value: (d.values || [])[i], color: colors[i] };
+        });
+      }
+
+      function destroyCharts() {
+        Object.keys(chartInstances).forEach(function (k) {
+          if (chartInstances[k]) chartInstances[k].destroy();
+          delete chartInstances[k];
+        });
+      }
+
+      function renderChart(w, data) {
+        if (!data || data.status !== "ok" || data.kind !== "series") return;
+        const canvas = document.getElementById("chart-" + w.id);
+        if (!canvas || typeof Chart === "undefined") return;
+        if (chartInstances[w.id]) { chartInstances[w.id].destroy(); delete chartInstances[w.id]; }
+
+        const cfg = w.config || {};
+        const labels = data.labels || [];
+        const values = data.values || [];
+        const accent = themeOf(cfg.color).base;
+        const prefix = data.prefix || "";
+
+        if (w.widget_type === "pie") {
+          chartInstances[w.id] = new Chart(canvas, {
+            type: "doughnut",
+            // Pie ignores cfg.color by design (CATEGORICAL note above).
+            data: { labels: labels, datasets: [{ data: values, backgroundColor: paletteFor(cfg.color, labels.length), borderColor: "#fff", borderWidth: 1.5 }] },
+            options: {
+              responsive: true, maintainAspectRatio: false, cutout: "72%",
+              plugins: {
+                legend: { display: false },
+                datalabels: { display: false },
+                centerTotal: { display: cfg.show_value_center !== false, text: prefix + fmtNum(data.total) },
+                tooltip: { callbacks: { label: function (c) { return c.label + ": " + prefix + fmtNum(c.parsed); } } },
+              },
+            },
+          });
+          return;
+        }
+
+        if (w.widget_type === "bar") {
+          chartInstances[w.id] = new Chart(canvas, {
+            type: "bar",
+            data: { labels: labels, datasets: [{ label: w.title, data: values, backgroundColor: accent, borderRadius: 6, categoryPercentage: 0.7, barPercentage: 0.9 }] },
+            options: {
+              responsive: true, maintainAspectRatio: false,
+              layout: { padding: { top: 18 } },
+              plugins: {
+                legend: { display: false },
+                datalabels: cfg.data_labels ? { display: true, anchor: "end", align: "end", clip: false, color: "#98a2b3", font: { size: 10, weight: 500 }, formatter: dataLabel(prefix) } : { display: false },
+                tooltip: { callbacks: { label: function (c) { return prefix + fmtNum(c.parsed.y); } } },
+              },
+              scales: {
+                x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11 }, color: "#9aa0a6" } },
+                y: { beginAtZero: true, grid: { color: "#f3f4f6" }, border: { display: false }, ticks: { font: { size: 11 }, color: "#9aa0a6" } },
+              },
+            },
+          });
+          return;
+        }
+
+        // line
+        chartInstances[w.id] = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: w.title, data: values, borderColor: accent,
+              backgroundColor: hexA(accent, 0.08), fill: true, tension: 0.35,
+              pointRadius: 2, pointBackgroundColor: accent, borderWidth: 2,
+            }],
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              datalabels: cfg.data_labels ? { display: true, align: "top", color: "#98a2b3", font: { size: 10 }, formatter: dataLabel(prefix) } : { display: false },
+              tooltip: { callbacks: { label: function (c) { return prefix + fmtNum(c.parsed.y); } } },
+            },
+            scales: {
+              x: { grid: { color: "#f7f8fa" }, border: { display: false }, ticks: { font: { size: 11 }, color: "#9aa0a6" } },
+              y: { beginAtZero: true, grid: { color: "#f3f4f6" }, border: { display: false }, ticks: { font: { size: 11 }, color: "#9aa0a6" } },
+            },
+          },
+        });
+      }
+
+      // Datalabel formatter that hides null/empty values (fixes stray "-").
+      function dataLabel(prefix) {
+        return function (v) {
+          if (v == null || v === "" || Number(v) === 0) return "";
+          return prefix + fmtNum(v);
+        };
+      }
+
+      function fmtNum(v) {
+        if (v == null) return "0";
+        const n = Number(v);
+        if (Number.isInteger(n)) return n.toLocaleString();
+        return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      }
+      function hexA(hex, a) {
+        const m = hex.replace("#", "");
+        const r = parseInt(m.substring(0, 2), 16), g = parseInt(m.substring(2, 4), 16), b = parseInt(m.substring(4, 6), 16);
+        return "rgba(" + r + "," + g + "," + b + "," + a + ")";
+      }
+
+      function loadWidgetData(widgets) {
+        if (!widgets || !widgets.length) return;
+        widgets.forEach(function (w) {
+          api("GET", "/api/dashboard-widgets/" + w.id + "/data").then(function (data) {
+            widgetData.value[w.id] = data;
+            if (["bar", "pie", "line"].indexOf(w.widget_type) >= 0) {
+              nextTick(function () { renderChart(w, data); });
+            }
+          }).catch(function () {
+            widgetData.value[w.id] = { status: "error" };
+          });
+        });
+      }
+
+      function reloadActiveTabData() {
+        destroyCharts();
+        widgetData.value = {};
+        const tab = activeTab.value;
+        if (tab && tab.widgets) loadWidgetData(tab.widgets);
+      }
+
+      function loadDashboards() {
+        return api("GET", "/api/dashboards").then(function (list) {
+          dashboards.value = list;
+          if (!activeDashboardId.value && list.length) {
+            activeDashboardId.value = list[0].id;
+          }
+          const d = dashboards.value.find(function (x) { return x.id === activeDashboardId.value; });
+          if (d && d.tabs.length && !d.tabs.some(function (t) { return t.id === activeTabId.value; })) {
+            activeTabId.value = d.tabs[0].id;
+          }
+        });
+      }
+
+      function selectDashboard(id) {
+        activeDashboardId.value = id;
+        const d = dashboards.value.find(function (x) { return x.id === id; });
+        activeTabId.value = (d && d.tabs.length) ? d.tabs[0].id : null;
+      }
+      function stepDashboard(dir) {
+        if (dashboards.value.length < 2) return;
+        const idx = dashboards.value.findIndex(function (d) { return d.id === activeDashboardId.value; });
+        const next = (idx + dir + dashboards.value.length) % dashboards.value.length;
+        selectDashboard(dashboards.value[next].id);
+      }
+      function closeDashMenu() { dashMenuOpen.value = false; }
+
+      watch(activeTab, function () { reloadActiveTabData(); });
+
+      function openDashboardModal() {
+        dashboardForm.value = { id: null, name: "", description: "" };
+        showDashboardModal.value = true;
+      }
+      function saveDashboard() {
+        const f = dashboardForm.value;
+        const p = f.id
+          ? api("PUT", "/api/dashboards/" + f.id, { name: f.name, description: f.description })
+          : api("POST", "/api/dashboards", { name: f.name, description: f.description });
+        p.then(function (created) {
+          showDashboardModal.value = false;
+          if (!f.id && created && created.id) activeDashboardId.value = created.id;
+          return loadDashboards();
+        }).catch(function (e) { alert(e.message); });
+      }
+      function deleteActiveDashboard() {
+        if (!activeDashboardId.value || !confirm("确定删除此看板？其标签页与组件将一并删除。")) return;
+        api("DELETE", "/api/dashboards/" + activeDashboardId.value).then(function () {
+          activeDashboardId.value = null;
+          activeTabId.value = null;
+          return loadDashboards();
+        }).catch(function (e) { alert(e.message); });
+      }
+
+      function openTabModal() { tabForm.value = { name: "" }; showTabModal.value = true; }
+      function saveTab() {
+        if (!activeDashboardId.value) return;
+        api("POST", "/api/dashboards/" + activeDashboardId.value + "/tabs", tabForm.value)
+          .then(function () { showTabModal.value = false; return loadDashboards(); })
+          .then(function () {
+            const d = dashboards.value.find(function (x) { return x.id === activeDashboardId.value; });
+            if (d && d.tabs.length) activeTabId.value = d.tabs[d.tabs.length - 1].id;
+          })
+          .catch(function (e) { alert(e.message); });
+      }
+
+      function openWidgetPanel(w) {
+        if (w) {
+          const base = blankWidget();
+          widgetForm.value = {
+            id: w.id,
+            title: w.title,
+            widget_type: w.widget_type,
+            source_key: w.source_key || "",
+            config: Object.assign(base.config, w.config || {}, { filters: (w.config && w.config.filters) ? w.config.filters.map(function (f) { return Object.assign({}, f); }) : [] }),
+            x: w.x, y: w.y, w: w.w, h: w.h,
+          };
+        } else {
+          widgetForm.value = blankWidget();
+        }
+        panelOpen.value = true;
+      }
+      function closePanel() { panelOpen.value = false; }
+      function addFilter() {
+        widgetForm.value.config.filters.push({ field: "", op: "eq", value: "" });
+      }
+
+      function buildConfig() {
+        const f = widgetForm.value;
+        const c = f.config;
+        if (f.widget_type === "iframe") return { url: c.url };
+        if (f.widget_type === "rich_text") return { content: c.content };
+        const out = {
+          metric: c.metric, field: c.field, group_by: c.group_by,
+          filters: (c.filters || []).filter(function (x) { return x.field; }),
+          prefix: c.prefix || "", suffix: c.suffix || "",
+        };
+        // date_group path: backend rejects a datetime group_by and re-derives it
+        // from created_at, so send group_by empty and let the date_group drive it.
+        if (isDateGroup.value) { out.group_by = ""; out.date_group = c.date_group; }
+        if (isChart.value) {
+          out.color = c.color; out.sort = c.sort;
+          out.show_legend = !!c.show_legend;
+          out.show_value_center = !!c.show_value_center;
+          out.data_labels = !!c.data_labels;
+          out.hide_empty = !!c.hide_empty;
+        }
+        return out;
+      }
+
+      function saveWidget() {
+        if (!activeTabId.value) return;
+        const f = widgetForm.value;
+        const payload = {
+          title: f.title, widget_type: f.widget_type, source_key: f.source_key,
+          config: buildConfig(), x: f.x, y: f.y, w: f.w, h: f.h,
+        };
+        const p = f.id
+          ? api("PUT", "/api/dashboard-widgets/" + f.id, payload)
+          : api("POST", "/api/dashboard-tabs/" + activeTabId.value + "/widgets", payload);
+        p.then(function () { panelOpen.value = false; return loadDashboards(); })
+          .then(function () { reloadActiveTabData(); })
+          .catch(function (e) { alert(e.message); });
+      }
+
+      function deleteWidget(id) {
+        if (!confirm("确定删除此组件？")) return;
+        api("DELETE", "/api/dashboard-widgets/" + id)
+          .then(function () { return loadDashboards(); })
+          .then(function () { reloadActiveTabData(); })
+          .catch(function (e) { alert(e.message); });
+      }
+
+      onMounted(function () {
+        fetch("/api/me", { headers: window.crmAuthHeader ? window.crmAuthHeader() : {}, credentials: "same-origin" })
+          .then(function (r) { return r.json(); })
+          .then(function (me) {
+            const perms = me.permissions || [];
+            canWrite.value = perms.indexOf("dashboard.write") >= 0 || me.is_super;
+          });
+        api("GET", "/api/dashboard-metadata").then(function (m) { metadata.value = m; });
+        loadDashboards();
+      });
+
+      return {
+        dashboards, activeDashboardId, activeTabId, activeDashboard, activeTab, tabIndex,
+        metadata, widgetData, canWrite, editMode, dashMenuOpen,
+        showDashboardModal, showTabModal, panelOpen,
+        dashboardForm, tabForm, widgetForm,
+        needsDataSource, needsField, needsGroupBy, isChart, isDateGroup,
+        sourceFields, numericFields, groupByFields,
+        cardStyle, themeColor, swatchColor, sourceLabel, metricLabel, typeLabel, typeIcon,
+        richTitle, richBody, showLegend, legendOf,
+        selectDashboard, stepDashboard, closeDashMenu,
+        openDashboardModal, saveDashboard, deleteActiveDashboard,
+        openTabModal, saveTab, openWidgetPanel, closePanel, addFilter, saveWidget, deleteWidget,
+      };
+    },
+  }).mount("#page-app");
+})();

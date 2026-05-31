@@ -1,0 +1,843 @@
+"""Dashboard builder — CRUD, whitelisted aggregation, seed."""
+from __future__ import annotations
+
+import json
+import re
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple, Type
+from urllib.parse import urlparse
+
+from fastapi import HTTPException
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from auth import data_scope as ds
+from auth import service as auth_svc
+from auth.service import AuthContext
+from schemas.dashboards import (
+    CHART_COLORS,
+    CHART_WIDGET_TYPES,
+    DATA_WIDGET_TYPES,
+    DATA_SOURCES,
+    DATE_GROUPS,
+    DEFAULT_COLOR,
+    DEFAULT_SORT,
+    FILTER_OPS,
+    METRICS,
+    NUMERIC_METRICS,
+    SORT_MODES,
+    WIDGET_TYPES,
+    get_field,
+    get_source,
+)
+from services.clients import scoped_client_query
+
+_DEFAULT_SEED_NAME = "经营总览"
+_NUMERIC_RE = re.compile(r"^-?\d+(\.\d+)?$")
+
+# model_attr -> key in models dict passed to service functions
+MODEL_MAP_KEYS = {
+    "Client": "Client",
+    "Contact": "Contact",
+    "Opportunity": "Opportunity",
+    "VisitRecord": "VisitRecord",
+    "HandoffRequest": "HandoffRequest",
+    "DeliveryPipelineEntry": "DeliveryPipelineEntry",
+    "RosterEntry": "RosterEntry",
+    "DeliverySettlementEntry": "DeliverySettlementEntry",
+    "DeliveryInterviewEntry": "DeliveryInterviewEntry",
+}
+
+
+def _now() -> datetime:
+    return datetime.now()
+
+
+def _parse_json(raw: str, default: Any) -> Any:
+    if not raw:
+        return default
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return default
+
+
+def _dump_json(obj: Any) -> str:
+    return json.dumps(obj, ensure_ascii=False)
+
+
+def _get_model(models: dict, source_key: str) -> Type[Any]:
+    src = get_source(source_key)
+    if not src:
+        raise HTTPException(status_code=400, detail=f"未知数据源: {source_key}")
+    key = MODEL_MAP_KEYS.get(src.model_attr)
+    if not key or key not in models:
+        raise HTTPException(status_code=500, detail=f"数据源模型未注入: {source_key}")
+    return models[key]
+
+
+def source_permission(source_key: str) -> str:
+    src = get_source(source_key)
+    if not src:
+        raise HTTPException(status_code=400, detail=f"未知数据源: {source_key}")
+    return src.permission
+
+
+def user_can_read_source(ctx: AuthContext, source_key: str) -> bool:
+    if not source_key:
+        return True
+    perm = source_permission(source_key)
+    return auth_svc.user_has_permission(ctx, perm)
+
+
+def validate_iframe_url(url: str) -> str:
+    url = (url or "").strip()
+    if not url:
+        raise HTTPException(status_code=400, detail="iframe URL 不能为空")
+    if "<" in url or ">" in url:
+        raise HTTPException(status_code=400, detail="iframe URL 不允许 HTML")
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        raise HTTPException(status_code=400, detail="iframe 仅允许 https:// URL")
+    if not parsed.netloc:
+        raise HTTPException(status_code=400, detail="iframe URL 无效")
+    return url
+
+
+def validate_rich_text(content: str) -> str:
+    text = (content or "").strip()
+    if "<" in text or ">" in text:
+        raise HTTPException(status_code=400, detail="rich_text 不允许 HTML")
+    return text
+
+
+def validate_widget_config(
+    widget_type: str,
+    source_key: str,
+    config: dict,
+) -> dict:
+    if widget_type not in WIDGET_TYPES:
+        raise HTTPException(status_code=400, detail=f"未知 widget 类型: {widget_type}")
+
+    out: dict = {}
+
+    if widget_type == "iframe":
+        out["url"] = validate_iframe_url(config.get("url", ""))
+        return out
+
+    if widget_type == "rich_text":
+        out["content"] = validate_rich_text(config.get("content", ""))
+        return out
+
+    if widget_type not in DATA_WIDGET_TYPES:
+        raise HTTPException(status_code=400, detail=f"widget 类型不支持数据配置: {widget_type}")
+
+    if not source_key or source_key not in DATA_SOURCES:
+        raise HTTPException(status_code=400, detail=f"未知数据源: {source_key}")
+
+    metric = (config.get("metric") or "count").strip()
+    if metric not in METRICS:
+        raise HTTPException(status_code=400, detail=f"未知聚合方式: {metric}")
+
+    field = (config.get("field") or "").strip()
+    if metric in NUMERIC_METRICS:
+        if not field:
+            raise HTTPException(status_code=400, detail="sum/avg/min/max 需要指定 field")
+        fdef = get_field(source_key, field)
+        if not fdef or fdef.kind != "numeric":
+            raise HTTPException(status_code=400, detail=f"字段不可用于数值聚合: {field}")
+    elif field:
+        fdef = get_field(source_key, field)
+        if not fdef:
+            raise HTTPException(status_code=400, detail=f"未知字段: {field}")
+
+    group_by = (config.get("group_by") or "").strip()
+    if group_by:
+        gdef = get_field(source_key, group_by)
+        if not gdef:
+            raise HTTPException(status_code=400, detail=f"未知分组字段: {group_by}")
+        if gdef.kind == "datetime":
+            raise HTTPException(status_code=400, detail="datetime 字段请使用 date_group 而非 group_by")
+
+    date_group = (config.get("date_group") or "").strip()
+    if date_group:
+        if date_group not in DATE_GROUPS:
+            raise HTTPException(status_code=400, detail=f"未知 date_group: {date_group}")
+        dg_field = (config.get("group_by") or "created_at").strip()
+        dgdef = get_field(source_key, dg_field)
+        if not dgdef or dgdef.kind != "datetime":
+            raise HTTPException(status_code=400, detail="date_group 仅支持 datetime 字段")
+        group_by = dg_field
+
+    filters = config.get("filters") or []
+    if not isinstance(filters, list):
+        raise HTTPException(status_code=400, detail="filters 必须是数组")
+    clean_filters = []
+    for flt in filters:
+        if not isinstance(flt, dict):
+            raise HTTPException(status_code=400, detail="filter 项必须是对象")
+        op = (flt.get("op") or "").strip()
+        fname = (flt.get("field") or "").strip()
+        if op not in FILTER_OPS:
+            raise HTTPException(status_code=400, detail=f"未知 filter op: {op}")
+        fdef = get_field(source_key, fname)
+        if not fdef:
+            raise HTTPException(status_code=400, detail=f"未知 filter 字段: {fname}")
+        clean_filters.append({"field": fname, "op": op, "value": flt.get("value", "")})
+
+    limit = config.get("limit", 20)
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="limit 必须是整数")
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail="limit 须在 1–100 之间")
+
+    if widget_type in CHART_WIDGET_TYPES and not group_by and metric == "count":
+        pass  # count without group is ok for number widget only
+    if widget_type in CHART_WIDGET_TYPES and not group_by:
+        raise HTTPException(status_code=400, detail="图表 widget 需要 group_by 或 date_group")
+
+    out["metric"] = metric
+    out["field"] = field
+    out["group_by"] = group_by
+    if date_group:
+        out["date_group"] = date_group
+    out["filters"] = clean_filters
+    out["limit"] = limit
+    out["prefix"] = str(config.get("prefix") or "")
+    out["suffix"] = str(config.get("suffix") or "")
+
+    # Style options (Twenty-parity) — fixed enums / booleans only.
+    color = (config.get("color") or DEFAULT_COLOR).strip()
+    if color not in CHART_COLORS:
+        raise HTTPException(status_code=400, detail=f"未知配色: {color}")
+    out["color"] = color
+
+    sort_mode = (config.get("sort") or DEFAULT_SORT).strip()
+    if sort_mode not in SORT_MODES:
+        raise HTTPException(status_code=400, detail=f"未知排序: {sort_mode}")
+    out["sort"] = sort_mode
+
+    out["show_legend"] = bool(config.get("show_legend", True))
+    out["show_value_center"] = bool(config.get("show_value_center", True))
+    out["data_labels"] = bool(config.get("data_labels", False))
+    out["hide_empty"] = bool(config.get("hide_empty", False))
+    return out
+
+
+def _scoped_query(
+    db: Session,
+    ctx: AuthContext,
+    source_key: str,
+    models: dict,
+):
+    src = get_source(source_key)
+    if not src:
+        raise HTTPException(status_code=400, detail=f"未知数据源: {source_key}")
+    Model = _get_model(models, source_key)
+    q = db.query(Model)
+    if source_key == "clients":
+        return scoped_client_query(db, ctx, models["Client"], action="read")
+    if src.has_client_id:
+        return ds.filter_query_by_client_scope(
+            q,
+            db,
+            ctx,
+            src.resource_code,
+            "read",
+            Model.client_id,
+            models["Client"],
+        )
+    return q
+
+
+def _column(Model: Type[Any], field_key: str):
+    col = getattr(Model, field_key, None)
+    if col is None:
+        raise HTTPException(status_code=400, detail=f"字段不存在: {field_key}")
+    return col
+
+
+def _parse_numeric(raw: Any) -> Optional[float]:
+    s = str(raw or "").strip().replace(",", "").replace("¥", "").replace("￥", "")
+    if not s or not _NUMERIC_RE.match(s):
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _apply_filters(q, Model: Type[Any], filters: list):
+    for flt in filters:
+        col = _column(Model, flt["field"])
+        val = flt.get("value", "")
+        op = flt["op"]
+        if op == "eq":
+            q = q.filter(col == val)
+        elif op == "ne":
+            q = q.filter(col != val)
+        elif op == "contains":
+            q = q.filter(col.like(f"%{val}%"))
+        elif op == "not_contains":
+            q = q.filter(~col.like(f"%{val}%"))
+        elif op == "gt":
+            q = q.filter(col > val)
+        elif op == "gte":
+            q = q.filter(col >= val)
+        elif op == "lt":
+            q = q.filter(col < val)
+        elif op == "lte":
+            q = q.filter(col <= val)
+        elif op == "in":
+            parts = [p.strip() for p in str(val).split(",") if p.strip()]
+            q = q.filter(col.in_(parts))
+    return q
+
+
+def _date_bucket(col, date_group: str):
+    if date_group == "day":
+        return func.strftime("%Y-%m-%d", col)
+    if date_group == "week":
+        return func.strftime("%Y-W%W", col)
+    if date_group == "month":
+        return func.strftime("%Y-%m", col)
+    if date_group == "year":
+        return func.strftime("%Y", col)
+    return func.strftime("%Y-%m", col)
+
+
+def _aggregate_rows(rows: list, metric: str, field_key: str) -> float:
+    if metric == "count":
+        return float(len(rows))
+    nums = []
+    for row in rows:
+        v = _parse_numeric(getattr(row, field_key, None))
+        if v is not None:
+            nums.append(v)
+    if not nums:
+        return 0.0
+    if metric == "sum":
+        return sum(nums)
+    if metric == "avg":
+        return sum(nums) / len(nums)
+    if metric == "min":
+        return min(nums)
+    if metric == "max":
+        return max(nums)
+    return 0.0
+
+
+def _finalize_series(
+    labels: list,
+    values: list,
+    sort_mode: str,
+    hide_empty: bool,
+    limit: int,
+    prefix: str,
+    suffix: str,
+    preserve_order: bool = False,
+) -> dict:
+    pairs = list(zip(labels, values))
+    if hide_empty:
+        pairs = [(l, v) for (l, v) in pairs if v]
+    if not preserve_order:
+        if sort_mode == "label_asc":
+            pairs.sort(key=lambda x: str(x[0]))
+        elif sort_mode == "label_desc":
+            pairs.sort(key=lambda x: str(x[0]), reverse=True)
+        elif sort_mode == "value_asc":
+            pairs.sort(key=lambda x: x[1])
+        else:  # value_desc (default)
+            pairs.sort(key=lambda x: x[1], reverse=True)
+    pairs = pairs[:limit]
+    out_labels = [p[0] for p in pairs]
+    out_values = [p[1] for p in pairs]
+    return {
+        "status": "ok",
+        "kind": "series",
+        "labels": out_labels,
+        "values": out_values,
+        "total": sum(out_values),
+        "prefix": prefix,
+        "suffix": suffix,
+    }
+
+
+def query_widget_data(
+    db: Session,
+    ctx: AuthContext,
+    source_key: str,
+    config: dict,
+    models: dict,
+) -> dict:
+    if not user_can_read_source(ctx, source_key):
+        return {"status": "forbidden", "message": "无权限查看该数据源"}
+
+    metric = config.get("metric", "count")
+    field_key = config.get("field", "")
+    group_by = config.get("group_by", "")
+    date_group = config.get("date_group", "")
+    filters = config.get("filters") or []
+    limit = int(config.get("limit") or 20)
+    prefix = config.get("prefix", "")
+    suffix = config.get("suffix", "")
+    sort_mode = config.get("sort") or DEFAULT_SORT
+    hide_empty = bool(config.get("hide_empty", False))
+
+    Model = _get_model(models, source_key)
+    q = _scoped_query(db, ctx, source_key, models)
+    q = _apply_filters(q, Model, filters)
+
+    if group_by:
+        col = _column(Model, group_by)
+        if date_group:
+            bucket = _date_bucket(col, date_group)
+            rows = (
+                q.with_entities(bucket.label("label"), func.count().label("cnt"))
+                .group_by(bucket)
+                .order_by(bucket)
+                .all()
+            )
+            labels = [str(r.label or "(空)") for r in rows]
+            values = [float(r.cnt) for r in rows]
+            # Time series: keep chronological order regardless of sort.
+            return _finalize_series(
+                labels, values, sort_mode, hide_empty, limit, prefix, suffix,
+                preserve_order=True,
+            )
+
+        if metric == "count":
+            rows = (
+                q.with_entities(col.label("label"), func.count().label("cnt"))
+                .group_by(col)
+                .all()
+            )
+            labels = [str(r.label or "(空)") for r in rows]
+            values = [float(r.cnt) for r in rows]
+            return _finalize_series(
+                labels, values, sort_mode, hide_empty, limit, prefix, suffix,
+            )
+
+        # grouped numeric metric — compute in Python
+        all_rows = q.all()
+        buckets: Dict[str, list] = {}
+        for row in all_rows:
+            key = str(getattr(row, group_by, None) or "(空)")
+            buckets.setdefault(key, []).append(row)
+        labels = []
+        values = []
+        for label, bucket_rows in buckets.items():
+            labels.append(label)
+            values.append(_aggregate_rows(bucket_rows, metric, field_key))
+        return _finalize_series(
+            labels, values, sort_mode, hide_empty, limit, prefix, suffix,
+        )
+
+    # scalar
+    rows = q.all()
+    value = _aggregate_rows(rows, metric, field_key)
+    if metric in NUMERIC_METRICS and value == int(value):
+        display = str(int(value)) if value == int(value) else f"{value:.2f}"
+    elif metric == "count":
+        display = str(int(value))
+    else:
+        display = f"{value:.2f}"
+    return {
+        "status": "ok",
+        "kind": "scalar",
+        "value": value,
+        "display": f"{prefix}{display}{suffix}",
+        "prefix": prefix,
+        "suffix": suffix,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Serialization
+# ---------------------------------------------------------------------------
+
+def dashboard_to_dict(d: Any, tabs: Optional[list] = None) -> dict:
+    return {
+        "id": d.id,
+        "name": d.name,
+        "description": d.description or "",
+        "layout_json": _parse_json(d.layout_json or "{}", {}),
+        "created_by": d.created_by or "",
+        "created_at": d.created_at.isoformat() if d.created_at else "",
+        "updated_at": d.updated_at.isoformat() if d.updated_at else "",
+        "tabs": tabs if tabs is not None else [],
+    }
+
+
+def tab_to_dict(t: Any, widgets: Optional[list] = None) -> dict:
+    return {
+        "id": t.id,
+        "dashboard_id": t.dashboard_id,
+        "name": t.name,
+        "sort_order": t.sort_order or 0,
+        "created_at": t.created_at.isoformat() if t.created_at else "",
+        "updated_at": t.updated_at.isoformat() if t.updated_at else "",
+        "widgets": widgets if widgets is not None else [],
+    }
+
+
+def widget_to_dict(w: Any) -> dict:
+    return {
+        "id": w.id,
+        "tab_id": w.tab_id,
+        "title": w.title,
+        "widget_type": w.widget_type,
+        "source_key": w.source_key or "",
+        "config": _parse_json(w.config_json or "{}", {}),
+        "x": w.x or 0,
+        "y": w.y or 0,
+        "w": w.w or 4,
+        "h": w.h or 3,
+        "sort_order": w.sort_order or 0,
+        "created_at": w.created_at.isoformat() if w.created_at else "",
+        "updated_at": w.updated_at.isoformat() if w.updated_at else "",
+    }
+
+
+# ---------------------------------------------------------------------------
+# CRUD (explicit cascade — do not rely on SQLite FK cascade)
+# ---------------------------------------------------------------------------
+
+def list_dashboards(db: Session, DashboardDashboard, DashboardTab, DashboardWidget) -> list:
+    dashboards = db.query(DashboardDashboard).order_by(DashboardDashboard.id).all()
+    out = []
+    for d in dashboards:
+        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).order_by(
+            DashboardTab.sort_order, DashboardTab.id
+        ).all()
+        tab_dicts = []
+        for t in tabs:
+            widgets = db.query(DashboardWidget).filter(DashboardWidget.tab_id == t.id).order_by(
+                DashboardWidget.sort_order, DashboardWidget.y, DashboardWidget.x, DashboardWidget.id
+            ).all()
+            tab_dicts.append(tab_to_dict(t, [widget_to_dict(w) for w in widgets]))
+        out.append(dashboard_to_dict(d, tab_dicts))
+    return out
+
+
+def get_dashboard(db: Session, dashboard_id: int, DashboardDashboard, DashboardTab, DashboardWidget) -> dict:
+    d = db.query(DashboardDashboard).filter(DashboardDashboard.id == dashboard_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="Dashboard 不存在")
+    tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).order_by(
+        DashboardTab.sort_order, DashboardTab.id
+    ).all()
+    tab_dicts = []
+    for t in tabs:
+        widgets = db.query(DashboardWidget).filter(DashboardWidget.tab_id == t.id).order_by(
+            DashboardWidget.sort_order, DashboardWidget.y, DashboardWidget.x, DashboardWidget.id
+        ).all()
+        tab_dicts.append(tab_to_dict(t, [widget_to_dict(w) for w in widgets]))
+    return dashboard_to_dict(d, tab_dicts)
+
+
+def create_dashboard(db: Session, body: dict, ctx: AuthContext, DashboardDashboard) -> dict:
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name 不能为空")
+    now = _now()
+    d = DashboardDashboard(
+        name=name,
+        description=(body.get("description") or "").strip(),
+        layout_json=_dump_json(body.get("layout_json") or {}),
+        created_by=ctx.username,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(d)
+    db.commit()
+    db.refresh(d)
+    return dashboard_to_dict(d, [])
+
+
+def update_dashboard(db: Session, dashboard_id: int, body: dict, DashboardDashboard, DashboardTab, DashboardWidget) -> dict:
+    d = db.query(DashboardDashboard).filter(DashboardDashboard.id == dashboard_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="Dashboard 不存在")
+    if "name" in body:
+        name = (body.get("name") or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name 不能为空")
+        d.name = name
+    if "description" in body:
+        d.description = (body.get("description") or "").strip()
+    if "layout_json" in body:
+        d.layout_json = _dump_json(body.get("layout_json") or {})
+    d.updated_at = _now()
+    db.commit()
+    return get_dashboard(db, dashboard_id, DashboardDashboard, DashboardTab, DashboardWidget)
+
+
+def delete_dashboard(db: Session, dashboard_id: int, DashboardDashboard, DashboardTab, DashboardWidget) -> dict:
+    d = db.query(DashboardDashboard).filter(DashboardDashboard.id == dashboard_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="Dashboard 不存在")
+    tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == dashboard_id).all()
+    for tab in tabs:
+        db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).delete(synchronize_session=False)
+    db.query(DashboardTab).filter(DashboardTab.dashboard_id == dashboard_id).delete(synchronize_session=False)
+    db.query(DashboardDashboard).filter(DashboardDashboard.id == dashboard_id).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "ok"}
+
+
+def create_tab(db: Session, dashboard_id: int, body: dict, DashboardDashboard, DashboardTab) -> dict:
+    d = db.query(DashboardDashboard).filter(DashboardDashboard.id == dashboard_id).first()
+    if not d:
+        raise HTTPException(status_code=404, detail="Dashboard 不存在")
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name 不能为空")
+    now = _now()
+    t = DashboardTab(
+        dashboard_id=dashboard_id,
+        name=name,
+        sort_order=int(body.get("sort_order") or 0),
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return tab_to_dict(t, [])
+
+
+def update_tab(db: Session, tab_id: int, body: dict, DashboardTab) -> dict:
+    t = db.query(DashboardTab).filter(DashboardTab.id == tab_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tab 不存在")
+    if "name" in body:
+        name = (body.get("name") or "").strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="name 不能为空")
+        t.name = name
+    if "sort_order" in body:
+        t.sort_order = int(body.get("sort_order") or 0)
+    t.updated_at = _now()
+    db.commit()
+    db.refresh(t)
+    return tab_to_dict(t)
+
+
+def delete_tab(db: Session, tab_id: int, DashboardTab, DashboardWidget) -> dict:
+    t = db.query(DashboardTab).filter(DashboardTab.id == tab_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tab 不存在")
+    db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab_id).delete(synchronize_session=False)
+    db.query(DashboardTab).filter(DashboardTab.id == tab_id).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "ok"}
+
+
+def create_widget(db: Session, tab_id: int, body: dict, DashboardTab, DashboardWidget) -> dict:
+    t = db.query(DashboardTab).filter(DashboardTab.id == tab_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tab 不存在")
+    title = (body.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title 不能为空")
+    widget_type = (body.get("widget_type") or "").strip()
+    source_key = (body.get("source_key") or "").strip()
+    config = body.get("config") or {}
+    if not isinstance(config, dict):
+        raise HTTPException(status_code=400, detail="config 必须是对象")
+    clean_config = validate_widget_config(widget_type, source_key, config)
+    now = _now()
+    w = DashboardWidget(
+        tab_id=tab_id,
+        title=title,
+        widget_type=widget_type,
+        source_key=source_key,
+        config_json=_dump_json(clean_config),
+        x=int(body.get("x") or 0),
+        y=int(body.get("y") or 0),
+        w=int(body.get("w") or 4),
+        h=int(body.get("h") or 3),
+        sort_order=int(body.get("sort_order") or 0),
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(w)
+    db.commit()
+    db.refresh(w)
+    return widget_to_dict(w)
+
+
+def update_widget(db: Session, widget_id: int, body: dict, DashboardWidget) -> dict:
+    w = db.query(DashboardWidget).filter(DashboardWidget.id == widget_id).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Widget 不存在")
+    widget_type = (body.get("widget_type") or w.widget_type).strip()
+    source_key = body.get("source_key", w.source_key or "")
+    if "title" in body:
+        title = (body.get("title") or "").strip()
+        if not title:
+            raise HTTPException(status_code=400, detail="title 不能为空")
+        w.title = title
+    if "widget_type" in body:
+        w.widget_type = widget_type
+    if "source_key" in body:
+        w.source_key = (source_key or "").strip()
+    if "config" in body:
+        config = body.get("config") or {}
+        if not isinstance(config, dict):
+            raise HTTPException(status_code=400, detail="config 必须是对象")
+        clean = validate_widget_config(widget_type, w.source_key or source_key, config)
+        w.config_json = _dump_json(clean)
+    for attr in ("x", "y", "w", "h", "sort_order"):
+        if attr in body:
+            setattr(w, attr, int(body.get(attr) or 0))
+    w.updated_at = _now()
+    db.commit()
+    db.refresh(w)
+    return widget_to_dict(w)
+
+
+def delete_widget(db: Session, widget_id: int, DashboardWidget) -> dict:
+    w = db.query(DashboardWidget).filter(DashboardWidget.id == widget_id).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Widget 不存在")
+    db.query(DashboardWidget).filter(DashboardWidget.id == widget_id).delete(synchronize_session=False)
+    db.commit()
+    return {"status": "ok"}
+
+
+def get_widget_data(
+    db: Session,
+    ctx: AuthContext,
+    widget_id: int,
+    models: dict,
+    DashboardWidget,
+) -> dict:
+    w = db.query(DashboardWidget).filter(DashboardWidget.id == widget_id).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="Widget 不存在")
+    config = _parse_json(w.config_json or "{}", {})
+    wt = w.widget_type
+
+    if wt == "rich_text":
+        return {"status": "ok", "kind": "rich_text", "content": config.get("content", "")}
+    if wt == "iframe":
+        return {"status": "ok", "kind": "iframe", "url": config.get("url", "")}
+
+    source_key = w.source_key or ""
+    if not source_key:
+        return {"status": "error", "message": "未配置数据源"}
+    return query_widget_data(db, ctx, source_key, config, models)
+
+
+# ---------------------------------------------------------------------------
+# Seed
+# ---------------------------------------------------------------------------
+
+def seed_default_dashboards(
+    db: Session,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+) -> None:
+    """幂等预置「经营总览」dashboard。"""
+    existing = (
+        db.query(DashboardDashboard)
+        .filter(DashboardDashboard.name == _DEFAULT_SEED_NAME)
+        .first()
+    )
+    if existing:
+        return
+
+    now = _now()
+    d = DashboardDashboard(
+        name=_DEFAULT_SEED_NAME,
+        description="系统预置经营总览",
+        layout_json="{}",
+        created_by="system",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(d)
+    db.flush()
+
+    tab = DashboardTab(
+        dashboard_id=d.id,
+        name="总览",
+        sort_order=0,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(tab)
+    db.flush()
+
+    # Twenty 式默认看板：克制的 2x2 大卡布局（欢迎 / 环形 / 柱状 / 折线），无 KPI 数字卡。
+    # 全部用显式 x/y/w/h 做 12 栅格定位（前端按 grid-column/row 映射，非 DOM 流式排列）。
+    welcome_text = (
+        "欢迎使用经营总览\n"
+        "这里汇总了商机的分布、金额与创建趋势。点击右上角「编辑」可自定义看板、"
+        "新增标签页与组件。"
+    )
+    widgets_spec = [
+        {
+            "title": "欢迎",
+            "widget_type": "rich_text",
+            "source_key": "",
+            "config": {"content": welcome_text},
+            "x": 0, "y": 0, "w": 6, "h": 5,
+        },
+        {
+            "title": "商机阶段分布",
+            "widget_type": "pie",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count", "group_by": "stage", "limit": 8,
+                "color": "blue", "sort": "value_desc",
+                "show_legend": True, "show_value_center": True, "hide_empty": True,
+            },
+            "x": 6, "y": 0, "w": 6, "h": 5,
+        },
+        {
+            "title": "各阶段商机金额",
+            "widget_type": "bar",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "sum", "field": "amount", "group_by": "stage", "limit": 8,
+                "color": "blue", "sort": "value_desc",
+                "data_labels": True, "hide_empty": True, "prefix": "¥",
+            },
+            "x": 0, "y": 5, "w": 6, "h": 5,
+        },
+        {
+            "title": "商机创建趋势",
+            "widget_type": "line",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count", "group_by": "created_at", "date_group": "month",
+                "limit": 12, "color": "blue",
+            },
+            "x": 6, "y": 5, "w": 6, "h": 5,
+        },
+    ]
+
+    for i, spec in enumerate(widgets_spec):
+        w = DashboardWidget(
+            tab_id=tab.id,
+            title=spec["title"],
+            widget_type=spec["widget_type"],
+            source_key=spec["source_key"],
+            config_json=_dump_json(spec["config"]),
+            x=spec["x"],
+            y=spec["y"],
+            w=spec["w"],
+            h=spec["h"],
+            sort_order=i,
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(w)
+
+    db.commit()
