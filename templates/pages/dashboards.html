@@ -54,6 +54,17 @@
 .num-sub { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: #98a2b3; }
 .num-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
+/* roster summary card */
+.roster-card { display: flex; flex-direction: column; width: 100%; min-height: 0; gap: 0.7rem; }
+.roster-meta { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.roster-client-select { border: 1px solid #d8dce0; border-radius: 8px; padding: 0.3rem 0.5rem; font-size: 0.82rem; color: #374151; max-width: 60%; }
+.roster-client-select:focus { outline: none; border-color: #7B96B8; }
+.roster-scope, .roster-headcount { font-size: 0.76rem; color: #98a2b3; }
+.roster-tiles { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; align-content: center; }
+.roster-tile { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.6rem 0.7rem; background: #fafbfc; border: 1px solid #f0f1f3; border-radius: 10px; }
+.roster-tile-val { font-size: 1.35rem; font-weight: 600; line-height: 1.1; }
+.roster-tile-label { font-size: 0.72rem; color: #98a2b3; }
+
 /* rich text */
 .rich-text { width: 100%; align-self: flex-start; }
 .rich-title { font-size: 0.95rem; font-weight: 600; color: #1f2328; margin-bottom: 0.5rem; line-height: 1.4; }
@@ -156,6 +167,7 @@
                     <span class="card-title">{{ w.title }}</span>
                     <div v-if="editMode" class="card-actions">
                         <span class="icon-btn" @click="openWidgetPanel(w)" title="编辑">✎</span>
+                        <span class="icon-btn" @click="duplicateWidget(w)" title="复制">⧉</span>
                         <span class="icon-btn danger" @click="deleteWidget(w.id)" title="删除">✕</span>
                     </div>
                 </div>
@@ -180,6 +192,23 @@
                     </template>
                     <template v-else-if="w.widget_type === 'iframe'">
                         <iframe v-if="widgetData[w.id] && widgetData[w.id].url" class="dash-iframe" :src="widgetData[w.id].url" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+                    </template>
+                    <template v-else-if="w.widget_type === 'roster_summary'">
+                        <div class="roster-card">
+                            <div class="roster-meta">
+                                <select v-if="isRosterClientCard(w) && canWrite" class="roster-client-select" :value="(w.config && w.config.client_id) || ''" @change="changeRosterClient(w, $event.target.value)">
+                                    <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                </select>
+                                <span v-else class="roster-scope">{{ rosterScopeLabel(w) }}</span>
+                                <span v-if="isRosterClientCard(w) && canWrite" class="roster-headcount">{{ rosterHeadcount(w) }}</span>
+                            </div>
+                            <div class="roster-tiles">
+                                <div v-for="t in rosterTiles(w)" :key="t.label" class="roster-tile">
+                                    <span class="roster-tile-val" :style="{color: t.color}">{{ t.display }}</span>
+                                    <span class="roster-tile-label">{{ t.label }}</span>
+                                </div>
+                            </div>
+                        </div>
                     </template>
                     <template v-else-if="['bar','pie','line'].includes(w.widget_type)">
                         <div class="chart-area">
@@ -232,6 +261,26 @@
                     <h4>基础</h4>
                     <div class="field"><label>标题</label><input v-model="widgetForm.title" /></div>
                 </div>
+
+                <template v-if="isRosterSummary">
+                    <div class="panel-section">
+                        <h4>花名册概览</h4>
+                        <div class="field"><label>范围</label>
+                            <select v-model="rosterScope">
+                                <option value="all">全公司</option>
+                                <option value="client">指定客户</option>
+                            </select>
+                        </div>
+                        <div v-if="rosterScope === 'client'" class="field"><label>客户</label>
+                            <select v-model.number="widgetForm.config.client_id">
+                                <option :value="null">—</option>
+                                <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
+                        </div>
+                        <div class="toggle-row"><span>包含离职</span><input type="checkbox" v-model="widgetForm.config.include_left" /></div>
+                        <p style="font-size:.72rem;color:#98a2b3;margin-top:.4rem">展示月报价合计 / 税前工资合计 / GM$ / GM%（GM% = ΣGM$ ÷ (Σ月报价 / 1.0672)）。复制本卡片并选不同客户即可对比。</p>
+                    </div>
+                </template>
 
                 <template v-if="needsDataSource">
                     <div class="panel-section">
@@ -369,5 +418,5 @@
 {% endblock %}
 {% block handbook_assistant %}{% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/dashboards.js?v=3"></script>
+<script src="/static/js/pages/dashboards.js?v=4"></script>
 {% endblock %}

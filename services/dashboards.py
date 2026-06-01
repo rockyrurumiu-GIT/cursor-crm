@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple, Type
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, not_, text
 from sqlalchemy.orm import Session
 
 from auth import data_scope as ds
@@ -31,9 +31,14 @@ from schemas.dashboards import (
     get_source,
 )
 from services.clients import scoped_client_query
+from services.delivery_roster import sql_roster_employment_active_pool
 
 _DEFAULT_SEED_NAME = "经营总览"
+_ROSTER_SEED_NAME = "交付毛利总览"
 _NUMERIC_RE = re.compile(r"^-?\d+(\.\d+)?$")
+
+# Matches the roster footer math: 不含税月报价 = 含税月报价 / 1.0672 (see roster-detail.js TAX_DIVISOR).
+ROSTER_TAX_DIVISOR = 1.0672
 
 # model_attr -> key in models dict passed to service functions
 MODEL_MAP_KEYS = {
@@ -127,6 +132,18 @@ def validate_widget_config(
 
     if widget_type == "rich_text":
         out["content"] = validate_rich_text(config.get("content", ""))
+        return out
+
+    if widget_type == "roster_summary":
+        if source_key != "roster_entries":
+            raise HTTPException(status_code=400, detail="roster_summary 仅支持花名册数据源")
+        client_id = config.get("client_id")
+        if client_id not in (None, "", 0):
+            try:
+                out["client_id"] = int(client_id)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="client_id 必须是整数")
+        out["include_left"] = bool(config.get("include_left", False))
         return out
 
     if widget_type not in DATA_WIDGET_TYPES:
@@ -223,7 +240,18 @@ def validate_widget_config(
     out["show_value_center"] = bool(config.get("show_value_center", True))
     out["data_labels"] = bool(config.get("data_labels", False))
     out["hide_empty"] = bool(config.get("hide_empty", False))
+    if source_key == "roster_entries":
+        out["include_left"] = bool(config.get("include_left", False))
     return out
+
+
+def _apply_roster_active_pool(q, source_key: str, config: dict, Model: Type[Any]):
+    """Dashboard roster stats default to 在职池; set include_left to count 离职档案 too."""
+    if source_key != "roster_entries":
+        return q
+    if bool(config.get("include_left", False)):
+        return q
+    return q.filter(sql_roster_employment_active_pool(Model))
 
 
 def _scoped_query(
@@ -388,7 +416,32 @@ def query_widget_data(
 
     Model = _get_model(models, source_key)
     q = _scoped_query(db, ctx, source_key, models)
+    q = _apply_roster_active_pool(q, source_key, config, Model)
     q = _apply_filters(q, Model, filters)
+
+    if group_by == "client":
+        src = get_source(source_key)
+        if not src or not src.has_client_id:
+            raise HTTPException(status_code=400, detail="该数据源不支持按客户分组")
+        Client = models["Client"]
+        all_rows = q.all()
+        buckets: Dict[Any, list] = {}
+        for row in all_rows:
+            buckets.setdefault(getattr(row, "client_id", None), []).append(row)
+        ids = [cid for cid in buckets.keys() if cid is not None]
+        name_map = {}
+        if ids:
+            for cid, cname in db.query(Client.id, Client.name).filter(Client.id.in_(ids)).all():
+                name_map[cid] = cname
+        labels = []
+        values = []
+        for cid, bucket_rows in buckets.items():
+            labels.append(name_map.get(cid, "(未知客户)"))
+            if metric == "count":
+                values.append(float(len(bucket_rows)))
+            else:
+                values.append(_aggregate_rows(bucket_rows, metric, field_key))
+        return _finalize_series(labels, values, sort_mode, hide_empty, limit, prefix, suffix)
 
     if group_by:
         col = _column(Model, group_by)
@@ -726,11 +779,85 @@ def get_widget_data(
         return {"status": "ok", "kind": "rich_text", "content": config.get("content", "")}
     if wt == "iframe":
         return {"status": "ok", "kind": "iframe", "url": config.get("url", "")}
+    if wt == "roster_summary":
+        return query_roster_summary(db, ctx, config, models)
 
     source_key = w.source_key or ""
     if not source_key:
         return {"status": "error", "message": "未配置数据源"}
     return query_widget_data(db, ctx, source_key, config, models)
+
+
+def _yuan(value: float) -> str:
+    return f"¥{round(value):,}"
+
+
+def list_roster_clients(db: Session, ctx: AuthContext, models: dict) -> dict:
+    """Distinct clients present in the user's scoped roster — populates the card dropdown."""
+    if not user_can_read_source(ctx, "roster_entries"):
+        return {"status": "forbidden", "clients": []}
+    RosterEntry = _get_model(models, "roster_entries")
+    Client = models["Client"]
+    q = _scoped_query(db, ctx, "roster_entries", models)
+    q = _apply_roster_active_pool(q, "roster_entries", {}, RosterEntry)
+    ids = {cid for (cid,) in q.with_entities(RosterEntry.client_id).distinct().all() if cid and int(cid) > 0}
+    clients = []
+    if ids:
+        for cid, cname in db.query(Client.id, Client.name).filter(Client.id.in_(ids)).order_by(Client.name).all():
+            clients.append({"id": cid, "name": cname or f"客户#{cid}"})
+    return {"status": "ok", "clients": clients}
+
+
+def query_roster_summary(
+    db: Session,
+    ctx: AuthContext,
+    config: dict,
+    models: dict,
+) -> dict:
+    """Roster economics card: 月报价合计 / 税前工资合计 / GM$ / GM%, all clients or one.
+
+    Mirrors the roster footer: GM% = Σgms / (Σ月报价 / 1.0672), over the active pool
+    (employment_status not containing 离职) unless include_left is set.
+    """
+    if not user_can_read_source(ctx, "roster_entries"):
+        return {"status": "forbidden", "message": "无权限查看花名册"}
+
+    RosterEntry = _get_model(models, "roster_entries")
+    q = _scoped_query(db, ctx, "roster_entries", models)
+
+    q = _apply_roster_active_pool(q, "roster_entries", config, RosterEntry)
+
+    client_id = config.get("client_id")
+    client_name = ""
+    if client_id not in (None, "", 0):
+        q = q.filter(RosterEntry.client_id == int(client_id))
+        Client = models["Client"]
+        row = db.query(Client.name).filter(Client.id == int(client_id)).first()
+        client_name = row[0] if row else ""
+
+    rows = q.all()
+    revenue = 0.0
+    salary = 0.0
+    gms = 0.0
+    for r in rows:
+        revenue += _parse_numeric(r.monthly_quote_tax) or 0.0
+        salary += _parse_numeric(r.pre_tax_salary) or 0.0
+        gms += _parse_numeric(r.gms) or 0.0
+    net_revenue = revenue / ROSTER_TAX_DIVISOR if revenue else 0.0
+    gm_pct = (gms / net_revenue * 100) if net_revenue else 0.0
+
+    return {
+        "status": "ok",
+        "kind": "roster_summary",
+        "scope": "client" if client_id not in (None, "", 0) else "all",
+        "client_id": int(client_id) if client_id not in (None, "", 0) else None,
+        "client_name": client_name,
+        "headcount": len(rows),
+        "revenue": {"value": revenue, "display": _yuan(revenue)},
+        "salary": {"value": salary, "display": _yuan(salary)},
+        "gms": {"value": gms, "display": _yuan(gms)},
+        "gm_pct": {"value": gm_pct, "display": f"{gm_pct:.2f}%"},
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -743,7 +870,36 @@ def seed_default_dashboards(
     DashboardTab,
     DashboardWidget,
 ) -> None:
-    """幂等预置「经营总览」dashboard。"""
+    """幂等预置默认看板。每个看板独立判断是否已存在，不覆盖已有看板。"""
+    _seed_business_overview(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _seed_roster_margin(db, DashboardDashboard, DashboardTab, DashboardWidget)
+
+
+def _seed_widgets(db, DashboardTab, DashboardWidget, dashboard_id, tab_name, widgets_spec, now):
+    tab = DashboardTab(
+        dashboard_id=dashboard_id,
+        name=tab_name,
+        sort_order=0,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(tab)
+    db.flush()
+    for i, spec in enumerate(widgets_spec):
+        db.add(DashboardWidget(
+            tab_id=tab.id,
+            title=spec["title"],
+            widget_type=spec["widget_type"],
+            source_key=spec["source_key"],
+            config_json=_dump_json(spec["config"]),
+            x=spec["x"], y=spec["y"], w=spec["w"], h=spec["h"],
+            sort_order=i,
+            created_at=now,
+            updated_at=now,
+        ))
+
+
+def _seed_business_overview(db, DashboardDashboard, DashboardTab, DashboardWidget) -> None:
     existing = (
         db.query(DashboardDashboard)
         .filter(DashboardDashboard.name == _DEFAULT_SEED_NAME)
@@ -762,16 +918,6 @@ def seed_default_dashboards(
         updated_at=now,
     )
     db.add(d)
-    db.flush()
-
-    tab = DashboardTab(
-        dashboard_id=d.id,
-        name="总览",
-        sort_order=0,
-        created_at=now,
-        updated_at=now,
-    )
-    db.add(tab)
     db.flush()
 
     # Twenty 式默认看板：克制的 2x2 大卡布局（欢迎 / 环形 / 柱状 / 折线），无 KPI 数字卡。
@@ -823,21 +969,81 @@ def seed_default_dashboards(
         },
     ]
 
-    for i, spec in enumerate(widgets_spec):
-        w = DashboardWidget(
-            tab_id=tab.id,
-            title=spec["title"],
-            widget_type=spec["widget_type"],
-            source_key=spec["source_key"],
-            config_json=_dump_json(spec["config"]),
-            x=spec["x"],
-            y=spec["y"],
-            w=spec["w"],
-            h=spec["h"],
-            sort_order=i,
-            created_at=now,
-            updated_at=now,
-        )
-        db.add(w)
+    _seed_widgets(db, DashboardTab, DashboardWidget, d.id, "总览", widgets_spec, now)
+    db.commit()
 
+
+def _seed_roster_margin(db, DashboardDashboard, DashboardTab, DashboardWidget) -> None:
+    """幂等预置「交付毛利总览」：花名册收入/薪资/GM$/GM% 概览 + 按客户拆分。"""
+    existing = (
+        db.query(DashboardDashboard)
+        .filter(DashboardDashboard.name == _ROSTER_SEED_NAME)
+        .first()
+    )
+    if existing:
+        return
+
+    now = _now()
+    d = DashboardDashboard(
+        name=_ROSTER_SEED_NAME,
+        description="系统预置交付毛利总览",
+        layout_json="{}",
+        created_by="system",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(d)
+    db.flush()
+
+    # 取一个有花名册数据的客户作为单客户示例（用户可在卡片下拉切换或复制对比）。
+    row = db.execute(text(
+        "SELECT client_id FROM roster_entries WHERE client_id IS NOT NULL AND client_id > 0 "
+        "AND (employment_status IS NULL OR employment_status = '' OR employment_status NOT LIKE '%离职%') "
+        "GROUP BY client_id ORDER BY COUNT(*) DESC LIMIT 1"
+    )).first()
+    sample_client_id = row[0] if row else None
+
+    active_filter = [{"field": "employment_status", "op": "not_contains", "value": "离职"}]
+    widgets_spec = [
+        {
+            "title": "全公司毛利概览",
+            "widget_type": "roster_summary",
+            "source_key": "roster_entries",
+            "config": {},
+            "x": 0, "y": 0, "w": 4, "h": 5,
+        },
+        {
+            "title": "单客户毛利概览",
+            "widget_type": "roster_summary",
+            "source_key": "roster_entries",
+            "config": {"client_id": sample_client_id} if sample_client_id else {},
+            "x": 4, "y": 0, "w": 4, "h": 5,
+        },
+        {
+            "title": "各客户月报价(含税)",
+            "widget_type": "bar",
+            "source_key": "roster_entries",
+            "config": {
+                "metric": "sum", "field": "monthly_quote_tax", "group_by": "client",
+                "limit": 12, "color": "blue", "sort": "value_desc",
+                "data_labels": True, "hide_empty": True, "prefix": "¥",
+                "filters": active_filter,
+            },
+            "x": 0, "y": 5, "w": 6, "h": 5,
+        },
+        {
+            "title": "各客户 GM$",
+            "widget_type": "bar",
+            "source_key": "roster_entries",
+            "config": {
+                "metric": "sum", "field": "gms", "group_by": "client",
+                "limit": 12, "color": "green", "sort": "value_desc",
+                "data_labels": True, "hide_empty": True, "prefix": "¥",
+                "filters": active_filter,
+            },
+            "x": 6, "y": 5, "w": 6, "h": 5,
+        },
+    ]
+
+    _seed_widgets(db, DashboardTab, DashboardWidget, d.id, "毛利总览", widgets_spec, now)
     db.commit()

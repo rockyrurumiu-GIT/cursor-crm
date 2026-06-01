@@ -341,6 +341,200 @@ def test_filters_eq_in_contains(client, admin_auth, op):
     client.delete(f"/api/dashboards/{dash_id}", headers=headers)
 
 
+def _make_roster_client(name: str, rows: list):
+    """Insert a Client + roster entries directly. rows: list of (quote, salary, gms, status)."""
+    import main as crm_main
+
+    db = crm_main.SessionLocal()
+    try:
+        c = crm_main.Client(name=name)
+        db.add(c)
+        db.flush()
+        for quote, salary, gms, status in rows:
+            db.add(crm_main.RosterEntry(
+                client_id=c.id,
+                monthly_quote_tax=quote,
+                pre_tax_salary=salary,
+                gms=gms,
+                employment_status=status,
+            ))
+        db.commit()
+        return c.id
+    finally:
+        db.close()
+
+
+def _roster_summary_widget(client, headers, title, config):
+    dash_id, tab_id = _make_tab(client, headers, title + " Dash")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={"title": title, "widget_type": "roster_summary", "source_key": "roster_entries", "config": config},
+    )
+    assert r.status_code == 200, r.text
+    return dash_id, r.json()["id"]
+
+
+def test_roster_summary_overall_and_client_scope(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    cid = _make_roster_client(
+        f"RosterCo-{os.getpid()}",
+        [("23320", "11000", "7695", "在职"), ("22000", "17500", "1515", ""), ("9700", "6500", "893", "已离职")],
+    )
+
+    # All clients, active pool (excludes 离职): revenue 45320, salary 28500, gms 9210.
+    dash_id, wid = _roster_summary_widget(client, headers, "All", {})
+    data = client.get(f"/api/dashboard-widgets/{wid}/data", headers=headers).json()
+    assert data["status"] == "ok" and data["kind"] == "roster_summary"
+    assert data["scope"] == "all"
+    assert data["revenue"]["value"] == pytest.approx(45320)
+    assert data["salary"]["value"] == pytest.approx(28500)
+    assert data["gms"]["value"] == pytest.approx(9210)
+    expected_gm = 9210 / (45320 / 1.0672) * 100
+    assert data["gm_pct"]["value"] == pytest.approx(expected_gm)
+    assert data["headcount"] == 2
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+    # Client-scoped returns same client name.
+    dash_id2, wid2 = _roster_summary_widget(client, headers, "One", {"client_id": cid})
+    d2 = client.get(f"/api/dashboard-widgets/{wid2}/data", headers=headers).json()
+    assert d2["scope"] == "client" and d2["client_id"] == cid
+    assert d2["revenue"]["value"] == pytest.approx(45320)
+    client.delete(f"/api/dashboards/{dash_id2}", headers=headers)
+
+
+def test_roster_summary_include_left_flips_active_pool(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    cid = _make_roster_client(
+        f"RosterLeft-{os.getpid()}",
+        [("10000", "5000", "1000", "在职"), ("8000", "4000", "800", "已离职")],
+    )
+    # Default active-only excludes 离职; include_left adds it back. Compare GM$ sums.
+    dash_id, wid = _roster_summary_widget(client, headers, "Active", {"client_id": cid})
+    active = client.get(f"/api/dashboard-widgets/{wid}/data", headers=headers).json()
+    dash_id2, wid2 = _roster_summary_widget(client, headers, "WithLeft", {"client_id": cid, "include_left": True})
+    withleft = client.get(f"/api/dashboard-widgets/{wid2}/data", headers=headers).json()
+    assert active["headcount"] == 1
+    assert withleft["headcount"] == 2
+    assert withleft["gms"]["value"] > active["gms"]["value"]
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+    client.delete(f"/api/dashboards/{dash_id2}", headers=headers)
+
+
+def test_roster_summary_forbidden_without_roster_permission(client, client_rbac, admin_auth):
+    suffix = "rs" + str(os.getpid())
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    _make_roster_client(f"RosterPerm-{os.getpid()}", [("10000", "5000", "1000", "在职")])
+    dash_id, wid = _roster_summary_widget(client, headers, "Perm", {})
+
+    username, pwd = _create_dashboard_only_role(admin_auth, suffix)
+    login = _login(client_rbac, username, pwd)
+    assert login.status_code == 200
+    r = client_rbac.get(f"/api/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert r.status_code == 200
+    assert r.json()["status"] == "forbidden"
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_roster_bar_group_by_client(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    name = f"RosterBar-{os.getpid()}"
+    _make_roster_client(name, [("10000", "5000", "1000", "在职"), ("20000", "9000", "2000", "在职")])
+    dash_id, tab_id = _make_tab(client, headers, "Bar Dash")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "各客户月报价",
+            "widget_type": "bar",
+            "source_key": "roster_entries",
+            "config": {"metric": "sum", "field": "monthly_quote_tax", "group_by": "client", "limit": 20},
+        },
+    )
+    assert r.status_code == 200, r.text
+    wid = r.json()["id"]
+    data = client.get(f"/api/dashboard-widgets/{wid}/data", headers=headers).json()
+    assert data["status"] == "ok" and data["kind"] == "series"
+    assert name in data["labels"]
+    idx = data["labels"].index(name)
+    assert data["values"][idx] == pytest.approx(30000)
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_roster_pie_excludes_left_by_default(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    name = f"RosterPie-{os.getpid()}"
+    _make_roster_client(
+        name,
+        [("10000", "5000", "1000", "在职"), ("8000", "4000", "800", "已离职")],
+    )
+    dash_id, tab_id = _make_tab(client, headers, "Pie Dash")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "按客户人数",
+            "widget_type": "pie",
+            "source_key": "roster_entries",
+            "config": {"metric": "count", "group_by": "client", "limit": 20},
+        },
+    )
+    assert r.status_code == 200, r.text
+    wid = r.json()["id"]
+    data = client.get(f"/api/dashboard-widgets/{wid}/data", headers=headers).json()
+    assert data["status"] == "ok" and data["kind"] == "series"
+    idx = data["labels"].index(name)
+    assert data["values"][idx] == pytest.approx(1)
+
+    r2 = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "含离职",
+            "widget_type": "pie",
+            "source_key": "roster_entries",
+            "config": {"metric": "count", "group_by": "client", "limit": 20, "include_left": True},
+        },
+    )
+    assert r2.status_code == 200, r2.text
+    wid2 = r2.json()["id"]
+    data2 = client.get(f"/api/dashboard-widgets/{wid2}/data", headers=headers).json()
+    idx2 = data2["labels"].index(name)
+    assert data2["values"][idx2] == pytest.approx(2)
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_roster_clients_endpoint(client, admin_auth):
+    headers = _admin_headers(admin_auth)
+    name = f"RosterList-{os.getpid()}"
+    _make_roster_client(name, [("10000", "5000", "1000", "在职")])
+    r = client.get("/api/dashboard/roster-clients", headers=headers)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["status"] == "ok"
+    assert name in [c["name"] for c in data["clients"]]
+
+
+def test_roster_summary_rejects_wrong_source(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Wrong Src")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={"title": "X", "widget_type": "roster_summary", "source_key": "clients", "config": {}},
+    )
+    assert r.status_code == 400
+    assert "花名册" in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_seed_roster_margin_dashboard_exists(client, admin_auth):
+    headers = _admin_headers(admin_auth)
+    r = client.get("/api/dashboards", headers=headers)
+    assert r.status_code == 200
+    assert "交付毛利总览" in [d["name"] for d in r.json()]
+
+
 def test_legacy_widget_without_style_still_renders(client, admin_auth):
     """Widgets created before style fields existed must still query without error."""
     headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}

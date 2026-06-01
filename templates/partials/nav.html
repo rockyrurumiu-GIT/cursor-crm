@@ -25,7 +25,7 @@
         </div>
     </div>
     <!-- 客户（含费用折算器子项） -->
-    <div class="gh-nav-item{% if (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/tools/calc') or path.startswith('/customers/visits') or path.startswith('/contracts') or path.startswith('/contacts') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,crm.visits.read">
+    <div class="gh-nav-item{% if (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/tools/calc') or path.startswith('/dashboards') or path.startswith('/customers/visits') or path.startswith('/contracts') or path.startswith('/contacts') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,crm.visits.read,dashboard.read">
         <span class="nav-trigger cursor-default">客户
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
@@ -45,6 +45,7 @@
                     <div>
                         <div class="gh-mega-col-h">工具/仪表盘</div>
                         <a class="gh-mega-link" href="/tools/calc">毛利测算器</a>
+                        <a class="gh-mega-link" href="/dashboards" data-crm-nav-perm="dashboard.read">仪表盘</a>
                     </div>
                 </div>
             </div>
@@ -100,10 +101,6 @@
                 </div>
             </div>
         </div>
-    </div>
-    <!-- 仪表盘 -->
-    <div class="gh-nav-item{% if path.startswith('/dashboards') %} nav-active{% endif %}" data-crm-nav-perm="dashboard.read">
-        <a class="nav-trigger" href="/dashboards">仪表盘</a>
     </div>
     <!-- 交付 -->
     <div class="gh-nav-item{% if path.startswith('/delivery') or path.startswith('/customers/roster') %} nav-active{% endif %}" data-crm-nav-perm="delivery.roster.read">

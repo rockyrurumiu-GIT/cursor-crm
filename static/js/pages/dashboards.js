@@ -80,8 +80,8 @@
   }
 
   const METRIC_LABELS = { count: "计数", sum: "求和", avg: "平均", min: "最小", max: "最大" };
-  const TYPE_LABELS = { number: "数字", bar: "柱状", pie: "环形", line: "折线", rich_text: "文本", iframe: "网页" };
-  const TYPE_ICONS = { number: "#", bar: "▮", pie: "◔", line: "📈", rich_text: "¶", iframe: "▭" };
+  const TYPE_LABELS = { number: "数字", bar: "柱状", pie: "环形", line: "折线", rich_text: "文本", iframe: "网页", roster_summary: "花名册概览" };
+  const TYPE_ICONS = { number: "#", bar: "▮", pie: "◔", line: "📈", rich_text: "¶", iframe: "▭", roster_summary: "▦" };
 
   createApp({
     directives: {
@@ -102,12 +102,14 @@
       const canWrite = ref(false);
       const editMode = ref(false);
       const dashMenuOpen = ref(false);
+      const rosterClients = ref([]);
 
       const showDashboardModal = ref(false);
       const showTabModal = ref(false);
       const panelOpen = ref(false);
       const dashboardForm = ref({ id: null, name: "", description: "" });
       const tabForm = ref({ name: "" });
+      const rosterScope = ref("all"); // panel-only: 'all' | 'client'
       const widgetForm = ref(blankWidget());
 
       function blankWidget() {
@@ -121,6 +123,7 @@
             filters: [], color: DEFAULT_THEME, sort: "value_desc",
             show_legend: true, show_value_center: true, data_labels: false, hide_empty: false,
             url: "", content: "", prefix: "", suffix: "",
+            client_id: null, include_left: false,
           },
           x: 0, y: 0, w: 4, h: 4,
         };
@@ -151,6 +154,9 @@
       const isChart = computed(function () {
         return ["bar", "pie", "line"].indexOf(widgetForm.value.widget_type) >= 0;
       });
+      const isRosterSummary = computed(function () {
+        return widgetForm.value.widget_type === "roster_summary";
+      });
       const sourceFields = computed(function () {
         const src = metadata.value.sources.find(function (s) { return s.key === widgetForm.value.source_key; });
         return src ? src.fields : [];
@@ -174,6 +180,11 @@
         }
       });
 
+      // roster_summary is locked to the roster data source.
+      watch(function () { return widgetForm.value.widget_type; }, function (t) {
+        if (t === "roster_summary") widgetForm.value.source_key = "roster_entries";
+      });
+
       function cardStyle(w) {
         const x = Math.max(0, Math.min(11, w.x || 0));
         const ww = Math.max(1, Math.min(12, w.w || 4));
@@ -185,6 +196,31 @@
 
       function themeColor(w) { return themeOf((w.config || {}).color).base; }
       function swatchColor(c) { return themeOf(c).base; }
+
+      // roster_summary card: 4 KPI tiles from the data payload.
+      function rosterTiles(w) {
+        const d = widgetData.value[w.id];
+        if (!d || d.kind !== "roster_summary") return [];
+        return [
+          { label: "月报价合计", display: d.revenue ? d.revenue.display : "—", color: "#7B96B8" },
+          { label: "税前工资合计", display: d.salary ? d.salary.display : "—", color: "#9389AE" },
+          { label: "GM$", display: d.gms ? d.gms.display : "—", color: "#88A992" },
+          { label: "GM%", display: d.gm_pct ? d.gm_pct.display : "—", color: "#D6A461" },
+        ];
+      }
+      function rosterScopeLabel(w) {
+        const d = widgetData.value[w.id];
+        if (!d || d.kind !== "roster_summary") return "";
+        if (d.scope === "client") return (d.client_name || "未知客户") + " · " + (d.headcount || 0) + " 人";
+        return "全公司 · " + (d.headcount || 0) + " 人";
+      }
+      function rosterHeadcount(w) {
+        const d = widgetData.value[w.id];
+        return (d && d.kind === "roster_summary") ? (d.headcount || 0) + " 人" : "";
+      }
+      function isRosterClientCard(w) {
+        return w.widget_type === "roster_summary" && (w.config || {}).client_id != null;
+      }
       function sourceLabel(key) {
         const s = metadata.value.sources.find(function (x) { return x.key === key; });
         return s ? s.label : "";
@@ -414,8 +450,10 @@
             config: Object.assign(base.config, w.config || {}, { filters: (w.config && w.config.filters) ? w.config.filters.map(function (f) { return Object.assign({}, f); }) : [] }),
             x: w.x, y: w.y, w: w.w, h: w.h,
           };
+          rosterScope.value = (w.config && w.config.client_id != null) ? "client" : "all";
         } else {
           widgetForm.value = blankWidget();
+          rosterScope.value = "all";
         }
         panelOpen.value = true;
       }
@@ -429,6 +467,12 @@
         const c = f.config;
         if (f.widget_type === "iframe") return { url: c.url };
         if (f.widget_type === "rich_text") return { content: c.content };
+        if (f.widget_type === "roster_summary") {
+          return {
+            client_id: rosterScope.value === "client" ? (c.client_id || null) : null,
+            include_left: !!c.include_left,
+          };
+        }
         const out = {
           metric: c.metric, field: c.field, group_by: c.group_by,
           filters: (c.filters || []).filter(function (x) { return x.field; }),
@@ -470,6 +514,39 @@
           .catch(function (e) { alert(e.message); });
       }
 
+      // Duplicate any widget (mainly to compare two single-client roster cards).
+      function duplicateWidget(w) {
+        if (!activeTabId.value) return;
+        const payload = {
+          title: w.title + " 副本",
+          widget_type: w.widget_type,
+          source_key: w.source_key || "",
+          config: Object.assign({}, w.config || {}),
+          x: w.x, y: (w.y || 0) + (w.h || 4), w: w.w, h: w.h,
+        };
+        api("POST", "/api/dashboard-tabs/" + activeTabId.value + "/widgets", payload)
+          .then(function () { return loadDashboards(); })
+          .then(function () { reloadActiveTabData(); })
+          .catch(function (e) { alert(e.message); });
+      }
+
+      // On-card client switch for a roster_summary card (write users): persist + re-query.
+      function changeRosterClient(w, clientId) {
+        const cid = clientId === "" || clientId == null ? null : Number(clientId);
+        const payload = {
+          title: w.title, widget_type: w.widget_type, source_key: w.source_key || "roster_entries",
+          config: Object.assign({}, w.config || {}, { client_id: cid }),
+          x: w.x, y: w.y, w: w.w, h: w.h,
+        };
+        api("PUT", "/api/dashboard-widgets/" + w.id, payload)
+          .then(function () {
+            w.config = payload.config; // local update so dropdown reflects selection
+            return api("GET", "/api/dashboard-widgets/" + w.id + "/data");
+          })
+          .then(function (data) { widgetData.value[w.id] = data; })
+          .catch(function (e) { alert(e.message); });
+      }
+
       onMounted(function () {
         fetch("/api/me", { headers: window.crmAuthHeader ? window.crmAuthHeader() : {}, credentials: "same-origin" })
           .then(function (r) { return r.json(); })
@@ -478,21 +555,26 @@
             canWrite.value = perms.indexOf("dashboard.write") >= 0 || me.is_super;
           });
         api("GET", "/api/dashboard-metadata").then(function (m) { metadata.value = m; });
+        api("GET", "/api/dashboard/roster-clients")
+          .then(function (r) { rosterClients.value = (r && r.clients) || []; })
+          .catch(function () { rosterClients.value = []; });
         loadDashboards();
       });
 
       return {
         dashboards, activeDashboardId, activeTabId, activeDashboard, activeTab, tabIndex,
-        metadata, widgetData, canWrite, editMode, dashMenuOpen,
+        metadata, widgetData, canWrite, editMode, dashMenuOpen, rosterClients, rosterScope,
         showDashboardModal, showTabModal, panelOpen,
         dashboardForm, tabForm, widgetForm,
-        needsDataSource, needsField, needsGroupBy, isChart, isDateGroup,
+        needsDataSource, needsField, needsGroupBy, isChart, isDateGroup, isRosterSummary,
         sourceFields, numericFields, groupByFields,
         cardStyle, themeColor, swatchColor, sourceLabel, metricLabel, typeLabel, typeIcon,
         richTitle, richBody, showLegend, legendOf,
+        rosterTiles, rosterScopeLabel, rosterHeadcount, isRosterClientCard,
         selectDashboard, stepDashboard, closeDashMenu,
         openDashboardModal, saveDashboard, deleteActiveDashboard,
         openTabModal, saveTab, openWidgetPanel, closePanel, addFilter, saveWidget, deleteWidget,
+        duplicateWidget, changeRosterClient,
       };
     },
   }).mount("#page-app");

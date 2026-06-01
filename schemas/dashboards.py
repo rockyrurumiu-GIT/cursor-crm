@@ -18,7 +18,9 @@ from auth.data_scope_catalog import (
 
 FieldKind = Literal["text", "numeric", "datetime"]
 
-WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "pie", "line", "rich_text", "iframe"})
+# roster_summary is a dedicated delivery widget (multi-KPI card); it is a data widget
+# but NOT a chart and does not use the generic metric/group path.
+WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "pie", "line", "rich_text", "iframe", "roster_summary"})
 CHART_WIDGET_TYPES: FrozenSet[str] = frozenset({"bar", "pie", "line"})
 DATA_WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "pie", "line"})
 
@@ -145,8 +147,10 @@ DATA_SOURCES: Dict[str, DataSourceDef] = {
         fields=(
             SourceFieldDef("employment_status", "在职情况", "text"),
             SourceFieldDef("position_title", "岗位", "text"),
+            SourceFieldDef("client", "客户", "text"),  # virtual: resolves via client_id -> Client.name
             SourceFieldDef("monthly_quote_tax", "月报价(含税)", "numeric"),
             SourceFieldDef("pre_tax_salary", "税前工资", "numeric"),
+            SourceFieldDef("gms", "GM$", "numeric"),
             SourceFieldDef("created_at", "创建时间", "datetime"),
         ),
     ),

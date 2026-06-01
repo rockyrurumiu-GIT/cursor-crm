@@ -191,3 +191,11 @@ def register_dashboard_routes(
         user: str = Depends(require_permission("dashboard.read")),
     ):
         return build_metadata()
+
+    @app.get("/api/dashboard/roster-clients")
+    async def api_dashboard_roster_clients(
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("dashboard.read")),
+    ):
+        return dash_svc.list_roster_clients(db, ctx, models)
