@@ -27,6 +27,8 @@ class UserCreateBody(BaseModel):
     password: str = Field(..., min_length=6, max_length=256)
     display_name: str = Field(default="", max_length=128)
     role_codes: List[str] = Field(default_factory=list)
+    dept_ids: List[int] = Field(default_factory=list)
+    primary_dept_id: Optional[int] = None
 
 
 class UserUpdateBody(BaseModel):
@@ -78,6 +80,19 @@ class RoleUpdateBody(BaseModel):
 
 class RolePermissionsBody(BaseModel):
     permission_codes: List[str] = Field(default_factory=list)
+
+
+class DeptCreateBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    code: str = Field(..., min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_]+$")
+    parent_id: Optional[int] = None
+    dept_type: str = Field(default="general", max_length=32)
+
+
+class DeptUpdateBody(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+    dept_type: str = Field(default="general", max_length=32)
+    status: str = Field(default="active", pattern="^(active|disabled)$")
 
 
 def _session_payload(ctx: AuthContext) -> dict:
@@ -223,6 +238,8 @@ def build_router(
                 password=body.password,
                 display_name=body.display_name.strip(),
                 role_codes=body.role_codes,
+                dept_ids=body.dept_ids,
+                primary_dept_id=body.primary_dept_id,
                 actor=ctx.username,
                 actor_ctx=ctx,
             )
@@ -436,6 +453,37 @@ def build_router(
             db.rollback()
             raise HTTPException(status_code=400, detail=str(e))
 
+    @router.delete("/api/system/roles/{role_id}")
+    async def api_delete_role(
+        role_id: int,
+        ctx: AuthContext = Depends(get_current_context),
+        _perm: str = Depends(require_permission("system.roles.manage")),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            auth_svc.delete_role(db, role_id, actor=ctx.username)
+            db.commit()
+            return {"ok": True}
+        except ValueError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @router.post("/api/system/roles/{role_id}/delete")
+    async def api_delete_role_post(
+        role_id: int,
+        ctx: AuthContext = Depends(get_current_context),
+        _perm: str = Depends(require_permission("system.roles.manage")),
+        db: Session = Depends(get_db),
+    ):
+        """POST fallback when DELETE is blocked by proxy or old clients."""
+        try:
+            auth_svc.delete_role(db, role_id, actor=ctx.username)
+            db.commit()
+            return {"ok": True}
+        except ValueError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+
     @router.put("/api/system/roles/{role_id}/permissions")
     async def api_update_role_permissions(
         role_id: int,
@@ -466,6 +514,81 @@ def build_router(
         db: Session = Depends(get_db),
     ):
         return auth_svc.list_departments(db)
+
+    @router.post("/api/system/depts")
+    async def api_create_dept(
+        body: DeptCreateBody,
+        ctx: AuthContext = Depends(get_current_context),
+        _perm: str = Depends(require_permission("system.users.manage")),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            created = auth_svc.create_department(
+                db,
+                name=body.name.strip(),
+                code=body.code.strip(),
+                parent_id=body.parent_id,
+                dept_type=body.dept_type.strip(),
+                actor=ctx.username,
+            )
+            db.commit()
+            return created
+        except ValueError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @router.put("/api/system/depts/{dept_id}")
+    async def api_update_dept(
+        dept_id: int,
+        body: DeptUpdateBody,
+        ctx: AuthContext = Depends(get_current_context),
+        _perm: str = Depends(require_permission("system.users.manage")),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            auth_svc.update_department(
+                db,
+                dept_id,
+                name=body.name.strip(),
+                dept_type=body.dept_type.strip(),
+                status=body.status,
+                actor=ctx.username,
+            )
+            db.commit()
+            return {"ok": True}
+        except ValueError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @router.delete("/api/system/depts/{dept_id}")
+    async def api_delete_dept(
+        dept_id: int,
+        ctx: AuthContext = Depends(get_current_context),
+        _perm: str = Depends(require_permission("system.users.manage")),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            auth_svc.delete_department(db, dept_id, actor=ctx.username)
+            db.commit()
+            return {"ok": True}
+        except ValueError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @router.post("/api/system/depts/{dept_id}/delete")
+    async def api_delete_dept_post(
+        dept_id: int,
+        ctx: AuthContext = Depends(get_current_context),
+        _perm: str = Depends(require_permission("system.users.manage")),
+        db: Session = Depends(get_db),
+    ):
+        try:
+            auth_svc.delete_department(db, dept_id, actor=ctx.username)
+            db.commit()
+            return {"ok": True}
+        except ValueError as e:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(e))
 
     @router.put("/api/system/users/{user_id}/depts")
     async def api_set_user_depts(

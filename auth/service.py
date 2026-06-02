@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -348,7 +349,8 @@ def seed_rbac_data(
                 {"c": code, "n": code, "m": code.split(".")[0]},
             )
 
-    builtin_codes = {ROLE_SUPER_ADMIN, ROLE_SALES, ROLE_DELIVERY, ROLE_VIEWER}
+    from auth.policy import RESERVED_ROLE_CODES
+
     role_defs = [
         (ROLE_SUPER_ADMIN, "超级管理员", "拥有全部权限"),
         (ROLE_SALES, "销售", "客户与商机"),
@@ -359,7 +361,7 @@ def seed_rbac_data(
     role_ids: Dict[str, int] = {}
     for code, name, desc in role_defs:
         row = db.execute(text("SELECT id FROM sys_role WHERE code = :c"), {"c": code}).fetchone()
-        is_builtin = 1 if code in builtin_codes or code == ROLE_SUPER_ADMIN else 0
+        is_builtin = 1 if code in RESERVED_ROLE_CODES else 0
         if row:
             role_ids[code] = int(row[0])
             db.execute(
@@ -705,6 +707,8 @@ def _role_permission_codes(db: Session, role_id: int) -> List[str]:
 
 
 def list_roles(db: Session) -> List[Dict[str, Any]]:
+    from auth.policy import RESERVED_ROLE_CODES
+
     rows = db.execute(
         text(
             "SELECT id, code, name, description, is_builtin, created_at FROM sys_role ORDER BY id"
@@ -715,7 +719,8 @@ def list_roles(db: Session) -> List[Dict[str, Any]]:
         d = dict(row)
         rid = int(d["id"])
         d["permissions"] = _role_permission_codes(db, rid)
-        d["is_builtin"] = bool(int(d.get("is_builtin") or 0))
+        code = str(d.get("code") or "")
+        d["is_builtin"] = bool(int(d.get("is_builtin") or 0)) or code in RESERVED_ROLE_CODES
         cnt = db.execute(
             text("SELECT COUNT(*) FROM sys_user_role WHERE role_id = :rid"),
             {"rid": rid},
@@ -780,6 +785,8 @@ def create_user(
     password: str,
     display_name: str,
     role_codes: List[str],
+    dept_ids: Optional[List[int]] = None,
+    primary_dept_id: Optional[int] = None,
     actor: str,
     actor_ctx: AuthContext,
 ) -> Dict[str, Any]:
@@ -810,7 +817,16 @@ def create_user(
         raise ValueError("用户创建失败")
     uid = int(row["id"])
     _set_user_roles(db, uid, role_codes)
-    _ensure_user_dept_defaults(db, uid, role_codes)
+    if dept_ids:
+        set_user_departments(
+            db,
+            uid,
+            dept_ids,
+            primary_dept_id=primary_dept_id,
+            actor=actor,
+        )
+    else:
+        _ensure_user_dept_defaults(db, uid, role_codes)
     assigned = get_user_roles(db, uid)
     if role_codes and not assigned:
         raise ValueError("角色无效，请从列表中选择")
@@ -1110,6 +1126,38 @@ def create_custom_role(db: Session, *, name: str, description: str, actor: str) 
     return {"id": rid, "code": code, "name": label}
 
 
+def delete_role(db: Session, role_id: int, *, actor: str) -> None:
+    from auth.policy import RESERVED_ROLE_CODES
+
+    role = db.execute(
+        text("SELECT id, code, name, is_builtin FROM sys_role WHERE id = :id"),
+        {"id": role_id},
+    ).mappings().first()
+    if not role:
+        raise ValueError("角色不存在")
+    code = str(role["code"])
+    if int(role.get("is_builtin") or 0) or code in RESERVED_ROLE_CODES:
+        raise ValueError("内置角色不可删除")
+    cnt = db.execute(
+        text("SELECT COUNT(*) FROM sys_user_role WHERE role_id = :rid"),
+        {"rid": role_id},
+    ).scalar()
+    if int(cnt or 0) > 0:
+        raise ValueError(f"仍有 {int(cnt)} 个用户使用该角色，无法删除")
+    db.execute(text("DELETE FROM sys_role_data_scope WHERE role_id = :rid"), {"rid": role_id})
+    db.execute(text("DELETE FROM sys_role_permission WHERE role_id = :rid"), {"rid": role_id})
+    db.execute(text("DELETE FROM sys_role WHERE id = :rid"), {"rid": role_id})
+    audit_log(
+        db,
+        actor=actor,
+        action="role.delete",
+        target_type="role",
+        target_id=str(role_id),
+        detail=code,
+        before={"name": role.get("name"), "code": code},
+    )
+
+
 def update_role_meta(
     db: Session,
     role_id: int,
@@ -1195,6 +1243,138 @@ def list_departments(db: Session) -> List[Dict[str, Any]]:
         )
     ).mappings().all()
     return [dict(r) for r in rows]
+
+
+BUILTIN_DEPT_CODES = frozenset({"ROOT", "SALES", "DELIVERY", "FINANCE", "ADMIN"})
+
+
+def _dept_reference_reason(db: Session, dept_id: int) -> Optional[str]:
+    if db.execute(
+        text("SELECT 1 FROM sys_dept WHERE parent_id = :id LIMIT 1"), {"id": dept_id}
+    ).fetchone():
+        return "存在子部门"
+    if db.execute(
+        text("SELECT 1 FROM sys_user_dept WHERE dept_id = :id LIMIT 1"), {"id": dept_id}
+    ).fetchone():
+        return "仍有用户归属该部门"
+    if db.execute(
+        text("SELECT 1 FROM clients WHERE owner_dept_id = :id OR delivery_dept_id = :id LIMIT 1"),
+        {"id": dept_id},
+    ).fetchone():
+        return "仍有客户归属该部门"
+    return None
+
+
+def create_department(
+    db: Session,
+    *,
+    name: str,
+    code: str,
+    parent_id: Optional[int],
+    dept_type: str,
+    actor: str,
+) -> Dict[str, Any]:
+    name = (name or "").strip()
+    code = (code or "").strip().upper()
+    if not name:
+        raise ValueError("部门名称不能为空")
+    if not re.fullmatch(r"[A-Z0-9_]+", code):
+        raise ValueError("部门编码只能包含大写字母、数字、下划线")
+    if db.execute(text("SELECT 1 FROM sys_dept WHERE code = :c"), {"c": code}).fetchone():
+        raise ValueError("部门编码已存在")
+    parent_path = ""
+    pid: Optional[int] = None
+    if parent_id:
+        prow = db.execute(
+            text("SELECT id, path FROM sys_dept WHERE id = :id"), {"id": parent_id}
+        ).fetchone()
+        if not prow:
+            raise ValueError("上级部门不存在")
+        pid = int(prow[0])
+        parent_path = str(prow[1] or "")
+    path = f"{parent_path}/{code}" if parent_path else code
+    dtype = (dept_type or "general").strip() or "general"
+    now = _utc_now()
+    db.execute(
+        text(
+            "INSERT INTO sys_dept (name, code, parent_id, path, dept_type, status, created_at, updated_at) "
+            "VALUES (:n, :c, :pid, :p, :t, 'active', :at, :at)"
+        ),
+        {"n": name, "c": code, "pid": pid, "p": path, "t": dtype, "at": now},
+    )
+    did = int(db.execute(text("SELECT id FROM sys_dept WHERE code = :c"), {"c": code}).fetchone()[0])
+    audit_log(
+        db,
+        actor=actor,
+        action="dept.create",
+        target_type="dept",
+        target_id=str(did),
+        detail=code,
+        after={"name": name, "code": code, "parent_id": pid, "path": path, "dept_type": dtype},
+    )
+    return {"id": did, "code": code, "name": name, "path": path}
+
+
+def update_department(
+    db: Session,
+    dept_id: int,
+    *,
+    name: str,
+    dept_type: str,
+    status: str,
+    actor: str,
+) -> None:
+    row = db.execute(
+        text("SELECT id, code, name, dept_type, status FROM sys_dept WHERE id = :id"),
+        {"id": dept_id},
+    ).mappings().first()
+    if not row:
+        raise ValueError("部门不存在")
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("部门名称不能为空")
+    dtype = (dept_type or row["dept_type"] or "general").strip() or "general"
+    st = (status or row["status"] or "active").strip()
+    if st not in ("active", "disabled"):
+        raise ValueError("无效状态")
+    before = {"name": row["name"], "dept_type": row["dept_type"], "status": row["status"]}
+    db.execute(
+        text("UPDATE sys_dept SET name = :n, dept_type = :t, status = :s, updated_at = :at WHERE id = :id"),
+        {"n": name, "t": dtype, "s": st, "at": _utc_now(), "id": dept_id},
+    )
+    audit_log(
+        db,
+        actor=actor,
+        action="dept.update",
+        target_type="dept",
+        target_id=str(dept_id),
+        detail=str(row["code"]),
+        before=before,
+        after={"name": name, "dept_type": dtype, "status": st},
+    )
+
+
+def delete_department(db: Session, dept_id: int, *, actor: str) -> None:
+    row = db.execute(
+        text("SELECT id, code, name FROM sys_dept WHERE id = :id"), {"id": dept_id}
+    ).mappings().first()
+    if not row:
+        raise ValueError("部门不存在")
+    if str(row["code"]) in BUILTIN_DEPT_CODES:
+        raise ValueError("系统内置部门不可删除")
+    reason = _dept_reference_reason(db, dept_id)
+    if reason:
+        raise ValueError(f"无法删除：{reason}")
+    db.execute(text("DELETE FROM sys_dept WHERE id = :id"), {"id": dept_id})
+    audit_log(
+        db,
+        actor=actor,
+        action="dept.delete",
+        target_type="dept",
+        target_id=str(dept_id),
+        detail=str(row["code"]),
+        before={"name": row["name"], "code": row["code"]},
+    )
 
 
 def set_user_departments(

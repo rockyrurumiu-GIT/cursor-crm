@@ -156,6 +156,8 @@
                     <tr>
                         <th class="crm-th">客户名称</th>
                         <th class="crm-th">销售负责人</th>
+                        <th class="crm-th">交付部门</th>
+                        <th class="crm-th">交付负责人</th>
                         <th class="crm-th">外包规模</th>
                         <th class="crm-th">开拓阶段</th>
                         <th class="crm-th">预估金额</th>
@@ -171,6 +173,8 @@
                     <tr v-for="c in clients" :key="c.id">
                         <td class="crm-td crm-name-cell">{{ c.name }}</td>
                         <td class="crm-td">{{ c.owner }}</td>
+                        <td class="crm-td">{{ fmtDash(deliveryDeptDisplay(c)) }}</td>
+                        <td class="crm-td">{{ fmtDash(deliveryOwnerDisplay(c)) }}</td>
                         <td class="crm-td">{{ c.scale }}</td>
                         <td class="crm-td">
                             <span :class="phaseColor(c.phase)" class="px-2 py-1 rounded text-xs">{{ c.phase }}</span>
@@ -249,6 +253,8 @@
                             <div><dt class="text-gray-500 text-xs">外包规模</dt><dd>{{ fmtDash(selectedClient.scale) }}</dd></div>
                             <div><dt class="text-gray-500 text-xs">开拓阶段</dt><dd>{{ fmtDash(selectedClient.phase) }}</dd></div>
                             <div class="col-span-2"><dt class="text-gray-500 text-xs">销售负责人</dt><dd>{{ fmtDash(selectedClient.owner) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">交付部门</dt><dd>{{ fmtDash(deliveryDeptDisplay(selectedClient)) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">交付负责人</dt><dd>{{ fmtDash(deliveryOwnerDisplay(selectedClient)) }}</dd></div>
                         </dl>
                     </div>
                     <div>
@@ -421,6 +427,7 @@ createApp({
     setup() {
         const params = new URLSearchParams(window.location.search);
         const clients = ref([]);
+        const assignOptions = ref({ depts: [], users: [] });
         const handoffMap = ref({});
         const opportunitiesByClient = ref({});
         const filterPhase = ref(params.get('phase') || '');
@@ -466,11 +473,15 @@ createApp({
             if (filterPhase.value) {
                 url += '?phase=' + encodeURIComponent(filterPhase.value);
             }
-            const [clientsRes, handoffRes, oppRes] = await Promise.all([
+            const [clientsRes, handoffRes, oppRes, assignRes] = await Promise.all([
                 fetch(url, { headers: authHeader() }),
                 fetch('/api/clients/handoff-summary', { headers: authHeader() }),
                 fetch('/api/opportunities', { headers: authHeader() }),
+                fetch('/api/clients/assign-options', { headers: authHeader() }),
             ]);
+            if (assignRes.ok) {
+                assignOptions.value = await assignRes.json();
+            }
             if (handoffRes.ok) {
                 const d = await handoffRes.json();
                 handoffMap.value = d && !d.detail ? d : {};
@@ -583,6 +594,26 @@ createApp({
         };
 
         const fmtDash = (v) => (v && String(v).trim()) ? String(v).trim() : '—';
+
+        const deliveryDeptDisplay = (c) => {
+            if (!c) return '';
+            const label = (c.delivery_dept_label || '').trim();
+            if (label) return label;
+            const id = c.delivery_dept_id;
+            if (id == null || id === '') return '';
+            const d = (assignOptions.value.depts || []).find((x) => Number(x.id) === Number(id));
+            return d ? `${d.name} (${d.code})` : '';
+        };
+
+        const deliveryOwnerDisplay = (c) => {
+            if (!c) return '';
+            const label = (c.delivery_owner_label || '').trim();
+            if (label) return label;
+            const id = c.delivery_owner_user_id;
+            if (id == null || id === '') return '';
+            const u = (assignOptions.value.users || []).find((x) => Number(x.id) === Number(id));
+            return u ? `${(u.display_name || u.username)} · ${u.username}` : '';
+        };
         const fmtAmount = (c) => {
             const raw = c && c.estimated_annual_amount != null ? String(c.estimated_annual_amount).trim() : '';
             if (!raw) return '—';
@@ -646,6 +677,8 @@ createApp({
             fd.append('contact_description', c.contact_description || '');
             fd.append('city', c.city || '');
             fd.append('remarks', c.remarks || '');
+            fd.append('delivery_dept_id', c.delivery_dept_id != null && c.delivery_dept_id !== '' ? String(c.delivery_dept_id) : '');
+            fd.append('delivery_owner_user_id', c.delivery_owner_user_id != null && c.delivery_owner_user_id !== '' ? String(c.delivery_owner_user_id) : '');
         };
 
         const visitAttachmentUrls = ref({});
@@ -743,6 +776,7 @@ createApp({
             handoffEntry, handoffStatusLabel, resolveHandoffStatus, handoffBadge,
             clientOpportunities, openOppDrawer, closeOppDrawer,
             fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, displayAmount, displayWinRate, oppStageBadgeClass, hasPrimaryContact,
+            deliveryDeptDisplay, deliveryOwnerDisplay,
             openDetail, updateClient, confirmDelete, executeDelete,
             submitVisit, exportCSV, isImage, viewFull, visitAttachmentUrls
         };

@@ -9,6 +9,7 @@
     var CAN_AUDIT = root.getAttribute('data-can-audit') === '1';
     var CAN_INSURANCE = root.getAttribute('data-can-insurance') === '1';
     var IS_SUPER = root.getAttribute('data-is-super') === '1';
+    var BUILTIN_DEPT_CODES = { ROOT: 1, SALES: 1, DELIVERY: 1, FINANCE: 1, ADMIN: 1 };
 
     var state = {
         users: [],
@@ -18,7 +19,6 @@
         userSearchTimer: null,
         selectedUserIds: new Set(),
         roles: [],
-        selectedRoleId: null,
         matrixData: null,
         matrixReadonly: false,
         dataScopeData: null,
@@ -28,8 +28,10 @@
         drawerUserId: null,
     };
 
-    function headers() {
-        return Object.assign({}, window.crmAuthHeader(), { 'Content-Type': 'application/json' });
+    function buildHeaders(withJson) {
+        var h = Object.assign({}, window.crmAuthHeader());
+        if (withJson) h['Content-Type'] = 'application/json';
+        return h;
     }
 
     function showMsg(text, ok) {
@@ -57,18 +59,64 @@
             + pad(d.getSeconds());
     }
 
+    function formatSpcDateOnly(raw) {
+        if (raw == null || raw === '') return '—';
+        var s = String(raw).trim();
+        if (!s) return '—';
+        var d = new Date(s);
+        if (Number.isNaN(d.getTime())) {
+            var normalized = s.replace('T', ' ').replace(/Z$/i, '').replace(/\.\d{3}$/, '');
+            return normalized.length >= 10 ? normalized.slice(0, 10) : normalized;
+        }
+        var pad = function (n) { return String(n).padStart(2, '0'); };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+    }
+
+    function clearMsg() {
+        var el = document.getElementById('spc-global-msg');
+        if (!el) return;
+        el.textContent = '';
+        el.classList.add('hidden');
+    }
+
     async function api(path, opts) {
         opts = opts || {};
-        var r = await fetch(path, Object.assign({ credentials: 'same-origin', headers: headers() }, opts));
+        var hasBody = opts.body != null && opts.body !== '';
+        var r = await fetch(path, Object.assign({
+            credentials: 'same-origin',
+            headers: buildHeaders(hasBody),
+        }, opts));
         var data = await r.json().catch(function () { return {}; });
         if (!r.ok) {
             var detail = data.detail;
+            if (typeof detail !== 'string' && r.status === 405) {
+                detail = 'Method Not Allowed（请重启后端服务，或当前环境不支持该 HTTP 方法）';
+            }
             throw new Error(typeof detail === 'string' ? detail : (detail ? JSON.stringify(detail) : ('HTTP ' + r.status)));
         }
         return data;
     }
 
+    async function apiDelete(path) {
+        try {
+            await api(path, { method: 'DELETE' });
+        } catch (e) {
+            var msg = String(e.message || '').toLowerCase();
+            if (msg.indexOf('method not allowed') < 0 && msg.indexOf('405') < 0) {
+                throw e;
+            }
+            await api(path + '/delete', { method: 'POST' });
+        }
+    }
+
+    function runTabLoad(fn) {
+        Promise.resolve().then(fn).catch(function (e) {
+            showMsg(e.message, false);
+        });
+    }
+
     function switchTab(name) {
+        clearMsg();
         document.querySelectorAll('.spc-tab').forEach(function (btn) {
             btn.classList.toggle('active', btn.getAttribute('data-tab') === name);
         });
@@ -77,12 +125,13 @@
         });
         var panel = document.getElementById('panel-' + name);
         if (panel) panel.classList.remove('hidden');
-        if (name === 'users' && CAN_USERS) loadUsers();
-        if (name === 'roles' && CAN_ROLES) loadRoles();
-        if (name === 'matrix' && CAN_ROLES) loadMatrixTab();
-        if (name === 'datascope' && CAN_ROLES) loadDataScopeTab();
-        if (name === 'preview' && CAN_USERS) loadPreviewTab();
-        if (name === 'audit' && CAN_AUDIT) loadAudit();
+        if (name === 'users' && CAN_USERS) runTabLoad(loadUsers);
+        if (name === 'roles' && CAN_ROLES) runTabLoad(loadRoles);
+        if (name === 'matrix' && CAN_ROLES) runTabLoad(loadMatrixTab);
+        if (name === 'datascope' && CAN_ROLES) runTabLoad(loadDataScopeTab);
+        if (name === 'preview' && CAN_USERS) runTabLoad(loadPreviewTab);
+        if (name === 'depts' && CAN_USERS) runTabLoad(loadDeptsTab);
+        if (name === 'audit' && CAN_AUDIT) runTabLoad(function () { return loadAudit(false); });
         if (name === 'insurance' && CAN_INSURANCE && typeof window.loadGmInsuranceAdmin === 'function') {
             window.loadGmInsuranceAdmin();
         }
@@ -120,6 +169,48 @@
             var on = sel.indexOf(r.code) >= 0 ? ' selected' : '';
             return '<option value="' + r.code + '"' + on + '>' + (r.name || r.code) + '</option>';
         }).join('');
+    }
+
+    function roleCheckboxesHtml(selectedCodes) {
+        var sel = selectedCodes || [];
+        if (!state.roles.length) {
+            return '<p class="text-gray-400 text-xs">暂无角色</p>';
+        }
+        return '<div class="spc-check-group border rounded-lg px-3 py-2 max-h-[160px] overflow-y-auto space-y-1">'
+            + state.roles.map(function (r) {
+                var on = sel.indexOf(r.code) >= 0 ? ' checked' : '';
+                return '<label class="flex items-center gap-2 cursor-pointer">'
+                    + '<input type="checkbox" class="d-role-check" value="' + r.code + '"' + on + '>'
+                    + '<span>' + (r.name || r.code) + '</span></label>';
+            }).join('')
+            + '</div>';
+    }
+
+    function deptCheckboxesHtml(selectedIds) {
+        var sel = selectedIds || [];
+        if (!state.depts.length) {
+            return '<p class="text-gray-400 text-xs">暂无部门，请先在「部门管理」中创建</p>';
+        }
+        return '<div class="spc-check-group border rounded-lg px-3 py-2 max-h-[160px] overflow-y-auto space-y-1">'
+            + state.depts.map(function (d) {
+                var on = sel.indexOf(d.id) >= 0 ? ' checked' : '';
+                return '<label class="flex items-center gap-2 cursor-pointer">'
+                    + '<input type="checkbox" class="d-dept-check" value="' + d.id + '"' + on + '>'
+                    + '<span>' + d.name + ' (' + d.code + ')</span></label>';
+            }).join('')
+            + '</div>';
+    }
+
+    function collectCheckedRoleCodes() {
+        return Array.from(document.querySelectorAll('.d-role-check:checked')).map(function (el) {
+            return el.value;
+        });
+    }
+
+    function collectCheckedDeptIds() {
+        return Array.from(document.querySelectorAll('.d-dept-check:checked')).map(function (el) {
+            return parseInt(el.value, 10);
+        });
     }
 
     function syncBatchRoleUi() {
@@ -193,54 +284,158 @@
                 + '<td class="crm-td text-gray-600">' + deptLabel + '</td>'
                 + '<td class="crm-td">' + chips + '</td>'
                 + '<td class="crm-td text-gray-500 whitespace-nowrap">' + formatSpcDateTime(u.last_login_at) + '</td>'
-                + '<td class="crm-td text-gray-500 whitespace-nowrap">' + formatSpcDateTime(u.created_at) + '</td>'
+                + '<td class="crm-td text-gray-500 whitespace-nowrap">' + formatSpcDateOnly(u.created_at) + '</td>'
                 + '<td class="crm-td crm-sticky-right-op crm-op-col-xl whitespace-nowrap">' + ops + '</td></tr>';
         }).join('');
     }
 
-    function deptOptionsHtml(selectedIds, primaryId) {
-        var sel = selectedIds || [];
-        return state.depts.map(function (d) {
-            var on = sel.indexOf(d.id) >= 0 ? ' selected' : '';
-            var pri = d.id === primaryId ? ' data-primary="1"' : '';
-            return '<option value="' + d.id + '"' + on + pri + '>' + d.name + ' (' + d.code + ')</option>';
+    async function ensureDepts(force) {
+        if ((state.depts.length && !force) || !CAN_USERS) return;
+        state.depts = await api('/api/system/depts');
+    }
+
+    function deptNameById(deptId) {
+        var d = state.depts.find(function (x) { return x.id === deptId; });
+        return d ? (d.name + ' (' + d.code + ')') : '—';
+    }
+
+    function deptTypeLabel(t) {
+        return { sales: '销售', delivery: '交付', finance: '财务', general: '通用' }[t] || t || '—';
+    }
+
+    async function loadDeptsTab() {
+        if (!CAN_USERS) return;
+        await ensureDepts(true);
+        renderDeptsList();
+    }
+
+    function renderDeptsList() {
+        var tbody = document.getElementById('depts-tbody');
+        if (!tbody) return;
+        if (!state.depts.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="crm-td text-center text-gray-400 py-8">暂无部门</td></tr>';
+            return;
+        }
+        tbody.innerHTML = state.depts.map(function (d) {
+            var builtin = BUILTIN_DEPT_CODES[d.code];
+            var ops = '<div class="crm-op-actions">'
+                + '<button type="button" class="crm-op-btn-edit btn-edit-dept" data-id="' + d.id + '">编辑</button>'
+                + (builtin ? '' : '<button type="button" class="crm-op-btn-delete btn-delete-dept" data-id="' + d.id + '">删除</button>')
+                + '</div>';
+            return '<tr data-dept-id="' + d.id + '">'
+                + '<td class="crm-td font-medium">' + d.name + (builtin ? ' <span class="text-xs text-gray-400">内置</span>' : '') + '</td>'
+                + '<td class="crm-td text-gray-600">' + d.code + '</td>'
+                + '<td class="crm-td text-gray-600">' + (d.parent_id ? deptNameById(d.parent_id) : '—') + '</td>'
+                + '<td class="crm-td">' + deptTypeLabel(d.dept_type) + '</td>'
+                + '<td class="crm-td">' + d.status + '</td>'
+                + '<td class="crm-td text-gray-500 text-xs">' + d.path + '</td>'
+                + '<td class="crm-td crm-sticky-right-op crm-op-col-xl whitespace-nowrap">' + ops + '</td></tr>';
         }).join('');
     }
 
-    async function ensureDepts() {
-        if (state.depts.length || !CAN_USERS) return;
-        state.depts = await api('/api/system/depts');
+    function deptParentOptionsHtml(selectedId, excludeId) {
+        return state.depts
+            .filter(function (d) { return d.id !== excludeId; })
+            .map(function (d) {
+                var on = selectedId === d.id ? ' selected' : '';
+                return '<option value="' + d.id + '"' + on + '>' + d.name + ' (' + d.code + ')</option>';
+            }).join('');
+    }
+
+    function openDeptDrawer(mode, dept) {
+        var isNew = mode === 'create';
+        var parentId = dept ? dept.parent_id : null;
+        var html = ''
+            + (isNew
+                ? '<div><label class="block text-gray-600 mb-1">部门编码</label>'
+                    + '<input id="d-dept-code" class="w-full border rounded-lg px-3 py-2" placeholder="如 KEY_DELIV"></div>'
+                : '<div class="text-sm text-gray-500 mb-2">编码：<span class="font-mono">' + dept.code + '</span>（不可修改）</div>')
+            + '<div><label class="block text-gray-600 mb-1">部门名称</label>'
+            + '<input id="d-dept-name" class="w-full border rounded-lg px-3 py-2" value="' + (dept ? (dept.name || '') : '') + '"></div>'
+            + (isNew
+                ? '<div><label class="block text-gray-600 mb-1">上级部门</label>'
+                    + '<select id="d-dept-parent" class="w-full border rounded-lg px-3 py-2">'
+                    + '<option value="">无（顶级）</option>' + deptParentOptionsHtml(parentId, null) + '</select></div>'
+                : '')
+            + '<div><label class="block text-gray-600 mb-1">部门类型</label>'
+            + '<select id="d-dept-type" class="w-full border rounded-lg px-3 py-2">'
+            + ['general', 'sales', 'delivery', 'finance'].map(function (t) {
+                var cur = dept ? dept.dept_type : 'delivery';
+                return '<option value="' + t + '"' + (cur === t ? ' selected' : '') + '>' + deptTypeLabel(t) + '</option>';
+            }).join('')
+            + '</select></div>'
+            + (!isNew
+                ? '<div class="mt-3"><label class="block text-gray-600 mb-1">状态</label>'
+                    + '<select id="d-dept-status" class="w-full border rounded-lg px-3 py-2">'
+                    + '<option value="active"' + ((dept && dept.status === 'active') ? ' selected' : '') + '>启用</option>'
+                    + '<option value="disabled"' + ((dept && dept.status === 'disabled') ? ' selected' : '') + '>停用</option>'
+                    + '</select></div>'
+                : '');
+        openDrawer(isNew ? '新建部门' : '编辑部门 · ' + dept.name, html, async function () {
+            var name = document.getElementById('d-dept-name').value.trim();
+            var dtype = document.getElementById('d-dept-type').value;
+            if (!name) throw new Error('请填写部门名称');
+            if (isNew) {
+                var code = document.getElementById('d-dept-code').value.trim();
+                var parentRaw = document.getElementById('d-dept-parent').value;
+                if (!code) throw new Error('请填写部门编码');
+                await api('/api/system/depts', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: name,
+                        code: code,
+                        parent_id: parentRaw ? parseInt(parentRaw, 10) : null,
+                        dept_type: dtype,
+                    }),
+                });
+            } else {
+                await api('/api/system/depts/' + dept.id, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        name: name,
+                        dept_type: dtype,
+                        status: document.getElementById('d-dept-status').value,
+                    }),
+                });
+            }
+            state.depts = [];
+            await loadDeptsTab();
+            showMsg(isNew ? '部门已创建' : '部门已更新', true);
+        });
     }
 
     function openUserDrawer(mode, user) {
         var isNew = mode === 'create';
         var sel = user ? (user.roles || []) : ['VIEWER'];
         var deptIds = user ? (user.dept_ids || []) : [];
-        var primaryDept = user ? user.primary_dept_id : null;
-        var deptBlock = !isNew
-            ? '<div><label class="block text-gray-600 mb-1">部门（多选，第一项为主部门）</label>'
-                + '<select id="d-depts" multiple class="w-full border rounded-lg px-3 py-2 min-h-[100px]">'
-                + deptOptionsHtml(deptIds, primaryDept) + '</select></div>'
-            : '';
         var html = ''
             + (isNew ? '<div><label class="block text-gray-600 mb-1">用户名</label><input id="d-username" class="w-full border rounded-lg px-3 py-2"></div>'
                 + '<div><label class="block text-gray-600 mb-1">密码</label><input id="d-password" type="password" class="w-full border rounded-lg px-3 py-2"></div>' : '')
             + '<div><label class="block text-gray-600 mb-1">显示名</label><input id="d-display" class="w-full border rounded-lg px-3 py-2" value="' + (user ? (user.display_name || '') : '') + '"></div>'
-            + '<div><label class="block text-gray-600 mb-1">角色（多选）</label>'
-            + '<select id="d-roles" multiple class="w-full border rounded-lg px-3 py-2 min-h-[120px]">' + roleOptionsHtml(sel) + '</select></div>'
-            + deptBlock;
+            + '<div><label class="block text-gray-600 mb-1">角色</label>'
+            + roleCheckboxesHtml(sel)
+            + '</div>'
+            + '<div><label class="block text-gray-600 mb-1">部门</label>'
+            + deptCheckboxesHtml(deptIds)
+            + '<p class="text-xs text-gray-500 mt-1">可多选；列表中第一个勾选的部门为主部门' + (isNew ? '；不选则按角色自动分配默认部门' : '') + '</p></div>';
         openDrawer(isNew ? '新建用户' : '编辑用户 · ' + user.username, html, async function () {
-            var roleCodes = Array.from(document.getElementById('d-roles').selectedOptions).map(function (o) { return o.value; });
+            var roleCodes = collectCheckedRoleCodes();
             if (!roleCodes.length) throw new Error('至少选择一个角色');
+            var deptIdsSelected = collectCheckedDeptIds();
             if (isNew) {
+                var payload = {
+                    username: document.getElementById('d-username').value.trim(),
+                    password: document.getElementById('d-password').value,
+                    display_name: document.getElementById('d-display').value.trim(),
+                    role_codes: roleCodes,
+                };
+                if (deptIdsSelected.length) {
+                    payload.dept_ids = deptIdsSelected;
+                    payload.primary_dept_id = deptIdsSelected[0];
+                }
                 await api('/api/system/users', {
                     method: 'POST',
-                    body: JSON.stringify({
-                        username: document.getElementById('d-username').value.trim(),
-                        password: document.getElementById('d-password').value,
-                        display_name: document.getElementById('d-display').value.trim(),
-                        role_codes: roleCodes,
-                    }),
+                    body: JSON.stringify(payload),
                 });
             } else {
                 await api('/api/system/users/' + user.id, {
@@ -251,18 +446,14 @@
                     method: 'PUT',
                     body: JSON.stringify({ role_codes: roleCodes }),
                 });
-                var deptEl = document.getElementById('d-depts');
-                if (deptEl) {
-                    var deptIdsSelected = Array.from(deptEl.selectedOptions).map(function (o) { return parseInt(o.value, 10); });
-                    if (deptIdsSelected.length) {
-                        await api('/api/system/users/' + user.id + '/depts', {
-                            method: 'PUT',
-                            body: JSON.stringify({
-                                dept_ids: deptIdsSelected,
-                                primary_dept_id: deptIdsSelected[0],
-                            }),
-                        });
-                    }
+                if (deptIdsSelected.length) {
+                    await api('/api/system/users/' + user.id + '/depts', {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            dept_ids: deptIdsSelected,
+                            primary_dept_id: deptIdsSelected[0],
+                        }),
+                    });
                 }
             }
             await loadUsers();
@@ -270,10 +461,7 @@
         });
     }
 
-    async function loadRoles() {
-        if (!CAN_ROLES) return;
-        state.roles = await api('/api/system/roles');
-        renderRolesList();
+    function syncRoleSelectOptions() {
         var sel = document.getElementById('matrix-role-select');
         if (sel) {
             sel.innerHTML = state.roles.map(function (r) {
@@ -288,35 +476,84 @@
         }
     }
 
-    function renderRolesList() {
-        var ul = document.getElementById('roles-list');
+    async function loadRoles() {
+        if (!CAN_ROLES) return;
+        state.roles = await api('/api/system/roles');
+        renderRolesTable();
+        syncRoleSelectOptions();
+    }
+
+    function filteredRoles() {
         var q = (document.getElementById('role-search').value || '').trim().toLowerCase();
-        var filtered = state.roles.filter(function (r) {
+        return state.roles.filter(function (r) {
             if (!q) return true;
             return (r.name || '').toLowerCase().indexOf(q) >= 0
                 || (r.code || '').toLowerCase().indexOf(q) >= 0;
         });
-        ul.innerHTML = filtered.map(function (r) {
-            var active = state.selectedRoleId === r.id ? ' bg-blue-50 border-blue-200' : ' border-transparent hover:bg-gray-50';
-            return '<li><button type="button" class="w-full text-left border rounded-lg px-3 py-2' + active + '" data-role-id="' + r.id + '">'
-                + '<span class="font-medium">' + (r.name || r.code) + '</span>'
-                + '<span class="block text-xs text-gray-500">' + r.code + (r.is_builtin ? ' · 内置' : '') + '</span></button></li>';
-        }).join('');
-        if (state.selectedRoleId) showRoleDetail(state.selectedRoleId);
     }
 
-    function showRoleDetail(roleId) {
-        var r = state.roles.find(function (x) { return x.id === roleId; });
-        if (!r) return;
-        state.selectedRoleId = roleId;
-        document.getElementById('role-detail-empty').classList.add('hidden');
-        document.getElementById('role-detail').classList.remove('hidden');
-        document.getElementById('role-detail-name').textContent = r.name || r.code;
-        document.getElementById('role-detail-code').textContent = r.code;
-        document.getElementById('role-detail-builtin').textContent = r.is_builtin ? '系统内置' : '自定义';
-        document.getElementById('role-detail-count').textContent = r.user_count || 0;
-        document.getElementById('role-detail-desc').textContent = r.description || '';
-        renderRolesList();
+    function renderRolesTable() {
+        var tbody = document.getElementById('roles-tbody');
+        if (!tbody) return;
+        var rows = filteredRoles();
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="crm-td text-center text-gray-400 py-8">暂无角色</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(function (r) {
+            var builtin = r.is_builtin;
+            var typeLabel = builtin ? '内置' : '自定义';
+            var desc = (r.description || '').trim() || '—';
+            var canDelete = !builtin;
+            var ops = '<div class="crm-op-actions spc-op-actions">'
+                + '<button type="button" class="crm-op-btn-edit btn-role-matrix" data-id="' + r.id + '">编辑权限矩阵</button>'
+                + '<button type="button" class="crm-op-btn-detail btn-role-edit" data-id="' + r.id + '">修改</button>'
+                + (canDelete
+                    ? '<button type="button" class="crm-op-btn-delete btn-role-delete" data-id="' + r.id + '">删除</button>'
+                    : '')
+                + '</div>';
+            return '<tr data-role-id="' + r.id + '">'
+                + '<td class="crm-td font-medium">' + (r.name || r.code) + '</td>'
+                + '<td class="crm-td text-gray-600 font-mono text-xs">' + r.code + '</td>'
+                + '<td class="crm-td">' + typeLabel + '</td>'
+                + '<td class="crm-td">' + (r.user_count || 0) + '</td>'
+                + '<td class="crm-td text-gray-600 max-w-xs truncate" title="' + desc.replace(/"/g, '&quot;') + '">' + desc + '</td>'
+                + '<td class="crm-td crm-sticky-right-op crm-op-col-xl whitespace-nowrap">' + ops + '</td></tr>';
+        }).join('');
+    }
+
+    function openRoleDrawer(mode, role) {
+        var isNew = mode === 'create';
+        var html = '<div><label class="block text-gray-600 mb-1">角色名称</label>'
+            + '<input id="d-rname" class="w-full border rounded-lg px-3 py-2" value="' + (role ? (role.name || '') : '') + '"></div>'
+            + '<div class="mt-3"><label class="block text-gray-600 mb-1">描述</label>'
+            + '<textarea id="d-rdesc" rows="3" class="w-full border rounded-lg px-3 py-2">'
+            + (role ? (role.description || '') : '') + '</textarea></div>'
+            + (isNew ? '<p class="text-xs text-gray-500 mt-2">保存后可在「功能权限」「数据权限」中配置权限。</p>' : '');
+        openDrawer(isNew ? '新建角色' : '修改角色 · ' + (role.name || role.code), html, async function () {
+            var name = document.getElementById('d-rname').value.trim();
+            var description = document.getElementById('d-rdesc').value.trim();
+            if (!name) throw new Error('请填写角色名称');
+            if (isNew) {
+                await api('/api/system/roles', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: name, description: description }),
+                });
+            } else {
+                await api('/api/system/roles/' + role.id, {
+                    method: 'PUT',
+                    body: JSON.stringify({ name: name, description: description }),
+                });
+            }
+            await loadRoles();
+            showMsg(isNew ? '角色已创建' : '角色已更新', true);
+        });
+    }
+
+    function openRoleMatrix(roleId) {
+        var sel = document.getElementById('matrix-role-select');
+        if (sel) sel.value = String(roleId);
+        switchTab('matrix');
     }
 
     async function loadMatrixTab() {
@@ -551,8 +788,11 @@
     });
 
     document.getElementById('btn-new-user').addEventListener('click', function () {
-        if (!state.roles.length) loadRoles().then(function () { openUserDrawer('create', null); });
-        else openUserDrawer('create', null);
+        var open = function () { openUserDrawer('create', null); };
+        var prep = state.roles.length ? Promise.resolve() : loadRoles();
+        prep.then(function () { return ensureDepts(true); })
+            .then(open)
+            .catch(function (e) { showMsg(e.message, false); });
     });
 
     document.getElementById('user-search').addEventListener('input', function () {
@@ -638,7 +878,10 @@
         if (!id) return;
         var user = state.users.find(function (u) { return String(u.id) === String(id); });
         if (ev.target.classList.contains('btn-edit-user')) {
-            ensureDepts().then(function () { openUserDrawer('edit', user); }).catch(function (e) { showMsg(e.message, false); });
+            var prep = state.roles.length ? Promise.resolve() : loadRoles();
+            prep.then(function () { return ensureDepts(true); })
+                .then(function () { openUserDrawer('edit', user); })
+                .catch(function (e) { showMsg(e.message, false); });
         } else if (ev.target.classList.contains('btn-reset-pwd')) {
             var pw = prompt('输入新密码（至少6位）');
             if (!pw) return;
@@ -667,47 +910,30 @@
         }
     });
 
-    document.getElementById('roles-list').addEventListener('click', function (ev) {
-        var btn = ev.target.closest('[data-role-id]');
-        if (!btn) return;
-        showRoleDetail(parseInt(btn.getAttribute('data-role-id'), 10));
-    });
-
     document.getElementById('btn-new-role').addEventListener('click', function () {
-        var name = prompt('自定义角色名称');
-        if (!name) return;
-        api('/api/system/roles', { method: 'POST', body: JSON.stringify({ name: name, description: '' }) })
-            .then(function () { loadRoles(); showMsg('角色已创建', true); })
-            .catch(function (e) { showMsg(e.message, false); });
+        openRoleDrawer('create', null);
     });
 
-    document.getElementById('btn-edit-role-meta').addEventListener('click', function () {
-        var r = state.roles.find(function (x) { return x.id === state.selectedRoleId; });
-        if (!r) return;
-        openDrawer('编辑角色', '<div><label class="block mb-1">名称</label><input id="d-rname" class="w-full border rounded px-3 py-2" value="' + (r.name || '') + '"></div>'
-            + '<div class="mt-3"><label class="block mb-1">描述</label><textarea id="d-rdesc" class="w-full border rounded px-3 py-2">' + (r.description || '') + '</textarea></div>',
-            async function () {
-                await api('/api/system/roles/' + r.id, {
-                    method: 'PUT',
-                    body: JSON.stringify({
-                        name: document.getElementById('d-rname').value.trim(),
-                        description: document.getElementById('d-rdesc').value.trim(),
-                    }),
-                });
+    document.getElementById('roles-tbody').addEventListener('click', async function (ev) {
+        var id = ev.target.getAttribute('data-id');
+        if (!id) return;
+        var role = state.roles.find(function (r) { return String(r.id) === String(id); });
+        if (!role) return;
+        if (ev.target.classList.contains('btn-role-matrix')) {
+            openRoleMatrix(role.id);
+        } else if (ev.target.classList.contains('btn-role-edit')) {
+            openRoleDrawer('edit', role);
+        } else if (ev.target.classList.contains('btn-role-delete')) {
+            if (!confirm('确认删除角色「' + (role.name || role.code) + '」？\n若仍有用户绑定将无法删除。')) return;
+            try {
+                await apiDelete('/api/system/roles/' + role.id);
                 await loadRoles();
-                showRoleDetail(r.id);
-                showMsg('角色已更新', true);
-            });
-    });
-
-    document.getElementById('btn-open-matrix').addEventListener('click', function () {
-        if (state.selectedRoleId) {
-            document.getElementById('matrix-role-select').value = String(state.selectedRoleId);
+                showMsg('角色已删除', true);
+            } catch (e) { showMsg(e.message, false); }
         }
-        switchTab('matrix');
     });
 
-    document.getElementById('role-search').addEventListener('input', renderRolesList);
+    document.getElementById('role-search').addEventListener('input', renderRolesTable);
     document.getElementById('matrix-role-select').addEventListener('change', loadMatrixTab);
     document.getElementById('btn-save-matrix').addEventListener('click', function () {
         saveMatrix().catch(function (e) { showMsg(e.message, false); });
@@ -722,6 +948,46 @@
     document.getElementById('preview-user-select').addEventListener('change', function () {
         renderPreview().catch(function (e) { showMsg(e.message, false); });
     });
+
+    function refreshDeptParentSelect() {
+        var sel = document.getElementById('d-dept-parent');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">无（顶级）</option>' + deptParentOptionsHtml(null, null);
+    }
+
+    function handleNewDeptClick() {
+        openDeptDrawer('create', null);
+        ensureDepts(true).then(function () {
+            refreshDeptParentSelect();
+        }).catch(function (e) { showMsg(e.message, false); });
+    }
+
+    var panelDepts = document.getElementById('panel-depts');
+    if (panelDepts) {
+        panelDepts.addEventListener('click', async function (ev) {
+            var newBtn = ev.target.closest('#btn-new-dept');
+            if (newBtn) {
+                handleNewDeptClick();
+                return;
+            }
+            var id = ev.target.getAttribute('data-id');
+            if (!id) return;
+            var dept = state.depts.find(function (d) { return String(d.id) === String(id); });
+            if (ev.target.classList.contains('btn-edit-dept')) {
+                if (!dept) return;
+                openDeptDrawer('edit', dept);
+            } else if (ev.target.classList.contains('btn-delete-dept')) {
+                if (!dept) return;
+                if (!confirm('确认删除部门「' + dept.name + '」？\n若仍有用户或客户归属将无法删除。')) return;
+                try {
+                    await apiDelete('/api/system/depts/' + dept.id);
+                    state.depts = [];
+                    await loadDeptsTab();
+                    showMsg('部门已删除', true);
+                } catch (e) { showMsg(e.message, false); }
+            }
+        });
+    }
 
     document.getElementById('btn-audit-search').addEventListener('click', function () {
         var oldMore = document.getElementById('btn-audit-more');
@@ -755,6 +1021,7 @@
         document.getElementById('tab-btn-datascope').style.display = 'none';
     }
     if (!CAN_USERS) document.getElementById('tab-btn-preview').style.display = 'none';
+    if (!CAN_USERS) document.getElementById('tab-btn-depts').style.display = 'none';
     if (!CAN_AUDIT) document.getElementById('tab-btn-audit').style.display = 'none';
     if (!CAN_INSURANCE) {
         var insTab = document.getElementById('tab-btn-insurance');

@@ -16,6 +16,27 @@
         min-width: calc(var(--crm-op-col-width-xl) * 2 / 3) !important;
         max-width: calc(var(--crm-op-col-width-xl) * 2 / 3) !important;
     }
+    #panel-roles table[data-table-id="system-roles"] col.crm-col-op-xl,
+    #panel-roles table[data-table-id="system-roles"] th.crm-sticky-right-op.crm-op-col-xl,
+    #panel-roles table[data-table-id="system-roles"] td.crm-sticky-right-op.crm-op-col-xl {
+        width: var(--crm-op-col-width-xl) !important;
+        min-width: var(--crm-op-col-width-xl) !important;
+        max-width: var(--crm-op-col-width-xl) !important;
+    }
+    #panel-roles th.crm-sticky-right-op,
+    #panel-roles td.crm-sticky-right-op {
+        text-align: left;
+    }
+    #panel-roles td.crm-sticky-right-op .spc-op-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+    #panel-roles .crm-op-btn-detail.btn-role-edit {
+        color: #111827;
+    }
+    #panel-roles .crm-op-btn-detail.btn-role-edit:hover {
+        color: #030712;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -34,6 +55,7 @@
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="matrix" id="tab-btn-matrix">功能权限</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="datascope" id="tab-btn-datascope">数据权限</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="preview" id="tab-btn-preview">权限预览</button>
+        <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="depts" id="tab-btn-depts">部门管理</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="audit" id="tab-btn-audit">审计日志</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="insurance" id="tab-btn-insurance">社保参保地</button>
     </div>
@@ -87,26 +109,25 @@
 
     <!-- Tab: Roles -->
     <section id="panel-roles" class="spc-panel hidden">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 min-h-[420px]">
-            <div class="md:col-span-1 bg-white rounded-xl border border-gray-200 p-3">
-                <div class="flex items-center justify-between mb-2">
-                    <h2 class="font-semibold text-sm">角色列表</h2>
-                    <button type="button" id="btn-new-role" class="text-xs text-blue-600 hover:underline">+ 自定义</button>
-                </div>
-                <input id="role-search" type="search" placeholder="搜索角色…" class="w-full border rounded-lg px-2 py-1.5 text-xs mb-2">
-                <ul id="roles-list" class="space-y-1 text-sm max-h-[320px] overflow-y-auto"></ul>
-            </div>
-            <div class="md:col-span-2 bg-white rounded-xl border border-gray-200 p-4">
-                <div id="role-detail-empty" class="text-sm text-gray-500">请选择左侧角色</div>
-                <div id="role-detail" class="hidden">
-                    <h2 class="text-lg font-semibold" id="role-detail-name"></h2>
-                    <p class="text-xs text-gray-500 mt-1"><span id="role-detail-code"></span> · <span id="role-detail-builtin"></span> · 绑定 <span id="role-detail-count">0</span> 人</p>
-                    <p class="text-sm text-gray-600 mt-2" id="role-detail-desc"></p>
-                    <div class="mt-4 flex gap-2">
-                        <button type="button" id="btn-edit-role-meta" class="text-sm text-blue-600 hover:underline">编辑名称/描述</button>
-                        <button type="button" id="btn-open-matrix" class="text-sm text-blue-600 hover:underline">编辑权限矩阵 →</button>
-                    </div>
-                </div>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <input id="role-search" type="search" placeholder="搜索角色名称或编码…" class="border rounded-lg px-3 py-2 text-sm w-64 max-w-full">
+            <button type="button" id="btn-new-role" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新建角色</button>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="crm-h-scroll">
+            <table class="crm-table w-full min-w-full text-sm" data-table-id="system-roles">
+                <thead>
+                    <tr>
+                        <th class="crm-th">角色名称</th>
+                        <th class="crm-th">编码</th>
+                        <th class="crm-th">类型</th>
+                        <th class="crm-th">绑定用户</th>
+                        <th class="crm-th">描述</th>
+                        <th class="crm-th crm-sticky-right-op crm-op-col-xl">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="roles-tbody"></tbody>
+            </table>
             </div>
         </div>
     </section>
@@ -141,6 +162,32 @@
             <button type="button" id="btn-load-preview" class="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50">刷新预览</button>
         </div>
         <div id="preview-container" class="bg-white rounded-xl border border-gray-200 p-4 text-sm"></div>
+    </section>
+
+    <!-- Tab: Departments -->
+    <section id="panel-depts" class="spc-panel hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <p class="text-sm text-gray-600">维护组织架构；交付数据权限按客户的「交付部门」过滤。</p>
+            <button type="button" id="btn-new-dept" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新建部门</button>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="crm-h-scroll">
+                <table class="crm-table w-full min-w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th class="crm-th">名称</th>
+                            <th class="crm-th">编码</th>
+                            <th class="crm-th">上级</th>
+                            <th class="crm-th">类型</th>
+                            <th class="crm-th">状态</th>
+                            <th class="crm-th">路径</th>
+                            <th class="crm-th crm-sticky-right-op crm-op-col-xl">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="depts-tbody"></tbody>
+                </table>
+            </div>
+        </div>
     </section>
 
     <!-- Tab: Social insurance locations -->
@@ -213,6 +260,6 @@
 </aside>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/system-permission-center.js?v=7"></script>
+<script src="/static/js/system-permission-center.js?v=12"></script>
 <script src="/static/js/gm-insurance-admin.js?v=1"></script>
 {% endblock %}

@@ -17,6 +17,24 @@
             <label class="block text-sm font-medium mb-1">销售负责人</label>
             <input name="owner" required class="w-full p-2 border rounded">
         </div>
+        <div class="border-t border-gray-100 pt-4 mt-2">
+            <p class="text-sm font-medium text-gray-700 mb-3">交付归属</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">交付部门</label>
+                    <select name="delivery_dept_id" id="delivery-dept-select" class="crm-form-control w-full">
+                        <option value="">未指定</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">用于交付模块按部门过滤可见客户</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">交付负责人</label>
+                    <select name="delivery_owner_user_id" id="delivery-owner-select" class="crm-form-control w-full">
+                        <option value="">未指定</option>
+                    </select>
+                </div>
+            </div>
+        </div>
         <div>
             <label class="block text-sm font-medium mb-1">外包规模</label>
             <input name="scale" required class="w-full p-2 border rounded" placeholder="例如：10人月">
@@ -106,6 +124,34 @@
     var amountDisplay = document.getElementById('estimated-annual-amount-display');
     var clientId = {% if is_edit %}{{ client_id }}{% else %}null{% endif %};
     var submitBtn = form.querySelector('button[type="submit"]');
+    var deptSelect = document.getElementById('delivery-dept-select');
+    var ownerSelect = document.getElementById('delivery-owner-select');
+    var assignOptionsLoaded = false;
+
+    function fillSelect(selectEl, items, valueKey, labelFn, selectedValue) {
+        if (!selectEl) return;
+        var html = '<option value="">未指定</option>';
+        (items || []).forEach(function (item) {
+            var val = item[valueKey];
+            var sel = selectedValue != null && String(selectedValue) === String(val) ? ' selected' : '';
+            html += '<option value="' + val + '"' + sel + '>' + labelFn(item) + '</option>';
+        });
+        selectEl.innerHTML = html;
+    }
+
+    async function loadAssignOptions(selectedDeptId, selectedOwnerId) {
+        if (assignOptionsLoaded && !selectedDeptId && !selectedOwnerId) return;
+        var r = await fetch('/api/clients/assign-options', { headers: window.crmAuthHeader() });
+        if (!r.ok) throw new Error('加载归属选项失败');
+        var data = await r.json();
+        fillSelect(deptSelect, data.depts || [], 'id', function (d) {
+            return d.name + ' (' + d.code + ')';
+        }, selectedDeptId);
+        fillSelect(ownerSelect, data.users || [], 'id', function (u) {
+            return (u.display_name || u.username) + ' · ' + u.username;
+        }, selectedOwnerId);
+        assignOptionsLoaded = true;
+    }
 
     function setEstimatedAmountDisplay(value) {
         if (!amountDisplay) return;
@@ -123,6 +169,12 @@
     async function loadClient() {
         if (!clientId) {
             setEstimatedAmountDisplay('');
+            try {
+                await loadAssignOptions(null, null);
+            } catch (err) {
+                msg.textContent = err.message || '加载归属选项失败';
+                msg.classList.remove('hidden');
+            }
             return;
         }
         msg.classList.add('hidden');
@@ -135,6 +187,7 @@
                 return;
             }
             var data = await r.json();
+            await loadAssignOptions(data.delivery_dept_id, data.delivery_owner_user_id);
             ['name', 'industry', 'owner', 'scale', 'phase',
              'contact_name', 'contact_info', 'contact_title', 'contact_relationship',
              'contact_acquisition_channel', 'contact_superior_contact', 'contact_description',
@@ -143,7 +196,7 @@
             });
             setEstimatedAmountDisplay(data.estimated_annual_amount);
         } catch (err) {
-            msg.textContent = '加载失败';
+            msg.textContent = err.message || '加载失败';
             msg.classList.remove('hidden');
         }
     }

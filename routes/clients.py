@@ -44,6 +44,66 @@ def _normalize_contact_channel(raw: Optional[str]) -> str:
     return channel
 
 
+def _parse_optional_int(raw: Optional[str]) -> Optional[int]:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    try:
+        return int(s)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="无效的数值参数")
+
+
+def _dept_label(db: Session, dept_id: Optional[int]) -> str:
+    if not dept_id:
+        return ""
+    from sqlalchemy import text
+
+    row = db.execute(
+        text("SELECT name, code FROM sys_dept WHERE id = :id"), {"id": dept_id}
+    ).fetchone()
+    if not row:
+        return str(dept_id)
+    name, code = str(row[0] or ""), str(row[1] or "")
+    if name and code:
+        return f"{name} ({code})"
+    return name or code or str(dept_id)
+
+
+def _user_label(db: Session, user_id: Optional[int]) -> str:
+    if not user_id:
+        return ""
+    from sqlalchemy import text
+
+    row = db.execute(
+        text("SELECT display_name, username FROM sys_user WHERE id = :id"), {"id": user_id}
+    ).fetchone()
+    if not row:
+        return str(user_id)
+    display = str(row[0] or row[1] or user_id)
+    username = str(row[1] or row[0] or user_id)
+    return f"{display} · {username}"
+
+
+def _serialize_client(db: Session, client) -> dict:
+    from fastapi.encoders import jsonable_encoder
+
+    d = jsonable_encoder(client)
+    dept_id = d.get("delivery_dept_id")
+    if dept_id is None:
+        dept_id = getattr(client, "delivery_dept_id", None)
+    owner_id = d.get("delivery_owner_user_id")
+    if owner_id is None:
+        owner_id = getattr(client, "delivery_owner_user_id", None)
+    d["delivery_dept_id"] = dept_id
+    d["delivery_owner_user_id"] = owner_id
+    d["delivery_dept_label"] = _dept_label(db, dept_id) if dept_id else ""
+    d["delivery_owner_label"] = _user_label(db, owner_id) if owner_id else ""
+    return d
+
+
 def register_client_read_routes(
     app,
     *,
@@ -117,7 +177,7 @@ def register_client_read_routes(
             db.refresh(c)
         statuses = _parse_handoff_status_filter(handoff_status)
         if not statuses:
-            return clients
+            return [_serialize_client(db, c) for c in clients]
         out = []
         for c in clients:
             latest = (
@@ -130,7 +190,39 @@ def register_client_read_routes(
             # OR：待审 / 草稿 / 未提交等任一命中即展示
             if cur in statuses:
                 out.append(c)
-        return out
+        return [_serialize_client(db, c) for c in out]
+
+    @app.get("/api/clients/assign-options")
+    async def client_assign_options(
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("crm.clients.read")),
+    ):
+        from sqlalchemy import text
+
+        depts = db.execute(
+            text(
+                "SELECT id, name, code, parent_id, path, dept_type, status "
+                "FROM sys_dept WHERE status = 'active' ORDER BY path"
+            )
+        ).mappings().all()
+        users = db.execute(
+            text(
+                "SELECT id, username, display_name FROM sys_user "
+                "WHERE status = 'active' ORDER BY username"
+            )
+        ).mappings().all()
+        return {
+            "depts": [dict(r) for r in depts],
+            "users": [
+                {
+                    "id": int(r["id"]),
+                    "username": str(r["username"]),
+                    "display_name": str(r["display_name"] or r["username"]),
+                }
+                for r in users
+            ],
+        }
 
     @app.get("/api/clients/{client_id}")
     async def get_client(
@@ -145,7 +237,7 @@ def register_client_read_routes(
         refresh_client_estimated_annual_amount(db, client_id, Client, Opportunity)
         db.commit()
         db.refresh(client)
-        return client
+        return _serialize_client(db, client)
 
     @app.get("/api/export/clients")
     async def export_clients(
@@ -218,12 +310,16 @@ def register_client_write_routes(
         contact_description: Optional[str] = Form(None),
         city: Optional[str] = Form(None),
         remarks: Optional[str] = Form(None),
+        delivery_dept_id: Optional[str] = Form(None),
+        delivery_owner_user_id: Optional[str] = Form(None),
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("crm.clients.write")),
     ):
         ds.assert_data_scope(ctx, RESOURCE_CRM_CLIENT, "write")
         owner_fields = ds.default_owner_fields(ctx)
+        delivery_dept = _parse_optional_int(delivery_dept_id)
+        delivery_owner = _parse_optional_int(delivery_owner_user_id)
         client = Client(
             name=name,
             industry=industry,
@@ -241,6 +337,8 @@ def register_client_write_routes(
             contact_description=(contact_description or "").strip(),
             city=(city or "").strip(),
             remarks=(remarks or "").strip(),
+            delivery_dept_id=delivery_dept,
+            delivery_owner_user_id=delivery_owner,
             **owner_fields,
         )
         db.add(client)
@@ -271,6 +369,8 @@ def register_client_write_routes(
         contact_description: Optional[str] = Form(None),
         city: Optional[str] = Form(None),
         remarks: Optional[str] = Form(None),
+        delivery_dept_id: Optional[str] = Form(None),
+        delivery_owner_user_id: Optional[str] = Form(None),
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("crm.clients.write")),
@@ -278,6 +378,8 @@ def register_client_write_routes(
         from phase2_core import refresh_client_estimated_annual_amount
 
         client = ensure_client_access(db, ctx, client_id, Client, action="write")
+        delivery_dept = _parse_optional_int(delivery_dept_id)
+        delivery_owner = _parse_optional_int(delivery_owner_user_id)
         duplicate = scoped_client_query(db, ctx, Client, action="write").filter(Client.name == name, Client.id != client_id).first()
         if duplicate:
             raise HTTPException(status_code=400, detail="\u5ba2\u6237\u540d\u79f0\u5df2\u5b58\u5728")
@@ -316,6 +418,16 @@ def register_client_write_routes(
             updates.append(f"\u8054\u7cfb\u4eba\u5173\u7cfb\u4ece[{client.contact_relationship or ''}]\u53d8\u66f4\u4e3a[{new_contact_relationship}]")
         if (client.city or "") != new_city:
             updates.append(f"\u5ba2\u6237\u6240\u5728\u57ce\u5e02\u4ece[{client.city or ''}]\u53d8\u66f4\u4e3a[{new_city}]")
+        if getattr(client, "delivery_dept_id", None) != delivery_dept:
+            updates.append(
+                f"\u4ea4\u4ed8\u90e8\u95e8\u4ece[{_dept_label(db, getattr(client, 'delivery_dept_id', None)) or '—'}]"
+                f"\u53d8\u66f4\u4e3a[{_dept_label(db, delivery_dept) or '—'}]"
+            )
+        if getattr(client, "delivery_owner_user_id", None) != delivery_owner:
+            updates.append(
+                f"\u4ea4\u4ed8\u8d1f\u8d23\u4eba\u4ece[{_user_label(db, getattr(client, 'delivery_owner_user_id', None)) or '—'}]"
+                f"\u53d8\u66f4\u4e3a[{_user_label(db, delivery_owner) or '—'}]"
+            )
 
         client.name = name
         client.industry = industry
@@ -332,6 +444,8 @@ def register_client_write_routes(
         client.contact_description = new_contact_description
         client.city = new_city
         client.remarks = remarks or ""
+        client.delivery_dept_id = delivery_dept
+        client.delivery_owner_user_id = delivery_owner
 
         old_folder = f"{old_name}_{client_id}"
         new_folder = f"{name}_{client_id}"
