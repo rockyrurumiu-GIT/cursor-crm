@@ -613,6 +613,9 @@ engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base.metadata.create_all(bind=engine)
 run_schema_migrations(engine)
+from models.rms import register_rms_models
+
+RMS_MODELS = register_rms_models(Base)
 auth_service.bootstrap_after_migrate(
     engine,
     admin_username=_effective_admin_username(),
