@@ -327,7 +327,10 @@
             var builtin = BUILTIN_DEPT_CODES[d.code];
             var ops = '<div class="crm-op-actions">'
                 + '<button type="button" class="crm-op-btn-edit btn-edit-dept" data-id="' + d.id + '">编辑</button>'
-                + (builtin ? '' : '<button type="button" class="crm-op-btn-delete btn-delete-dept" data-id="' + d.id + '">删除</button>')
+                + (builtin ? '' : '<button type="button" class="crm-op-btn-delete btn-delete-dept" data-id="' + d.id + '"'
+                + ' data-crm-delete-title="确认删除部门"'
+                + ' data-crm-delete-target="将删除部门：' + String(d.name || '').replace(/"/g, '&quot;') + '"'
+                + ' data-crm-delete-hint="若仍有用户或客户归属将无法删除。">删除</button>')
                 + '</div>';
             return '<tr data-dept-id="' + d.id + '">'
                 + '<td class="crm-td font-medium">' + d.name + (builtin ? ' <span class="text-xs text-gray-400">内置</span>' : '') + '</td>'
@@ -524,7 +527,10 @@
                 + '<button type="button" class="crm-op-btn-edit btn-role-matrix" data-id="' + r.id + '">编辑权限矩阵</button>'
                 + '<button type="button" class="crm-op-btn-detail btn-role-edit" data-id="' + r.id + '">修改</button>'
                 + (canDelete
-                    ? '<button type="button" class="crm-op-btn-delete btn-role-delete" data-id="' + r.id + '">删除</button>'
+                    ? '<button type="button" class="crm-op-btn-delete btn-role-delete" data-id="' + r.id + '"'
+                    + ' data-crm-delete-title="确认删除角色"'
+                    + ' data-crm-delete-target="将删除角色：' + String(r.name || r.code).replace(/"/g, '&quot;') + '"'
+                    + ' data-crm-delete-hint="若仍有用户绑定将无法删除。">删除</button>'
                     : '')
                 + '</div>';
             return '<tr data-role-id="' + r.id + '">'
@@ -946,7 +952,6 @@
         } else if (ev.target.classList.contains('btn-role-edit')) {
             openRoleDrawer('edit', role);
         } else if (ev.target.classList.contains('btn-role-delete')) {
-            if (!confirm('确认删除角色「' + (role.name || role.code) + '」？\n若仍有用户绑定将无法删除。')) return;
             try {
                 await apiDelete('/api/system/roles/' + role.id);
                 await loadRoles();
@@ -1000,7 +1005,6 @@
                 openDeptDrawer('edit', dept);
             } else if (ev.target.classList.contains('btn-delete-dept')) {
                 if (!dept) return;
-                if (!confirm('确认删除部门「' + dept.name + '」？\n若仍有用户或客户归属将无法删除。')) return;
                 try {
                     await apiDelete('/api/system/depts/' + dept.id);
                     state.depts = [];

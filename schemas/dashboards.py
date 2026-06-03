@@ -20,10 +20,16 @@ FieldKind = Literal["text", "numeric", "datetime"]
 
 # roster_summary is a dedicated delivery widget (multi-KPI card); it is a data widget
 # but NOT a chart and does not use the generic metric/group path.
-WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "pie", "line", "rich_text", "iframe", "roster_summary"})
-CHART_WIDGET_TYPES: FrozenSet[str] = frozenset({"bar", "pie", "line"})
+WIDGET_TYPES: FrozenSet[str] = frozenset({
+    "number", "bar", "horizontal_bar", "pie", "line", "rich_text", "iframe", "roster_summary",
+})
+CHART_WIDGET_TYPES: FrozenSet[str] = frozenset({"bar", "horizontal_bar", "pie", "line"})
 CHART_EXTRA_RENDERS: FrozenSet[str] = frozenset({"doughnut", "horizontal_bar"})
-DATA_WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "pie", "line"})
+DATA_WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "horizontal_bar", "pie", "line"})
+# Config panel type grid order (subset of WIDGET_TYPES).
+WIDGET_TYPE_DISPLAY_ORDER: Tuple[str, ...] = (
+    "number", "bar", "horizontal_bar", "pie", "line", "rich_text", "iframe", "roster_summary",
+)
 
 METRICS: FrozenSet[str] = frozenset({"count", "sum", "avg", "min", "max"})
 NUMERIC_METRICS: FrozenSet[str] = frozenset({"sum", "avg", "min", "max"})
@@ -216,7 +222,7 @@ def build_metadata() -> dict:
         })
     return {
         "sources": sources,
-        "widget_types": sorted(WIDGET_TYPES),
+        "widget_types": [t for t in WIDGET_TYPE_DISPLAY_ORDER if t in WIDGET_TYPES],
         "chart_widget_types": sorted(CHART_WIDGET_TYPES),
         "metrics": sorted(METRICS),
         "filter_ops": sorted(FILTER_OPS),

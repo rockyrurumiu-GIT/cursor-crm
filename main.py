@@ -1508,9 +1508,12 @@ register_rms_jobs_routes(
 register_rms_candidates_routes(
     app,
     get_db=get_db,
+    upload_dir=UPLOAD_DIR,
     Client=Client,
     RmsCandidate=RMS_MODELS["RmsCandidate"],
     RmsApplication=RMS_MODELS["RmsApplication"],
+    RmsResume=RMS_MODELS["RmsResume"],
+    RmsJob=RMS_MODELS["RmsJob"],
 )
 register_rms_applications_routes(
     app,

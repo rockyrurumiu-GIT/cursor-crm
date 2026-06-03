@@ -122,6 +122,39 @@ class JobUpdate(BaseModel):
     owner_user_id: Optional[int] = None
 
 
+CANDIDATE_EDUCATION_LEVELS = frozenset(
+    {"重本", "统本", "专科", "硕士", "留学生", "民教网", "其他"}
+)
+CANDIDATE_GENDERS = frozenset({"男", "女"})
+CANDIDATE_SOURCES = frozenset(
+    {"平台", "Boss", "linkedin", "猎聘", "内推", "挂靠", "外协", "其他"}
+)
+CANDIDATE_MARITAL_STATUSES = frozenset({"未婚", "已婚"})
+
+CANDIDATE_WRITABLE_STR_FIELDS = (
+    "name",
+    "phone",
+    "email",
+    "wechat",
+    "email_wechat",
+    "age",
+    "work_years",
+    "current_salary",
+    "expected_salary",
+    "available_date",
+    "education_level",
+    "school",
+    "major",
+    "gender",
+    "marital_status",
+    "current_company",
+    "current_title",
+    "city",
+    "source",
+    "tags",
+)
+
+
 class CandidateCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -129,6 +162,19 @@ class CandidateCreate(BaseModel):
     phone: str = ""
     email: str = ""
     wechat: str = ""
+    email_wechat: str = ""
+    age: str = ""
+    work_years: str = ""
+    target_job_id: Optional[int] = None
+    target_client_id: Optional[int] = None
+    current_salary: str = ""
+    expected_salary: str = ""
+    available_date: str = ""
+    education_level: str = ""
+    school: str = ""
+    major: str = ""
+    gender: str = ""
+    marital_status: str = ""
     current_company: str = ""
     current_title: str = ""
     city: str = ""
@@ -143,6 +189,19 @@ class CandidateUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     wechat: Optional[str] = None
+    email_wechat: Optional[str] = None
+    age: Optional[str] = None
+    work_years: Optional[str] = None
+    target_job_id: Optional[int] = None
+    target_client_id: Optional[int] = None
+    current_salary: Optional[str] = None
+    expected_salary: Optional[str] = None
+    available_date: Optional[str] = None
+    education_level: Optional[str] = None
+    school: Optional[str] = None
+    major: Optional[str] = None
+    gender: Optional[str] = None
+    marital_status: Optional[str] = None
     current_company: Optional[str] = None
     current_title: Optional[str] = None
     city: Optional[str] = None

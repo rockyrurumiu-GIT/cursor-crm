@@ -242,8 +242,6 @@ const rosterDetailApp = createApp({
                 }
             },
         );
-        const showDel = ref(false);
-        const delRow = ref(null);
         const fileInput = ref(null);
         const filters = reactive({
             employmentStatus: '',
@@ -733,24 +731,14 @@ const rosterDetailApp = createApp({
             calcFieldsLocked.value = false;
             loadRows();
         };
-        const confirmDelete = (row) => {
-            delRow.value = row;
-            showDel.value = true;
-        };
-        const cancelDelete = () => {
-            showDel.value = false;
-            delRow.value = null;
-        };
-        const doDelete = async () => {
-            if (!delRow.value) return;
-            const id = delRow.value.id;
+        const doDelete = async (row) => {
+            if (!row) return;
+            const id = row.id;
             const r = await fetch(`/api/roster/${id}`, { method: 'DELETE', headers: authHeader() });
             if (r.ok) {
-                cancelDelete();
                 loadRows();
             } else {
                 alert('删除失败');
-                cancelDelete();
             }
         };
         const triggerImport = () => {
@@ -1005,11 +993,11 @@ const rosterDetailApp = createApp({
         return {
             rows, filteredRows, filters, employmentStatusOptions, workLocationOptions, customerNameOptions, positionTitleOptions,
             brief, loading, showForm, editingId, form, formFields: activeFormFields, detailCompactFields, detailTextareaFields,
-            showDel, fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
+            fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
             showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors, showOnlyChecked, displayCountHint, emptyStateText,
             IS_GLOBAL_ROSTER,
             rosterCustomerSelectOptions,
-            openAdd, openEdit, openRosterDetail, formReadonly, calcFieldsLocked, saveForm, confirmDelete, cancelDelete, doDelete,
+            openAdd, openEdit, openRosterDetail, formReadonly, calcFieldsLocked, saveForm, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
             showRosterValidation,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,

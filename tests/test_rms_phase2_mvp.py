@@ -127,6 +127,44 @@ def _create_client_admin(client, admin_auth, name: str) -> int:
     return int(r.json()["id"])
 
 
+def _unique_phone() -> str:
+    return "1" + str(1000000000 + uuid.uuid4().int % 9000000000)
+
+
+def _candidate_json(job_id: int, **overrides) -> dict:
+    payload = {
+        "name": "Candidate",
+        "phone": _unique_phone(),
+        "target_job_id": job_id,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _delivery_open_job(client, engine, admin_auth, suffix: str):
+    """Create client + open job; return (delivery_login, job_id)."""
+    sales = f"rms2_s_{suffix}"
+    delivery = f"rms2_d_{suffix}"
+    sales_uid = _create_user(client, admin_auth, sales, [ROLE_SALES])
+    delivery_uid = _create_user(client, admin_auth, delivery, [ROLE_DELIVERY])
+    cid = _create_client_admin(client, admin_auth, f"RMS Job {suffix}")
+    _set_client_owner(engine, cid, sales_uid, delivery_owner_user_id=delivery_uid)
+    admin_user, admin_pwd = admin_auth
+    job_r = client.post(
+        "/api/rms/jobs",
+        headers=auth_header(admin_user, admin_pwd),
+        json={
+            "client_id": cid,
+            "title": f"Job {suffix}",
+            "owner_user_id": sales_uid,
+            "delivery_owner_user_id": delivery_uid,
+        },
+    )
+    assert job_r.status_code == 200, job_r.text
+    login_del = _login(client, delivery)
+    return login_del, job_r.json()["id"]
+
+
 def _set_client_owner(engine, client_id: int, owner_user_id: int, delivery_owner_user_id: int | None = None):
     with engine.begin() as conn:
         conn.execute(
@@ -201,6 +239,7 @@ def _enable_sales_rms_jobs_write(engine):
 
 def _enable_delivery_rms_mvp(engine):
     _grant_role_permissions(engine, ROLE_DELIVERY, RMS_MVP_PERMS)
+    _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "read", SCOPE_ASSIGNED)
     _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "write", SCOPE_ASSIGNED)
     _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_APPLICATION, "write", SCOPE_ASSIGNED)
 
@@ -455,18 +494,17 @@ def test_create_job_blocked_without_recruitment_or_delivery_scope(
 
 def test_candidate_created_by_visible(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
-    delivery = f"rms2_cdel_{suffix}"
-    _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
-    login = _login(client_rbac, delivery)
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"vis_{suffix}")
     created = client_rbac.post(
         "/api/rms/candidates",
         cookies=login.cookies,
-        json={
-            "name": "Alice",
-            "phone": "13800138000",
-            "email": "alice@example.com",
-            "wechat": "wx_alice",
-        },
+        json=_candidate_json(
+            job_id,
+            name="Alice",
+            email="alice@example.com",
+            wechat="wx_alice",
+            email_wechat="alice@example.com",
+        ),
     )
     assert created.status_code == 200, created.text
     cid = created.json()["id"]
@@ -477,15 +515,13 @@ def test_candidate_created_by_visible(client_rbac, admin_auth, rms_engine, uniq)
 
 def test_candidate_hidden_when_not_creator_or_visible_application(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
-    del_a = f"rms2_cda_{suffix}"
+    login_a, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"hid_{suffix}")
     del_b = f"rms2_cdb_{suffix}"
-    uid_a = _create_user(client_rbac, admin_auth, del_a, [ROLE_DELIVERY])
     _create_user(client_rbac, admin_auth, del_b, [ROLE_DELIVERY])
-    login_a = _login(client_rbac, del_a)
     created = client_rbac.post(
         "/api/rms/candidates",
         cookies=login_a.cookies,
-        json={"name": "Hidden Bob", "phone": "13900139000"},
+        json=_candidate_json(job_id, name="Hidden Bob", phone="13900139000"),
     )
     assert created.status_code == 200
     cand_id = created.json()["id"]
@@ -497,18 +533,17 @@ def test_candidate_hidden_when_not_creator_or_visible_application(client_rbac, a
 
 def test_candidate_contact_masked_without_rms_contacts_view(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
-    delivery = f"rms2_mask_{suffix}"
-    _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
-    login = _login(client_rbac, delivery)
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"mask_{suffix}")
     created = client_rbac.post(
         "/api/rms/candidates",
         cookies=login.cookies,
-        json={
-            "name": "Mask Me",
-            "phone": "13800138000",
-            "email": "mask@example.com",
-            "wechat": "wxmask",
-        },
+        json=_candidate_json(
+            job_id,
+            name="Mask Me",
+            email="mask@example.com",
+            wechat="wxmask",
+            email_wechat="mask@example.com",
+        ),
     )
     assert created.status_code == 200
     body = created.json()
@@ -517,27 +552,59 @@ def test_candidate_contact_masked_without_rms_contacts_view(client_rbac, admin_a
     assert "***" in body["wechat"]
 
 
+def test_candidate_create_rejects_invalid_phone(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"ph_{suffix}")
+    r = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(job_id, phone="12345"),
+    )
+    assert r.status_code == 400
+    assert "手机号" in r.json().get("detail", "")
+
+
+def test_candidate_create_rejects_non_open_job(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"cls_{suffix}")
+    admin_user, admin_pwd = admin_auth
+    closed = client_rbac.patch(
+        f"/api/rms/jobs/{job_id}",
+        headers=auth_header(admin_user, admin_pwd),
+        json={"status": "closed"},
+    )
+    assert closed.status_code == 200, closed.text
+    r = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(job_id, name="Late Cand", phone="13800138001"),
+    )
+    assert r.status_code == 400
+    assert "open" in r.json().get("detail", "").lower()
+
+
 def test_candidate_contact_visible_with_rms_contacts_view(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
     import main as crm_main
 
     _grant_role_permissions(crm_main.engine, ROLE_DELIVERY, ("rms.contacts.view",))
-    delivery = f"rms2_cont_{suffix}"
-    _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
-    login = _login(client_rbac, delivery)
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"cont_{suffix}")
+    phone = "13800138088"
     created = client_rbac.post(
         "/api/rms/candidates",
         cookies=login.cookies,
-        json={
-            "name": "Clear",
-            "phone": "13800138000",
-            "email": "clear@example.com",
-            "wechat": "wxclear",
-        },
+        json=_candidate_json(
+            job_id,
+            name="Clear",
+            phone=phone,
+            email="clear@example.com",
+            wechat="wxclear",
+            email_wechat="clear@example.com",
+        ),
     )
     assert created.status_code == 200
     body = created.json()
-    assert body["phone"] == "13800138000"
+    assert body["phone"] == phone
     assert body["email"] == "clear@example.com"
     assert body["wechat"] == "wxclear"
 
@@ -569,7 +636,7 @@ def _trial_job_and_candidate(client, engine, admin_auth, suffix: str):
     cand_r = client.post(
         "/api/rms/candidates",
         cookies=login_del.cookies,
-        json={"name": f"Cand {suffix}", "phone": "13700137000"},
+        json=_candidate_json(job_id, name=f"Cand {suffix}", phone="13700137000"),
     )
     assert cand_r.status_code == 200
     return login_del, job_id, cand_r.json()["id"], cid
@@ -593,13 +660,11 @@ def test_application_create_syncs_client_id_from_job(client_rbac, admin_auth, rm
 def test_application_rejects_invisible_candidate(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
     login_a, job_id, _, _ = _trial_job_and_candidate(client_rbac, rms_engine, admin_auth, suffix)
-    del_b = f"rms2_irb_{suffix}"
-    _create_user(client_rbac, admin_auth, del_b, [ROLE_DELIVERY])
-    login_b = _login(client_rbac, del_b)
+    login_b, job_b_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"sec_{suffix}")
     secret = client_rbac.post(
         "/api/rms/candidates",
         cookies=login_b.cookies,
-        json={"name": "Secret", "phone": "13600136000"},
+        json=_candidate_json(job_b_id, name="Secret", phone="13600136000"),
     )
     assert secret.status_code == 200
     secret_id = secret.json()["id"]
@@ -678,7 +743,7 @@ def test_patch_application_recomputes_client_id_when_job_changes(client_rbac, ad
     cand = client_rbac.post(
         "/api/rms/candidates",
         cookies=login_del.cookies,
-        json={"name": "Patch Cand", "phone": "13500135000"},
+        json=_candidate_json(job_a.json()["id"], name="Patch Cand", phone="13500135000"),
     )
     assert cand.status_code == 200
     app = client_rbac.post(

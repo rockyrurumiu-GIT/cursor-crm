@@ -719,12 +719,6 @@ function flattenHandbookOutline(nodes, depth = 0) {
                     }
                 };
                 const removeHandbook = async (row) => {
-                    const ok = await window.crmConfirmDeleteDialog({
-                        title: '确认删除文件',
-                        targetText: `将删除文件：${row.original_filename || '未命名文件'}`,
-                        hint: '删除后将从当前交付手册列表移除。',
-                    });
-                    if (!ok) return;
                     if (handbookReaderRow.value && Number(handbookReaderRow.value.id) === Number(row.id)) {
                         handbookReaderRow.value = null;
                     }

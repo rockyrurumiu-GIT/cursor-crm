@@ -31,6 +31,32 @@
   const PRIORITY_LABELS = { high: "高", medium: "中", low: "低" };
   const STATUS_LABELS = { open: "open", closed: "closed", freeze: "freeze" };
 
+  const EDUCATION_OPTIONS = ["重本", "统本", "专科", "硕士", "留学生", "民教网", "其他"];
+  const GENDER_OPTIONS = ["男", "女"];
+  const SOURCE_OPTIONS = ["平台", "Boss", "linkedin", "猎聘", "内推", "挂靠", "外协", "其他"];
+  const MARITAL_OPTIONS = ["未婚", "已婚"];
+  const PHONE_RE = /^1\d{10}$/;
+
+  function stripSalaryCommas(s) {
+    return String(s == null ? "" : s).replace(/,/g, "").trim();
+  }
+
+  function formatSalaryThousands(s) {
+    const raw = stripSalaryCommas(s);
+    if (!raw) return "";
+    if (/[kK万千%]/.test(raw)) return raw;
+    if (!/^-?\d+(\.\d+)?$/.test(raw)) return raw;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return raw;
+    return n.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  }
+
+  function fuzzyMatch(haystack, needle) {
+    const n = (needle || "").trim().toLowerCase();
+    if (!n) return true;
+    return String(haystack || "").toLowerCase().indexOf(n) !== -1;
+  }
+
   function authHeaders() {
     return typeof window.crmAuthHeader === "function" ? window.crmAuthHeader() : {};
   }
@@ -54,6 +80,7 @@
     if (status === 404) return "记录不存在或不可见 (404)" + (d ? "：" + d : "");
     if (status === 409) return "重复推荐 (409)" + (d ? "：" + d : "");
     if (status === 400) return "请求无效 (400)" + (d ? "：" + d : "");
+    if (status === 422) return "数据校验失败 (422)" + (d ? "：" + d : "");
     return "请求失败 (" + status + ")" + (d ? "：" + d : "");
   }
 
@@ -97,7 +124,7 @@
     return { ok: true, data: payload };
   }
 
-  const { createApp, ref, reactive, computed, onMounted, nextTick } = Vue;
+  const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
 
   createApp({
     setup() {
@@ -113,8 +140,12 @@
       const modalSaving = ref(false);
       const jobModalMode = ref("create");
       const editingJobId = ref(null);
+      const candidateModalMode = ref("create");
+      const editingCandidateId = ref(null);
+      const editingCandidateResumeName = ref("");
       const jobFilterPanelExpanded = ref(true);
       const jobsScrollWrap = ref(null);
+      const candidatesScrollWrap = ref(null);
 
       const jobFilter = reactive({
         title: "",
@@ -150,12 +181,28 @@
       });
       const candidateForm = reactive({
         name: "",
+        age: "",
+        work_years: "",
         phone: "",
-        email: "",
-        wechat: "",
+        email_wechat: "",
+        target_job_id: "",
+        target_client_id: "",
         city: "",
+        current_salary: "",
+        expected_salary: "",
+        available_date: "",
+        education_level: "",
+        school: "",
+        major: "",
+        gender: "",
+        marital_status: "",
         source: "",
       });
+      const candidateResumeFile = ref(null);
+      const jobPickerQuery = ref("");
+      const jobPickerOpen = ref(false);
+      const clientPickerQuery = ref("");
+      const clientPickerOpen = ref(false);
       const applicationForm = reactive({
         job_id: "",
         candidate_id: "",
@@ -178,13 +225,25 @@
           if (jobModalMode.value === "edit") return "修改岗位";
           return "新建岗位";
         }
-        if (modal.value === "candidate") return "新建候选人";
+        if (modal.value === "candidate") {
+          return candidateModalMode.value === "edit" ? "修改候选人" : "新建候选人";
+        }
         if (modal.value === "application") return "新建推荐";
         return "";
       });
 
       const jobModalReadonly = computed(function () {
         return modal.value === "job" && jobModalMode.value === "view";
+      });
+
+      const modalCloseLabel = computed(function () {
+        return jobModalReadonly.value ? "关闭" : "取消";
+      });
+
+      const modalShowSave = computed(function () {
+        if (!modal.value) return false;
+        if (modal.value === "job") return !jobModalReadonly.value;
+        return true;
       });
 
       const filteredJobs = computed(function () {
@@ -265,6 +324,133 @@
         return name ? name : "#" + candidateId;
       }
 
+      const openJobs = computed(function () {
+        return jobsState.items.filter(function (j) {
+          return (j.status || "") === "open";
+        });
+      });
+
+      const filteredJobPickerOptions = computed(function () {
+        const q = jobPickerQuery.value;
+        return openJobs.value.filter(function (j) {
+          const label = (j.title || "") + " " + (j.client_name || clientNameById(j.client_id) || "");
+          return fuzzyMatch(label, q);
+        });
+      });
+
+      const filteredClientPickerOptions = computed(function () {
+        const q = clientPickerQuery.value;
+        return clientOptions.value.filter(function (c) {
+          return fuzzyMatch(c.name, q);
+        });
+      });
+
+      const selectedJobPickerLabel = computed(function () {
+        const id = candidateForm.target_job_id;
+        if (id === "" || id == null) return "";
+        const j = jobsState.items.find(function (x) {
+          return Number(x.id) === Number(id);
+        });
+        if (j) {
+          return (j.title || "—") + (j.client_name ? " · " + j.client_name : "");
+        }
+        return "#" + id;
+      });
+
+      const selectedClientPickerLabel = computed(function () {
+        const id = candidateForm.target_client_id;
+        if (id === "" || id == null) return "";
+        const c = clientOptions.value.find(function (x) {
+          return Number(x.id) === Number(id);
+        });
+        return c ? c.name || "#" + id : "#" + id;
+      });
+
+      function displayCandidateContact(c) {
+        return (c.email_wechat || c.email || c.wechat || "—").trim() || "—";
+      }
+
+      function displayTargetJob(c) {
+        return (c.target_job_title || "").trim() || (c.target_job_id ? "#" + c.target_job_id : "—");
+      }
+
+      function displayTargetClient(c) {
+        return (c.target_client_name || "").trim() || (c.target_client_id ? "#" + c.target_client_id : "—");
+      }
+
+      function displaySalary(value) {
+        const formatted = formatSalaryThousands(value);
+        return formatted || "—";
+      }
+
+      function formatCandidateSalaryField(field) {
+        candidateForm[field] = formatSalaryThousands(candidateForm[field]);
+      }
+
+      function resumeViewUrl(c) {
+        if (!c || c.resume_id == null || c.resume_id === "") return "#";
+        return "/api/rms/resumes/" + c.resume_id + "/view";
+      }
+
+      function resumeDownloadUrl(c) {
+        if (!c || c.resume_id == null || c.resume_id === "") return "#";
+        return "/api/rms/resumes/" + c.resume_id + "/download";
+      }
+
+      function resumeCanView(c) {
+        const name = String((c && c.resume_file_name) || "").toLowerCase();
+        return /\.(pdf|txt|rtf)$/.test(name);
+      }
+
+      function selectJobPicker(job) {
+        candidateForm.target_job_id = job.id;
+        jobPickerQuery.value = job.title || "";
+        jobPickerOpen.value = false;
+      }
+
+      function selectClientPicker(client) {
+        candidateForm.target_client_id = client.id;
+        clientPickerQuery.value = client.name || "";
+        clientPickerOpen.value = false;
+      }
+
+      function onCandidateResumeChange(ev) {
+        const f = ev.target && ev.target.files && ev.target.files[0];
+        candidateResumeFile.value = f || null;
+      }
+
+      async function uploadCandidateResume(candidateId, file) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const headers = authHeaders();
+        let resp;
+        try {
+          resp = await fetch("/api/rms/candidates/" + candidateId + "/resume", {
+            method: "POST",
+            headers: headers,
+            body: fd,
+            credentials: "same-origin",
+          });
+        } catch (e) {
+          const msg = e && e.message ? e.message : String(e);
+          return { ok: false, status: 0, message: "简历上传失败（" + msg + "）" };
+        }
+        let payload = null;
+        const ct = resp.headers.get("content-type") || "";
+        if (ct.indexOf("application/json") !== -1) {
+          try {
+            payload = await resp.json();
+          } catch (e2) {
+            payload = null;
+          }
+        }
+        if (!resp.ok) {
+          const detail = payload && payload.detail != null ? payload.detail : "";
+          return { ok: false, status: resp.status, message: messageForStatus(resp.status, detail) };
+        }
+        return { ok: true, data: payload };
+      }
+
       function transitionsFor(status) {
         return ALLOWED_TRANSITIONS[status] || [];
       }
@@ -291,6 +477,23 @@
             delete table.dataset.colContentFit;
             window.crmScheduleTableColumnResize(table.closest("#rms-app") || document);
           }
+        });
+      }
+
+      function scheduleCandidatesTableColumnFit() {
+        nextTick(function () {
+          requestAnimationFrame(function () {
+            var table = document.querySelector("table[data-table-id=\"rms-candidates\"]");
+            if (!table || activeTab.value !== "candidates") return;
+            if (typeof window.crmFitTableColumnsToContent === "function") {
+              window.crmFitTableColumnsToContent(table);
+            } else if (typeof window.crmInitTableColumnResize === "function") {
+              window.crmInitTableColumnResize(table);
+            } else if (typeof window.crmScheduleTableColumnResize === "function") {
+              delete table.dataset.colContentFit;
+              window.crmScheduleTableColumnResize(table.closest("#rms-app") || document);
+            }
+          });
         });
       }
 
@@ -324,6 +527,7 @@
           candidatesState.items = Array.isArray(r.data) ? r.data : [];
         } finally {
           candidatesState.loading = false;
+          scheduleCandidatesTableColumnFit();
         }
       }
 
@@ -510,13 +714,120 @@
         toast("岗位删除功能暂未开放", true);
       }
 
-      function openCandidateModal() {
+      function resetCandidateForm() {
+        candidateForm.name = "";
+        candidateForm.age = "";
+        candidateForm.work_years = "";
+        candidateForm.phone = "";
+        candidateForm.email_wechat = "";
+        candidateForm.target_job_id = "";
+        candidateForm.target_client_id = "";
+        candidateForm.city = "";
+        candidateForm.current_salary = "";
+        candidateForm.expected_salary = "";
+        candidateForm.available_date = "";
+        candidateForm.education_level = "";
+        candidateForm.school = "";
+        candidateForm.major = "";
+        candidateForm.gender = "";
+        candidateForm.marital_status = "";
+        candidateForm.source = "";
+        candidateResumeFile.value = null;
+        editingCandidateResumeName.value = "";
+        jobPickerQuery.value = "";
+        clientPickerQuery.value = "";
+        jobPickerOpen.value = false;
+        clientPickerOpen.value = false;
+      }
+
+      function fillCandidateFormFromRow(c) {
+        candidateForm.name = c.name || "";
+        candidateForm.age = c.age || "";
+        candidateForm.work_years = c.work_years || "";
+        candidateForm.phone = c.phone || "";
+        candidateForm.email_wechat = (c.email_wechat || c.email || c.wechat || "").trim();
+        candidateForm.target_job_id = c.target_job_id != null ? c.target_job_id : "";
+        candidateForm.target_client_id = c.target_client_id != null ? c.target_client_id : "";
+        candidateForm.city = c.city || "";
+        candidateForm.current_salary = formatSalaryThousands(c.current_salary || "");
+        candidateForm.expected_salary = formatSalaryThousands(c.expected_salary || "");
+        candidateForm.available_date = c.available_date || "";
+        candidateForm.education_level = c.education_level || "";
+        candidateForm.school = c.school || "";
+        candidateForm.major = c.major || "";
+        candidateForm.gender = c.gender || "";
+        candidateForm.marital_status = c.marital_status || "";
+        candidateForm.source = c.source || "";
+        jobPickerQuery.value = displayTargetJob(c) === "—" ? "" : displayTargetJob(c);
+        clientPickerQuery.value = displayTargetClient(c) === "—" ? "" : displayTargetClient(c);
+        editingCandidateResumeName.value = (c.resume_file_name || "").trim();
+      }
+
+      function buildCandidateBody() {
+        formatCandidateSalaryField("current_salary");
+        formatCandidateSalaryField("expected_salary");
+        return {
+          name: candidateForm.name.trim(),
+          age: (candidateForm.age || "").trim(),
+          work_years: (candidateForm.work_years || "").trim(),
+          phone: (candidateForm.phone || "").trim(),
+          email_wechat: (candidateForm.email_wechat || "").trim(),
+          target_job_id: Number(candidateForm.target_job_id),
+          city: (candidateForm.city || "").trim(),
+          current_salary: stripSalaryCommas(candidateForm.current_salary),
+          expected_salary: stripSalaryCommas(candidateForm.expected_salary),
+          available_date: candidateForm.available_date || "",
+          education_level: candidateForm.education_level || "",
+          school: (candidateForm.school || "").trim(),
+          major: (candidateForm.major || "").trim(),
+          gender: candidateForm.gender || "",
+          marital_status: candidateForm.marital_status || "",
+          source: candidateForm.source || "",
+          target_client_id:
+            candidateForm.target_client_id !== "" && candidateForm.target_client_id != null
+              ? Number(candidateForm.target_client_id)
+              : undefined,
+        };
+      }
+
+      async function openCandidateModal() {
         modalError.value = "";
+        candidateModalMode.value = "create";
+        editingCandidateId.value = null;
+        resetCandidateForm();
         modal.value = "candidate";
+        if (!clientOptions.value.length) {
+          await loadJobFormOptions();
+        }
+      }
+
+      async function openCandidateEdit(row) {
+        modalError.value = "";
+        candidateModalMode.value = "edit";
+        editingCandidateId.value = row.id;
+        resetCandidateForm();
+        fillCandidateFormFromRow(row);
+        modal.value = "candidate";
+        if (!clientOptions.value.length) {
+          await loadJobFormOptions();
+        }
+      }
+
+      async function removeCandidate(row) {
+        const r = await rmsRequest("DELETE", "/api/rms/candidates/" + row.id);
+        if (!r.ok) {
+          toast(r.message, true);
+          return;
+        }
+        toast("已删除", false);
+        await loadCandidates();
       }
 
       function openApplicationModal() {
         modalError.value = "";
+        applicationForm.job_id = "";
+        applicationForm.candidate_id = "";
+        applicationForm.resume_id = "";
         modal.value = "application";
       }
 
@@ -525,6 +836,9 @@
         modalError.value = "";
         jobModalMode.value = "create";
         editingJobId.value = null;
+        candidateModalMode.value = "create";
+        editingCandidateId.value = null;
+        editingCandidateResumeName.value = "";
       }
 
       async function submitModal() {
@@ -549,23 +863,72 @@
           }
           if (r.ok) await loadJobs();
         } else if (modal.value === "candidate") {
-          r = await rmsRequest("POST", "/api/rms/candidates", {
-            name: candidateForm.name || "",
-            phone: candidateForm.phone || "",
-            email: candidateForm.email || "",
-            wechat: candidateForm.wechat || "",
-            city: candidateForm.city || "",
-            source: candidateForm.source || "",
+          if (!(candidateForm.name || "").trim()) {
+            modalError.value = "请填写姓名";
+            modalSaving.value = false;
+            return;
+          }
+          const phone = (candidateForm.phone || "").trim();
+          if (!PHONE_RE.test(phone)) {
+            modalError.value = "手机号须为11位数字且以1开头";
+            modalSaving.value = false;
+            return;
+          }
+          if (candidateForm.target_job_id === "" || candidateForm.target_job_id == null) {
+            modalError.value = "请选择应聘岗位（须为 open 状态）";
+            modalSaving.value = false;
+            return;
+          }
+          const jobId = Number(candidateForm.target_job_id);
+          const pickedJob = openJobs.value.find(function (j) {
+            return Number(j.id) === jobId;
           });
+          if (!pickedJob) {
+            modalError.value = "应聘岗位不存在或不是 open 状态";
+            modalSaving.value = false;
+            return;
+          }
+          const body = buildCandidateBody();
+          body.phone = phone;
+          if (candidateModalMode.value === "edit") {
+            r = await rmsRequest("PATCH", "/api/rms/candidates/" + editingCandidateId.value, body);
+            if (r.ok && candidateResumeFile.value) {
+              const up = await uploadCandidateResume(editingCandidateId.value, candidateResumeFile.value);
+              if (!up.ok) {
+                modalSaving.value = false;
+                modalError.value = up.message;
+                await loadCandidates();
+                return;
+              }
+            }
+          } else {
+            r = await rmsRequest("POST", "/api/rms/candidates", body);
+            if (r.ok && candidateResumeFile.value && r.data && r.data.id) {
+              const up = await uploadCandidateResume(r.data.id, candidateResumeFile.value);
+              if (!up.ok) {
+                modalSaving.value = false;
+                modalError.value = up.message;
+                await loadCandidates();
+                return;
+              }
+            }
+          }
           if (r.ok) await loadCandidates();
         } else if (modal.value === "application") {
+          if (applicationForm.job_id === "" || applicationForm.job_id == null) {
+            modalError.value = "请选择岗位";
+            modalSaving.value = false;
+            return;
+          }
+          if (applicationForm.candidate_id === "" || applicationForm.candidate_id == null) {
+            modalError.value = "请选择或填写候选人";
+            modalSaving.value = false;
+            return;
+          }
           const body = {
             job_id: Number(applicationForm.job_id),
             candidate_id: Number(applicationForm.candidate_id),
           };
-          if (applicationForm.resume_id !== "" && applicationForm.resume_id != null) {
-            body.resume_id = Number(applicationForm.resume_id);
-          }
           r = await rmsRequest("POST", "/api/rms/applications", body);
           if (r.ok) await loadApplications();
         } else {
@@ -595,6 +958,12 @@
         await loadApplications();
       }
 
+      watch(activeTab, function (tab) {
+        if (tab === "candidates") {
+          scheduleCandidatesTableColumnFit();
+        }
+      });
+
       onMounted(async function () {
         await Promise.all([
           loadMe(),
@@ -603,6 +972,9 @@
           loadApplications(),
           loadJobFormOptions(),
         ]);
+        if (activeTab.value === "candidates") {
+          scheduleCandidatesTableColumnFit();
+        }
       });
 
       return {
@@ -618,11 +990,17 @@
         modalError,
         modalSaving,
         jobModalMode,
+        candidateModalMode,
+        editingCandidateId,
+        editingCandidateResumeName,
         jobModalReadonly,
+        modalCloseLabel,
+        modalShowSave,
         jobFilterPanelExpanded,
         jobFilter,
         filteredJobs,
         jobsScrollWrap,
+        candidatesScrollWrap,
         clientOptions,
         userOptions,
         jobFormOptionsError,
@@ -630,6 +1008,31 @@
         priorityOptions: PRIORITY_OPTIONS,
         statusOptions: STATUS_OPTIONS,
         candidateForm,
+        candidateResumeFile,
+        educationOptions: EDUCATION_OPTIONS,
+        genderOptions: GENDER_OPTIONS,
+        sourceOptions: SOURCE_OPTIONS,
+        maritalOptions: MARITAL_OPTIONS,
+        openJobs,
+        jobPickerQuery,
+        jobPickerOpen,
+        clientPickerQuery,
+        clientPickerOpen,
+        filteredJobPickerOptions,
+        filteredClientPickerOptions,
+        selectedJobPickerLabel,
+        selectedClientPickerLabel,
+        displayCandidateContact,
+        displayTargetJob,
+        displayTargetClient,
+        displaySalary,
+        formatCandidateSalaryField,
+        resumeViewUrl,
+        resumeDownloadUrl,
+        resumeCanView,
+        selectJobPicker,
+        selectClientPicker,
+        onCandidateResumeChange,
         applicationForm,
         userOptionLabel,
         onJobClientChange,
@@ -638,6 +1041,7 @@
         statusLabel,
         resetJobFilter,
         scrollJobsToTop,
+        scheduleCandidatesTableColumnFit,
         labelJob,
         labelCandidate,
         transitionsFor,
@@ -646,6 +1050,8 @@
         openJobEdit,
         removeJob,
         openCandidateModal,
+        openCandidateEdit,
+        removeCandidate,
         openApplicationModal,
         closeModal,
         submitModal,

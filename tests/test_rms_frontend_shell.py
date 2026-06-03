@@ -38,7 +38,20 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "data-rms-error" in html
     assert "data-rms-empty" in html
     assert "rms-sticky-serial" in html
+    assert "rms-candidate-sticky-name" in html
     assert "rms-jobs-table" in html
+    assert "rms-candidates-table" in html
+    assert ">应聘岗位</th>" in html
+    assert html.index(">邮箱/微信</th>") < html.index(">应聘岗位</th>")
+    assert "rms-candidates-scroll" in html
+    assert "rms-candidates-frame" in html
+    assert ">阅读</a>" in html
+    assert ">下载</a>" in html
+    assert "resumeViewUrl" in html
+    assert "resumeCanView" in html
+    assert ">年限</th>" in html
+    assert "crm-sticky-right-op" in html
+    assert "maritalOptions" in html or "未婚" in html
     assert "rms-jobs-scroll-fill" in html
     assert "crm-table" in html
     assert "/static/js/pages/rms.js" in html

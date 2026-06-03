@@ -845,12 +845,6 @@ createApp({
             }
         };
         const removeRow = async (row) => {
-            const ok = await window.crmConfirmDeleteDialog({
-                title: '确认删除记录',
-                targetText: '将删除当前离职档案记录',
-                hint: '删除后将从离职档案池移除。',
-            });
-            if (!ok) return;
             const r = await fetch(`/api/roster/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
             if (!r.ok) {
                 alert('删除失败');

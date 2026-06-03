@@ -198,12 +198,6 @@
                 if (!editable.value) return;
                 const list = form.value?.requirement?.positions || [];
                 const p = list[idx] || {};
-                const ok = await window.crmConfirmDeleteDialog({
-                    title: '确认删除岗位',
-                    targetText: `将删除岗位：${p.role || '未命名岗位'} · ${p.headcount || 1}人`,
-                    hint: '删除后将从当前交接单岗位矩阵移除。',
-                });
-                if (!ok) return;
                 if (idx >= 0 && idx < list.length) list.splice(idx, 1);
             };
 

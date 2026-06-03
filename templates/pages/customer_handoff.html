@@ -117,7 +117,11 @@
                                 <option v-for="u in spec.enums.billing_unit" :key="u" :value="u">{{ u }}</option>
                             </select>
                             <input v-model="p.start_date" :disabled="!editable" type="date" class="border rounded p-2 text-sm">
-                            <button v-if="editable" type="button" @click="requestRemovePosition(idx)" class="text-red-600 text-sm">删除</button>
+                            <button v-if="editable" type="button" class="crm-op-btn-delete text-sm"
+                                data-crm-delete-title="确认删除岗位"
+                                :data-crm-delete-target="'将删除岗位：' + (p.role || '未命名岗位') + ' · ' + (p.headcount || 1) + '人'"
+                                data-crm-delete-hint="删除后将从当前交接单岗位矩阵移除。"
+                                @click="requestRemovePosition(idx)">删除</button>
                         </div>
                         <input v-model="p.skills" :disabled="!editable" placeholder="技能硬要求" class="w-full border rounded p-2 text-sm">
                     </div>

@@ -672,12 +672,6 @@ createApp({
             await loadRows();
         };
         const removeRow = async (row) => {
-            const ok = await window.crmConfirmDeleteDialog({
-                title: '确认删除记录',
-                targetText: '将删除当前结算回款记录',
-                hint: '删除后将从结算回款列表移除。',
-            });
-            if (!ok) return;
             try {
                 await crmApi.del(`/api/delivery/settlement/row/${row.id}`);
                 crmToast.success('已删除');

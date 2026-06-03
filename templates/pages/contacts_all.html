@@ -647,12 +647,6 @@ createApp({
             if (r.ok) { showForm.value = false; await load(); } else alert((await r.json()).detail || '失败');
         };
         const remove = async (c) => {
-            const ok = await window.crmConfirmDeleteDialog({
-                title: '确认删除联系人',
-                targetText: `将删除联系人：${c.name || '未命名联系人'}`,
-                hint: '删除后将从联系人列表移除。',
-            });
-            if (!ok) return;
             await authFetch(`/api/contacts/${c.id}`, { method: 'DELETE' });
             await load();
         };

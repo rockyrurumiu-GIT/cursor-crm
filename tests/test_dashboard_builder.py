@@ -259,6 +259,8 @@ def test_dashboard_metadata(client, admin_auth):
     data = r.json()
     assert "clients" in [s["key"] for s in data["sources"]]
     assert "number" in data["widget_types"]
+    assert "horizontal_bar" in data["widget_types"]
+    assert data["widget_types"].index("horizontal_bar") < data["widget_types"].index("pie")
     assert "count" in data["metrics"]
     # Twenty-parity style metadata.
     assert "blue" in data["colors"]
@@ -350,6 +352,26 @@ def test_invalid_extra_views_returns_400(client, admin_auth, bad_extra, detail_p
     )
     assert r.status_code == 400
     assert detail_part in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_horizontal_bar_primary_widget_type(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "HBar Primary")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "阶段排名",
+            "widget_type": "horizontal_bar",
+            "source_key": "opportunities",
+            "config": {"metric": "count", "group_by": "stage", "limit": 10},
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["widget_type"] == "horizontal_bar"
+    assert body["config"]["limit"] == 10
     client.delete(f"/api/dashboards/{dash_id}", headers=headers)
 
 

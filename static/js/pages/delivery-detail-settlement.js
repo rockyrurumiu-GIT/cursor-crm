@@ -210,12 +210,6 @@
         }
 
         async function removeRow(row) {
-            var ok = await window.crmConfirmDeleteDialog({
-                title: '确认删除记录',
-                targetText: '将删除当前结算记录',
-                hint: '删除后将从当前客户结算列表移除。',
-            });
-            if (!ok) return;
             try {
                 await api.del(`/api/delivery/settlement/row/${row.id}`);
             } catch (err) {

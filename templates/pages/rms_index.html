@@ -7,7 +7,50 @@
     .rms-job-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem 1rem; }
     @media (max-width: 768px) { .rms-job-form-grid { grid-template-columns: 1fr; } }
     .rms-field-full { grid-column: 1 / -1; }
-    /* 岗位列表：JD 默认 35 汉字；前三列横向冻结；表头 z-index 高于表体冻结列避免纵向滚动遮挡 */
+    .rms-candidate-form-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.75rem 1rem;
+        padding: 3px 4px;
+    }
+    @media (max-width: 1024px) { .rms-candidate-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 640px) { .rms-candidate-form-grid { grid-template-columns: 1fr; } }
+    .rms-candidate-form-grid input:focus,
+    .rms-candidate-form-grid select:focus,
+    .rms-candidate-form-grid textarea:focus {
+        outline: none;
+        border-color: #0969da;
+        box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.28);
+    }
+    .rms-candidate-form-grid select {
+        appearance: auto;
+        -webkit-appearance: menulist;
+    }
+    .rms-combobox { position: relative; }
+    .rms-combobox-menu {
+        position: absolute; left: 0; right: 0; top: 100%; z-index: 30; margin-top: 2px;
+        max-height: 12rem; overflow-y: auto; background: #fff; border: 1px solid #d0d7de;
+        border-radius: 6px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+    }
+    .rms-combobox-item { padding: 0.5rem 0.75rem; font-size: 0.875rem; cursor: pointer; }
+    .rms-combobox-item:hover { background: #f6f8fa; }
+    /* 滚动区勿加左右 padding，否则横向滚动后冻结列与圆角边框之间会露白缝 */
+    .rms-candidates-scroll {
+        padding: 0;
+        box-sizing: border-box;
+        overflow-x: auto;
+        overflow-y: hidden;
+        max-height: none !important;
+        scrollbar-gutter: auto;
+    }
+    .rms-candidates-frame {
+        border-radius: 0.5rem;
+        overflow: hidden;
+        background: #fff;
+    }
+    .crm-table.rms-candidates-table .crm-th,
+    .crm-table.rms-candidates-table .crm-td { white-space: nowrap; }
+    /* 岗位：仅序号列冻结；候选人：仅姓名列冻结 */
     .rms-jobs-panel {
         display: flex;
         flex-direction: column;
@@ -27,29 +70,16 @@
         table-layout: fixed;
         border-collapse: separate;
         border-spacing: 0;
-        --rms-jobs-sticky-serial-width: 4.5rem;
-        --rms-jobs-sticky-title-width: 10rem;
-        --rms-jobs-sticky-client-width: 8rem;
         --rms-jobs-jd-width: 35em;
     }
-    .crm-table.rms-jobs-table .rms-sticky-serial,
-    .crm-table.rms-jobs-table .rms-sticky-title,
-    .crm-table.rms-jobs-table .rms-sticky-client {
+    .crm-table.rms-jobs-table .rms-sticky-serial {
         position: sticky;
+        left: 0;
+        z-index: 1;
         background: #fff;
         border-right: 1px solid #e5e7eb;
         box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
-        background-clip: padding-box;
-    }
-    .crm-table.rms-jobs-table .rms-sticky-serial { left: 0; }
-    .crm-table.rms-jobs-table .rms-sticky-title { left: var(--rms-jobs-sticky-serial-width); }
-    .crm-table.rms-jobs-table .rms-sticky-client {
-        left: calc(var(--rms-jobs-sticky-serial-width) + var(--rms-jobs-sticky-title-width));
-    }
-    .crm-table.rms-jobs-table tbody .rms-sticky-serial,
-    .crm-table.rms-jobs-table tbody .rms-sticky-title,
-    .crm-table.rms-jobs-table tbody .rms-sticky-client {
-        z-index: 1;
+        background-clip: border-box;
     }
     .crm-table.rms-jobs-table tbody .crm-sticky-right-op {
         z-index: 2 !important;
@@ -66,19 +96,65 @@
         z-index: 45;
         background: #2f75b5;
     }
-    .crm-table.rms-jobs-table thead .rms-sticky-title {
-        top: 0;
-        z-index: 44;
-        background: #2f75b5;
-    }
-    .crm-table.rms-jobs-table thead .rms-sticky-client {
-        top: 0;
-        z-index: 43;
-        background: #2f75b5;
-    }
     .crm-table.rms-jobs-table thead .crm-sticky-right-op {
         z-index: 46 !important;
     }
+    .crm-table.rms-candidates-table {
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+    .crm-table.rms-candidates-table .rms-candidate-sticky-name {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background: #fff;
+        border-right: 1px solid #e5e7eb;
+        box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
+        background-clip: border-box;
+        overflow: visible;
+    }
+    .crm-table.rms-candidates-table .rms-candidate-sticky-name::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: -12px;
+        width: 12px;
+        background: inherit;
+        pointer-events: none;
+    }
+    .crm-table.rms-candidates-table thead .rms-candidate-sticky-name {
+        border-top-left-radius: 0.5rem;
+    }
+    /* 右冻结列：勿圆角、勿向右伪元素（会被 frame 裁切反而露白）；贴齐滚动区右缘 */
+    .crm-table.rms-candidates-table th.crm-sticky-right-op,
+    .crm-table.rms-candidates-table td.crm-sticky-right-op {
+        right: 0 !important;
+        background-clip: border-box;
+        border-top-right-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+        box-shadow: -6px 0 12px -10px rgba(15, 23, 42, 0.14);
+    }
+    .crm-table-scroll .crm-table.rms-candidates-table thead {
+        position: relative;
+        z-index: 40;
+    }
+    .crm-table-scroll .crm-table.rms-candidates-table thead th.crm-th {
+        z-index: 41;
+    }
+    .crm-table.rms-candidates-table thead .rms-candidate-sticky-name {
+        top: 0;
+        z-index: 45;
+        background: #2f75b5;
+    }
+    .crm-table.rms-candidates-table tbody .crm-sticky-right-op {
+        z-index: 2 !important;
+    }
+    .crm-table.rms-candidates-table thead .crm-sticky-right-op {
+        z-index: 46 !important;
+    }
+    /* 岗位列表：JD 默认 35 汉字 */
     .crm-table.rms-jobs-table .crm-td.rms-col-jd,
     .crm-table.rms-jobs-table .crm-th.rms-col-jd {
         width: var(--rms-jobs-jd-width);
@@ -243,8 +319,8 @@
                 <thead>
                     <tr>
                         <th class="crm-th rms-sticky-serial">序号</th>
-                        <th class="crm-th rms-sticky-title">岗位名称</th>
-                        <th class="crm-th rms-sticky-client">客户</th>
+                        <th class="crm-th">岗位名称</th>
+                        <th class="crm-th">客户</th>
                         <th class="crm-th">优先级</th>
                         <th class="crm-th">状态</th>
                         <th class="crm-th rms-col-jd" data-col-default-em="35">JD</th>
@@ -266,8 +342,8 @@
                 <tbody>
                     <tr v-for="(j, idx) in filteredJobs" :key="j.id">
                         <td class="crm-td rms-sticky-serial">{{ idx + 1 }}</td>
-                        <td class="crm-td rms-sticky-title crm-name-cell">{{ j.title || '—' }}</td>
-                        <td class="crm-td rms-sticky-client">{{ j.client_name || clientNameById(j.client_id) || '—' }}</td>
+                        <td class="crm-td crm-name-cell">{{ j.title || '—' }}</td>
+                        <td class="crm-td">{{ j.client_name || clientNameById(j.client_id) || '—' }}</td>
                         <td class="crm-td">{{ priorityLabel(j.priority) }}</td>
                         <td class="crm-td">{{ statusLabel(j.status) }}</td>
                         <td class="crm-td rms-col-jd"><div class="crm-cell-clip">{{ j.job_description || '—' }}</div></td>
@@ -309,31 +385,74 @@
         <div v-if="candidatesState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ candidatesState.error }}</div>
         <div v-else-if="candidatesState.loading" class="text-sm text-[#57606a]">加载中…</div>
         <div v-else-if="!candidatesState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无候选人</div>
-        <div v-else class="overflow-x-auto rounded-lg border border-[#d0d7de]">
-            <table class="rms-table w-full">
-                <thead class="bg-[#f6f8fa] border-b border-[#d0d7de]">
+        <div v-else class="rms-candidates-frame border border-[#d0d7de]">
+            <div ref="candidatesScrollWrap" class="rms-candidates-scroll crm-table-scroll">
+            <table class="crm-table rms-candidates-table" data-table-id="rms-candidates">
+                <thead>
                     <tr>
-                        <th class="px-3 py-2">姓名</th>
-                        <th class="px-3 py-2">城市</th>
-                        <th class="px-3 py-2">当前公司</th>
-                        <th class="px-3 py-2">职位</th>
-                        <th class="px-3 py-2">电话</th>
-                        <th class="px-3 py-2">邮箱</th>
-                        <th class="px-3 py-2">微信</th>
+                        <th class="crm-th rms-candidate-sticky-name">姓名</th>
+                        <th class="crm-th">年龄</th>
+                        <th class="crm-th">年限</th>
+                        <th class="crm-th">手机号</th>
+                        <th class="crm-th">邮箱/微信</th>
+                        <th class="crm-th">应聘岗位</th>
+                        <th class="crm-th">应聘项目</th>
+                        <th class="crm-th">城市</th>
+                        <th class="crm-th">当前薪资</th>
+                        <th class="crm-th">期望薪资</th>
+                        <th class="crm-th">到岗时间</th>
+                        <th class="crm-th">学历</th>
+                        <th class="crm-th">学校</th>
+                        <th class="crm-th">专业</th>
+                        <th class="crm-th">性别</th>
+                        <th class="crm-th">婚姻状况</th>
+                        <th class="crm-th">来源</th>
+                        <th class="crm-th">简历</th>
+                        <th class="crm-th crm-sticky-right-op">操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="c in candidatesState.items" :key="c.id" class="border-b border-[#d0d7de] last:border-0">
-                        <td class="px-3 py-2">{{ c.name || '—' }}</td>
-                        <td class="px-3 py-2">{{ c.city || '—' }}</td>
-                        <td class="px-3 py-2">{{ c.current_company || '—' }}</td>
-                        <td class="px-3 py-2">{{ c.current_title || '—' }}</td>
-                        <td class="px-3 py-2">{{ c.phone || '—' }}</td>
-                        <td class="px-3 py-2">{{ c.email || '—' }}</td>
-                        <td class="px-3 py-2">{{ c.wechat || '—' }}</td>
+                    <tr v-for="c in candidatesState.items" :key="c.id">
+                        <td class="crm-td crm-name-cell rms-candidate-sticky-name">{{ c.name || '—' }}</td>
+                        <td class="crm-td">{{ c.age || '—' }}</td>
+                        <td class="crm-td">{{ c.work_years || '—' }}</td>
+                        <td class="crm-td">{{ c.phone || '—' }}</td>
+                        <td class="crm-td">{{ displayCandidateContact(c) }}</td>
+                        <td class="crm-td">{{ displayTargetJob(c) }}</td>
+                        <td class="crm-td">{{ displayTargetClient(c) }}</td>
+                        <td class="crm-td">{{ c.city || '—' }}</td>
+                        <td class="crm-td tabular-nums">{{ displaySalary(c.current_salary) }}</td>
+                        <td class="crm-td tabular-nums">{{ displaySalary(c.expected_salary) }}</td>
+                        <td class="crm-td">{{ c.available_date || '—' }}</td>
+                        <td class="crm-td">{{ c.education_level || '—' }}</td>
+                        <td class="crm-td">{{ c.school || '—' }}</td>
+                        <td class="crm-td">{{ c.major || '—' }}</td>
+                        <td class="crm-td">{{ c.gender || '—' }}</td>
+                        <td class="crm-td">{{ c.marital_status || '—' }}</td>
+                        <td class="crm-td">{{ c.source || '—' }}</td>
+                        <td class="crm-td whitespace-nowrap">
+                            <template v-if="c.resume_id">
+                                <a v-if="resumeCanView(c)" :href="resumeViewUrl(c)" target="_blank" rel="noopener"
+                                    class="crm-op-btn-detail">阅读</a>
+                                <a :href="resumeDownloadUrl(c)" class="crm-op-btn-edit ml-1">下载</a>
+                            </template>
+                            <span v-else class="text-[#57606a]">—</span>
+                        </td>
+                        <td class="crm-td crm-sticky-right-op whitespace-nowrap">
+                            <div v-if="canWriteCandidates" class="flex flex-wrap gap-1">
+                                <button type="button" class="crm-op-btn-edit" @click="openCandidateEdit(c)">修改</button>
+                                <button type="button" class="crm-op-btn-delete"
+                                    data-crm-delete-title="确认删除候选人"
+                                    :data-crm-delete-target="'将删除候选人：' + (c.name || ('#' + c.id))"
+                                    data-crm-delete-hint="删除后将从候选人列表移除。"
+                                    @click="removeCandidate(c)">删除</button>
+                            </div>
+                            <span v-else class="text-[#57606a]">—</span>
+                        </td>
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </section>
 
@@ -367,11 +486,12 @@
                         <td class="px-3 py-2">{{ a.status }}</td>
                         <td class="px-3 py-2">{{ a.client_id }}</td>
                         <td class="px-3 py-2">
-                            <div class="flex flex-wrap gap-1">
+                            <div v-if="canWriteApplications" class="flex flex-wrap gap-1">
                                 <button v-for="next in transitionsFor(a.status)" :key="next" type="button"
                                     @click="transitionStatus(a.id, next)"
                                     class="text-xs border border-[#d0d7de] px-2 py-0.5 rounded hover:bg-[#f6f8fa]">{{ next }}</button>
                             </div>
+                            <span v-else class="text-xs text-[#57606a]">—</span>
                         </td>
                     </tr>
                 </tbody>
@@ -381,7 +501,8 @@
 
     <!-- Modals -->
     <div v-if="modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="closeModal">
-        <div class="bg-white rounded-lg border border-[#d0d7de] shadow-lg w-full max-w-5xl max-h-[90vh] flex flex-col p-5" @click.stop>
+        <div class="bg-white rounded-lg border border-[#d0d7de] shadow-lg w-full max-w-6xl max-h-[90vh] flex flex-col p-5" @click.stop
+            @click="jobPickerOpen = false; clientPickerOpen = false">
             <h3 class="text-lg font-medium mb-4 shrink-0">{{ modalTitle }}</h3>
             <p v-if="modalError" class="mb-3 text-sm text-red-700 shrink-0">{{ modalError }}</p>
 
@@ -468,36 +589,118 @@
             </template>
 
             <template v-else-if="modal === 'candidate'">
-                <div class="space-y-3 text-sm">
+                <div class="overflow-y-auto flex-1 min-h-0 text-sm rms-candidate-form-grid">
                     <label class="block"><span class="text-[#57606a]">姓名</span>
                         <input v-model="candidateForm.name" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block"><span class="text-[#57606a]">电话</span>
-                        <input v-model="candidateForm.phone" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block"><span class="text-[#57606a]">邮箱</span>
-                        <input v-model="candidateForm.email" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block"><span class="text-[#57606a]">微信</span>
-                        <input v-model="candidateForm.wechat" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">年龄</span>
+                        <input v-model="candidateForm.age" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="如 28" /></label>
+                    <label class="block"><span class="text-[#57606a]">工作年限</span>
+                        <input v-model="candidateForm.work_years" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="如 5年" /></label>
+                    <label class="block"><span class="text-[#57606a]">手机号</span>
+                        <input v-model="candidateForm.phone" type="tel" maxlength="11" pattern="1[0-9]{10}"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="11位手机号" /></label>
+                    <label class="block"><span class="text-[#57606a]">邮箱/微信</span>
+                        <input v-model="candidateForm.email_wechat" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="邮箱或微信号" /></label>
+                    <label class="block rms-combobox"><span class="text-[#57606a]">应聘岗位 <span class="text-red-600">*</span></span>
+                        <input v-model="jobPickerQuery" type="text" autocomplete="off" required
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5"
+                            :placeholder="selectedJobPickerLabel || '仅 open 岗位，输入模糊搜索'"
+                            @focus="jobPickerOpen = true" @input="jobPickerOpen = true" />
+                        <span v-if="!openJobs.length" class="text-xs text-amber-800 mt-0.5 block">暂无 open 岗位，请先在岗位 tab 创建</span>
+                        <ul v-if="jobPickerOpen && filteredJobPickerOptions.length" class="rms-combobox-menu" @mousedown.prevent>
+                            <li v-for="j in filteredJobPickerOptions" :key="'jp'+j.id" class="rms-combobox-item"
+                                @click="selectJobPicker(j)">{{ j.title }}<span v-if="j.client_name" class="text-[#57606a]"> · {{ j.client_name }}</span></li>
+                        </ul>
+                    </label>
+                    <label class="block rms-combobox"><span class="text-[#57606a]">应聘项目</span>
+                        <input v-model="clientPickerQuery" type="text" autocomplete="off"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5"
+                            :placeholder="selectedClientPickerLabel || '输入客户名模糊搜索'"
+                            @focus="clientPickerOpen = true" @input="clientPickerOpen = true" />
+                        <ul v-if="clientPickerOpen && filteredClientPickerOptions.length" class="rms-combobox-menu" @mousedown.prevent>
+                            <li v-for="c in filteredClientPickerOptions" :key="'cp'+c.id" class="rms-combobox-item"
+                                @click="selectClientPicker(c)">{{ c.name }}</li>
+                        </ul>
+                    </label>
                     <label class="block"><span class="text-[#57606a]">城市</span>
                         <input v-model="candidateForm.city" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">当前薪资</span>
+                        <input v-model="candidateForm.current_salary" inputmode="decimal"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 tabular-nums"
+                            placeholder="如 25,000"
+                            @blur="formatCandidateSalaryField('current_salary')" /></label>
+                    <label class="block"><span class="text-[#57606a]">期望薪资</span>
+                        <input v-model="candidateForm.expected_salary" inputmode="decimal"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 tabular-nums"
+                            placeholder="如 30,000"
+                            @blur="formatCandidateSalaryField('expected_salary')" /></label>
+                    <label class="block"><span class="text-[#57606a]">到岗时间</span>
+                        <input v-model="candidateForm.available_date" type="date"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">学历</span>
+                        <select v-model="candidateForm.education_level" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option value="">请选择</option>
+                            <option v-for="e in educationOptions" :key="'ed'+e" :value="e">{{ e }}</option>
+                        </select>
+                    </label>
+                    <label class="block"><span class="text-[#57606a]">学校</span>
+                        <input v-model="candidateForm.school" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">专业</span>
+                        <input v-model="candidateForm.major" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">性别</span>
+                        <select v-model="candidateForm.gender" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option value="">请选择</option>
+                            <option v-for="g in genderOptions" :key="'g'+g" :value="g">{{ g }}</option>
+                        </select>
+                    </label>
+                    <label class="block"><span class="text-[#57606a]">婚姻状况</span>
+                        <select v-model="candidateForm.marital_status" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option value="">请选择</option>
+                            <option v-for="m in maritalOptions" :key="'m'+m" :value="m">{{ m }}</option>
+                        </select>
+                    </label>
                     <label class="block"><span class="text-[#57606a]">来源</span>
-                        <input v-model="candidateForm.source" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                        <select v-model="candidateForm.source" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option value="">请选择</option>
+                            <option v-for="s in sourceOptions" :key="'src'+s" :value="s">{{ s }}</option>
+                        </select>
+                    </label>
+                    <label class="block rms-field-full"><span class="text-[#57606a]">简历（附件）</span>
+                        <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" class="mt-1 w-full text-sm"
+                            @change="onCandidateResumeChange" />
+                        <span v-if="editingCandidateResumeName" class="text-xs text-[#57606a] mt-0.5 block">当前：{{ editingCandidateResumeName }}</span>
+                        <span class="text-xs text-[#656d76]">支持 PDF、Word、TXT、RTF，最大 10MB</span>
+                    </label>
                 </div>
             </template>
 
             <template v-else-if="modal === 'application'">
                 <div class="space-y-3 text-sm">
-                    <label class="block"><span class="text-[#57606a]">岗位 ID</span>
-                        <input v-model.number="applicationForm.job_id" type="number" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block"><span class="text-[#57606a]">候选人 ID</span>
-                        <input v-model.number="applicationForm.candidate_id" type="number" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block"><span class="text-[#57606a]">简历 ID（可选）</span>
-                        <input v-model.number="applicationForm.resume_id" type="number" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <p v-if="!jobsState.items.length" class="text-xs text-amber-800">岗位列表为空或不可见，请先在「岗位」tab 确认有可读岗位。</p>
+                    <label class="block"><span class="text-[#57606a]">岗位</span>
+                        <select v-model.number="applicationForm.job_id"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option value="" disabled>请选择岗位</option>
+                            <option v-for="j in jobsState.items" :key="'aj'+j.id" :value="j.id">{{ j.title || ('#' + j.id) }}</option>
+                        </select>
+                    </label>
+                    <p v-if="candidatesState.error" class="text-xs text-amber-800">{{ candidatesState.error }}</p>
+                    <p v-else-if="!candidatesState.items.length" class="text-xs text-amber-800">候选人列表为空或不可见，可手动输入 ID。</p>
+                    <label class="block"><span class="text-[#57606a]">候选人</span>
+                        <select v-if="candidatesState.items.length" v-model.number="applicationForm.candidate_id"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option value="" disabled>请选择候选人</option>
+                            <option v-for="c in candidatesState.items" :key="'ac'+c.id" :value="c.id">{{ c.name || ('#' + c.id) }}</option>
+                        </select>
+                        <input v-else v-model.number="applicationForm.candidate_id" type="number"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="候选人 ID" />
+                    </label>
                 </div>
             </template>
 
             <div class="flex justify-end gap-2 mt-5 shrink-0">
-                <button type="button" @click="closeModal" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md">{{ jobModalReadonly ? '关闭' : '取消' }}</button>
-                <button v-if="!jobModalReadonly" type="button" @click="submitModal" :disabled="modalSaving"
+                <button type="button" @click="closeModal" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md">{{ modalCloseLabel }}</button>
+                <button v-if="modalShowSave" type="button" @click="submitModal" :disabled="modalSaving"
                     class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50">保存</button>
             </div>
         </div>

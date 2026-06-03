@@ -1240,7 +1240,11 @@
                                         <button type="button" class="crm-op-btn-handoff" @click="openHandbookMetaModal(f)">元数据</button>
                                         <button v-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="crm-op-btn-handoff" @click="openHandbookCuesModal(f)">锚点</button>
                                         <button type="button" class="crm-op-btn-edit" @click="downloadHandbookFile(f)">下载</button>
-                                        <button type="button" class="crm-op-btn-delete" @click="removeHandbook(f)">删除</button>
+                                        <button type="button" class="crm-op-btn-delete"
+                                            data-crm-delete-title="确认删除文件"
+                                            data-crm-delete-target-prefix="将删除文件："
+                                            data-crm-delete-hint="删除后将从当前交付手册列表移除。"
+                                            @click="removeHandbook(f)">删除</button>
                                     </div>
                                 </td>
                             </tr>

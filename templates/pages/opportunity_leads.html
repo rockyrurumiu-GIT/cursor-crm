@@ -363,12 +363,6 @@ createApp({
         };
 
         const remove = async (o) => {
-            const ok = await window.crmConfirmDeleteDialog({
-                title: '确认删除商机',
-                targetText: `将删除商机：${o.name || '未命名商机'}`,
-                hint: '删除后将从商机列表移除。',
-            });
-            if (!ok) return;
             const r = await fetch(`/api/opportunities/${o.id}`, { method: 'DELETE', headers: auth() });
             if (r.ok) {
                 if (detailRow.value && detailRow.value.id === o.id) detailRow.value = null;

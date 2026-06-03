@@ -120,7 +120,7 @@
             top: 0;
             z-index: 5;
         }
-        .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer):not(.rms-sticky-serial):not(.rms-sticky-title):not(.rms-sticky-client) {
+        .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer):not(.rms-sticky-serial):not(.rms-sticky-title):not(.rms-sticky-client):not(.rms-candidate-sticky-name) {
             z-index: 3;
         }
         /* 三键操作列固定宽（colgroup + 单元格双保险） */
@@ -400,7 +400,8 @@
         .crm-table thead .turnover-sticky-right-actions,
         .crm-table thead .rms-sticky-serial,
         .crm-table thead .rms-sticky-title,
-        .crm-table thead .rms-sticky-client {
+        .crm-table thead .rms-sticky-client,
+        .crm-table thead .rms-candidate-sticky-name {
             background: #2f75b5;
             color: #fff;
             border-color: #1f5a94;
@@ -415,7 +416,8 @@
         .crm-table tbody .turnover-sticky-right-actions,
         .crm-table tbody .rms-sticky-serial,
         .crm-table tbody .rms-sticky-title,
-        .crm-table tbody .rms-sticky-client {
+        .crm-table tbody .rms-sticky-client,
+        .crm-table tbody .rms-candidate-sticky-name {
             background: #fff;
         }
         .crm-table tbody tr:nth-child(even) .delivery-sticky-left-serial,
@@ -428,7 +430,8 @@
         .crm-table tbody tr:nth-child(even) .turnover-sticky-right-actions,
         .crm-table tbody tr:nth-child(even) .rms-sticky-serial,
         .crm-table tbody tr:nth-child(even) .rms-sticky-title,
-        .crm-table tbody tr:nth-child(even) .rms-sticky-client {
+        .crm-table tbody tr:nth-child(even) .rms-sticky-client,
+        .crm-table tbody tr:nth-child(even) .rms-candidate-sticky-name {
             background: #f6f8fa;
         }
         .crm-table tbody tr:hover .delivery-sticky-left-serial,
@@ -441,7 +444,8 @@
         .crm-table tbody tr:hover .turnover-sticky-right-actions,
         .crm-table tbody tr:hover .rms-sticky-serial,
         .crm-table tbody tr:hover .rms-sticky-title,
-        .crm-table tbody tr:hover .rms-sticky-client {
+        .crm-table tbody tr:hover .rms-sticky-client,
+        .crm-table tbody tr:hover .rms-candidate-sticky-name {
             background: #eef6ff;
         }
         /* 表头列宽拖拽（与客户拜访记录一致） */
@@ -1503,6 +1507,59 @@
                 document.body.appendChild(overlay);
             });
         };
+
+        /** 除客户列表删除客户外，所有 .crm-op-btn-delete（文案为「删除」）统一二次确认 */
+        window.crmIsDeleteConfirmExempt = function (btn) {
+            if (!btn) { return true; }
+            if (btn.getAttribute('data-crm-delete-skip') === '1') { return true; }
+            if (btn.closest('[data-crm-delete-exempt]')) { return true; }
+            var path = (window.location.pathname || '').replace(/\/+$/, '');
+            if (path === '/customers' || path.indexOf('/customers/') === 0) { return true; }
+            return false;
+        };
+        window.crmInferDeleteDialogMeta = function (btn) {
+            var title = btn.getAttribute('data-crm-delete-title') || '确认删除';
+            var hint = btn.getAttribute('data-crm-delete-hint') || '删除后将从当前列表移除。';
+            var target = (btn.getAttribute('data-crm-delete-target') || '').trim();
+            var prefix = (btn.getAttribute('data-crm-delete-target-prefix') || '将删除：').trim();
+            if (!target) {
+                var tr = btn.closest('tr');
+                if (tr) {
+                    var nameEl = tr.querySelector('[data-crm-delete-name], .crm-name-cell');
+                    var label = nameEl ? (nameEl.textContent || '').trim() : '';
+                    if (!label) {
+                        var td0 = tr.querySelector('td');
+                        label = td0 ? (td0.textContent || '').trim() : '';
+                    }
+                    if (label) { target = prefix + label; }
+                }
+            }
+            if (!target) { target = '确认后将执行删除操作。'; }
+            return { title: title, targetText: target, hint: hint };
+        };
+        (function () {
+            var CONFIRMED_ATTR = 'data-crm-delete-confirmed';
+            document.addEventListener('click', function (e) {
+                var btn = e.target && e.target.closest ? e.target.closest('.crm-op-btn-delete') : null;
+                if (!btn) { return; }
+                if ((btn.textContent || '').trim() !== '删除') { return; }
+                if (window.crmIsDeleteConfirmExempt(btn)) { return; }
+                if (btn.getAttribute(CONFIRMED_ATTR) === '1') {
+                    btn.removeAttribute(CONFIRMED_ATTR);
+                    return;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                var meta = window.crmInferDeleteDialogMeta(btn);
+                window.crmConfirmDeleteDialog(meta).then(function (ok) {
+                    if (!ok) { return; }
+                    btn.setAttribute(CONFIRMED_ATTR, '1');
+                    btn.click();
+                });
+            }, true);
+        })();
+
         window.crmEscModalVisible = function (el) {
             if (!el || el.classList.contains('hidden')) { return false; }
             var st = window.getComputedStyle(el);

@@ -351,7 +351,11 @@
                                 <div class="crm-op-actions">
                                     <button type="button" class="crm-op-btn-detail" @click="openRosterDetail(row)">详情</button>
                                     <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
-                                    <button type="button" class="crm-op-btn-delete" @click="confirmDelete(row)">删除</button>
+                                    <button type="button" class="crm-op-btn-delete"
+                                        data-crm-delete-title="确认删除记录"
+                                        data-crm-delete-target-prefix="将删除："
+                                        data-crm-delete-hint="删除后将从当前花名册列表移除。"
+                                        @click="doDelete(row)">删除</button>
                                 </div>
                             </td>
                         </tr>
@@ -566,19 +570,6 @@
                     :disabled="hasBlockingErrors"
                     @click="saveForm"
                 >保存</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 删除确认（整体/单客户花名册共用） -->
-    <div v-if="showDel" class="crm-esc-modal fixed inset-0 z-[60] flex items-center justify-center bg-black/45 p-4" @click.self="cancelDelete">
-        <div class="bg-white rounded-lg shadow-xl p-4 sm:p-5 w-full max-w-md" role="dialog" aria-modal="true" aria-labelledby="roster-del-title">
-            <h3 id="roster-del-title" class="font-semibold text-lg text-gray-800 mb-3">确认删除记录</h3>
-            <p class="text-sm text-gray-600 mb-2">将删除当前花名册记录</p>
-            <p class="text-xs text-gray-400 mb-4">删除后将从当前花名册列表移除。</p>
-            <div class="flex gap-2">
-                <button type="button" class="flex-1 py-2 rounded-md bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200" @click="cancelDelete">取消</button>
-                <button type="button" class="flex-1 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700" @click="doDelete">确认删除</button>
             </div>
         </div>
     </div>

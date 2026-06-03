@@ -1,4 +1,7 @@
-"""RMS module shell routes (Phase 2.5: HTML shell + health; business UI in static/js/pages/rms.js)."""
+"""RMS shell: /rms page (jobs/candidates/applications tabs) and /api/rms/health.
+
+Business UI lives in templates/pages/rms_index.html + static/js/pages/rms.js (Phase 2.5 MVP).
+"""
 from __future__ import annotations
 
 from typing import Callable

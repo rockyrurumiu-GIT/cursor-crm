@@ -15,7 +15,9 @@
     /** 大表按内容测宽时抽样行数，避免上千行卡顿 */
     const CONTENT_SAMPLE_ROWS = 48;
     const STORAGE_VERSION = 'v5';
-    const RMS_JOBS_STORAGE_VERSION = 'v9';
+    const RMS_JOBS_STORAGE_VERSION = 'v10';
+    /** 候选人表列顺序重建后须 bump，避免 localStorage 列宽错位 */
+    const RMS_CANDIDATES_STORAGE_VERSION = 'v2';
 
     function readCssLengthPx(varName, fallbackPx) {
         const root = getComputedStyle(document.documentElement);
@@ -126,7 +128,9 @@
     function storageKeyFor(table) {
         if (table.dataset.tableResizeKey) return table.dataset.tableResizeKey;
         const id = table.dataset.tableId || [...table.classList].find((c) => c.endsWith('-table') && c !== 'crm-table') || 'crm-table';
-        const version = id === 'rms-jobs' ? RMS_JOBS_STORAGE_VERSION : STORAGE_VERSION;
+        let version = STORAGE_VERSION;
+        if (id === 'rms-jobs') version = RMS_JOBS_STORAGE_VERSION;
+        else if (id === 'rms-candidates') version = RMS_CANDIDATES_STORAGE_VERSION;
         return `crm-col-widths:${version}:${location.pathname}:${id}`;
     }
 
@@ -215,11 +219,6 @@
         if (table.classList.contains('interview-table')) {
             table.style.setProperty('--interview-sticky-serial-width', px(0));
             return;
-        }
-        if (table.classList.contains('rms-jobs-table')) {
-            table.style.setProperty('--rms-jobs-sticky-serial-width', px(0));
-            table.style.setProperty('--rms-jobs-sticky-title-width', px(1));
-            table.style.setProperty('--rms-jobs-sticky-client-width', px(2));
         }
     }
 

@@ -7,6 +7,9 @@
 
   const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
   const chartInstances = {};
+  let widgetAutosaveTimer = null;
+  let widgetPersistInFlight = false;
+  let widgetPersistQueued = false;
 
   const EXTRA_RENDER_LABELS = { doughnut: "环形图", horizontal_bar: "横向排名（柱图）" };
 
@@ -236,8 +239,16 @@
   }
 
   const METRIC_LABELS = { count: "计数", sum: "求和", avg: "平均", min: "最小", max: "最大" };
-  const TYPE_LABELS = { number: "数字", bar: "柱状", pie: "环形", line: "折线", rich_text: "文本", iframe: "网页", roster_summary: "花名册概览" };
-  const TYPE_ICONS = { number: "#", bar: "▮", pie: "◔", line: "📈", rich_text: "¶", iframe: "▭", roster_summary: "▦" };
+  const CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line"];
+  const DATA_WIDGET_TYPES = ["number"].concat(CHART_WIDGET_TYPES);
+  const TYPE_LABELS = {
+    number: "数字", bar: "柱状", horizontal_bar: "横向排名", pie: "环形", line: "折线",
+    rich_text: "文本", iframe: "网页", roster_summary: "花名册概览",
+  };
+  const TYPE_ICONS = {
+    number: "#", bar: "▮", horizontal_bar: "▤", pie: "◔", line: "📈",
+    rich_text: "¶", iframe: "▭", roster_summary: "▦",
+  };
 
   function chartCanvasId(w, viewIndex) {
     if (viewIndex == null || viewIndex === undefined) return "chart-" + w.id;
@@ -278,6 +289,8 @@
       const showDashboardModal = ref(false);
       const showTabModal = ref(false);
       const panelOpen = ref(false);
+      const panelAutosaveReady = ref(false);
+      const panelUserEdited = ref(false);
       const colorPickerOpen = ref(false);
       const colorSearch = ref("");
       const dashboardForm = ref({ id: null, name: "", description: "" });
@@ -293,7 +306,7 @@
           source_key: "clients",
           config: {
             metric: "count", field: "", group_by: "", date_group: "month",
-            filters: [], color: "green", color_shade: 2, sort: "value_desc",
+            filters: [], limit: 20, color: "green", color_shade: 2, sort: "value_desc",
             show_legend: true, show_value_center: true, data_labels: false, hide_empty: false,
             url: "", content: "", prefix: "", suffix: "",
             client_id: null, include_left: false,
@@ -342,16 +355,16 @@
       });
 
       const needsDataSource = computed(function () {
-        return ["number", "bar", "pie", "line"].indexOf(widgetForm.value.widget_type) >= 0;
+        return DATA_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
       });
       const needsField = computed(function () {
         return ["sum", "avg", "min", "max"].indexOf(widgetForm.value.config.metric) >= 0;
       });
       const needsGroupBy = computed(function () {
-        return ["bar", "pie", "line"].indexOf(widgetForm.value.widget_type) >= 0;
+        return CHART_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
       });
       const isChart = computed(function () {
-        return ["bar", "pie", "line"].indexOf(widgetForm.value.widget_type) >= 0;
+        return CHART_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
       });
       const isRosterSummary = computed(function () {
         return widgetForm.value.widget_type === "roster_summary";
@@ -392,9 +405,79 @@
       function pickColor(key, shadeIndex) {
         widgetForm.value.config.color = key;
         widgetForm.value.config.color_shade = shadeIndex;
+        flushPersistWidget();
       }
 
       function closeColorPicker() { colorPickerOpen.value = false; }
+
+      function clearWidgetAutosaveTimer() {
+        if (widgetAutosaveTimer) {
+          clearTimeout(widgetAutosaveTimer);
+          widgetAutosaveTimer = null;
+        }
+      }
+
+      function canAutosaveWidget() {
+        return panelAutosaveReady.value && panelOpen.value && activeTabId.value
+          && (widgetForm.value.id || panelUserEdited.value);
+      }
+
+      function schedulePersistWidget(delayMs) {
+        if (!canAutosaveWidget()) return;
+        clearWidgetAutosaveTimer();
+        widgetAutosaveTimer = setTimeout(function () {
+          widgetAutosaveTimer = null;
+          flushPersistWidget();
+        }, delayMs == null ? 420 : delayMs);
+      }
+
+      function flushPersistWidget() {
+        clearWidgetAutosaveTimer();
+        if (!canAutosaveWidget()) return Promise.resolve();
+        if (widgetPersistInFlight) {
+          widgetPersistQueued = true;
+          return Promise.resolve();
+        }
+        widgetPersistInFlight = true;
+        const f = widgetForm.value;
+        const payload = {
+          title: f.title,
+          widget_type: f.widget_type,
+          source_key: f.source_key,
+          config: buildConfig(),
+          x: f.x,
+          y: f.y,
+          w: f.w,
+          h: f.h,
+        };
+        const isNew = !f.id;
+        const req = isNew
+          ? api("POST", "/api/dashboard-tabs/" + activeTabId.value + "/widgets", payload)
+          : api("PUT", "/api/dashboard-widgets/" + f.id, payload);
+        return req
+          .then(function (res) {
+            if (isNew && res && res.id) widgetForm.value.id = res.id;
+            return loadDashboards();
+          })
+          .then(function () {
+            reloadActiveTabData();
+          })
+          .catch(function (e) { alert(e.message); })
+          .finally(function () {
+            widgetPersistInFlight = false;
+            if (widgetPersistQueued) {
+              widgetPersistQueued = false;
+              flushPersistWidget();
+            }
+          });
+      }
+
+      function selectWidgetType(t) {
+        if (widgetForm.value.widget_type === t) return;
+        panelUserEdited.value = true;
+        widgetForm.value.widget_type = t;
+        flushPersistWidget();
+      }
 
       // Line charts require a date_group group_by; keep frontend honest by forcing line type for datetime groups.
       watch(function () { return [widgetForm.value.widget_type, widgetForm.value.config.group_by]; }, function () {
@@ -513,8 +596,8 @@
           return;
         }
 
-        if (render === "horizontal_bar") {
-          const topN = opts.limit != null ? opts.limit : 6;
+        if (render === "horizontal_bar" || (!render && w.widget_type === "horizontal_bar")) {
+          const topN = opts.limit != null ? opts.limit : (cfg.limit != null ? cfg.limit : 6);
           const hLabels = labels.slice(0, topN);
           const hValues = values.slice(0, topN);
           chartInstances[canvasId] = new Chart(canvas, {
@@ -586,7 +669,7 @@
         const tab = activeTab.value;
         if (!tab || !tab.widgets) return;
         tab.widgets.forEach(function (w) {
-          if (["bar", "pie", "line"].indexOf(w.widget_type) < 0) return;
+          if (CHART_WIDGET_TYPES.indexOf(w.widget_type) < 0) return;
           const data = widgetData.value[w.id];
           if (!data) return;
           renderChart(w, data, { viewIndex: null });
@@ -646,6 +729,22 @@
         nextTick(function () { renderVisibleCharts(); });
       });
 
+      watch(rosterScope, function () {
+        if (!panelAutosaveReady.value) return;
+        panelUserEdited.value = true;
+        schedulePersistWidget(0);
+      });
+
+      watch(
+        widgetForm,
+        function () {
+          if (!panelAutosaveReady.value) return;
+          panelUserEdited.value = true;
+          schedulePersistWidget(420);
+        },
+        { deep: true }
+      );
+
       function openDashboardModal() {
         dashboardForm.value = { id: null, name: "", description: "" };
         showDashboardModal.value = true;
@@ -661,8 +760,14 @@
           return loadDashboards();
         }).catch(function (e) { alert(e.message); });
       }
-      function deleteActiveDashboard() {
-        if (!activeDashboardId.value || !confirm("确定删除此看板？其标签页与组件将一并删除。")) return;
+      async function deleteActiveDashboard() {
+        if (!activeDashboardId.value) return;
+        const ok = await window.crmConfirmDeleteDialog({
+          title: "确认删除",
+          targetText: "将删除当前看板及其标签页与组件",
+          hint: "删除后不可恢复。",
+        });
+        if (!ok) return;
         api("DELETE", "/api/dashboards/" + activeDashboardId.value).then(function () {
           activeDashboardId.value = null;
           activeTabId.value = null;
@@ -711,11 +816,25 @@
           rosterScope.value = "all";
         }
         colorPickerOpen.value = false;
+        panelUserEdited.value = !!w;
+        panelAutosaveReady.value = false;
         panelOpen.value = true;
+        nextTick(function () { panelAutosaveReady.value = true; });
       }
-      function closePanel() { panelOpen.value = false; colorPickerOpen.value = false; }
+      function closePanel() {
+        panelAutosaveReady.value = false;
+        panelUserEdited.value = false;
+        clearWidgetAutosaveTimer();
+        panelOpen.value = false;
+        colorPickerOpen.value = false;
+      }
       function addFilter() {
         widgetForm.value.config.filters.push({ field: "", op: "eq", value: "" });
+        schedulePersistWidget(420);
+      }
+      function removeFilter(idx) {
+        widgetForm.value.config.filters.splice(idx, 1);
+        flushPersistWidget();
       }
 
       function blankExtraView() {
@@ -725,10 +844,12 @@
       function addExtraView() {
         if (!widgetForm.value.config.extra_views) widgetForm.value.config.extra_views = [];
         widgetForm.value.config.extra_views.push(blankExtraView());
+        flushPersistWidget();
       }
 
       function removeExtraView(idx) {
         widgetForm.value.config.extra_views.splice(idx, 1);
+        flushPersistWidget();
       }
 
       function buildConfig() {
@@ -751,6 +872,8 @@
         // from created_at, so send group_by empty and let the date_group drive it.
         if (isDateGroup.value) { out.group_by = ""; out.date_group = c.date_group; }
         if (isChart.value) {
+          const lim = Number(c.limit);
+          out.limit = Number.isFinite(lim) && lim >= 1 ? lim : 20;
           out.color = c.color;
           out.color_shade = Number(c.color_shade);
           if (!Number.isFinite(out.color_shade) || out.color_shade < 0 || out.color_shade > 4) out.color_shade = 2;
@@ -778,23 +901,13 @@
         return out;
       }
 
-      function saveWidget() {
-        if (!activeTabId.value) return;
-        const f = widgetForm.value;
-        const payload = {
-          title: f.title, widget_type: f.widget_type, source_key: f.source_key,
-          config: buildConfig(), x: f.x, y: f.y, w: f.w, h: f.h,
-        };
-        const p = f.id
-          ? api("PUT", "/api/dashboard-widgets/" + f.id, payload)
-          : api("POST", "/api/dashboard-tabs/" + activeTabId.value + "/widgets", payload);
-        p.then(function () { panelOpen.value = false; return loadDashboards(); })
-          .then(function () { reloadActiveTabData(); })
-          .catch(function (e) { alert(e.message); });
-      }
-
-      function deleteWidget(id) {
-        if (!confirm("确定删除此组件？")) return;
+      async function deleteWidget(id) {
+        const ok = await window.crmConfirmDeleteDialog({
+          title: "确认删除",
+          targetText: "将删除当前看板组件",
+          hint: "删除后不可恢复。",
+        });
+        if (!ok) return;
         api("DELETE", "/api/dashboard-widgets/" + id)
           .then(function () { return loadDashboards(); })
           .then(function () { reloadActiveTabData(); })
@@ -879,7 +992,8 @@
         rosterTiles, rosterScopeLabel, rosterHeadcount, isRosterClientCard,
         selectDashboard,
         openDashboardModal, saveDashboard, deleteActiveDashboard,
-        openTabModal, saveTab, openWidgetPanel, closePanel, addFilter, addExtraView, removeExtraView, saveWidget, deleteWidget,
+        openTabModal, saveTab, openWidgetPanel, closePanel, selectWidgetType,
+        addFilter, removeFilter, addExtraView, removeExtraView, deleteWidget,
         duplicateWidget, changeRosterClient,
       };
     },
