@@ -51,7 +51,16 @@ CLIENT_SALES_DEPT_COL = "owner_dept_id"
 CLIENT_SALES_ASSIGNED_COL = "assigned_user_id"
 CLIENT_DELIVERY_OWNER_COL = "delivery_owner_user_id"
 CLIENT_DELIVERY_DEPT_COL = "delivery_dept_id"
+CLIENT_RECRUITMENT_OWNER_COL = "recruitment_owner_user_id"
+CLIENT_RECRUITMENT_DEPT_COL = "recruitment_dept_id"
 CLIENT_FK = "client_id"
+
+# CRM client list: dept scope matches if any role dept column is in range.
+CLIENT_DEPT_COLS_FOR_LIST = (
+    CLIENT_SALES_DEPT_COL,
+    CLIENT_DELIVERY_DEPT_COL,
+    CLIENT_RECRUITMENT_DEPT_COL,
+)
 
 
 @dataclass(frozen=True)

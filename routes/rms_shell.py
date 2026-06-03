@@ -1,4 +1,4 @@
-"""RMS module shell routes (Phase 0: permission + navigation placeholder only)."""
+"""RMS module shell routes (Phase 2.5: HTML shell + health; business UI in static/js/pages/rms.js)."""
 from __future__ import annotations
 
 from typing import Callable

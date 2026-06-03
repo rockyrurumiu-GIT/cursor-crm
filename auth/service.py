@@ -339,14 +339,8 @@ def record_login(db: Session, user_id: int) -> None:
     )
 
 
-def seed_rbac_data(
-    db: Session,
-    *,
-    admin_username: str,
-    admin_password: str,
-) -> None:
-    """Idempotent seed: permissions, roles, admin user."""
-    now = _utc_now()
+def sync_permission_catalog_rows(db: Session) -> None:
+    """Ensure sys_permission has a row for every code in ALL_PERMISSION_CODES (idempotent)."""
     for code in sorted(ALL_PERMISSION_CODES):
         existing = db.execute(
             text("SELECT id FROM sys_permission WHERE code = :c"), {"c": code}
@@ -358,6 +352,17 @@ def seed_rbac_data(
                 ),
                 {"c": code, "n": code, "m": code.split(".")[0]},
             )
+
+
+def seed_rbac_data(
+    db: Session,
+    *,
+    admin_username: str,
+    admin_password: str,
+) -> None:
+    """Idempotent seed: permissions, roles, admin user."""
+    now = _utc_now()
+    sync_permission_catalog_rows(db)
 
     from auth.policy import RESERVED_ROLE_CODES
 
@@ -389,11 +394,11 @@ def seed_rbac_data(
             rid = db.execute(text("SELECT id FROM sys_role WHERE code = :c"), {"c": code}).fetchone()
             role_ids[code] = int(rid[0])
 
+    # Builtin roles: only add missing default permissions; do not wipe customized grants.
     for role_code, perms in ROLE_DEFAULT_PERMISSIONS.items():
         if role_code not in role_ids:
             continue
         rid = role_ids[role_code]
-        db.execute(text("DELETE FROM sys_role_permission WHERE role_id = :rid"), {"rid": rid})
         for perm_code in perms:
             prow = db.execute(
                 text("SELECT id FROM sys_permission WHERE code = :c"), {"c": perm_code}
@@ -1232,8 +1237,10 @@ def set_role_permissions(
     from auth import policy
 
     role = policy.assert_can_edit_role_permissions(actor_ctx, db, role_id)
+    sync_permission_catalog_rows(db)
     before_perms = _role_permission_codes(db, role_id)
     db.execute(text("DELETE FROM sys_role_permission WHERE role_id = :rid"), {"rid": role_id})
+    skipped: List[str] = []
     for code in permission_codes:
         row = db.execute(text("SELECT id FROM sys_permission WHERE code = :c"), {"c": code}).fetchone()
         if row:
@@ -1244,6 +1251,15 @@ def set_role_permissions(
                 ),
                 {"rid": role_id, "pid": int(row[0])},
             )
+        else:
+            skipped.append(code)
+    if skipped:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=400,
+            detail=f"权限码未入库，无法保存: {', '.join(sorted(skipped))}",
+        )
     after_perms = _role_permission_codes(db, role_id)
     audit_log(
         db,
@@ -1255,6 +1271,7 @@ def set_role_permissions(
         before={"permissions": before_perms},
         after={"permissions": after_perms},
     )
+    return after_perms
 
 
 def list_departments(db: Session) -> List[Dict[str, Any]]:
@@ -1279,7 +1296,10 @@ def _dept_reference_reason(db: Session, dept_id: int) -> Optional[str]:
     ).fetchone():
         return "仍有用户归属该部门"
     if db.execute(
-        text("SELECT 1 FROM clients WHERE owner_dept_id = :id OR delivery_dept_id = :id LIMIT 1"),
+        text(
+            "SELECT 1 FROM clients WHERE owner_dept_id = :id OR delivery_dept_id = :id "
+            "OR recruitment_dept_id = :id LIMIT 1"
+        ),
         {"id": dept_id},
     ).fetchone():
         return "仍有客户归属该部门"

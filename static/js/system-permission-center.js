@@ -79,6 +79,13 @@
         el.classList.add('hidden');
     }
 
+    function escAttr(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
+    }
+
     async function api(path, opts) {
         opts = opts || {};
         var hasBody = opts.body != null && opts.body !== '';
@@ -464,15 +471,23 @@
     function syncRoleSelectOptions() {
         var sel = document.getElementById('matrix-role-select');
         if (sel) {
+            var matrixPrev = sel.value;
             sel.innerHTML = state.roles.map(function (r) {
                 return '<option value="' + r.id + '">' + (r.name || r.code) + '</option>';
             }).join('');
+            if (matrixPrev && state.roles.some(function (r) { return String(r.id) === matrixPrev; })) {
+                sel.value = matrixPrev;
+            }
         }
         var dsSel = document.getElementById('datascope-role-select');
         if (dsSel) {
+            var dsPrev = dsSel.value;
             dsSel.innerHTML = state.roles.map(function (r) {
                 return '<option value="' + r.id + '">' + (r.name || r.code) + '</option>';
             }).join('');
+            if (dsPrev && state.roles.some(function (r) { return String(r.id) === dsPrev; })) {
+                dsSel.value = dsPrev;
+            }
         }
     }
 
@@ -593,7 +608,7 @@
                 cols.forEach(function (c) {
                     var checked = row.cells && row.cells[c.key] ? ' checked' : '';
                     var dis = state.matrixReadonly ? ' disabled' : '';
-                    html += '<td class="text-center"><input type="checkbox" data-row="' + row.label + '" data-col="' + c.key + '"' + checked + dis + '></td>';
+                    html += '<td class="text-center"><input type="checkbox" data-row="' + escAttr(row.label) + '" data-col="' + escAttr(c.key) + '"' + checked + dis + '></td>';
                 });
                 html += '</tr>';
             });
@@ -604,19 +619,24 @@
 
     function collectMatrixPermissions() {
         var codes = new Set();
+        var box = document.getElementById('matrix-container');
         var data = state.matrixData;
+        if (!box || !data) return [];
+        var rowByLabel = {};
         (data.modules || []).forEach(function (mod) {
             (mod.rows || []).forEach(function (row) {
-                ['read', 'write', 'delete', 'import_export', 'approve'].forEach(function (colKey) {
-                    var sel = 'input[data-row="' + CSS.escape(row.label) + '"][data-col="' + colKey + '"]';
-                    var inp = document.querySelector(sel);
-                    if (!inp || !inp.checked) return;
-                    var list = (row.col_codes && row.col_codes[colKey]) || [];
-                    list.forEach(function (c) { codes.add(c); });
-                });
+                rowByLabel[row.label] = row;
             });
         });
-        return Array.from(codes);
+        box.querySelectorAll('input[type="checkbox"][data-row][data-col]:checked').forEach(function (inp) {
+            var label = inp.getAttribute('data-row');
+            var colKey = inp.getAttribute('data-col');
+            var row = rowByLabel[label || ''];
+            if (!row || !colKey) return;
+            var list = (row.col_codes && row.col_codes[colKey]) || [];
+            list.forEach(function (c) { codes.add(c); });
+        });
+        return Array.from(codes).sort();
     }
 
     async function saveMatrix() {
@@ -627,12 +647,14 @@
         }
         if (state.matrixReadonly) return;
         var codes = collectMatrixPermissions();
-        await api('/api/system/roles/' + rid + '/permissions', {
+        var res = await api('/api/system/roles/' + rid + '/permissions', {
             method: 'PUT',
             body: JSON.stringify({ permission_codes: codes }),
         });
-        showMsg('权限已保存', true);
+        var saved = (res && res.permission_codes) ? res.permission_codes.length : codes.length;
+        showMsg('权限已保存（' + saved + ' 项）', true);
         await loadRoles();
+        await loadMatrixTab();
     }
 
     async function loadDataScopeTab() {

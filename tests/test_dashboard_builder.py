@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 
 import pytest
@@ -533,6 +534,182 @@ def test_seed_roster_margin_dashboard_exists(client, admin_auth):
     r = client.get("/api/dashboards", headers=headers)
     assert r.status_code == 200
     assert "交付毛利总览" in [d["name"] for d in r.json()]
+
+
+def test_roster_margin_preset_layout_sync(client, admin_auth):
+    """Sync preset layout; relocate legacy/user overlap; idempotent relocate."""
+    import main as crm_main
+    from services.dashboards import (
+        _ROSTER_SEED_NAME,
+        _max_preset_bottom,
+        _roster_margin_preset_specs,
+        seed_default_dashboards,
+    )
+
+    db = crm_main.SessionLocal()
+    try:
+        seed_default_dashboards(
+            db,
+            crm_main.DashboardDashboard,
+            crm_main.DashboardTab,
+            crm_main.DashboardWidget,
+        )
+
+        d = (
+            db.query(crm_main.DashboardDashboard)
+            .filter(
+                crm_main.DashboardDashboard.name == _ROSTER_SEED_NAME,
+                crm_main.DashboardDashboard.created_by == "system",
+            )
+            .first()
+        )
+        assert d is not None
+
+        tab = (
+            db.query(crm_main.DashboardTab)
+            .filter(
+                crm_main.DashboardTab.dashboard_id == d.id,
+                crm_main.DashboardTab.name == "毛利总览",
+            )
+            .first()
+        )
+        assert tab is not None
+
+        bar_quote = (
+            db.query(crm_main.DashboardWidget)
+            .filter(
+                crm_main.DashboardWidget.tab_id == tab.id,
+                crm_main.DashboardWidget.title == "各客户月报价(含税)",
+                crm_main.DashboardWidget.widget_type == "bar",
+                crm_main.DashboardWidget.source_key == "roster_entries",
+            )
+            .one()
+        )
+        bar_quote_id = bar_quote.id
+        bar_quote.w = 4
+        bar_quote.h = 5
+        cfg = json.loads(bar_quote.config_json or "{}")
+        cfg["data_labels"] = True
+        cfg["color"] = "purple"
+        cfg["limit"] = 99
+        bar_quote.config_json = json.dumps(cfg, ensure_ascii=False)
+
+        single_client = (
+            db.query(crm_main.DashboardWidget)
+            .filter(
+                crm_main.DashboardWidget.tab_id == tab.id,
+                crm_main.DashboardWidget.title == "单客户毛利概览",
+                crm_main.DashboardWidget.widget_type == "roster_summary",
+                crm_main.DashboardWidget.source_key == "roster_entries",
+            )
+            .one()
+        )
+        single_client_id = single_client.id
+        sc_cfg = json.loads(single_client.config_json or "{}")
+        sc_cfg["client_id"] = 424242
+        single_client.config_json = json.dumps(sc_cfg, ensure_ascii=False)
+
+        legacy_pie = crm_main.DashboardWidget(
+            tab_id=tab.id,
+            title="单客户毛利概览",
+            widget_type="pie",
+            source_key="roster_entries",
+            config_json='{"metric": "count", "group_by": "client"}',
+            x=4,
+            y=0,
+            w=4,
+            h=5,
+            sort_order=50,
+        )
+        copy_w = crm_main.DashboardWidget(
+            tab_id=tab.id,
+            title="单客户毛利概览 副本",
+            widget_type="number",
+            source_key="clients",
+            config_json='{"metric": "count"}',
+            x=4,
+            y=5,
+            w=4,
+            h=5,
+            sort_order=51,
+        )
+        user_w = crm_main.DashboardWidget(
+            tab_id=tab.id,
+            title="用户自定义",
+            widget_type="number",
+            source_key="clients",
+            config_json='{"metric": "count"}',
+            x=0,
+            y=12,
+            w=4,
+            h=4,
+            sort_order=99,
+        )
+        db.add(legacy_pie)
+        db.add(copy_w)
+        db.add(user_w)
+        db.commit()
+        pie_id = legacy_pie.id
+        copy_id = copy_w.id
+        user_w_id = user_w.id
+
+        seed_default_dashboards(
+            db,
+            crm_main.DashboardDashboard,
+            crm_main.DashboardTab,
+            crm_main.DashboardWidget,
+        )
+        db.expire_all()
+        pie_y1 = db.query(crm_main.DashboardWidget).filter_by(id=pie_id).one().y
+        copy_y1 = db.query(crm_main.DashboardWidget).filter_by(id=copy_id).one().y
+
+        seed_default_dashboards(
+            db,
+            crm_main.DashboardDashboard,
+            crm_main.DashboardTab,
+            crm_main.DashboardWidget,
+        )
+        db.expire_all()
+
+        specs = _roster_margin_preset_specs(None)
+        base_y = _max_preset_bottom(specs)
+        for spec in specs:
+            matches = (
+                db.query(crm_main.DashboardWidget)
+                .filter(
+                    crm_main.DashboardWidget.tab_id == tab.id,
+                    crm_main.DashboardWidget.title == spec["title"],
+                    crm_main.DashboardWidget.widget_type == spec["widget_type"],
+                    crm_main.DashboardWidget.source_key == spec["source_key"],
+                )
+                .all()
+            )
+            assert len(matches) == 1, spec
+            w = matches[0]
+            assert w.x == spec["x"] and w.y == spec["y"] and w.w == spec["w"] and w.h == spec["h"]
+
+        bar_quote = db.query(crm_main.DashboardWidget).filter_by(id=bar_quote_id).one()
+        assert bar_quote.w == 6 and bar_quote.h == 7
+        synced = json.loads(bar_quote.config_json or "{}")
+        assert synced["data_labels"] is False
+        assert synced["color"] == "purple"
+        assert synced["limit"] == 99
+
+        single_client = db.query(crm_main.DashboardWidget).filter_by(id=single_client_id).one()
+        assert json.loads(single_client.config_json or "{}")["client_id"] == 424242
+
+        pie = db.query(crm_main.DashboardWidget).filter_by(id=pie_id).one()
+        copy_row = db.query(crm_main.DashboardWidget).filter_by(id=copy_id).one()
+        assert pie.y >= base_y
+        assert copy_row.y >= base_y
+        assert pie.y == pie_y1
+        assert copy_row.y == copy_y1
+
+        assert db.query(crm_main.DashboardWidget).filter_by(id=user_w_id).count() == 1
+        assert db.query(crm_main.DashboardWidget).filter_by(id=pie_id).count() == 1
+        assert db.query(crm_main.DashboardWidget).filter_by(id=copy_id).count() == 1
+    finally:
+        db.close()
 
 
 def test_legacy_widget_without_style_still_renders(client, admin_auth):

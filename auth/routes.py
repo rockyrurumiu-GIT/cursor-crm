@@ -496,11 +496,11 @@ def build_router(
         if invalid:
             raise HTTPException(status_code=400, detail=f"未知权限: {invalid}")
         try:
-            auth_svc.set_role_permissions(
+            saved = auth_svc.set_role_permissions(
                 db, role_id, body.permission_codes, actor=ctx.username, actor_ctx=ctx
             )
             db.commit()
-            return {"ok": True}
+            return {"ok": True, "permission_codes": saved}
         except HTTPException:
             db.rollback()
             raise

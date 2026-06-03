@@ -155,15 +155,18 @@
                 <thead>
                     <tr>
                         <th class="crm-th">客户名称</th>
-                        <th class="crm-th">销售负责人</th>
                         <th class="crm-th">外包规模</th>
                         <th class="crm-th">开拓阶段</th>
                         <th class="crm-th">预估金额</th>
                         <th class="crm-th">城市</th>
                         <th class="crm-th">首要联系人</th>
                         <th class="crm-th">商机</th>
+                        <th class="crm-th">销售部门</th>
+                        <th class="crm-th">销售主责</th>
                         <th class="crm-th">交付部门</th>
-                        <th class="crm-th">交付负责人</th>
+                        <th class="crm-th">交付主责</th>
+                        <th class="crm-th">招聘部门</th>
+                        <th class="crm-th">招聘主责</th>
                         <th class="crm-th customers-handoff-col">交接状态</th>
                         <th class="crm-th">创建时间</th>
                         <th class="crm-th crm-sticky-right-op">操作</th>
@@ -172,7 +175,6 @@
                 <tbody>
                     <tr v-for="c in clients" :key="c.id">
                         <td class="crm-td crm-name-cell">{{ c.name }}</td>
-                        <td class="crm-td">{{ c.owner }}</td>
                         <td class="crm-td">{{ c.scale }}</td>
                         <td class="crm-td">
                             <span :class="phaseColor(c.phase)" class="px-2 py-1 rounded text-xs">{{ c.phase }}</span>
@@ -189,8 +191,12 @@
                             </template>
                             <span v-else class="text-gray-400">—</span>
                         </td>
+                        <td class="crm-td">{{ fmtDash(salesDeptDisplay(c)) }}</td>
+                        <td class="crm-td">{{ fmtDash(salesOwnerDisplay(c)) }}</td>
                         <td class="crm-td">{{ fmtDash(deliveryDeptDisplay(c)) }}</td>
                         <td class="crm-td">{{ fmtDash(deliveryOwnerDisplay(c)) }}</td>
+                        <td class="crm-td">{{ fmtDash(recruitmentDeptDisplay(c)) }}</td>
+                        <td class="crm-td">{{ fmtDash(recruitmentOwnerDisplay(c)) }}</td>
                         <td class="crm-td customers-handoff-col">
                             <a :href="`/customers/${c.id}/handoff`"
                                 :class="handoffBadge(resolveHandoffStatus(c.id))"
@@ -252,9 +258,12 @@
                             <div><dt class="text-gray-500 text-xs">行业</dt><dd>{{ fmtDash(selectedClient.industry) }}</dd></div>
                             <div><dt class="text-gray-500 text-xs">外包规模</dt><dd>{{ fmtDash(selectedClient.scale) }}</dd></div>
                             <div><dt class="text-gray-500 text-xs">开拓阶段</dt><dd>{{ fmtDash(selectedClient.phase) }}</dd></div>
-                            <div class="col-span-2"><dt class="text-gray-500 text-xs">销售负责人</dt><dd>{{ fmtDash(selectedClient.owner) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">销售部门</dt><dd>{{ fmtDash(salesDeptDisplay(selectedClient)) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">销售主责</dt><dd>{{ fmtDash(salesOwnerDisplay(selectedClient)) }}</dd></div>
                             <div><dt class="text-gray-500 text-xs">交付部门</dt><dd>{{ fmtDash(deliveryDeptDisplay(selectedClient)) }}</dd></div>
-                            <div><dt class="text-gray-500 text-xs">交付负责人</dt><dd>{{ fmtDash(deliveryOwnerDisplay(selectedClient)) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">交付主责</dt><dd>{{ fmtDash(deliveryOwnerDisplay(selectedClient)) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">招聘部门</dt><dd>{{ fmtDash(recruitmentDeptDisplay(selectedClient)) }}</dd></div>
+                            <div><dt class="text-gray-500 text-xs">招聘主责</dt><dd>{{ fmtDash(recruitmentOwnerDisplay(selectedClient)) }}</dd></div>
                         </dl>
                     </div>
                     <div>
@@ -595,14 +604,35 @@ createApp({
 
         const fmtDash = (v) => (v && String(v).trim()) ? String(v).trim() : '—';
 
+        const deptNameOnly = (label, deptId) => {
+            const fromLabel = (label || '').trim();
+            if (fromLabel) {
+                const m = fromLabel.match(/^(.+?)\s*\([^)]+\)\s*$/);
+                return m ? m[1].trim() : fromLabel;
+            }
+            if (deptId == null || deptId === '') return '';
+            const d = (assignOptions.value.depts || []).find((x) => Number(x.id) === Number(deptId));
+            return d ? String(d.name || '').trim() : '';
+        };
+
+        const salesDeptDisplay = (c) => {
+            if (!c) return '';
+            return deptNameOnly(c.owner_dept_label, c.owner_dept_id);
+        };
+
+        const salesOwnerDisplay = (c) => {
+            if (!c) return '';
+            const label = (c.owner_user_label || '').trim();
+            if (label) return label;
+            const id = c.owner_user_id;
+            if (id == null || id === '') return (c.owner || '').trim();
+            const u = (assignOptions.value.users || []).find((x) => Number(x.id) === Number(id));
+            return u ? `${(u.display_name || u.username)} · ${u.username}` : (c.owner || '').trim();
+        };
+
         const deliveryDeptDisplay = (c) => {
             if (!c) return '';
-            const label = (c.delivery_dept_label || '').trim();
-            if (label) return label;
-            const id = c.delivery_dept_id;
-            if (id == null || id === '') return '';
-            const d = (assignOptions.value.depts || []).find((x) => Number(x.id) === Number(id));
-            return d ? `${d.name} (${d.code})` : '';
+            return deptNameOnly(c.delivery_dept_label, c.delivery_dept_id);
         };
 
         const deliveryOwnerDisplay = (c) => {
@@ -614,6 +644,22 @@ createApp({
             const u = (assignOptions.value.users || []).find((x) => Number(x.id) === Number(id));
             return u ? `${(u.display_name || u.username)} · ${u.username}` : '';
         };
+
+        const recruitmentDeptDisplay = (c) => {
+            if (!c) return '';
+            return deptNameOnly(c.recruitment_dept_label, c.recruitment_dept_id);
+        };
+
+        const recruitmentOwnerDisplay = (c) => {
+            if (!c) return '';
+            const label = (c.recruitment_owner_label || '').trim();
+            if (label) return label;
+            const id = c.recruitment_owner_user_id;
+            if (id == null || id === '') return '';
+            const u = (assignOptions.value.users || []).find((x) => Number(x.id) === Number(id));
+            return u ? `${(u.display_name || u.username)} · ${u.username}` : '';
+        };
+
         const fmtAmount = (c) => {
             const raw = c && c.estimated_annual_amount != null ? String(c.estimated_annual_amount).trim() : '';
             if (!raw) return '—';
@@ -665,6 +711,8 @@ createApp({
             fd.append('name', c.name);
             fd.append('industry', c.industry || '');
             fd.append('owner', c.owner || '');
+            fd.append('owner_dept_id', c.owner_dept_id != null && c.owner_dept_id !== '' ? String(c.owner_dept_id) : '');
+            fd.append('owner_user_id', c.owner_user_id != null && c.owner_user_id !== '' ? String(c.owner_user_id) : '');
             fd.append('scale', c.scale || '');
             fd.append('phase', c.phase || '');
             fd.append('description', c.description || '');
@@ -679,6 +727,8 @@ createApp({
             fd.append('remarks', c.remarks || '');
             fd.append('delivery_dept_id', c.delivery_dept_id != null && c.delivery_dept_id !== '' ? String(c.delivery_dept_id) : '');
             fd.append('delivery_owner_user_id', c.delivery_owner_user_id != null && c.delivery_owner_user_id !== '' ? String(c.delivery_owner_user_id) : '');
+            fd.append('recruitment_dept_id', c.recruitment_dept_id != null && c.recruitment_dept_id !== '' ? String(c.recruitment_dept_id) : '');
+            fd.append('recruitment_owner_user_id', c.recruitment_owner_user_id != null && c.recruitment_owner_user_id !== '' ? String(c.recruitment_owner_user_id) : '');
         };
 
         const visitAttachmentUrls = ref({});
@@ -776,7 +826,8 @@ createApp({
             handoffEntry, handoffStatusLabel, resolveHandoffStatus, handoffBadge,
             clientOpportunities, openOppDrawer, closeOppDrawer,
             fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, displayAmount, displayWinRate, oppStageBadgeClass, hasPrimaryContact,
-            deliveryDeptDisplay, deliveryOwnerDisplay,
+            salesDeptDisplay, salesOwnerDisplay,
+            deliveryDeptDisplay, deliveryOwnerDisplay, recruitmentDeptDisplay, recruitmentOwnerDisplay,
             openDetail, updateClient, confirmDelete, executeDelete,
             submitVisit, exportCSV, isImage, viewFull, visitAttachmentUrls
         };

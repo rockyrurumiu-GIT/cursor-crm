@@ -241,3 +241,90 @@ def test_get_rms_page_ok_with_delivery_default(client_rbac, admin_auth):
     health = client_rbac.get("/api/rms/health", cookies=login.cookies)
     assert health.status_code == 200
     assert health.json()["phase"] == 2
+
+
+def test_seed_rbac_keeps_extra_permissions_on_builtin_role(client_rbac, admin_auth):
+    """Restart seed must not wipe manually granted RMS perms on DELIVERY."""
+    import main as crm_main
+    from auth.permissions import ROLE_DELIVERY
+
+    with crm_main.engine.connect() as conn:
+        rid = int(
+            conn.execute(
+                text("SELECT id FROM sys_role WHERE code = :c"),
+                {"c": ROLE_DELIVERY},
+            ).fetchone()[0]
+        )
+        pid = conn.execute(
+            text("SELECT id FROM sys_permission WHERE code = 'rms.candidates.read'"),
+        ).fetchone()
+        assert pid is not None
+        conn.execute(
+            text(
+                "INSERT OR IGNORE INTO sys_role_permission (role_id, permission_id) "
+                "VALUES (:rid, :pid)"
+            ),
+            {"rid": rid, "pid": int(pid[0])},
+        )
+        conn.commit()
+
+    db = crm_main.SessionLocal()
+    try:
+        auth_svc.seed_rbac_data(db, admin_username="admin", admin_password="unused")
+        db.commit()
+        perms = auth_svc._role_permission_codes(db, rid)
+    finally:
+        db.close()
+    assert "rms.candidates.read" in perms
+
+
+def test_custom_role_rms_permissions_persist_after_save(client_rbac, admin_auth):
+    """RMS 权限码须能写入自定义角色；保存前自动补齐 sys_permission 行。"""
+    user, pwd = admin_auth
+    headers = {**auth_header(user, pwd), "Content-Type": "application/json"}
+    suffix = os.getpid()
+    role_name = f"招聘测试_{suffix}"
+    created = client_rbac.post(
+        "/api/system/roles",
+        headers=headers,
+        json={"name": role_name, "description": "RMS 权限保存测试"},
+    )
+    assert created.status_code == 200, created.text
+    role_id = created.json()["id"]
+
+    rms_codes = sorted(RMS_PERMISSION_CODES)
+    saved = client_rbac.put(
+        f"/api/system/roles/{role_id}/permissions",
+        headers=headers,
+        json={"permission_codes": rms_codes},
+    )
+    assert saved.status_code == 200, saved.text
+
+    matrix = client_rbac.get(
+        f"/api/system/permissions/matrix?role_id={role_id}",
+        headers=headers,
+    )
+    assert matrix.status_code == 200
+    granted = set()
+    for mod in matrix.json().get("modules") or []:
+        for row in mod.get("rows") or []:
+            granted.update(row.get("codes") or [])
+    assert RMS_PERMISSION_CODES <= granted
+
+
+def test_matrix_selection_maps_rms_rows_to_codes():
+    from auth.permission_catalog import _MATRIX_ROWS, permission_codes_from_matrix_selection
+
+    selected = {}
+    for row in _MATRIX_ROWS:
+        if row.get("module") != "rms":
+            continue
+        selected[row["label"]] = {
+            "read": bool(row.get("read")),
+            "write": bool(row.get("write")),
+            "delete": bool(row.get("delete")),
+            "import_export": bool(row.get("import_export")),
+            "approve": bool(row.get("approve")),
+        }
+    codes = set(permission_codes_from_matrix_selection(selected))
+    assert RMS_PERMISSION_CODES <= codes

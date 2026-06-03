@@ -873,6 +873,7 @@ def seed_default_dashboards(
     """幂等预置默认看板。每个看板独立判断是否已存在，不覆盖已有看板。"""
     _seed_business_overview(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _seed_roster_margin(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _sync_roster_margin_preset_layout(db, DashboardDashboard, DashboardTab, DashboardWidget)
 
 
 def _seed_widgets(db, DashboardTab, DashboardWidget, dashboard_id, tab_name, widgets_spec, now):
@@ -933,7 +934,7 @@ def _seed_business_overview(db, DashboardDashboard, DashboardTab, DashboardWidge
             "widget_type": "rich_text",
             "source_key": "",
             "config": {"content": welcome_text},
-            "x": 0, "y": 0, "w": 6, "h": 5,
+            "x": 0, "y": 0, "w": 6, "h": 6,
         },
         {
             "title": "商机阶段分布",
@@ -944,7 +945,7 @@ def _seed_business_overview(db, DashboardDashboard, DashboardTab, DashboardWidge
                 "color": "blue", "sort": "value_desc",
                 "show_legend": True, "show_value_center": True, "hide_empty": True,
             },
-            "x": 6, "y": 0, "w": 6, "h": 5,
+            "x": 6, "y": 0, "w": 6, "h": 6,
         },
         {
             "title": "各阶段商机金额",
@@ -953,9 +954,9 @@ def _seed_business_overview(db, DashboardDashboard, DashboardTab, DashboardWidge
             "config": {
                 "metric": "sum", "field": "amount", "group_by": "stage", "limit": 8,
                 "color": "blue", "sort": "value_desc",
-                "data_labels": True, "hide_empty": True, "prefix": "¥",
+                "data_labels": False, "hide_empty": True, "prefix": "¥",
             },
-            "x": 0, "y": 5, "w": 6, "h": 5,
+            "x": 0, "y": 5, "w": 6, "h": 6,
         },
         {
             "title": "商机创建趋势",
@@ -965,11 +966,220 @@ def _seed_business_overview(db, DashboardDashboard, DashboardTab, DashboardWidge
                 "metric": "count", "group_by": "created_at", "date_group": "month",
                 "limit": 12, "color": "blue",
             },
-            "x": 6, "y": 5, "w": 6, "h": 5,
+            "x": 6, "y": 5, "w": 6, "h": 6,
         },
     ]
 
     _seed_widgets(db, DashboardTab, DashboardWidget, d.id, "总览", widgets_spec, now)
+    db.commit()
+
+
+_ROSTER_MARGIN_TAB_NAME = "毛利总览"
+
+
+def _roster_margin_sample_client_id(db: Session):
+    row = db.execute(text(
+        "SELECT client_id FROM roster_entries WHERE client_id IS NOT NULL AND client_id > 0 "
+        "AND (employment_status IS NULL OR employment_status = '' OR employment_status NOT LIKE '%离职%') "
+        "GROUP BY client_id ORDER BY COUNT(*) DESC LIMIT 1"
+    )).first()
+    return row[0] if row else None
+
+
+def _roster_margin_preset_specs(sample_client_id) -> list:
+    """Fresh dict/list per call — do not hoist to a module-level mutable spec list."""
+    active_filter = [{"field": "employment_status", "op": "not_contains", "value": "离职"}]
+    client_config = {"client_id": sample_client_id} if sample_client_id else {}
+    return [
+        {
+            "title": "全公司毛利概览",
+            "widget_type": "roster_summary",
+            "source_key": "roster_entries",
+            "config": {},
+            "x": 0, "y": 0, "w": 6, "h": 6,
+        },
+        {
+            "title": "单客户毛利概览",
+            "widget_type": "roster_summary",
+            "source_key": "roster_entries",
+            "config": dict(client_config),
+            "x": 6, "y": 0, "w": 6, "h": 6,
+        },
+        {
+            "title": "各客户月报价(含税)",
+            "widget_type": "bar",
+            "source_key": "roster_entries",
+            "config": {
+                "metric": "sum", "field": "monthly_quote_tax", "group_by": "client",
+                "limit": 12, "color": "blue", "sort": "value_desc",
+                "data_labels": False, "hide_empty": True, "prefix": "¥",
+                "filters": list(active_filter),
+            },
+            "x": 0, "y": 6, "w": 6, "h": 7,
+        },
+        {
+            "title": "各客户 GM$",
+            "widget_type": "bar",
+            "source_key": "roster_entries",
+            "config": {
+                "metric": "sum", "field": "gms", "group_by": "client",
+                "limit": 12, "color": "green", "sort": "value_desc",
+                "data_labels": False, "hide_empty": True, "prefix": "¥",
+                "filters": list(active_filter),
+            },
+            "x": 6, "y": 6, "w": 6, "h": 7,
+        },
+    ]
+
+
+def _find_roster_margin_tab(db: Session, dashboard_id: int, DashboardTab):
+    tab = (
+        db.query(DashboardTab)
+        .filter(DashboardTab.dashboard_id == dashboard_id, DashboardTab.name == _ROSTER_MARGIN_TAB_NAME)
+        .first()
+    )
+    if tab:
+        return tab
+    return (
+        db.query(DashboardTab)
+        .filter(DashboardTab.dashboard_id == dashboard_id)
+        .order_by(DashboardTab.sort_order, DashboardTab.id)
+        .first()
+    )
+
+
+def _spec_rect(spec: dict) -> tuple:
+    x = int(spec["x"])
+    y = int(spec["y"])
+    width = max(1, int(spec["w"]))
+    height = max(1, int(spec["h"]))
+    return (x, y, width, height)
+
+
+def _widget_rect(w) -> tuple:
+    x = int(w.x or 0)
+    y = int(w.y or 0)
+    width = max(1, int(w.w or 1))
+    height = max(1, int(w.h or 1))
+    return (x, y, width, height)
+
+
+def _rects_overlap(a: tuple, b: tuple) -> bool:
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
+    return ax < bx + bw and bx < ax + aw and ay < by + bh and by < ay + ah
+
+
+def _preset_rects_from_specs(specs: list) -> list:
+    return [_spec_rect(s) for s in specs]
+
+
+def _max_preset_bottom(specs: list) -> int:
+    return max(y + h for _x, y, _w, h in (_spec_rect(s) for s in specs))
+
+
+def _widget_overlaps_any_preset_rect(w, preset_rects: list) -> bool:
+    wr = _widget_rect(w)
+    return any(_rects_overlap(wr, pr) for pr in preset_rects)
+
+
+def _match_preset_widget(widgets: list, spec: dict):
+    for w in widgets:
+        if (
+            w.title == spec["title"]
+            and w.widget_type == spec["widget_type"]
+            and (w.source_key or "") == spec["source_key"]
+        ):
+            return w
+    return None
+
+
+def _sync_roster_margin_preset_layout(
+    db: Session,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+) -> None:
+    """Sync layout for existing system seed dashboard only; preserve user config semantics."""
+    d = (
+        db.query(DashboardDashboard)
+        .filter(
+            DashboardDashboard.name == _ROSTER_SEED_NAME,
+            DashboardDashboard.created_by == "system",
+        )
+        .first()
+    )
+    if not d:
+        return
+
+    tab = _find_roster_margin_tab(db, d.id, DashboardTab)
+    if not tab:
+        return
+
+    sample_client_id = _roster_margin_sample_client_id(db)
+    specs = _roster_margin_preset_specs(sample_client_id)
+    now = _now()
+    widgets = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).all()
+    next_sort = max((w.sort_order for w in widgets), default=-1)
+
+    managed_preset_ids = set()
+
+    for spec in specs:
+        w = _match_preset_widget(widgets, spec)
+        if w:
+            w.x = spec["x"]
+            w.y = spec["y"]
+            w.w = spec["w"]
+            w.h = spec["h"]
+            w.updated_at = now
+            if spec["widget_type"] == "bar":
+                cfg = _parse_json(w.config_json, {})
+                cfg["data_labels"] = False
+                w.config_json = _dump_json(cfg)
+        else:
+            next_sort += 1
+            w = DashboardWidget(
+                tab_id=tab.id,
+                title=spec["title"],
+                widget_type=spec["widget_type"],
+                source_key=spec["source_key"],
+                config_json=_dump_json(spec["config"]),
+                x=spec["x"],
+                y=spec["y"],
+                w=spec["w"],
+                h=spec["h"],
+                sort_order=next_sort,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(w)
+            db.flush()
+            widgets.append(w)
+        managed_preset_ids.add(w.id)
+
+    preset_rects = _preset_rects_from_specs(specs)
+    base_y = _max_preset_bottom(specs)
+    all_widgets = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).all()
+
+    to_relocate = []
+    for w in all_widgets:
+        if w.id in managed_preset_ids:
+            continue
+        _x, wy, _ww, _wh = _widget_rect(w)
+        if wy >= base_y and not _widget_overlaps_any_preset_rect(w, preset_rects):
+            continue
+        if _widget_overlaps_any_preset_rect(w, preset_rects):
+            to_relocate.append(w)
+
+    to_relocate.sort(key=lambda w: (int(w.y or 0), int(w.x or 0), w.id))
+    offset = 0
+    for w in to_relocate:
+        _x, _y, _ww, height = _widget_rect(w)
+        w.x = 0
+        w.y = base_y + offset
+        w.updated_at = now
+        offset += height
+
     db.commit()
 
 
@@ -995,55 +1205,8 @@ def _seed_roster_margin(db, DashboardDashboard, DashboardTab, DashboardWidget) -
     db.add(d)
     db.flush()
 
-    # 取一个有花名册数据的客户作为单客户示例（用户可在卡片下拉切换或复制对比）。
-    row = db.execute(text(
-        "SELECT client_id FROM roster_entries WHERE client_id IS NOT NULL AND client_id > 0 "
-        "AND (employment_status IS NULL OR employment_status = '' OR employment_status NOT LIKE '%离职%') "
-        "GROUP BY client_id ORDER BY COUNT(*) DESC LIMIT 1"
-    )).first()
-    sample_client_id = row[0] if row else None
+    sample_client_id = _roster_margin_sample_client_id(db)
+    widgets_spec = _roster_margin_preset_specs(sample_client_id)
 
-    active_filter = [{"field": "employment_status", "op": "not_contains", "value": "离职"}]
-    widgets_spec = [
-        {
-            "title": "全公司毛利概览",
-            "widget_type": "roster_summary",
-            "source_key": "roster_entries",
-            "config": {},
-            "x": 0, "y": 0, "w": 4, "h": 5,
-        },
-        {
-            "title": "单客户毛利概览",
-            "widget_type": "roster_summary",
-            "source_key": "roster_entries",
-            "config": {"client_id": sample_client_id} if sample_client_id else {},
-            "x": 4, "y": 0, "w": 4, "h": 5,
-        },
-        {
-            "title": "各客户月报价(含税)",
-            "widget_type": "bar",
-            "source_key": "roster_entries",
-            "config": {
-                "metric": "sum", "field": "monthly_quote_tax", "group_by": "client",
-                "limit": 12, "color": "blue", "sort": "value_desc",
-                "data_labels": True, "hide_empty": True, "prefix": "¥",
-                "filters": active_filter,
-            },
-            "x": 0, "y": 5, "w": 6, "h": 5,
-        },
-        {
-            "title": "各客户 GM$",
-            "widget_type": "bar",
-            "source_key": "roster_entries",
-            "config": {
-                "metric": "sum", "field": "gms", "group_by": "client",
-                "limit": 12, "color": "green", "sort": "value_desc",
-                "data_labels": True, "hide_empty": True, "prefix": "¥",
-                "filters": active_filter,
-            },
-            "x": 6, "y": 5, "w": 6, "h": 5,
-        },
-    ]
-
-    _seed_widgets(db, DashboardTab, DashboardWidget, d.id, "毛利总览", widgets_spec, now)
+    _seed_widgets(db, DashboardTab, DashboardWidget, d.id, _ROSTER_MARGIN_TAB_NAME, widgets_spec, now)
     db.commit()

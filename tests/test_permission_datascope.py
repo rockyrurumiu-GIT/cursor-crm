@@ -8,8 +8,15 @@ import pytest
 from sqlalchemy import text
 from starlette.testclient import TestClient
 
-from auth.data_scope import get_effective_data_scope, merge_scope_types
-from auth.data_scope_catalog import RESOURCE_CRM_CLIENT, SCOPE_ALL, SCOPE_ASSIGNED, SCOPE_NONE
+from auth.data_scope import apply_client_scope, get_effective_data_scope, merge_scope_types
+from auth.data_scope_catalog import (
+    RESOURCE_CRM_CLIENT,
+    SCOPE_ALL,
+    SCOPE_ASSIGNED,
+    SCOPE_DEPT,
+    SCOPE_NONE,
+)
+from auth.service import AuthContext
 from tests.helpers import auth_header
 
 
@@ -233,3 +240,110 @@ def test_get_effective_data_scope_super_all():
 
     ctx = AuthContext(username="admin", is_super=True)
     assert get_effective_data_scope(ctx, RESOURCE_CRM_CLIENT, "read") == SCOPE_ALL
+
+
+def test_crm_client_dept_scope_matches_any_role_dept_column(client_rbac):
+    """crm.client dept scope: owner / delivery / recruitment dept columns are OR-matched."""
+    import main as crm_main
+    from sqlalchemy.orm import sessionmaker
+
+    suffix = os.getpid()
+    other_dept = 970000 + (suffix % 1000)
+    match_dept = other_dept + 1
+    engine = crm_main.engine
+    now = "2026-06-03T00:00:00Z"
+
+    with engine.begin() as conn:
+        for did, name in ((other_dept, f"其他部门_{suffix}"), (match_dept, f"匹配部门_{suffix}")):
+            conn.execute(
+                text(
+                    "INSERT OR IGNORE INTO sys_dept "
+                    "(id, name, code, parent_id, path, dept_type, status, created_at, updated_at) "
+                    "VALUES (:id, :name, :code, NULL, :path, 'internal', 'active', :at, :at)"
+                ),
+                {"id": did, "name": name, "code": f"D{did}", "path": f"/{did}/", "at": now},
+            )
+
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    Client = crm_main.Client
+    try:
+        ctx = AuthContext(
+            username="scope_tester",
+            user_id=1,
+            permissions={"crm.clients.read"},
+            dept_ids=[match_dept],
+            primary_dept_id=match_dept,
+            role_data_scopes={(RESOURCE_CRM_CLIENT, "read"): SCOPE_DEPT},
+        )
+
+        def visible_ids():
+            return {
+                int(r[0])
+                for r in apply_client_scope(
+                    db.query(Client.id),
+                    db,
+                    ctx,
+                    RESOURCE_CRM_CLIENT,
+                    "read",
+                    Client,
+                ).all()
+            }
+
+        c_delivery = Client(
+            name=f"交付部门可见_{suffix}",
+            industry="IT",
+            owner="admin",
+            scale="100",
+            phase="初步接触",
+            description="d",
+            owner_dept_id=other_dept,
+            delivery_dept_id=match_dept,
+        )
+        c_recruitment = Client(
+            name=f"招聘部门可见_{suffix}",
+            industry="IT",
+            owner="admin",
+            scale="100",
+            phase="初步接触",
+            description="d",
+            owner_dept_id=other_dept,
+            recruitment_dept_id=match_dept,
+        )
+        c_hidden = Client(
+            name=f"三部门均不可见_{suffix}",
+            industry="IT",
+            owner="admin",
+            scale="100",
+            phase="初步接触",
+            description="d",
+            owner_dept_id=other_dept,
+            delivery_dept_id=other_dept,
+            recruitment_dept_id=other_dept,
+        )
+        db.add_all([c_delivery, c_recruitment, c_hidden])
+        db.commit()
+
+        ids = visible_ids()
+        assert c_delivery.id in ids
+        assert c_recruitment.id in ids
+        assert c_hidden.id not in ids
+    finally:
+        db.close()
+
+
+def test_migration_006_recruitment_columns(client):
+    import main as crm_main
+
+    with crm_main.engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT migration_id FROM schema_migrations WHERE migration_id = :id"),
+            {"id": "006_client_recruitment_owner.sql"},
+        ).fetchone()
+        cols = {
+            r[1]
+            for r in conn.execute(text("PRAGMA table_info(clients)")).fetchall()
+        }
+    assert row is not None
+    assert "recruitment_owner_user_id" in cols
+    assert "recruitment_dept_id" in cols

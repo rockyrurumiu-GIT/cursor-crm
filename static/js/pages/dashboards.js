@@ -24,7 +24,7 @@
   // widget `color` setting and always uses this multi-hue palette — categorical charts
   // should be multi-colored. `color` only affects bar / line / number accent. This is a
   // design choice, not a bug.
-  const CATEGORICAL = ["#7B96B8", "#88A992", "#D6A461", "#CD9180", "#9389AE", "#9AA0A6", "#A9B7C9", "#C2B59B"];
+  const CATEGORICAL = ["#B4C4D8", "#C2D4C8", "#E8D4B0", "#E4C4BC", "#C9C0DC", "#D0D3D8", "#C5D0DE", "#DDD4C4"];
 
   function themeOf(color) {
     return COLOR_THEMES[color] || COLOR_THEMES[DEFAULT_THEME];
@@ -34,6 +34,97 @@
     const out = [];
     for (let i = 0; i < n; i++) out.push(CATEGORICAL[i % CATEGORICAL.length]);
     return out;
+  }
+
+  function fmtNum(v) {
+    if (v == null) return "0";
+    const n = Number(v);
+    if (Number.isInteger(n)) return n.toLocaleString();
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+  function hexA(hex, a) {
+    const m = hex.replace("#", "");
+    const r = parseInt(m.substring(0, 2), 16), g = parseInt(m.substring(2, 4), 16), b = parseInt(m.substring(4, 6), 16);
+    return "rgba(" + r + "," + g + "," + b + "," + a + ")";
+  }
+  function dataLabel(prefix) {
+    return function (v) {
+      if (v == null || v === "" || Number(v) === 0) return "";
+      return prefix + fmtNum(v);
+    };
+  }
+
+  function chartResponsive() {
+    return { responsive: true, maintainAspectRatio: false };
+  }
+  function whiteTooltip(labelFn) {
+    return {
+      backgroundColor: "#ffffff",
+      titleColor: "#1f2328",
+      bodyColor: "#6b7280",
+      borderColor: "#e6e8eb",
+      borderWidth: 1,
+      padding: 12,
+      usePointStyle: true,
+      displayColors: true,
+      titleFont: { size: 12, weight: "600" },
+      bodyFont: { size: 11 },
+      boxPadding: 4,
+      callbacks: { label: labelFn },
+    };
+  }
+  function cartesianScales(xGrid) {
+    return {
+      x: { grid: xGrid, border: { display: false }, ticks: { font: { size: 10 }, color: "#b0b5bc", maxRotation: 0 } },
+      y: { beginAtZero: true, grid: { color: "#f4f5f7" }, border: { display: false }, ticks: { font: { size: 10 }, color: "#b0b5bc", padding: 6 } },
+    };
+  }
+  function doughnutChartOptions(cfg, prefix, totalText) {
+    const r = chartResponsive();
+    return {
+      responsive: r.responsive,
+      maintainAspectRatio: r.maintainAspectRatio,
+      cutout: "74%",
+      plugins: {
+        legend: { display: false },
+        datalabels: { display: false },
+        centerTotal: { display: cfg.show_value_center !== false, text: totalText },
+        tooltip: whiteTooltip(function (c) { return c.label + ": " + prefix + fmtNum(c.parsed); }),
+      },
+    };
+  }
+  function barChartOptions(cfg, prefix) {
+    const r = chartResponsive();
+    return {
+      responsive: r.responsive,
+      maintainAspectRatio: r.maintainAspectRatio,
+      layout: { padding: { top: cfg.data_labels ? 18 : 6 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: cfg.data_labels
+          ? { display: true, anchor: "end", align: "end", clip: false, color: "#98a2b3", font: { size: 10, weight: 500 }, formatter: dataLabel(prefix) }
+          : { display: false },
+        tooltip: whiteTooltip(function (c) { return prefix + fmtNum(c.parsed.y); }),
+      },
+      scales: cartesianScales({ display: false }),
+    };
+  }
+  function lineChartOptions(cfg, prefix) {
+    const r = chartResponsive();
+    return {
+      responsive: r.responsive,
+      maintainAspectRatio: r.maintainAspectRatio,
+      interaction: { mode: "index", intersect: false },
+      elements: { point: { hoverRadius: 6, hitRadius: 12 } },
+      plugins: {
+        legend: { display: false },
+        datalabels: cfg.data_labels
+          ? { display: true, align: "top", color: "#98a2b3", font: { size: 10 }, formatter: dataLabel(prefix) }
+          : { display: false },
+        tooltip: whiteTooltip(function (c) { return prefix + fmtNum(c.parsed.y); }),
+      },
+      scales: cartesianScales({ color: "#f5f6f8" }),
+    };
   }
 
   // Register datalabels plugin globally (disabled by default per-chart).
@@ -56,9 +147,9 @@
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = "#1f2328";
-      ctx.font = "600 26px system-ui, sans-serif";
+      ctx.font = "600 22px system-ui, sans-serif";
       ctx.fillText(opt.text, x, y - 7);
-      ctx.fillStyle = "#98a2b3";
+      ctx.fillStyle = "#a8b0bd";
       ctx.font = "400 11px system-ui, sans-serif";
       ctx.fillText("总计", x, y + 15);
       ctx.restore();
@@ -273,16 +364,8 @@
           chartInstances[w.id] = new Chart(canvas, {
             type: "doughnut",
             // Pie ignores cfg.color by design (CATEGORICAL note above).
-            data: { labels: labels, datasets: [{ data: values, backgroundColor: paletteFor(cfg.color, labels.length), borderColor: "#fff", borderWidth: 1.5 }] },
-            options: {
-              responsive: true, maintainAspectRatio: false, cutout: "72%",
-              plugins: {
-                legend: { display: false },
-                datalabels: { display: false },
-                centerTotal: { display: cfg.show_value_center !== false, text: prefix + fmtNum(data.total) },
-                tooltip: { callbacks: { label: function (c) { return c.label + ": " + prefix + fmtNum(c.parsed); } } },
-              },
-            },
+            data: { labels: labels, datasets: [{ data: values, backgroundColor: paletteFor(cfg.color, labels.length), borderColor: "#fff", borderWidth: 2 }] },
+            options: doughnutChartOptions(cfg, prefix, prefix + fmtNum(data.total)),
           });
           return;
         }
@@ -290,68 +373,24 @@
         if (w.widget_type === "bar") {
           chartInstances[w.id] = new Chart(canvas, {
             type: "bar",
-            data: { labels: labels, datasets: [{ label: w.title, data: values, backgroundColor: accent, borderRadius: 6, categoryPercentage: 0.7, barPercentage: 0.9 }] },
-            options: {
-              responsive: true, maintainAspectRatio: false,
-              layout: { padding: { top: 18 } },
-              plugins: {
-                legend: { display: false },
-                datalabels: cfg.data_labels ? { display: true, anchor: "end", align: "end", clip: false, color: "#98a2b3", font: { size: 10, weight: 500 }, formatter: dataLabel(prefix) } : { display: false },
-                tooltip: { callbacks: { label: function (c) { return prefix + fmtNum(c.parsed.y); } } },
-              },
-              scales: {
-                x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11 }, color: "#9aa0a6" } },
-                y: { beginAtZero: true, grid: { color: "#f3f4f6" }, border: { display: false }, ticks: { font: { size: 11 }, color: "#9aa0a6" } },
-              },
-            },
+            data: { labels: labels, datasets: [{ label: w.title, data: values, backgroundColor: accent, borderRadius: 4, categoryPercentage: 0.65, barPercentage: 0.85 }] },
+            options: barChartOptions(cfg, prefix),
           });
           return;
         }
 
-        // line
         chartInstances[w.id] = new Chart(canvas, {
           type: "line",
           data: {
             labels: labels,
             datasets: [{
               label: w.title, data: values, borderColor: accent,
-              backgroundColor: hexA(accent, 0.08), fill: true, tension: 0.35,
-              pointRadius: 2, pointBackgroundColor: accent, borderWidth: 2,
+              backgroundColor: hexA(accent, 0.08), fill: true, tension: 0.25,
+              pointRadius: 0, pointBackgroundColor: accent, borderWidth: 2,
             }],
           },
-          options: {
-            responsive: true, maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              datalabels: cfg.data_labels ? { display: true, align: "top", color: "#98a2b3", font: { size: 10 }, formatter: dataLabel(prefix) } : { display: false },
-              tooltip: { callbacks: { label: function (c) { return prefix + fmtNum(c.parsed.y); } } },
-            },
-            scales: {
-              x: { grid: { color: "#f7f8fa" }, border: { display: false }, ticks: { font: { size: 11 }, color: "#9aa0a6" } },
-              y: { beginAtZero: true, grid: { color: "#f3f4f6" }, border: { display: false }, ticks: { font: { size: 11 }, color: "#9aa0a6" } },
-            },
-          },
+          options: lineChartOptions(cfg, prefix),
         });
-      }
-
-      // Datalabel formatter that hides null/empty values (fixes stray "-").
-      function dataLabel(prefix) {
-        return function (v) {
-          if (v == null || v === "" || Number(v) === 0) return "";
-          return prefix + fmtNum(v);
-        };
-      }
-
-      function fmtNum(v) {
-        if (v == null) return "0";
-        const n = Number(v);
-        if (Number.isInteger(n)) return n.toLocaleString();
-        return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-      }
-      function hexA(hex, a) {
-        const m = hex.replace("#", "");
-        const r = parseInt(m.substring(0, 2), 16), g = parseInt(m.substring(2, 4), 16), b = parseInt(m.substring(4, 6), 16);
-        return "rgba(" + r + "," + g + "," + b + "," + a + ")";
       }
 
       function loadWidgetData(widgets) {

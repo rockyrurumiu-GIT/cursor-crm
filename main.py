@@ -221,6 +221,8 @@ class Client(Base):
     assigned_user_id = Column(Integer, nullable=True, index=True)
     delivery_owner_user_id = Column(Integer, nullable=True, index=True)
     delivery_dept_id = Column(Integer, nullable=True, index=True)
+    recruitment_owner_user_id = Column(Integer, nullable=True, index=True)
+    recruitment_dept_id = Column(Integer, nullable=True, index=True)
     scale = Column(String)
     phase = Column(String)  # 初步接触, 方案/报价, 合同签订, 成交
     win_rate = Column(String, default="")
@@ -612,27 +614,40 @@ from schemas.delivery_handbook import HANDBOOK_ALLOWED_SUFFIXES, HANDBOOK_STATUS
 engine = create_engine(DB_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base.metadata.create_all(bind=engine)
-run_schema_migrations(engine)
-from models.rms import register_rms_models
 
-RMS_MODELS = register_rms_models(Base)
-auth_service.bootstrap_after_migrate(
-    engine,
-    admin_username=_effective_admin_username(),
-    admin_password=ADMIN_USER["password"],
-)
 
-from services.dashboards import seed_default_dashboards
+def _ensure_clients_schema_compat():
+    """补齐 clients 表新增字段，兼容旧库。"""
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(clients)").fetchall()}
+        except Exception:
+            return
+        add_cols = {
+            "win_rate": "TEXT DEFAULT ''",
+            "estimated_annual_amount": "TEXT DEFAULT ''",
+            "contact_name": "TEXT DEFAULT ''",
+            "contact_info": "TEXT DEFAULT ''",
+            "contact_title": "TEXT DEFAULT ''",
+            "contact_relationship": "TEXT DEFAULT ''",
+            "contact_acquisition_channel": "TEXT DEFAULT ''",
+            "contact_superior_contact": "TEXT DEFAULT ''",
+            "contact_description": "TEXT DEFAULT ''",
+            "city": "TEXT DEFAULT ''",
+            "owner_user_id": "INTEGER NULL",
+            "owner_dept_id": "INTEGER NULL",
+            "assigned_user_id": "INTEGER NULL",
+            "delivery_owner_user_id": "INTEGER NULL",
+            "delivery_dept_id": "INTEGER NULL",
+            "recruitment_owner_user_id": "INTEGER NULL",
+            "recruitment_dept_id": "INTEGER NULL",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE clients ADD COLUMN {col} {ddl}")
 
-_db_seed_dashboards = SessionLocal()
-try:
-    seed_default_dashboards(_db_seed_dashboards, DashboardDashboard, DashboardTab, DashboardWidget)
-    _db_seed_dashboards.commit()
-except Exception:
-    _db_seed_dashboards.rollback()
-    raise
-finally:
-    _db_seed_dashboards.close()
+
+_ensure_clients_schema_compat()
 
 
 def _ensure_interview_schema_compat():
@@ -770,35 +785,6 @@ def _ensure_pipeline_schema_compat():
             conn.exec_driver_sql("ALTER TABLE delivery_pipeline_entries ADD COLUMN recruiter_user_id INTEGER")
 
 
-def _ensure_clients_schema_compat():
-    """补齐 clients 表新增字段，兼容旧库。"""
-    with engine.begin() as conn:
-        try:
-            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(clients)").fetchall()}
-        except Exception:
-            return
-        add_cols = {
-            "win_rate": "TEXT DEFAULT ''",
-            "estimated_annual_amount": "TEXT DEFAULT ''",
-            "contact_name": "TEXT DEFAULT ''",
-            "contact_info": "TEXT DEFAULT ''",
-            "contact_title": "TEXT DEFAULT ''",
-            "contact_relationship": "TEXT DEFAULT ''",
-            "contact_acquisition_channel": "TEXT DEFAULT ''",
-            "contact_superior_contact": "TEXT DEFAULT ''",
-            "contact_description": "TEXT DEFAULT ''",
-            "city": "TEXT DEFAULT ''",
-            "owner_user_id": "INTEGER NULL",
-            "owner_dept_id": "INTEGER NULL",
-            "assigned_user_id": "INTEGER NULL",
-            "delivery_owner_user_id": "INTEGER NULL",
-            "delivery_dept_id": "INTEGER NULL",
-        }
-        for col, ddl in add_cols.items():
-            if col not in existing:
-                conn.exec_driver_sql(f"ALTER TABLE clients ADD COLUMN {col} {ddl}")
-
-
 def _ensure_contacts_schema_compat():
     """补齐 contacts 表新增字段，兼容旧库。"""
     with engine.begin() as conn:
@@ -871,6 +857,28 @@ _ensure_pipeline_schema_compat()
 _ensure_clients_schema_compat()
 _ensure_contacts_schema_compat()
 _ensure_visits_schema_compat()
+
+run_schema_migrations(engine)
+from models.rms import register_rms_models
+
+RMS_MODELS = register_rms_models(Base)
+auth_service.bootstrap_after_migrate(
+    engine,
+    admin_username=_effective_admin_username(),
+    admin_password=ADMIN_USER["password"],
+)
+
+from services.dashboards import seed_default_dashboards
+
+_db_seed_dashboards = SessionLocal()
+try:
+    seed_default_dashboards(_db_seed_dashboards, DashboardDashboard, DashboardTab, DashboardWidget)
+    _db_seed_dashboards.commit()
+except Exception:
+    _db_seed_dashboards.rollback()
+    raise
+finally:
+    _db_seed_dashboards.close()
 
 from services.gm_insurance import ensure_social_insurance_schema, seed_social_insurance_locations
 

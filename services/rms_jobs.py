@@ -87,6 +87,12 @@ def create_job(
     if not client:
         raise HTTPException(status_code=404, detail="客户不存在")
 
+    sales_owner_user_id = data.get("sales_owner_user_id")
+    if sales_owner_user_id is not None:
+        sales_owner_user_id = int(sales_owner_user_id)
+        _ensure_user_exists(db, sales_owner_user_id)
+        client.owner_user_id = sales_owner_user_id
+
     existing_count = db.query(RmsJob).filter(RmsJob.client_id == client_id).count()
     now = _utc_now_str()
 

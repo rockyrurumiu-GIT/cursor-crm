@@ -13,12 +13,27 @@
             <label class="block text-sm font-medium mb-1">行业</label>
             <input name="industry" required class="w-full p-2 border rounded">
         </div>
-        <div>
-            <label class="block text-sm font-medium mb-1">销售负责人</label>
-            <input name="owner" required class="w-full p-2 border rounded">
+        <div class="border-t border-gray-100 pt-4 mt-2">
+            <p class="text-sm font-bold text-gray-800 mb-3">销售归属</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">销售部门</label>
+                    <select name="owner_dept_id" id="sales-dept-select" class="crm-form-control w-full">
+                        <option value="">未指定</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">新建时默认当前登录人所属部门</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">销售主责</label>
+                    <select name="owner_user_id" id="sales-owner-select" class="crm-form-control w-full">
+                        <option value="">未指定</option>
+                    </select>
+                </div>
+            </div>
+            <input type="hidden" name="owner" id="owner-field" value="">
         </div>
         <div class="border-t border-gray-100 pt-4 mt-2">
-            <p class="text-sm font-medium text-gray-700 mb-3">交付归属</p>
+            <p class="text-sm font-bold text-gray-800 mb-3">交付归属</p>
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium mb-1">交付部门</label>
@@ -28,8 +43,26 @@
                     <p class="text-xs text-gray-500 mt-1">用于交付模块按部门过滤可见客户</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">交付负责人</label>
+                    <label class="block text-sm font-medium mb-1">交付主责</label>
                     <select name="delivery_owner_user_id" id="delivery-owner-select" class="crm-form-control w-full">
+                        <option value="">未指定</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="border-t border-gray-100 pt-4 mt-2">
+            <p class="text-sm font-bold text-gray-800 mb-3">招聘归属</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">招聘部门</label>
+                    <select name="recruitment_dept_id" id="recruitment-dept-select" class="crm-form-control w-full">
+                        <option value="">未指定</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">用于招聘角色按部门过滤可见客户（与销售/交付部门并列生效）</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">招聘主责</label>
+                    <select name="recruitment_owner_user_id" id="recruitment-owner-select" class="crm-form-control w-full">
                         <option value="">未指定</option>
                     </select>
                 </div>
@@ -124,8 +157,14 @@
     var amountDisplay = document.getElementById('estimated-annual-amount-display');
     var clientId = {% if is_edit %}{{ client_id }}{% else %}null{% endif %};
     var submitBtn = form.querySelector('button[type="submit"]');
-    var deptSelect = document.getElementById('delivery-dept-select');
-    var ownerSelect = document.getElementById('delivery-owner-select');
+    var salesDeptSelect = document.getElementById('sales-dept-select');
+    var salesOwnerSelect = document.getElementById('sales-owner-select');
+    var ownerField = document.getElementById('owner-field');
+    var deliveryDeptSelect = document.getElementById('delivery-dept-select');
+    var deliveryOwnerSelect = document.getElementById('delivery-owner-select');
+    var recruitmentDeptSelect = document.getElementById('recruitment-dept-select');
+    var recruitmentOwnerSelect = document.getElementById('recruitment-owner-select');
+    var assignUsers = [];
     var assignOptionsLoaded = false;
 
     function fillSelect(selectEl, items, valueKey, labelFn, selectedValue) {
@@ -139,18 +178,39 @@
         selectEl.innerHTML = html;
     }
 
-    async function loadAssignOptions(selectedDeptId, selectedOwnerId) {
-        if (assignOptionsLoaded && !selectedDeptId && !selectedOwnerId) return;
+    function syncOwnerFieldFromSalesUser() {
+        if (!ownerField || !salesOwnerSelect) return;
+        var id = salesOwnerSelect.value;
+        if (!id) return;
+        var u = assignUsers.find(function (x) { return String(x.id) === String(id); });
+        if (u) ownerField.value = (u.display_name || u.username || '').trim();
+    }
+
+    async function loadAssignOptions(salesDeptId, salesOwnerId, deliveryDeptId, deliveryOwnerId, recruitmentDeptId, recruitmentOwnerId) {
+        if (assignOptionsLoaded && salesDeptId == null && salesOwnerId == null
+            && deliveryDeptId == null && deliveryOwnerId == null
+            && recruitmentDeptId == null && recruitmentOwnerId == null) return;
         var r = await fetch('/api/clients/assign-options', { headers: window.crmAuthHeader() });
         if (!r.ok) throw new Error('加载归属选项失败');
         var data = await r.json();
-        fillSelect(deptSelect, data.depts || [], 'id', function (d) {
-            return d.name + ' (' + d.code + ')';
-        }, selectedDeptId);
-        fillSelect(ownerSelect, data.users || [], 'id', function (u) {
-            return (u.display_name || u.username) + ' · ' + u.username;
-        }, selectedOwnerId);
+        assignUsers = data.users || [];
+        var deptLabel = function (d) { return String(d.name || d.code || '').trim(); };
+        var userLabel = function (u) { return (u.display_name || u.username) + ' · ' + u.username; };
+        var defs = data.defaults || {};
+        var sd = salesDeptId != null ? salesDeptId : defs.owner_dept_id;
+        var su = salesOwnerId != null ? salesOwnerId : defs.owner_user_id;
+        fillSelect(salesDeptSelect, data.depts || [], 'id', deptLabel, sd);
+        fillSelect(salesOwnerSelect, assignUsers, 'id', userLabel, su);
+        fillSelect(deliveryDeptSelect, data.depts || [], 'id', deptLabel, deliveryDeptId);
+        fillSelect(deliveryOwnerSelect, assignUsers, 'id', userLabel, deliveryOwnerId);
+        fillSelect(recruitmentDeptSelect, data.depts || [], 'id', deptLabel, recruitmentDeptId);
+        fillSelect(recruitmentOwnerSelect, assignUsers, 'id', userLabel, recruitmentOwnerId);
+        syncOwnerFieldFromSalesUser();
         assignOptionsLoaded = true;
+    }
+
+    if (salesOwnerSelect) {
+        salesOwnerSelect.addEventListener('change', syncOwnerFieldFromSalesUser);
     }
 
     function setEstimatedAmountDisplay(value) {
@@ -170,7 +230,7 @@
         if (!clientId) {
             setEstimatedAmountDisplay('');
             try {
-                await loadAssignOptions(null, null);
+                await loadAssignOptions(null, null, null, null, null, null);
             } catch (err) {
                 msg.textContent = err.message || '加载归属选项失败';
                 msg.classList.remove('hidden');
@@ -187,8 +247,16 @@
                 return;
             }
             var data = await r.json();
-            await loadAssignOptions(data.delivery_dept_id, data.delivery_owner_user_id);
-            ['name', 'industry', 'owner', 'scale', 'phase',
+            await loadAssignOptions(
+                data.owner_dept_id,
+                data.owner_user_id,
+                data.delivery_dept_id,
+                data.delivery_owner_user_id,
+                data.recruitment_dept_id,
+                data.recruitment_owner_user_id
+            );
+            if (ownerField) ownerField.value = data.owner || '';
+            ['name', 'industry', 'scale', 'phase',
              'contact_name', 'contact_info', 'contact_title', 'contact_relationship',
              'contact_acquisition_channel', 'contact_superior_contact', 'contact_description',
              'city', 'description', 'remarks'].forEach(function (key) {
@@ -204,6 +272,12 @@
     form.onsubmit = async function (e) {
         e.preventDefault();
         msg.classList.add('hidden');
+        syncOwnerFieldFromSalesUser();
+        if (ownerField && !ownerField.value.trim()) {
+            msg.textContent = '请选择销售主责';
+            msg.classList.remove('hidden');
+            return;
+        }
         var fd = new FormData(form);
         var h = window.crmAuthHeader();
         var url = clientId ? ('/api/clients/' + clientId) : '/api/clients';

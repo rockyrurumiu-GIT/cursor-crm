@@ -1,11 +1,234 @@
 {% extends "base.html" %}
 {% block title %}招聘 · ITO CRM{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    .rms-tab-active { background: #eef2ff; color: #1f2328; font-weight: 600; border-color: #d0d7de; }
+    .rms-table th { text-align: left; font-size: 0.75rem; color: #656d76; font-weight: 600; }
+    .rms-table td { font-size: 0.875rem; color: #24292f; vertical-align: top; }
+</style>
+{% endblock %}
 {% block content %}
-<div class="max-w-3xl mx-auto py-10 px-4">
+{% raw %}
+<div id="rms-app" class="max-w-6xl mx-auto py-8 px-4" v-cloak>
     <h1 class="text-2xl font-semibold text-[#1f2328] mb-2">招聘（RMS）</h1>
-    <p class="text-[#57606a] text-sm mb-6">Phase 2：API MVP 已接入。岗位、候选人、推荐记录与状态流转 API 已可用；完整前端页面将在后续阶段开放。</p>
-    <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-3 text-sm text-[#24292f]">
-        模块已接入 RBAC；具备 <code class="text-xs">rms.jobs.read</code> 即可访问本页。
+    <p class="text-[#57606a] text-sm mb-6">Phase 2.5：前端 MVP 已接入。支持岗位、候选人、推荐记录与状态流转；简历、AI、面试、Offer 与入职转花名册将在后续阶段开放。</p>
+
+    <div class="flex flex-wrap gap-2 mb-4 border-b border-[#d0d7de] pb-2">
+        <button type="button" data-rms-tab="jobs" @click="activeTab = 'jobs'"
+            :class="activeTab === 'jobs' ? 'rms-tab-active' : ''"
+            class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">岗位</button>
+        <button type="button" data-rms-tab="candidates" @click="activeTab = 'candidates'"
+            :class="activeTab === 'candidates' ? 'rms-tab-active' : ''"
+            class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">候选人</button>
+        <button type="button" data-rms-tab="applications" @click="activeTab = 'applications'"
+            :class="activeTab === 'applications' ? 'rms-tab-active' : ''"
+            class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">推荐</button>
+    </div>
+
+    <!-- Jobs -->
+    <section v-show="activeTab === 'jobs'">
+        <div class="flex justify-between items-center mb-3">
+            <h2 class="text-lg font-medium text-[#1f2328]">岗位</h2>
+            <button v-if="canWriteJobs" type="button" @click="openJobModal"
+                class="text-sm bg-[#0969da] text-white px-3 py-1.5 rounded-md hover:bg-[#0860ca]">新建岗位</button>
+        </div>
+        <div v-if="jobsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ jobsState.error }}</div>
+        <div v-else-if="jobsState.loading" class="text-sm text-[#57606a]">加载中…</div>
+        <div v-else-if="!jobsState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无岗位</div>
+        <div v-else class="overflow-x-auto rounded-lg border border-[#d0d7de]">
+            <table class="rms-table w-full">
+                <thead class="bg-[#f6f8fa] border-b border-[#d0d7de]">
+                    <tr>
+                        <th class="px-3 py-2">岗位名称</th>
+                        <th class="px-3 py-2">客户 ID</th>
+                        <th class="px-3 py-2">负责人</th>
+                        <th class="px-3 py-2">状态</th>
+                        <th class="px-3 py-2">人数</th>
+                        <th class="px-3 py-2">地点</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="j in jobsState.items" :key="j.id" class="border-b border-[#d0d7de] last:border-0">
+                        <td class="px-3 py-2">{{ j.title || '—' }}</td>
+                        <td class="px-3 py-2">{{ j.client_id }}</td>
+                        <td class="px-3 py-2">{{ j.owner_user_id }}</td>
+                        <td class="px-3 py-2">{{ j.status }}</td>
+                        <td class="px-3 py-2">{{ j.headcount }}</td>
+                        <td class="px-3 py-2">{{ j.location || '—' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Candidates -->
+    <section v-show="activeTab === 'candidates'">
+        <div class="flex justify-between items-center mb-3">
+            <h2 class="text-lg font-medium text-[#1f2328]">候选人</h2>
+            <button v-if="canWriteCandidates" type="button" @click="openCandidateModal"
+                class="text-sm bg-[#0969da] text-white px-3 py-1.5 rounded-md hover:bg-[#0860ca]">新建候选人</button>
+        </div>
+        <div v-if="candidatesState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ candidatesState.error }}</div>
+        <div v-else-if="candidatesState.loading" class="text-sm text-[#57606a]">加载中…</div>
+        <div v-else-if="!candidatesState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无候选人</div>
+        <div v-else class="overflow-x-auto rounded-lg border border-[#d0d7de]">
+            <table class="rms-table w-full">
+                <thead class="bg-[#f6f8fa] border-b border-[#d0d7de]">
+                    <tr>
+                        <th class="px-3 py-2">姓名</th>
+                        <th class="px-3 py-2">城市</th>
+                        <th class="px-3 py-2">当前公司</th>
+                        <th class="px-3 py-2">职位</th>
+                        <th class="px-3 py-2">电话</th>
+                        <th class="px-3 py-2">邮箱</th>
+                        <th class="px-3 py-2">微信</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="c in candidatesState.items" :key="c.id" class="border-b border-[#d0d7de] last:border-0">
+                        <td class="px-3 py-2">{{ c.name || '—' }}</td>
+                        <td class="px-3 py-2">{{ c.city || '—' }}</td>
+                        <td class="px-3 py-2">{{ c.current_company || '—' }}</td>
+                        <td class="px-3 py-2">{{ c.current_title || '—' }}</td>
+                        <td class="px-3 py-2">{{ c.phone || '—' }}</td>
+                        <td class="px-3 py-2">{{ c.email || '—' }}</td>
+                        <td class="px-3 py-2">{{ c.wechat || '—' }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Applications -->
+    <section v-show="activeTab === 'applications'">
+        <div class="flex justify-between items-center mb-3">
+            <h2 class="text-lg font-medium text-[#1f2328]">推荐记录</h2>
+            <button v-if="canWriteApplications" type="button" @click="openApplicationModal"
+                class="text-sm bg-[#0969da] text-white px-3 py-1.5 rounded-md hover:bg-[#0860ca]">新建推荐</button>
+        </div>
+        <div v-if="applicationsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ applicationsState.error }}</div>
+        <div v-else-if="applicationsState.loading" class="text-sm text-[#57606a]">加载中…</div>
+        <div v-else-if="!applicationsState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无推荐记录</div>
+        <div v-else class="overflow-x-auto rounded-lg border border-[#d0d7de]">
+            <table class="rms-table w-full">
+                <thead class="bg-[#f6f8fa] border-b border-[#d0d7de]">
+                    <tr>
+                        <th class="px-3 py-2">ID</th>
+                        <th class="px-3 py-2">岗位</th>
+                        <th class="px-3 py-2">候选人</th>
+                        <th class="px-3 py-2">状态</th>
+                        <th class="px-3 py-2">客户 ID</th>
+                        <th class="px-3 py-2">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="a in applicationsState.items" :key="a.id" class="border-b border-[#d0d7de] last:border-0">
+                        <td class="px-3 py-2">{{ a.id }}</td>
+                        <td class="px-3 py-2">{{ labelJob(a.job_id) }}</td>
+                        <td class="px-3 py-2">{{ labelCandidate(a.candidate_id) }}</td>
+                        <td class="px-3 py-2">{{ a.status }}</td>
+                        <td class="px-3 py-2">{{ a.client_id }}</td>
+                        <td class="px-3 py-2">
+                            <div class="flex flex-wrap gap-1">
+                                <button v-for="next in transitionsFor(a.status)" :key="next" type="button"
+                                    @click="transitionStatus(a.id, next)"
+                                    class="text-xs border border-[#d0d7de] px-2 py-0.5 rounded hover:bg-[#f6f8fa]">{{ next }}</button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Modals -->
+    <div v-if="modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="closeModal">
+        <div class="bg-white rounded-lg border border-[#d0d7de] shadow-lg w-full max-w-md p-5" @click.stop>
+            <h3 class="text-lg font-medium mb-4">{{ modalTitle }}</h3>
+            <p v-if="modalError" class="mb-3 text-sm text-red-700">{{ modalError }}</p>
+
+            <template v-if="modal === 'job'">
+                <p v-if="jobFormOptionsError" class="mb-2 text-xs text-amber-800">{{ jobFormOptionsError }}</p>
+                <div class="space-y-3 text-sm">
+                    <label class="block"><span class="text-[#57606a]">客户</span>
+                        <select v-model.number="jobForm.client_id" @change="onJobClientChange"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option :value="''" disabled>请选择客户</option>
+                            <option v-for="c in clientOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
+                        </select>
+                    </label>
+                    <label class="block"><span class="text-[#57606a]">岗位名称</span>
+                        <input v-model="jobForm.title" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">岗位 JD</span>
+                        <textarea v-model="jobForm.job_description" rows="4"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 resize-y"
+                            placeholder="岗位职责与要求"></textarea></label>
+                    <label class="block"><span class="text-[#57606a]">销售主责</span>
+                        <select v-model.number="jobForm.sales_owner_user_id"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option value="">未指定</option>
+                            <option v-for="u in userOptions" :key="'s'+u.id" :value="u.id">{{ userOptionLabel(u) }}</option>
+                        </select>
+                    </label>
+                    <label class="block"><span class="text-[#57606a]">招聘主责</span>
+                        <select v-model.number="jobForm.owner_user_id"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option value="" disabled>请选择</option>
+                            <option v-for="u in userOptions" :key="'r'+u.id" :value="u.id">{{ userOptionLabel(u) }}</option>
+                        </select>
+                    </label>
+                    <label class="block"><span class="text-[#57606a]">交付主责</span>
+                        <select v-model.number="jobForm.delivery_owner_user_id"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                            <option value="">未指定</option>
+                            <option v-for="u in userOptions" :key="'d'+u.id" :value="u.id">{{ userOptionLabel(u) }}</option>
+                        </select>
+                        <span class="text-xs text-[#656d76] mt-0.5 block">客户首个岗位时通常必填</span>
+                    </label>
+                </div>
+            </template>
+
+            <template v-else-if="modal === 'candidate'">
+                <div class="space-y-3 text-sm">
+                    <label class="block"><span class="text-[#57606a]">姓名</span>
+                        <input v-model="candidateForm.name" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">电话</span>
+                        <input v-model="candidateForm.phone" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">邮箱</span>
+                        <input v-model="candidateForm.email" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">微信</span>
+                        <input v-model="candidateForm.wechat" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">城市</span>
+                        <input v-model="candidateForm.city" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">来源</span>
+                        <input v-model="candidateForm.source" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                </div>
+            </template>
+
+            <template v-else-if="modal === 'application'">
+                <div class="space-y-3 text-sm">
+                    <label class="block"><span class="text-[#57606a]">岗位 ID</span>
+                        <input v-model.number="applicationForm.job_id" type="number" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">候选人 ID</span>
+                        <input v-model.number="applicationForm.candidate_id" type="number" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    <label class="block"><span class="text-[#57606a]">简历 ID（可选）</span>
+                        <input v-model.number="applicationForm.resume_id" type="number" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                </div>
+            </template>
+
+            <div class="flex justify-end gap-2 mt-5">
+                <button type="button" @click="closeModal" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md">取消</button>
+                <button type="button" @click="submitModal" :disabled="modalSaving"
+                    class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50">保存</button>
+            </div>
+        </div>
     </div>
 </div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script src="/static/js/core/crm-api.js"></script>
+<script src="/static/js/core/crm-toast.js"></script>
+<script src="/static/js/pages/rms.js"></script>
 {% endblock %}

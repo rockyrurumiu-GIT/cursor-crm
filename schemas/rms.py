@@ -72,6 +72,7 @@ class JobCreate(BaseModel):
     status: str = "open"
     owner_user_id: int
     delivery_owner_user_id: Optional[int] = None
+    sales_owner_user_id: Optional[int] = None
 
 
 class JobUpdate(BaseModel):

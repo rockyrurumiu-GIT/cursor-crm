@@ -7,6 +7,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
 from auth.data_scope_catalog import (
+    CLIENT_DEPT_COLS_FOR_LIST,
     RESOURCE_CRM_CLIENT,
     SCOPE_ALL,
     SCOPE_ASSIGNED,
@@ -57,6 +58,20 @@ def _dept_subtree_ids(db: Session, dept_ids: List[int]) -> Set[int]:
     return out
 
 
+def _crm_client_dept_or_filter(client_model: Type[Any], dept_ids: list[int] | set[int]):
+    """Match clients when any sales/delivery/recruitment dept column is in dept_ids."""
+    clauses = []
+    for col_name in CLIENT_DEPT_COLS_FOR_LIST:
+        col = getattr(client_model, col_name, None)
+        if col is not None:
+            clauses.append(col.in_(dept_ids))
+    if not clauses:
+        return client_model.id == -1
+    if len(clauses) == 1:
+        return clauses[0]
+    return or_(*clauses)
+
+
 def _apply_scope_to_client_query(
     query: Query,
     scope: str,
@@ -65,6 +80,7 @@ def _apply_scope_to_client_query(
     client_model: Type[Any],
     *,
     sales: bool,
+    resource_code: str | None = None,
 ):
     """Filter a Client ORM query by effective scope."""
     if scope == SCOPE_ALL:
@@ -89,11 +105,15 @@ def _apply_scope_to_client_query(
         dept_ids = ctx.dept_ids or ([ctx.primary_dept_id] if ctx.primary_dept_id else [])
         if not dept_ids:
             return query.filter(client_model.id == -1)
+        if resource_code == RESOURCE_CRM_CLIENT:
+            return query.filter(_crm_client_dept_or_filter(client_model, dept_ids))
         return query.filter(DeptCol.in_(dept_ids))
     if scope == SCOPE_DEPT_AND_CHILD:
         dept_ids = list(_dept_subtree_ids(db, ctx.dept_ids or ([ctx.primary_dept_id] if ctx.primary_dept_id else [])))
         if not dept_ids:
             return query.filter(client_model.id == -1)
+        if resource_code == RESOURCE_CRM_CLIENT:
+            return query.filter(_crm_client_dept_or_filter(client_model, dept_ids))
         return query.filter(DeptCol.in_(dept_ids))
     return query.filter(client_model.id == -1)
 
@@ -108,7 +128,9 @@ def apply_client_scope(
 ) -> Query:
     scope = get_effective_data_scope(ctx, resource_code, action)
     sales = resource_code == RESOURCE_CRM_CLIENT or resource_code.startswith("crm.")
-    return _apply_scope_to_client_query(query, scope, ctx, db, client_model, sales=sales)
+    return _apply_scope_to_client_query(
+        query, scope, ctx, db, client_model, sales=sales, resource_code=resource_code
+    )
 
 
 def scoped_client_ids(

@@ -67,9 +67,21 @@ def _dept_label(db: Session, dept_id: Optional[int]) -> str:
     if not row:
         return str(dept_id)
     name, code = str(row[0] or ""), str(row[1] or "")
-    if name and code:
-        return f"{name} ({code})"
     return name or code or str(dept_id)
+
+
+def _user_display_name(db: Session, user_id: Optional[int]) -> str:
+    """Short display name for legacy Client.owner text field."""
+    if not user_id:
+        return ""
+    from sqlalchemy import text
+
+    row = db.execute(
+        text("SELECT display_name, username FROM sys_user WHERE id = :id"), {"id": user_id}
+    ).fetchone()
+    if not row:
+        return str(user_id)
+    return str(row[0] or row[1] or user_id).strip()
 
 
 def _user_label(db: Session, user_id: Optional[int]) -> str:
@@ -91,6 +103,16 @@ def _serialize_client(db: Session, client) -> dict:
     from fastapi.encoders import jsonable_encoder
 
     d = jsonable_encoder(client)
+    sales_dept_id = d.get("owner_dept_id")
+    if sales_dept_id is None:
+        sales_dept_id = getattr(client, "owner_dept_id", None)
+    sales_user_id = d.get("owner_user_id")
+    if sales_user_id is None:
+        sales_user_id = getattr(client, "owner_user_id", None)
+    d["owner_dept_id"] = sales_dept_id
+    d["owner_user_id"] = sales_user_id
+    d["owner_dept_label"] = _dept_label(db, sales_dept_id) if sales_dept_id else ""
+    d["owner_user_label"] = _user_label(db, sales_user_id) if sales_user_id else ""
     dept_id = d.get("delivery_dept_id")
     if dept_id is None:
         dept_id = getattr(client, "delivery_dept_id", None)
@@ -101,6 +123,16 @@ def _serialize_client(db: Session, client) -> dict:
     d["delivery_owner_user_id"] = owner_id
     d["delivery_dept_label"] = _dept_label(db, dept_id) if dept_id else ""
     d["delivery_owner_label"] = _user_label(db, owner_id) if owner_id else ""
+    rec_dept_id = d.get("recruitment_dept_id")
+    if rec_dept_id is None:
+        rec_dept_id = getattr(client, "recruitment_dept_id", None)
+    rec_owner_id = d.get("recruitment_owner_user_id")
+    if rec_owner_id is None:
+        rec_owner_id = getattr(client, "recruitment_owner_user_id", None)
+    d["recruitment_dept_id"] = rec_dept_id
+    d["recruitment_owner_user_id"] = rec_owner_id
+    d["recruitment_dept_label"] = _dept_label(db, rec_dept_id) if rec_dept_id else ""
+    d["recruitment_owner_label"] = _user_label(db, rec_owner_id) if rec_owner_id else ""
     return d
 
 
@@ -222,6 +254,10 @@ def register_client_read_routes(
                 }
                 for r in users
             ],
+            "defaults": {
+                "owner_dept_id": ctx.primary_dept_id,
+                "owner_user_id": ctx.user_id,
+            },
         }
 
     @app.get("/api/clients/{client_id}")
@@ -310,20 +346,33 @@ def register_client_write_routes(
         contact_description: Optional[str] = Form(None),
         city: Optional[str] = Form(None),
         remarks: Optional[str] = Form(None),
+        owner_dept_id: Optional[str] = Form(None),
+        owner_user_id: Optional[str] = Form(None),
         delivery_dept_id: Optional[str] = Form(None),
         delivery_owner_user_id: Optional[str] = Form(None),
+        recruitment_dept_id: Optional[str] = Form(None),
+        recruitment_owner_user_id: Optional[str] = Form(None),
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("crm.clients.write")),
     ):
         ds.assert_data_scope(ctx, RESOURCE_CRM_CLIENT, "write")
+        sales_dept = _parse_optional_int(owner_dept_id)
+        sales_user = _parse_optional_int(owner_user_id)
         owner_fields = ds.default_owner_fields(ctx)
+        if sales_dept is not None:
+            owner_fields["owner_dept_id"] = sales_dept
+        if sales_user is not None:
+            owner_fields["owner_user_id"] = sales_user
+        owner_display = (owner or "").strip() or _user_display_name(db, owner_fields.get("owner_user_id"))
         delivery_dept = _parse_optional_int(delivery_dept_id)
         delivery_owner = _parse_optional_int(delivery_owner_user_id)
+        recruitment_dept = _parse_optional_int(recruitment_dept_id)
+        recruitment_owner = _parse_optional_int(recruitment_owner_user_id)
         client = Client(
             name=name,
             industry=industry,
-            owner=owner,
+            owner=owner_display,
             scale=scale,
             phase=phase,
             description=description,
@@ -339,6 +388,8 @@ def register_client_write_routes(
             remarks=(remarks or "").strip(),
             delivery_dept_id=delivery_dept,
             delivery_owner_user_id=delivery_owner,
+            recruitment_dept_id=recruitment_dept,
+            recruitment_owner_user_id=recruitment_owner,
             **owner_fields,
         )
         db.add(client)
@@ -369,8 +420,12 @@ def register_client_write_routes(
         contact_description: Optional[str] = Form(None),
         city: Optional[str] = Form(None),
         remarks: Optional[str] = Form(None),
+        owner_dept_id: Optional[str] = Form(None),
+        owner_user_id: Optional[str] = Form(None),
         delivery_dept_id: Optional[str] = Form(None),
         delivery_owner_user_id: Optional[str] = Form(None),
+        recruitment_dept_id: Optional[str] = Form(None),
+        recruitment_owner_user_id: Optional[str] = Form(None),
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("crm.clients.write")),
@@ -378,8 +433,13 @@ def register_client_write_routes(
         from phase2_core import refresh_client_estimated_annual_amount
 
         client = ensure_client_access(db, ctx, client_id, Client, action="write")
+        sales_dept = _parse_optional_int(owner_dept_id)
+        sales_user = _parse_optional_int(owner_user_id)
+        owner_display = (owner or "").strip() or _user_display_name(db, sales_user)
         delivery_dept = _parse_optional_int(delivery_dept_id)
         delivery_owner = _parse_optional_int(delivery_owner_user_id)
+        recruitment_dept = _parse_optional_int(recruitment_dept_id)
+        recruitment_owner = _parse_optional_int(recruitment_owner_user_id)
         duplicate = scoped_client_query(db, ctx, Client, action="write").filter(Client.name == name, Client.id != client_id).first()
         if duplicate:
             raise HTTPException(status_code=400, detail="\u5ba2\u6237\u540d\u79f0\u5df2\u5b58\u5728")
@@ -390,8 +450,18 @@ def register_client_write_routes(
             updates.append(f"\u5ba2\u6237\u540d\u79f0\u4ece[{old_name}]\u53d8\u66f4\u4e3a[{name}]")
         if client.industry != industry:
             updates.append(f"\u884c\u4e1a\u4ece[{client.industry}]\u53d8\u66f4\u4e3a[{industry}]")
-        if client.owner != owner:
-            updates.append(f"\u9500\u552e\u8d1f\u8d23\u4eba\u4ece[{client.owner}]\u53d8\u66f4\u4e3a[{owner}]")
+        if client.owner != owner_display:
+            updates.append(f"\u9500\u552e\u4e3b\u8d23\u4ece[{client.owner}]\u53d8\u66f4\u4e3a[{owner_display}]")
+        if getattr(client, "owner_dept_id", None) != sales_dept:
+            updates.append(
+                f"\u9500\u552e\u90e8\u95e8\u4ece[{_dept_label(db, getattr(client, 'owner_dept_id', None)) or '—'}]"
+                f"\u53d8\u66f4\u4e3a[{_dept_label(db, sales_dept) or '—'}]"
+            )
+        if getattr(client, "owner_user_id", None) != sales_user:
+            updates.append(
+                f"\u9500\u552e\u4e3b\u8d23\u4eba\u4ece[{_user_label(db, getattr(client, 'owner_user_id', None)) or '—'}]"
+                f"\u53d8\u66f4\u4e3a[{_user_label(db, sales_user) or '—'}]"
+            )
         if client.scale != scale:
             updates.append(f"\u5916\u5305\u89c4\u6a21\u4ece[{client.scale}]\u53d8\u66f4\u4e3a[{scale}]")
         if client.phase != phase:
@@ -428,10 +498,22 @@ def register_client_write_routes(
                 f"\u4ea4\u4ed8\u8d1f\u8d23\u4eba\u4ece[{_user_label(db, getattr(client, 'delivery_owner_user_id', None)) or '—'}]"
                 f"\u53d8\u66f4\u4e3a[{_user_label(db, delivery_owner) or '—'}]"
             )
+        if getattr(client, "recruitment_dept_id", None) != recruitment_dept:
+            updates.append(
+                f"\u62db\u8058\u90e8\u95e8\u4ece[{_dept_label(db, getattr(client, 'recruitment_dept_id', None)) or '—'}]"
+                f"\u53d8\u66f4\u4e3a[{_dept_label(db, recruitment_dept) or '—'}]"
+            )
+        if getattr(client, "recruitment_owner_user_id", None) != recruitment_owner:
+            updates.append(
+                f"\u62db\u8058\u8d1f\u8d23\u4eba\u4ece[{_user_label(db, getattr(client, 'recruitment_owner_user_id', None)) or '—'}]"
+                f"\u53d8\u66f4\u4e3a[{_user_label(db, recruitment_owner) or '—'}]"
+            )
 
         client.name = name
         client.industry = industry
-        client.owner = owner
+        client.owner = owner_display
+        client.owner_dept_id = sales_dept
+        client.owner_user_id = sales_user
         client.scale = scale
         client.phase = phase
         client.description = description
@@ -446,6 +528,8 @@ def register_client_write_routes(
         client.remarks = remarks or ""
         client.delivery_dept_id = delivery_dept
         client.delivery_owner_user_id = delivery_owner
+        client.recruitment_dept_id = recruitment_dept
+        client.recruitment_owner_user_id = recruitment_owner
 
         old_folder = f"{old_name}_{client_id}"
         new_folder = f"{name}_{client_id}"
