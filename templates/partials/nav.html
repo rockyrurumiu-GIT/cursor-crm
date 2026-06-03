@@ -134,6 +134,9 @@
             </div>
         </div>
     </div>
+    <div class="gh-nav-item{% if path.startswith('/rms') %} nav-active{% endif %}" data-crm-nav-perm="rms.jobs.read">
+        <a class="nav-trigger" href="/rms">招聘</a>
+    </div>
     <div class="gh-nav-item{% if path.startswith('/system') %} nav-active{% endif %}" data-crm-nav-any="system.users.manage,system.roles.manage,system.audit.read">
         <span class="nav-trigger cursor-default">权限中心
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>

@@ -26,12 +26,22 @@ from auth.permissions import (
 from auth.data_scope_catalog import (
     DATA_SCOPE_ACTIONS,
     RESOURCE_CODES,
+    RESOURCE_RMS_APPLICATION,
+    RESOURCE_RMS_JOB,
     SCOPE_ALL,
     SCOPE_ASSIGNED,
     SCOPE_NONE,
     merge_scope_types,
     permission_to_resource,
 )
+
+_BUILTIN_ROLE_CODES = frozenset({
+    ROLE_SUPER_ADMIN,
+    ROLE_SALES,
+    ROLE_DELIVERY,
+    ROLE_VIEWER,
+    "RESTRICTED",
+})
 
 SESSION_COOKIE_NAME = "crm_session"
 SESSION_MAX_AGE = 7 * 86400
@@ -490,9 +500,15 @@ def _scope_rows_for_role(role_code: str) -> Dict[tuple[str, str], str]:
                 rows[(resource, action)] = SCOPE_ASSIGNED
             rows[(resource, "delete")] = SCOPE_NONE
         rows[("crm.client", "read")] = SCOPE_ASSIGNED
+        for resource in (RESOURCE_RMS_JOB, RESOURCE_RMS_APPLICATION):
+            rows[(resource, "read")] = SCOPE_ASSIGNED
+            for action in ("write", "export", "delete"):
+                rows[(resource, action)] = SCOPE_NONE
         return rows
     if role_code == ROLE_VIEWER:
         for resource in RESOURCE_CODES:
+            if resource.startswith("rms."):
+                continue
             rows[(resource, "read")] = SCOPE_ASSIGNED
             for action in ("write", "export", "delete"):
                 rows[(resource, action)] = SCOPE_NONE
@@ -508,16 +524,21 @@ def _scope_rows_for_role(role_code: str) -> Dict[tuple[str, str], str]:
 def seed_role_data_scopes(db: Session, role_ids: Dict[str, int]) -> None:
     now = _utc_now()
     for role_code, rid in role_ids.items():
+        if role_code not in _BUILTIN_ROLE_CODES:
+            continue
         defaults = _scope_rows_for_role(role_code)
         if not defaults:
             continue
-        existing = db.execute(
-            text("SELECT COUNT(*) FROM sys_role_data_scope WHERE role_id = :rid"),
-            {"rid": rid},
-        ).scalar()
-        if int(existing or 0) > 0:
-            continue
         for (resource_code, action), scope_type in defaults.items():
+            exists = db.execute(
+                text(
+                    "SELECT 1 FROM sys_role_data_scope "
+                    "WHERE role_id = :rid AND resource_code = :rc AND action = :act LIMIT 1"
+                ),
+                {"rid": rid, "rc": resource_code, "act": action},
+            ).fetchone()
+            if exists:
+                continue
             db.execute(
                 text(
                     "INSERT INTO sys_role_data_scope (role_id, resource_code, action, scope_type, created_at, updated_at) "
@@ -1505,6 +1526,10 @@ def build_data_scope_matrix(role_scopes: Optional[List[Dict[str, Any]]] = None) 
         "delivery.handbook": "交付手册",
         "delivery.handoff": "项目交接",
         "delivery.settlement": "结算台账",
+        "rms.job": "招聘岗位",
+        "rms.application": "推荐记录",
+        "rms.candidate": "候选人",
+        "rms.resume": "简历",
         "file": "文件",
     }
     action_labels = {"read": "查看", "write": "编辑", "export": "导出", "delete": "删除"}

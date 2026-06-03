@@ -1460,6 +1460,10 @@ register_dashboard_routes(
     DeliveryInterviewEntry=DeliveryInterviewEntry,
 )
 
+from routes.rms_shell import register_rms_shell_routes
+
+register_rms_shell_routes(app, page_renderer=_page)
+
 
 @app.get("/", response_class=HTMLResponse)
 async def root():

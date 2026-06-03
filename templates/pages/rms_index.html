@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}招聘 · ITO CRM{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto py-10 px-4">
+    <h1 class="text-2xl font-semibold text-[#1f2328] mb-2">招聘（RMS）</h1>
+    <p class="text-[#57606a] text-sm mb-6">Phase 0：权限与导航占位。岗位、候选人、推荐等业务功能将在后续阶段开放。</p>
+    <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-3 text-sm text-[#24292f]">
+        模块已接入 RBAC；具备 <code class="text-xs">rms.jobs.read</code> 即可访问本页。
+    </div>
+</div>
+{% endblock %}

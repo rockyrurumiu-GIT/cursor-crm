@@ -68,10 +68,23 @@ RMS 的核心建模原则是：
 - `job_description`
 - `requirements`
 - `status`
+- `owner_user_id`
 - `created_at`
 - `updated_at`
 
 其中 `client_id` 关联 CRM 现有客户表，不复制客户主数据。
+
+`owner_user_id` 表示**岗位负责人**（`rms_jobs` 实体级 Owner），与 CRM 客户上的交付锚点分工不同：
+
+- `rms_jobs.owner_user_id`：该岗位的招聘/交付负责人。
+- `clients.delivery_owner_user_id`：客户在交付 data scope 下的负责人锚点（见 [`auth/data_scope_catalog.py`](../auth/data_scope_catalog.py) 中 `CLIENT_DELIVERY_OWNER_COL`）。
+- `clients.delivery_dept_id`：客户交付归属部门（可选）。
+
+**试单与客户可见性（Phase 2 实现）：**
+
+创建客户下**首个** RMS 岗位时，若 `clients.delivery_owner_user_id` 为空，应要求选择交付/招聘对接人，并写入 `clients.delivery_owner_user_id`，尽量从所选用户同步 `clients.delivery_dept_id`。仅写 `rms_jobs.owner_user_id` 而不补齐客户交付负责人时，其他交付用户可能在对该 `client_id` 做 delivery scope 过滤时仍看不到此客户。
+
+岗位创建时 `rms_jobs.owner_user_id` 仍必填。
 
 ### 3.2 rms_candidates
 
@@ -127,6 +140,7 @@ RMS 的核心建模原则是：
 - `id`
 - `job_id`
 - `candidate_id`
+- `client_id`
 - `resume_id`
 - `status`
 - `recommended_by`
@@ -135,6 +149,8 @@ RMS 的核心建模原则是：
 - `last_activity_at`
 - `created_at`
 - `updated_at`
+
+`client_id` 为 CRM 客户冗余字段（Phase 1 表结构），与 `rms_jobs.client_id` 一致。创建或更新推荐记录时，应从关联岗位同步写入 `client_id`，便于 delivery data scope 与列表过滤，避免仅依赖运行时 `JOIN rms_jobs`。
 
 状态应记录在 `rms_applications.status`，而不是 `rms_candidates`。
 
@@ -196,6 +212,7 @@ RMS 的核心建模原则是：
 建议核心字段：
 
 - `id`
+- `application_id`
 - `job_id`
 - `candidate_id`
 - `resume_id`
@@ -206,6 +223,12 @@ RMS 的核心建模原则是：
 - `model_name`
 - `created_by`
 - `created_at`
+
+**关联约定：**
+
+- **`application_id` 为主关联**：一条匹配结果对应某次推荐（`rms_applications`）上下文；Phase 4 写入时应对齐具体 application。
+- **`job_id`、`candidate_id`（及 `resume_id`）为冗余字段**：写入时与 application 或对应 job/candidate 保持一致，便于列表与统计查询，减少每次 JOIN。
+- **`client_id` 第一阶段不强制**：客户范围可通过 `rms_applications.client_id`（Phase 1 冗余）或 `JOIN rms_jobs` 解析；若后续看板有性能需求再在 match 表加列。
 
 AI 匹配结果只能用于辅助排序、解释和推荐，不能自动淘汰候选人。
 
@@ -272,6 +295,17 @@ RMS API 必须使用 `require_permission`，不能只依赖登录态。
 简历原文件下载必须使用 `rms.resumes.download` 权限。
 
 拥有 `rms.resumes.read` 只能查看简历元数据和解析结果，不代表可以下载原文件。
+
+### 5.3 权限与 data scope 资源映射（Phase 0 登记）
+
+`rms.contacts.view` 必须映射到 resource `rms.candidate`（写入 `PERMISSION_TO_RESOURCE`），以满足 [`tests/test_data_scope_catalog.py`](../tests/test_data_scope_catalog.py) 中「所有业务权限均映射 resource」的契约。
+
+运行时行为：
+
+- **不**为 `rms.contacts.view` 单独增加行级 data scope 分支；候选人列表可见性与 `rms.candidates.read` 共用同一 `rms.candidate` 资源及 client 继承策略。
+- **仅**在服务层作为联系方式脱敏开关：无此权限时对 phone / email / wechat 脱敏（见 §5.1）。
+
+完整 `rms.*` → resource 映射表见 [`plan/29-rms-module-plan.md`](../plan/29-rms-module-plan.md)。
 
 ## 6. 与 CRM 的关系
 
@@ -397,3 +431,4 @@ RMS 模块完成后，应满足以下条件：
 ```bash
 ./venv/bin/python scripts/check_architecture.py
 ./venv/bin/python -m pytest tests/ -q
+```

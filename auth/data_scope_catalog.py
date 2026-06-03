@@ -82,6 +82,10 @@ RESOURCE_DELIVERY_INTERVIEWS = "delivery.interviews"
 RESOURCE_DELIVERY_HANDBOOK = "delivery.handbook"
 RESOURCE_DELIVERY_HANDOFF = "delivery.handoff"
 RESOURCE_DELIVERY_SETTLEMENT = "delivery.settlement"
+RESOURCE_RMS_JOB = "rms.job"
+RESOURCE_RMS_APPLICATION = "rms.application"
+RESOURCE_RMS_CANDIDATE = "rms.candidate"
+RESOURCE_RMS_RESUME = "rms.resume"
 RESOURCE_FILE = "file"
 
 RESOURCE_CODES: Tuple[str, ...] = (
@@ -95,6 +99,10 @@ RESOURCE_CODES: Tuple[str, ...] = (
     RESOURCE_DELIVERY_HANDBOOK,
     RESOURCE_DELIVERY_HANDOFF,
     RESOURCE_DELIVERY_SETTLEMENT,
+    RESOURCE_RMS_JOB,
+    RESOURCE_RMS_APPLICATION,
+    RESOURCE_RMS_CANDIDATE,
+    RESOURCE_RMS_RESUME,
     RESOURCE_FILE,
 )
 
@@ -139,6 +147,17 @@ PERMISSION_TO_RESOURCE: Dict[str, str] = {
     "delivery.interviews.write": RESOURCE_DELIVERY_INTERVIEWS,
     "delivery.settlement.read": RESOURCE_DELIVERY_SETTLEMENT,
     "delivery.settlement.write": RESOURCE_DELIVERY_SETTLEMENT,
+    "rms.jobs.read": RESOURCE_RMS_JOB,
+    "rms.jobs.write": RESOURCE_RMS_JOB,
+    "rms.candidates.read": RESOURCE_RMS_CANDIDATE,
+    "rms.candidates.write": RESOURCE_RMS_CANDIDATE,
+    "rms.resumes.read": RESOURCE_RMS_RESUME,
+    "rms.resumes.download": RESOURCE_RMS_RESUME,
+    "rms.contacts.view": RESOURCE_RMS_CANDIDATE,
+    "rms.applications.read": RESOURCE_RMS_APPLICATION,
+    "rms.applications.write": RESOURCE_RMS_APPLICATION,
+    "rms.matching.run": RESOURCE_RMS_JOB,
+    "rms.analytics.read": RESOURCE_RMS_JOB,
 }
 
 RESOURCE_SCOPE_ANCHOR: Mapping[str, ResourceScopeAnchor] = {
@@ -220,6 +239,33 @@ RESOURCE_SCOPE_ANCHOR: Mapping[str, ResourceScopeAnchor] = {
         scope_mode="delivery",
         inherit_via_client=True,
         client_fk=CLIENT_FK,
+    ),
+    RESOURCE_RMS_JOB: ResourceScopeAnchor(
+        resource_code=RESOURCE_RMS_JOB,
+        primary_table="rms_jobs",
+        scope_mode="delivery",
+        inherit_via_client=True,
+        client_fk=CLIENT_FK,
+        entity_owner_col="owner_user_id",
+    ),
+    RESOURCE_RMS_APPLICATION: ResourceScopeAnchor(
+        resource_code=RESOURCE_RMS_APPLICATION,
+        primary_table="rms_applications",
+        scope_mode="delivery",
+        inherit_via_client=True,
+        client_fk=CLIENT_FK,
+    ),
+    RESOURCE_RMS_CANDIDATE: ResourceScopeAnchor(
+        resource_code=RESOURCE_RMS_CANDIDATE,
+        primary_table="rms_candidates",
+        scope_mode="delivery",
+        inherit_via_client=False,
+    ),
+    RESOURCE_RMS_RESUME: ResourceScopeAnchor(
+        resource_code=RESOURCE_RMS_RESUME,
+        primary_table="rms_resumes",
+        scope_mode="delivery",
+        inherit_via_client=False,
     ),
     RESOURCE_FILE: ResourceScopeAnchor(
         resource_code=RESOURCE_FILE,
