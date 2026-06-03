@@ -240,4 +240,4 @@ def test_get_rms_page_ok_with_delivery_default(client_rbac, admin_auth):
 
     health = client_rbac.get("/api/rms/health", cookies=login.cookies)
     assert health.status_code == 200
-    assert health.json()["phase"] == 0
+    assert health.json()["phase"] == 2

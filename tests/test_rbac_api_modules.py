@@ -156,6 +156,34 @@ def _assert_forbidden(resp, code: str):
             "delivery.handoff.write",
             lambda _cid: {},
         ),
+        (
+            "/api/rms/jobs",
+            "rms.jobs.read",
+            "post",
+            "/api/rms/jobs",
+            "rms.jobs.write",
+            lambda cid: {
+                "client_id": cid,
+                "title": "Blocked RMS Job",
+                "owner_user_id": 1,
+            },
+        ),
+        (
+            "/api/rms/candidates",
+            "rms.candidates.read",
+            "post",
+            "/api/rms/candidates",
+            "rms.candidates.write",
+            lambda _cid: {"name": "Blocked RMS Cand"},
+        ),
+        (
+            "/api/rms/applications",
+            "rms.applications.read",
+            "post",
+            "/api/rms/applications",
+            "rms.applications.write",
+            lambda _cid: {"job_id": 1, "candidate_id": 1},
+        ),
     ],
 )
 def test_restricted_module_forbidden(

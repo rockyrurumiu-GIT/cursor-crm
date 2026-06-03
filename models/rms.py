@@ -19,6 +19,13 @@ _CLASS_BY_TABLE: Dict[str, str] = {
 _models_cache_by_base: Dict[int, Dict[str, Type]] = {}
 
 
+def _ensure_sys_user_stub(Base) -> None:
+    if "sys_user" not in Base.metadata.tables:
+        class SysUser(Base):  # noqa: F841 — FK target for RMS ORM only
+            __tablename__ = "sys_user"
+            id = Column(Integer, primary_key=True)
+
+
 def _models_from_metadata(Base) -> Dict[str, Type]:
     out: Dict[str, Type] = {}
     for mapper in Base.registry.mappers:
@@ -35,6 +42,7 @@ def _models_from_metadata(Base) -> Dict[str, Type]:
 
 def register_rms_models(Base) -> Dict[str, Type]:
     """Register RMS ORM classes on Base. Idempotent per metadata; does not call create_all."""
+    _ensure_sys_user_stub(Base)
     cache_key = id(Base.metadata)
     if cache_key in _models_cache_by_base:
         return dict(_models_cache_by_base[cache_key])

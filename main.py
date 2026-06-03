@@ -1464,6 +1464,33 @@ register_dashboard_routes(
 )
 
 from routes.rms_shell import register_rms_shell_routes
+from routes.rms_jobs import register_rms_jobs_routes
+from routes.rms_candidates import register_rms_candidates_routes
+from routes.rms_applications import register_rms_applications_routes
+
+register_rms_jobs_routes(
+    app,
+    get_db=get_db,
+    Client=Client,
+    RmsJob=RMS_MODELS["RmsJob"],
+    RmsApplication=RMS_MODELS["RmsApplication"],
+)
+register_rms_candidates_routes(
+    app,
+    get_db=get_db,
+    Client=Client,
+    RmsCandidate=RMS_MODELS["RmsCandidate"],
+    RmsApplication=RMS_MODELS["RmsApplication"],
+)
+register_rms_applications_routes(
+    app,
+    get_db=get_db,
+    Client=Client,
+    RmsJob=RMS_MODELS["RmsJob"],
+    RmsCandidate=RMS_MODELS["RmsCandidate"],
+    RmsApplication=RMS_MODELS["RmsApplication"],
+    RmsApplicationStatusHistory=RMS_MODELS["RmsApplicationStatusHistory"],
+)
 
 register_rms_shell_routes(app, page_renderer=_page)
 

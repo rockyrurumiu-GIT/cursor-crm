@@ -1,0 +1,624 @@
+"""RMS Phase 2: jobs, candidates, applications API MVP."""
+from __future__ import annotations
+
+import importlib
+import uuid
+
+import pytest
+from sqlalchemy import text
+from starlette.testclient import TestClient
+
+from auth.data_scope_catalog import RESOURCE_RMS_APPLICATION, RESOURCE_RMS_JOB, SCOPE_ASSIGNED
+from auth.permissions import ROLE_DELIVERY, ROLE_SALES, ROLE_VIEWER
+from tests.helpers import auth_header
+
+RMS_MVP_PERMS = (
+    "rms.jobs.read",
+    "rms.jobs.write",
+    "rms.candidates.read",
+    "rms.candidates.write",
+    "rms.applications.read",
+    "rms.applications.write",
+)
+
+
+@pytest.fixture
+def client_rbac(_test_env, monkeypatch):
+    monkeypatch.setenv("CRM_AUTH_MODE", "rbac")
+    import main as crm_main
+
+    importlib.reload(crm_main)
+    with TestClient(crm_main.app) as c:
+        yield c
+
+
+def _login(client, username: str, password: str = "pass1234"):
+    return client.post("/api/auth/login", json={"username": username, "password": password})
+
+
+def _create_user(client, admin_auth, username: str, role_codes: list[str], password: str = "pass1234"):
+    client.cookies.clear()
+    user, pwd = admin_auth
+    headers = {**auth_header(user, pwd), "Content-Type": "application/json"}
+    r = client.post(
+        "/api/system/users",
+        headers=headers,
+        json={
+            "username": username,
+            "password": password,
+            "display_name": username,
+            "role_codes": role_codes,
+        },
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["id"]
+
+
+def _user_id(engine, username: str) -> int:
+    with engine.connect() as conn:
+        uid = conn.execute(
+            text("SELECT id FROM sys_user WHERE username = :u"),
+            {"u": username},
+        ).scalar()
+    assert uid is not None
+    return int(uid)
+
+
+def _grant_role_permissions(engine, role_code: str, perm_codes: tuple[str, ...]) -> None:
+    with engine.begin() as conn:
+        rid = conn.execute(
+            text("SELECT id FROM sys_role WHERE code = :c"),
+            {"c": role_code},
+        ).scalar()
+        assert rid is not None
+        for code in perm_codes:
+            pid = conn.execute(
+                text("SELECT id FROM sys_permission WHERE code = :c"),
+                {"c": code},
+            ).scalar()
+            if pid:
+                conn.execute(
+                    text(
+                        "INSERT OR IGNORE INTO sys_role_permission (role_id, permission_id) "
+                        "VALUES (:r, :p)"
+                    ),
+                    {"r": rid, "p": pid},
+                )
+
+
+def _set_role_data_scope(engine, role_code: str, resource_code: str, action: str, scope_type: str) -> None:
+    with engine.begin() as conn:
+        rid = conn.execute(
+            text("SELECT id FROM sys_role WHERE code = :c"),
+            {"c": role_code},
+        ).scalar()
+        conn.execute(
+            text(
+                "DELETE FROM sys_role_data_scope "
+                "WHERE role_id = :rid AND resource_code = :rc AND action = :act"
+            ),
+            {"rid": rid, "rc": resource_code, "act": action},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO sys_role_data_scope "
+                "(role_id, resource_code, action, scope_type, created_at, updated_at) "
+                "VALUES (:rid, :rc, :act, :st, datetime('now'), datetime('now'))"
+            ),
+            {"rid": rid, "rc": resource_code, "act": action, "st": scope_type},
+        )
+
+
+def _create_client_admin(client, admin_auth, name: str) -> int:
+    user, pwd = admin_auth
+    r = client.post(
+        "/api/clients",
+        headers=auth_header(user, pwd),
+        data={
+            "name": name,
+            "industry": "IT",
+            "owner": user,
+            "scale": "M",
+            "phase": "active",
+            "description": "rms phase2",
+        },
+    )
+    assert r.status_code == 200, r.text
+    return int(r.json()["id"])
+
+
+def _set_client_owner(engine, client_id: int, owner_user_id: int, delivery_owner_user_id: int | None = None):
+    with engine.begin() as conn:
+        conn.execute(
+            text("UPDATE clients SET owner_user_id = :uid WHERE id = :cid"),
+            {"uid": owner_user_id, "cid": client_id},
+        )
+        if delivery_owner_user_id is not None:
+            conn.execute(
+                text("UPDATE clients SET delivery_owner_user_id = :uid WHERE id = :cid"),
+                {"uid": delivery_owner_user_id, "cid": client_id},
+            )
+        else:
+            conn.execute(
+                text(
+                    "UPDATE clients SET delivery_owner_user_id = NULL, delivery_dept_id = NULL "
+                    "WHERE id = :cid"
+                ),
+                {"cid": client_id},
+            )
+
+
+def _enable_sales_rms_jobs_write(engine):
+    _grant_role_permissions(engine, ROLE_SALES, ("rms.jobs.read", "rms.jobs.write"))
+
+
+def _enable_delivery_rms_mvp(engine):
+    _grant_role_permissions(engine, ROLE_DELIVERY, RMS_MVP_PERMS)
+    _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "write", SCOPE_ASSIGNED)
+    _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_APPLICATION, "write", SCOPE_ASSIGNED)
+
+
+@pytest.fixture
+def uniq():
+    return uuid.uuid4().hex[:8]
+
+
+@pytest.fixture
+def rms_engine(client_rbac):
+    import main as crm_main
+
+    _enable_sales_rms_jobs_write(crm_main.engine)
+    _enable_delivery_rms_mvp(crm_main.engine)
+    return crm_main.engine
+
+
+def test_first_job_via_trial_path_crm_visible(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    sales = f"rms2_sales_{suffix}"
+    delivery = f"rms2_del_{suffix}"
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_SALES])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS Trial {suffix}")
+    _set_client_owner(rms_engine, cid, sales_uid, delivery_owner_user_id=None)
+
+    login = _login(client_rbac, sales)
+    assert login.status_code == 200
+    r = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login.cookies,
+        json={
+            "client_id": cid,
+            "title": "Trial Job",
+            "owner_user_id": sales_uid,
+            "delivery_owner_user_id": delivery_uid,
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["client_id"] == cid
+    assert body["title"] == "Trial Job"
+
+    with rms_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT delivery_owner_user_id FROM clients WHERE id = :cid"),
+            {"cid": cid},
+        ).fetchone()
+    assert row is not None
+    assert int(row[0]) == delivery_uid
+
+
+def test_first_job_blocked_without_crm_client_visibility(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    sales_a = f"rms2_sa_{suffix}"
+    sales_b = f"rms2_sb_{suffix}"
+    delivery = f"rms2_delb_{suffix}"
+    uid_a = _create_user(client_rbac, admin_auth, sales_a, [ROLE_SALES])
+    _create_user(client_rbac, admin_auth, sales_b, [ROLE_SALES])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS Hidden {suffix}")
+    _set_client_owner(rms_engine, cid, uid_a, delivery_owner_user_id=None)
+
+    login_b = _login(client_rbac, sales_b)
+    r = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login_b.cookies,
+        json={
+            "client_id": cid,
+            "title": "Blocked",
+            "owner_user_id": uid_a,
+            "delivery_owner_user_id": delivery_uid,
+        },
+    )
+    assert r.status_code == 404
+
+
+def test_first_job_blocked_without_delivery_owner_body(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    sales = f"rms2_snod_{suffix}"
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_SALES])
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS NoDel {suffix}")
+    _set_client_owner(rms_engine, cid, sales_uid, delivery_owner_user_id=None)
+
+    login = _login(client_rbac, sales)
+    r = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login.cookies,
+        json={"client_id": cid, "title": "X", "owner_user_id": sales_uid},
+    )
+    assert r.status_code == 400
+    assert "delivery_owner_user_id" in r.json().get("detail", "")
+
+
+def test_create_job_forbidden_without_rms_jobs_write(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    viewer = f"rms2_viewer_{suffix}"
+    _create_user(client_rbac, admin_auth, viewer, [ROLE_VIEWER])
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS Viewer {suffix}")
+
+    login = _login(client_rbac, viewer)
+    r = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login.cookies,
+        json={"client_id": cid, "title": "Nope", "owner_user_id": 1},
+    )
+    assert r.status_code == 403
+    assert "rms.jobs.write" in r.json().get("detail", "")
+
+
+def test_first_job_regular_path_after_delivery_owner_set(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    sales = f"rms2_sreg_{suffix}"
+    delivery = f"rms2_dreg_{suffix}"
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_SALES])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS Regular {suffix}")
+    _set_client_owner(rms_engine, cid, sales_uid, delivery_owner_user_id=None)
+
+    login_sales = _login(client_rbac, sales)
+    first = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login_sales.cookies,
+        json={
+            "client_id": cid,
+            "title": "First",
+            "owner_user_id": sales_uid,
+            "delivery_owner_user_id": delivery_uid,
+        },
+    )
+    assert first.status_code == 200
+
+    login_del = _login(client_rbac, delivery)
+    second = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login_del.cookies,
+        json={
+            "client_id": cid,
+            "title": "Second",
+            "owner_user_id": delivery_uid,
+        },
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["title"] == "Second"
+
+
+def test_candidate_created_by_visible(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    delivery = f"rms2_cdel_{suffix}"
+    _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    login = _login(client_rbac, delivery)
+    created = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json={
+            "name": "Alice",
+            "phone": "13800138000",
+            "email": "alice@example.com",
+            "wechat": "wx_alice",
+        },
+    )
+    assert created.status_code == 200, created.text
+    cid = created.json()["id"]
+    got = client_rbac.get(f"/api/rms/candidates/{cid}", cookies=login.cookies)
+    assert got.status_code == 200
+    assert got.json()["name"] == "Alice"
+
+
+def test_candidate_hidden_when_not_creator_or_visible_application(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    del_a = f"rms2_cda_{suffix}"
+    del_b = f"rms2_cdb_{suffix}"
+    uid_a = _create_user(client_rbac, admin_auth, del_a, [ROLE_DELIVERY])
+    _create_user(client_rbac, admin_auth, del_b, [ROLE_DELIVERY])
+    login_a = _login(client_rbac, del_a)
+    created = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_a.cookies,
+        json={"name": "Hidden Bob", "phone": "13900139000"},
+    )
+    assert created.status_code == 200
+    cand_id = created.json()["id"]
+
+    login_b = _login(client_rbac, del_b)
+    hidden = client_rbac.get(f"/api/rms/candidates/{cand_id}", cookies=login_b.cookies)
+    assert hidden.status_code == 404
+
+
+def test_candidate_contact_masked_without_rms_contacts_view(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    delivery = f"rms2_mask_{suffix}"
+    _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    login = _login(client_rbac, delivery)
+    created = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json={
+            "name": "Mask Me",
+            "phone": "13800138000",
+            "email": "mask@example.com",
+            "wechat": "wxmask",
+        },
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert "****" in body["phone"]
+    assert "***" in body["email"]
+    assert "***" in body["wechat"]
+
+
+def test_candidate_contact_visible_with_rms_contacts_view(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    import main as crm_main
+
+    _grant_role_permissions(crm_main.engine, ROLE_DELIVERY, ("rms.contacts.view",))
+    delivery = f"rms2_cont_{suffix}"
+    _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    login = _login(client_rbac, delivery)
+    created = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json={
+            "name": "Clear",
+            "phone": "13800138000",
+            "email": "clear@example.com",
+            "wechat": "wxclear",
+        },
+    )
+    assert created.status_code == 200
+    body = created.json()
+    assert body["phone"] == "13800138000"
+    assert body["email"] == "clear@example.com"
+    assert body["wechat"] == "wxclear"
+
+
+def _trial_job_and_candidate(client, engine, admin_auth, suffix: str):
+    """Delivery-owned client with one job; returns cookies, job_id, candidate_id, client_id."""
+    sales = f"rms2_app_s_{suffix}"
+    delivery = f"rms2_app_d_{suffix}"
+    sales_uid = _create_user(client, admin_auth, sales, [ROLE_SALES])
+    delivery_uid = _create_user(client, admin_auth, delivery, [ROLE_DELIVERY])
+    cid = _create_client_admin(client, admin_auth, f"RMS App {suffix}")
+    _set_client_owner(engine, cid, sales_uid, delivery_owner_user_id=None)
+
+    login_sales = _login(client, sales)
+    job_r = client.post(
+        "/api/rms/jobs",
+        cookies=login_sales.cookies,
+        json={
+            "client_id": cid,
+            "title": "App Job",
+            "owner_user_id": sales_uid,
+            "delivery_owner_user_id": delivery_uid,
+        },
+    )
+    assert job_r.status_code == 200
+    job_id = job_r.json()["id"]
+
+    login_del = _login(client, delivery)
+    cand_r = client.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json={"name": f"Cand {suffix}", "phone": "13700137000"},
+    )
+    assert cand_r.status_code == 200
+    return login_del, job_id, cand_r.json()["id"], cid
+
+
+def test_application_create_syncs_client_id_from_job(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id, cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    r = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["client_id"] == client_id
+    assert r.json()["status"] == "recommended"
+
+
+def test_application_rejects_invisible_candidate(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login_a, job_id, _, _ = _trial_job_and_candidate(client_rbac, rms_engine, admin_auth, suffix)
+    del_b = f"rms2_irb_{suffix}"
+    _create_user(client_rbac, admin_auth, del_b, [ROLE_DELIVERY])
+    login_b = _login(client_rbac, del_b)
+    secret = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_b.cookies,
+        json={"name": "Secret", "phone": "13600136000"},
+    )
+    assert secret.status_code == 200
+    secret_id = secret.json()["id"]
+
+    r = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_a.cookies,
+        json={"job_id": job_id, "candidate_id": secret_id},
+    )
+    assert r.status_code == 404
+
+
+def test_application_duplicate_returns_409(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id, cand_id, _ = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    first = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert first.status_code == 200
+    dup = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert dup.status_code == 409
+
+
+def test_patch_application_rejects_forbidden_fields(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id, cand_id, _ = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    created = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert created.status_code == 200
+    app_id = created.json()["id"]
+    bad = client_rbac.patch(
+        f"/api/rms/applications/{app_id}",
+        cookies=login.cookies,
+        json={"status": "screening"},
+    )
+    assert bad.status_code == 400
+    assert "status" in bad.json().get("detail", "")
+
+
+def test_patch_application_recomputes_client_id_when_job_changes(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    sales = f"rms2_pjs_{suffix}"
+    delivery = f"rms2_pjd_{suffix}"
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_SALES])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    cid_a = _create_client_admin(client_rbac, admin_auth, f"RMS A {suffix}")
+    cid_b = _create_client_admin(client_rbac, admin_auth, f"RMS B {suffix}")
+    _set_client_owner(rms_engine, cid_a, sales_uid, delivery_owner_user_id=delivery_uid)
+    _set_client_owner(rms_engine, cid_b, sales_uid, delivery_owner_user_id=delivery_uid)
+
+    login_del = _login(client_rbac, delivery)
+    job_a = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login_del.cookies,
+        json={"client_id": cid_a, "title": "JA", "owner_user_id": delivery_uid},
+    )
+    job_b = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login_del.cookies,
+        json={"client_id": cid_b, "title": "JB", "owner_user_id": delivery_uid},
+    )
+    assert job_a.status_code == 200 and job_b.status_code == 200
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json={"name": "Patch Cand", "phone": "13500135000"},
+    )
+    assert cand.status_code == 200
+    app = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_a.json()["id"], "candidate_id": cand.json()["id"]},
+    )
+    assert app.status_code == 200
+    assert app.json()["client_id"] == cid_a
+
+    patched = client_rbac.patch(
+        f"/api/rms/applications/{app.json()['id']}",
+        cookies=login_del.cookies,
+        json={"job_id": job_b.json()["id"]},
+    )
+    assert patched.status_code == 200
+    assert patched.json()["client_id"] == cid_b
+
+
+def _app_for_status(client, engine, admin_auth, suffix: str):
+    login, job_id, cand_id, _ = _trial_job_and_candidate(client, engine, admin_auth, suffix)
+    created = client.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert created.status_code == 200
+    return login, created.json()["id"]
+
+
+def test_status_transition_writes_current_stage_and_activity(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, suffix)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "screening", "reason": "ok", "note": "n1"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "screening"
+    assert body["current_stage"] == "screening"
+    assert body["last_activity_at"]
+
+    hist = client_rbac.get(
+        f"/api/rms/applications/{app_id}/status-history",
+        cookies=login.cookies,
+    )
+    assert hist.status_code == 200
+    assert len(hist.json()) >= 1
+    assert hist.json()[0]["to_status"] == "screening"
+
+
+def test_status_reject_from_screening(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, suffix)
+    client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "screening"},
+    )
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "rejected", "reason": "no fit"},
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "rejected"
+
+
+def test_status_terminal_no_transition(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, suffix)
+    client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "rejected"},
+    )
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "screening"},
+    )
+    assert r.status_code == 400
+
+
+def test_status_illegal_jump_returns_400(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, suffix)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "hired"},
+    )
+    assert r.status_code == 400

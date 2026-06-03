@@ -19,4 +19,4 @@ def register_rms_shell_routes(app, *, page_renderer: Callable):
 
     @app.get("/api/rms/health")
     async def api_rms_health(_user: str = Depends(require_permission("rms.jobs.read"))):
-        return {"status": "ok", "phase": 0}
+        return {"status": "ok", "phase": 2}
