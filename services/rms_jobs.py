@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional, Set, Type
 
 from fastapi import HTTPException
 from sqlalchemy import text
@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from auth import service as auth_svc
 from auth.service import AuthContext
+from schemas.rms import JOB_PRIORITIES, JOB_STATUSES, JOB_WRITABLE_STR_FIELDS
 from services import rms_scope as rms_ds
 
 
@@ -23,7 +24,36 @@ def _ensure_user_exists(db: Session, user_id: int) -> None:
         raise HTTPException(status_code=400, detail="用户不存在")
 
 
-def job_to_dict(job: Any) -> Dict[str, Any]:
+def _user_label(db: Session, user_id: Optional[int]) -> str:
+    if user_id is None:
+        return ""
+    row = db.execute(
+        text("SELECT username, display_name FROM sys_user WHERE id = :uid"),
+        {"uid": user_id},
+    ).fetchone()
+    if not row:
+        return ""
+    dn = str(row[1] or "").strip()
+    un = str(row[0] or "").strip()
+    if dn and un:
+        return f"{dn} · {un}"
+    return dn or un
+
+
+def _validate_job_enums(data: Dict[str, Any]) -> None:
+    status = data.get("status")
+    if status is not None:
+        status = str(status).strip()
+        if status and status not in JOB_STATUSES:
+            raise HTTPException(status_code=400, detail=f"无效状态: {status}")
+    priority = data.get("priority")
+    if priority is not None:
+        priority = str(priority).strip()
+        if priority and priority not in JOB_PRIORITIES:
+            raise HTTPException(status_code=400, detail=f"无效优先级: {priority}")
+
+
+def _job_core_dict(job: Any) -> Dict[str, Any]:
     return {
         "id": job.id,
         "client_id": job.client_id,
@@ -34,10 +64,53 @@ def job_to_dict(job: Any) -> Dict[str, Any]:
         "job_description": job.job_description or "",
         "requirements": job.requirements or "",
         "status": job.status or "open",
+        "priority": getattr(job, "priority", None) or "medium",
+        "salary_cap": getattr(job, "salary_cap", None) or "",
+        "years_required": getattr(job, "years_required", None) or "",
+        "education": getattr(job, "education", None) or "",
+        "overtime_travel": getattr(job, "overtime_travel", None) or "",
+        "interviewer": getattr(job, "interviewer", None) or "",
+        "note": getattr(job, "note", None) or "",
         "owner_user_id": job.owner_user_id,
         "created_at": job.created_at or "",
         "updated_at": job.updated_at or "",
     }
+
+
+def job_to_dict(
+    job: Any,
+    *,
+    client: Any = None,
+    db: Optional[Session] = None,
+) -> Dict[str, Any]:
+    d = _job_core_dict(job)
+    sales_uid = None
+    delivery_uid = None
+    client_name = ""
+    if client is not None:
+        client_name = str(getattr(client, "name", None) or "")
+        sales_uid = getattr(client, "owner_user_id", None)
+        delivery_uid = getattr(client, "delivery_owner_user_id", None)
+    d["client_name"] = client_name
+    d["sales_owner_user_id"] = sales_uid
+    d["delivery_owner_user_id"] = delivery_uid
+    d["recruitment_owner_user_id"] = job.owner_user_id
+    if db is not None:
+        d["sales_owner_label"] = _user_label(db, sales_uid)
+        d["delivery_owner_label"] = _user_label(db, delivery_uid)
+        d["recruitment_owner_label"] = _user_label(db, job.owner_user_id)
+    else:
+        d["sales_owner_label"] = ""
+        d["delivery_owner_label"] = ""
+        d["recruitment_owner_label"] = ""
+    return d
+
+
+def _clients_by_id(db: Session, Client: Type[Any], client_ids: Set[int]) -> Dict[int, Any]:
+    if not client_ids:
+        return {}
+    rows = db.query(Client).filter(Client.id.in_(client_ids)).all()
+    return {int(c.id): c for c in rows}
 
 
 def list_jobs(
@@ -55,7 +128,8 @@ def list_jobs(
     if status:
         q = q.filter(RmsJob.status == status)
     rows = q.order_by(RmsJob.id.desc()).all()
-    return [job_to_dict(r) for r in rows]
+    client_map = _clients_by_id(db, Client, {int(r.client_id) for r in rows if r.client_id is not None})
+    return [job_to_dict(r, client=client_map.get(int(r.client_id)), db=db) for r in rows]
 
 
 def get_job(
@@ -68,7 +142,25 @@ def get_job(
     row = rms_ds.scoped_jobs_query(db, ctx, RmsJob, Client, action="read").filter(RmsJob.id == job_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="岗位不存在")
-    return job_to_dict(row)
+    client = db.query(Client).filter(Client.id == row.client_id).first()
+    return job_to_dict(row, client=client, db=db)
+
+
+def _apply_client_owners_from_job_data(db: Session, client: Any, data: Dict[str, Any]) -> None:
+    sales_owner_user_id = data.get("sales_owner_user_id")
+    if sales_owner_user_id is not None:
+        sales_owner_user_id = int(sales_owner_user_id)
+        _ensure_user_exists(db, sales_owner_user_id)
+        client.owner_user_id = sales_owner_user_id
+
+    owner_user_id = data.get("owner_user_id")
+    if owner_user_id is not None:
+        owner_user_id = int(owner_user_id)
+        _ensure_user_exists(db, owner_user_id)
+        client.recruitment_owner_user_id = owner_user_id
+        _, primary_dept = auth_svc.get_user_dept_ids(db, owner_user_id)
+        if primary_dept is not None:
+            client.recruitment_dept_id = primary_dept
 
 
 def create_job(
@@ -79,6 +171,7 @@ def create_job(
     RmsApplication: Type[Any],
     Client: Type[Any],
 ) -> Dict[str, Any]:
+    _validate_job_enums(data)
     client_id = int(data["client_id"])
     owner_user_id = int(data["owner_user_id"])
     _ensure_user_exists(db, owner_user_id)
@@ -87,14 +180,7 @@ def create_job(
     if not client:
         raise HTTPException(status_code=404, detail="客户不存在")
 
-    sales_owner_user_id = data.get("sales_owner_user_id")
-    if sales_owner_user_id is not None:
-        sales_owner_user_id = int(sales_owner_user_id)
-        _ensure_user_exists(db, sales_owner_user_id)
-        client.owner_user_id = sales_owner_user_id
-
     existing_count = db.query(RmsJob).filter(RmsJob.client_id == client_id).count()
-    now = _utc_now_str()
 
     if client.delivery_owner_user_id is None and existing_count == 0:
         rms_ds.assert_crm_client_visible_for_trial(db, ctx, client_id, Client)
@@ -110,23 +196,29 @@ def create_job(
     else:
         rms_ds.assert_rms_client_writable_regular(db, ctx, client_id, Client)
 
-    job = RmsJob(
-        client_id=client_id,
-        title=str(data.get("title") or "").strip(),
-        department=str(data.get("department") or "").strip(),
-        location=str(data.get("location") or "").strip(),
-        headcount=int(data.get("headcount") or 1),
-        job_description=str(data.get("job_description") or "").strip(),
-        requirements=str(data.get("requirements") or "").strip(),
-        status=str(data.get("status") or "open").strip() or "open",
-        owner_user_id=owner_user_id,
-        created_at=now,
-        updated_at=now,
-    )
+    _apply_client_owners_from_job_data(db, client, data)
+
+    now = _utc_now_str()
+    job_kwargs: Dict[str, Any] = {
+        "client_id": client_id,
+        "owner_user_id": owner_user_id,
+        "headcount": int(data.get("headcount") or 1),
+        "created_at": now,
+        "updated_at": now,
+    }
+    for field in JOB_WRITABLE_STR_FIELDS:
+        if field in data:
+            job_kwargs[field] = str(data.get(field) or "").strip()
+        else:
+            default = "open" if field == "status" else "medium" if field == "priority" else ""
+            job_kwargs[field] = default
+
+    job = RmsJob(**job_kwargs)
     db.add(job)
     db.commit()
     db.refresh(job)
-    return job_to_dict(job)
+    db.refresh(client)
+    return job_to_dict(job, client=client, db=db)
 
 
 def _sync_applications_client_for_job(
@@ -150,6 +242,7 @@ def update_job(
     RmsApplication: Type[Any],
     Client: Type[Any],
 ) -> Dict[str, Any]:
+    _validate_job_enums(data)
     job = rms_ds.assert_job_writable(db, ctx, job_id, RmsJob, Client)
     new_client_id = data.get("client_id")
     if new_client_id is not None:
@@ -164,7 +257,7 @@ def update_job(
         _ensure_user_exists(db, owner_user_id)
         job.owner_user_id = owner_user_id
 
-    for field in ("title", "department", "location", "job_description", "requirements", "status"):
+    for field in JOB_WRITABLE_STR_FIELDS:
         if data.get(field) is not None:
             setattr(job, field, str(data[field]).strip())
     if data.get("headcount") is not None:
@@ -173,4 +266,5 @@ def update_job(
     job.updated_at = _utc_now_str()
     db.commit()
     db.refresh(job)
-    return job_to_dict(job)
+    client = db.query(Client).filter(Client.id == job.client_id).first()
+    return job_to_dict(job, client=client, db=db)

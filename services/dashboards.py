@@ -16,6 +16,8 @@ from auth import service as auth_svc
 from auth.service import AuthContext
 from schemas.dashboards import (
     CHART_COLORS,
+    COLOR_SHADES,
+    DEFAULT_COLOR_SHADE,
     CHART_WIDGET_TYPES,
     DATA_WIDGET_TYPES,
     DATA_SOURCES,
@@ -230,6 +232,15 @@ def validate_widget_config(
     if color not in CHART_COLORS:
         raise HTTPException(status_code=400, detail=f"未知配色: {color}")
     out["color"] = color
+
+    raw_shade = config.get("color_shade", DEFAULT_COLOR_SHADE)
+    try:
+        color_shade = int(raw_shade)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="color_shade 必须是 0–4 的整数")
+    if color_shade not in COLOR_SHADES:
+        raise HTTPException(status_code=400, detail="color_shade 须在 0–4 之间")
+    out["color_shade"] = color_shade
 
     sort_mode = (config.get("sort") or DEFAULT_SORT).strip()
     if sort_mode not in SORT_MODES:

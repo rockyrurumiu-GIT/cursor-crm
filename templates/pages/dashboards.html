@@ -104,9 +104,39 @@
 .type-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; }
 .type-cell { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.5rem 0; border: 1px solid #e0e2e6; border-radius: 8px; font-size: 0.72rem; color: #5b6370; cursor: pointer; }
 .type-cell.active { border-color: #2563eb; background: #eff4ff; color: #1d4ed8; }
-.color-row { display: flex; gap: 0.5rem; }
-.color-swatch { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
-.color-swatch.active { border-color: #1f2328; }
+.color-picker-wrap { position: relative; }
+.color-picker-trigger {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  width: 100%; padding: 0.45rem 0.55rem; border: 1px solid #d8dce0; border-radius: 8px;
+  background: #fff; font-size: 0.85rem; color: #374151; cursor: pointer;
+}
+.color-picker-trigger:hover { background: #f9fafb; }
+.color-picker-value { display: inline-flex; align-items: center; gap: 0.4rem; color: #1f2328; font-weight: 500; }
+.color-picker-preview { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.08); flex-shrink: 0; }
+.color-popover {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 80;
+  background: #fff; border: 1px solid #e6e8eb; border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(16,24,40,0.12); padding: 0.55rem 0.45rem 0.45rem; max-height: 280px;
+  display: flex; flex-direction: column; min-width: 0;
+}
+.color-popover-search {
+  width: 100%; border: 1px solid #e0e2e6; border-radius: 8px; padding: 0.4rem 0.55rem;
+  font-size: 0.82rem; margin-bottom: 0.45rem; flex-shrink: 0;
+}
+.color-popover-search:focus { outline: none; border-color: #9aa9bd; }
+.color-popover-list { overflow-y: auto; flex: 1; min-height: 0; }
+.color-popover-row {
+  display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 0.35rem;
+  padding: 0.35rem 0.4rem; border-radius: 8px; cursor: default;
+}
+.color-popover-row:hover { background: #f4f5f7; }
+.color-popover-label { font-size: 0.78rem; color: #5b6370; }
+.color-popover-swatches { display: flex; gap: 0.35rem; justify-content: flex-end; flex-wrap: nowrap; }
+.color-popover-swatch {
+  width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent;
+  flex-shrink: 0;
+}
+.color-popover-swatch.active { border-color: #1f2328; box-shadow: 0 0 0 1px #fff inset; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0; font-size: 0.83rem; color: #374151; }
 .filter-row { display: grid; grid-template-columns: 1fr 70px 1fr 24px; gap: 0.35rem; margin-bottom: 0.4rem; align-items: center; }
 .filter-row select, .filter-row input { padding: 0.3rem 0.4rem; font-size: 0.78rem; border: 1px solid #d8dce0; border-radius: 6px; }
@@ -117,8 +147,228 @@
 .modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; align-items: center; justify-content: center; }
 .modal-panel { background: #fff; border-radius: 14px; padding: 1.25rem; width: 90%; max-width: 420px; }
 
+/* 交付毛利总览 — Twenty-style present mode (independent of dash-grid) */
+.margin-dashboard-view {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.margin-panel {
+  height: 360px;
+  background: #fff;
+  border: 1px solid #eceef1;
+  border-radius: 10px;
+  padding: 16px 18px 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: none;
+}
+.margin-panel-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #2f343a;
+  line-height: 1.2;
+  margin: 0 0 12px;
+  flex-shrink: 0;
+}
+.margin-panel-inner { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.margin-chart-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.margin-chart-body canvas { display: block; width: 100% !important; height: 100% !important; }
+.margin-legend {
+  height: 34px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  color: #6f747b;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.margin-legend-item { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.margin-legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.margin-legend-label { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.margin-legend-nav {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #8f949b;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.margin-legend-nav span { opacity: 0.45; user-select: none; }
+.margin-metric-table {
+  flex: 1;
+  display: grid;
+  grid-template-rows: auto repeat(4, 1fr);
+  min-height: 0;
+}
+.margin-metric-head,
+.margin-metric-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+}
+.margin-metric-head {
+  font-size: 11px;
+  font-weight: 500;
+  color: #8f949b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f2f3f5;
+  margin-bottom: 4px;
+}
+.margin-metric-row { font-size: 13px; color: #4b5563; }
+.margin-metric-row .margin-metric-label { color: #6f747b; font-size: 12px; }
+.margin-metric-row .margin-metric-val {
+  font-size: 15px;
+  font-weight: 500;
+  color: #2f343a;
+  text-align: right;
+}
+.margin-metric-foot {
+  flex-shrink: 0;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f2f3f5;
+}
+.margin-client-select {
+  border: 1px solid #d8dce0;
+  border-radius: 8px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+  color: #374151;
+  max-width: 100%;
+  background: #fff;
+}
+.margin-client-select:focus { outline: none; border-color: #7B96B8; }
+.margin-panel-sub {
+  font-size: 0.72rem;
+  color: #8f949b;
+  line-height: 1.35;
+  margin: -6px 0 10px;
+}
+.margin-edit-section { max-width: 1280px; margin: 0 auto 1.25rem; }
+.margin-edit-section-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #2f343a;
+  margin: 0 0 0.75rem;
+}
+.margin-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  grid-auto-rows: 320px;
+  max-width: 1280px;
+}
+.dash-card-margin-preset,
+.dash-card-margin-extra {
+  min-height: 320px;
+  height: 320px;
+  max-height: 320px;
+  overflow: hidden;
+}
+.card-head-preset {
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+.preset-overview-tag {
+  flex: 1 1 100%;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #3f6b9e;
+  background: #eef4ff;
+  border: 1px solid #d6e4f7;
+  border-radius: 4px;
+  padding: 0.12rem 0.45rem;
+  line-height: 1.35;
+}
+.dash-card-margin-extra { border-color: #e8d4b0; background: #fffdf8; }
+.dash-card-margin-extra .card-title { color: #6f747b; }
+.dash-card-missing { border-color: #f0d4d4; background: #fffafa; }
+
 </style>
 {% endblock %}
+{% macro margin_edit_card_body() -%}
+{% raw %}
+                <div class="card-body">
+                    <template v-if="!card.w">
+                        <p class="state-msg">未找到该总览组件</p>
+                    </template>
+                    <template v-else>
+                    <template v-if="widgetData[card.w.id] && widgetData[card.w.id].status === 'forbidden'">
+                        <p class="state-msg state-forbidden">无权限查看</p>
+                    </template>
+                    <template v-else-if="widgetData[card.w.id] && widgetData[card.w.id].status === 'error'">
+                        <p class="state-msg">加载失败</p>
+                    </template>
+                    <template v-else-if="card.w.widget_type === 'number'">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ widgetData[card.w.id] ? widgetData[card.w.id].display : '—' }}</span>
+                            <span class="num-sub"><span class="num-dot" :style="{background: themeColor(card.w)}"></span>{{ sourceLabel(card.w.source_key) }}</span>
+                        </div>
+                    </template>
+                    <template v-else-if="card.w.widget_type === 'rich_text'">
+                        <div class="rich-text">
+                            <div v-if="richTitle(widgetData[card.w.id] && widgetData[card.w.id].content)" class="rich-title">{{ richTitle(widgetData[card.w.id] && widgetData[card.w.id].content) }}</div>
+                            <div class="rich-body">{{ richBody(widgetData[card.w.id] && widgetData[card.w.id].content) }}</div>
+                        </div>
+                    </template>
+                    <template v-else-if="card.w.widget_type === 'iframe'">
+                        <iframe v-if="widgetData[card.w.id] && widgetData[card.w.id].url" class="dash-iframe" :src="widgetData[card.w.id].url" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+                    </template>
+                    <template v-else-if="card.w.widget_type === 'roster_summary'">
+                        <div class="roster-card">
+                            <div class="roster-meta">
+                                <select v-if="isRosterClientCard(card.w) && canWrite" class="roster-client-select" :value="(card.w.config && card.w.config.client_id) || ''" @change="changeRosterClient(card.w, $event.target.value)">
+                                    <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                </select>
+                                <span v-else class="roster-scope">{{ rosterScopeLabel(card.w) }}</span>
+                                <span v-if="isRosterClientCard(card.w) && canWrite" class="roster-headcount">{{ rosterHeadcount(card.w) }}</span>
+                            </div>
+                            <div class="roster-tiles">
+                                <div v-for="t in rosterTiles(card.w)" :key="t.label" class="roster-tile">
+                                    <span class="roster-tile-val" :style="{color: t.color}">{{ t.display }}</span>
+                                    <span class="roster-tile-label">{{ t.label }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <template v-else-if="['bar','pie','line'].includes(card.w.widget_type)">
+                        <div class="chart-area">
+                            <div class="chart-canvas-wrap">
+                                <canvas :id="'chart-' + card.w.id"></canvas>
+                            </div>
+                            <div v-if="card.w.widget_type === 'pie' && showLegend(card.w) && legendOf(card.w).length" class="chart-legend">
+                                <div class="legend-items">
+                                    <span v-for="item in legendOf(card.w)" :key="item.label" class="legend-row">
+                                        <span class="legend-dot" :style="{background: item.color}"></span>
+                                        <span class="legend-label" :title="item.label">{{ item.label }}</span>
+                                        <span class="legend-val">{{ item.value }}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <template v-else>
+                        <span class="state-msg">加载中…</span>
+                    </template>
+                    </template>
+                </div>
+{% endraw %}
+{%- endmacro %}
 {% block content %}
 {% raw %}
 <div id="page-app" class="dash-root">
@@ -163,7 +413,137 @@
 
     <!-- Canvas -->
     <div class="dash-canvas">
-        <div v-if="activeTab && activeTab.widgets.length" class="dash-grid">
+        <!-- 交付毛利总览 — present mode (2×2 Twenty-like, no dash-grid) -->
+        <div v-if="marginPresentMode" class="margin-dashboard-view">
+            <!-- 左上：各客户月报价(含税) -->
+            <section class="margin-panel margin-panel--bar">
+                <h3 class="margin-panel-title">{{ marginPanelLabels.quote.title }}</h3>
+                <p class="margin-panel-sub">{{ marginPanelLabels.quote.hint }}</p>
+                <div class="margin-panel-inner">
+                    <template v-if="marginPanelQuoteState === 'forbidden'"><p class="state-msg state-forbidden">无权限查看</p></template>
+                    <template v-else-if="marginPanelQuoteState === 'error'"><p class="state-msg">加载失败</p></template>
+                    <template v-else-if="marginPanelQuoteState === 'ok'">
+                        <div class="margin-chart-body"><canvas id="margin-revenue-bar"></canvas></div>
+                        <div class="margin-legend">
+                            <span v-for="item in marginQuoteLegend" :key="item.label" class="margin-legend-item">
+                                <span class="margin-legend-dot" :style="{background: item.color}"></span>
+                                <span class="margin-legend-label" :title="item.label">{{ item.label }}</span>
+                            </span>
+                            <span class="margin-legend-nav"><span>‹</span><span>1 / 2</span><span>›</span></span>
+                        </div>
+                    </template>
+                    <span v-else class="state-msg">{{ marginWidgets.quoteBar ? '加载中…' : '未配置月报价图表' }}</span>
+                </div>
+            </section>
+
+            <!-- 右上：各客户 GM$ 环形（同源柱图 widget，非历史 pie） -->
+            <section class="margin-panel margin-panel--donut">
+                <h3 class="margin-panel-title">{{ marginPanelLabels.gmDonut.title }}</h3>
+                <p class="margin-panel-sub">{{ marginPanelLabels.gmDonut.hint }}</p>
+                <div class="margin-panel-inner">
+                    <template v-if="marginPanelGmState === 'forbidden'"><p class="state-msg state-forbidden">无权限查看</p></template>
+                    <template v-else-if="marginPanelGmState === 'error'"><p class="state-msg">加载失败</p></template>
+                    <template v-else-if="marginPanelGmState === 'ok'">
+                        <div class="margin-chart-body"><canvas id="margin-gm-donut"></canvas></div>
+                        <div class="margin-legend">
+                            <span v-for="item in marginDonutLegend" :key="item.label" class="margin-legend-item">
+                                <span class="margin-legend-dot" :style="{background: item.color}"></span>
+                                <span class="margin-legend-label" :title="item.label">{{ item.label }}</span>
+                            </span>
+                            <span class="margin-legend-nav"><span>‹</span><span>1 / 2</span><span>›</span></span>
+                        </div>
+                    </template>
+                    <span v-else class="state-msg">{{ marginWidgets.gmBar ? '加载中…' : '未配置 GM$ 图表' }}</span>
+                </div>
+            </section>
+
+            <!-- 左下：各客户 GM$ 排名 -->
+            <section class="margin-panel margin-panel--hbar">
+                <h3 class="margin-panel-title">{{ marginPanelLabels.gmHbar.title }}</h3>
+                <p class="margin-panel-sub">{{ marginPanelLabels.gmHbar.hint }}</p>
+                <div class="margin-panel-inner">
+                    <template v-if="marginPanelGmState === 'forbidden'"><p class="state-msg state-forbidden">无权限查看</p></template>
+                    <template v-else-if="marginPanelGmState === 'error'"><p class="state-msg">加载失败</p></template>
+                    <template v-else-if="marginPanelGmState === 'ok'">
+                        <div class="margin-chart-body"><canvas id="margin-gm-hbar"></canvas></div>
+                    </template>
+                    <span v-else class="state-msg">{{ marginWidgets.gmBar ? '加载中…' : '未配置 GM$ 图表' }}</span>
+                </div>
+            </section>
+
+            <!-- 右下：毛利概览（roster 双卡，非 pie） -->
+            <section class="margin-panel margin-panel--metrics">
+                <h3 class="margin-panel-title">{{ marginPanelLabels.metrics.title }}</h3>
+                <p class="margin-panel-sub">{{ marginPanelLabels.metrics.hint }}</p>
+                <div class="margin-panel-inner">
+                    <template v-if="marginPanelMetricsState === 'forbidden'"><p class="state-msg state-forbidden">无权限查看</p></template>
+                    <template v-else-if="marginPanelMetricsState === 'error'"><p class="state-msg">加载失败</p></template>
+                    <template v-else-if="marginPanelMetricsState === 'ok'">
+                        <div class="margin-metric-table">
+                            <div class="margin-metric-head">
+                                <span></span>
+                                <span>全公司</span>
+                                <span>{{ marginClientColumnLabel }}</span>
+                            </div>
+                            <div v-for="row in marginMetricRows" :key="row.label" class="margin-metric-row">
+                                <span class="margin-metric-label">{{ row.label }}</span>
+                                <span class="margin-metric-val">{{ row.company }}</span>
+                                <span class="margin-metric-val">{{ row.client }}</span>
+                            </div>
+                        </div>
+                        <div v-if="marginWidgets.client && canWrite" class="margin-metric-foot">
+                            <select class="margin-client-select" :value="(marginWidgets.client.config && marginWidgets.client.config.client_id) || ''" @change="changeRosterClient(marginWidgets.client, $event.target.value)">
+                                <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
+                        </div>
+                    </template>
+                    <span v-else class="state-msg">{{ marginWidgets.company && marginWidgets.client ? '加载中…' : '未配置毛利概览' }}</span>
+                </div>
+            </section>
+        </div>
+
+        <template v-else-if="activeTab && activeTab.widgets.length">
+        <template v-if="marginDashboardEditLayout">
+            <section class="margin-edit-section">
+                <h3 class="margin-edit-section-title">总览组件</h3>
+                <div class="dash-grid margin-edit-grid">
+                    <div v-for="card in marginPresetEditCards" :key="'preset-' + card.key"
+                         class="dash-card dash-card-margin-preset editing"
+                         :class="{ 'dash-card-missing': !card.w }"
+                         :style="card.style">
+                        <div class="card-head card-head-preset">
+                            <span class="preset-overview-tag">{{ card.editTag }}</span>
+                            <span class="card-title">{{ card.title }}</span>
+                            <div v-if="card.w" class="card-actions">
+                                <span class="icon-btn" @click="openWidgetPanel(card.w)" title="编辑">✎</span>
+                                <span class="icon-btn" @click="duplicateWidget(card.w)" title="复制">⧉</span>
+                                <span class="icon-btn danger" @click="deleteWidget(card.w.id)" title="删除">✕</span>
+                            </div>
+                        </div>
+{% endraw %}{{ margin_edit_card_body() }}{% raw %}
+                    </div>
+                </div>
+            </section>
+            <section v-if="marginExtraWidgets.length" class="margin-edit-section">
+                <h3 class="margin-edit-section-title">历史 / 额外组件（不参与总览展示）</h3>
+                <div class="dash-grid margin-edit-grid">
+                    <div v-for="card in marginExtraEditCards" :key="'extra-' + card.key"
+                         class="dash-card dash-card-margin-extra editing"
+                         :style="card.style">
+                        <div class="card-head">
+                            <span class="card-title">{{ card.title }}</span>
+                            <div class="card-actions">
+                                <span class="icon-btn" @click="openWidgetPanel(card.w)" title="编辑">✎</span>
+                                <span class="icon-btn" @click="duplicateWidget(card.w)" title="复制">⧉</span>
+                                <span class="icon-btn danger" @click="deleteWidget(card.w.id)" title="删除">✕</span>
+                            </div>
+                        </div>
+{% endraw %}{{ margin_edit_card_body() }}{% raw %}
+                    </div>
+                </div>
+            </section>
+        </template>
+        <div v-else class="dash-grid">
             <div v-for="w in activeTab.widgets" :key="w.id" class="dash-card" :class="{editing: editMode}" :style="cardStyle(w)">
                 <div class="card-head">
                     <span class="card-title">{{ w.title }}</span>
@@ -234,6 +614,7 @@
                 </div>
             </div>
         </div>
+        </template>
         <div v-else-if="activeDashboard && !activeTab" class="empty-canvas">暂无标签页{{ editMode ? '，点击上方「+ 标签页」新建。' : '。' }}</div>
         <div v-else-if="activeTab" class="empty-canvas">暂无组件{{ editMode ? '，点击上方「+ 组件」添加。' : '。' }}</div>
         <div v-else class="empty-canvas">暂无仪表盘。</div>
@@ -351,12 +732,29 @@
                 <template v-if="isChart">
                     <div class="panel-section">
                         <h4>样式</h4>
-                        <div class="field"><label>配色</label>
-                            <div class="color-row">
-                                <span v-for="c in metadata.colors" :key="c"
-                                      :class="['color-swatch', widgetForm.config.color === c ? 'active' : '']"
-                                      :style="{background: swatchColor(c)}"
-                                      @click="widgetForm.config.color = c"></span>
+                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker">
+                            <label>颜色</label>
+                            <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
+                                <span class="color-picker-value">
+                                    <span class="color-picker-preview" :style="{background: widgetPalette(widgetForm.config)[selectedShade(widgetForm.config)]}"></span>
+                                    {{ selectedColorRowLabel }}
+                                </span>
+                                <span style="font-size:.7rem;color:#9aa0a6">▾</span>
+                            </button>
+                            <div v-if="colorPickerOpen" class="color-popover">
+                                <input class="color-popover-search" v-model="colorSearch" placeholder="搜索颜色" />
+                                <div class="color-popover-list">
+                                    <div v-for="row in filteredColorRows" :key="row.key" class="color-popover-row">
+                                        <span class="color-popover-label">{{ row.label }}</span>
+                                        <div class="color-popover-swatches">
+                                            <span v-for="(shade, si) in row.shades" :key="si"
+                                                  :class="['color-popover-swatch', isColorSwatchActive(row, si) ? 'active' : '']"
+                                                  :style="{background: shade}"
+                                                  :title="row.label + ' ' + (si + 1)"
+                                                  @click="pickColor(row.key, si)"></span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="field"><label>排序</label>
@@ -420,5 +818,5 @@
 {% endblock %}
 {% block handbook_assistant %}{% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/dashboards.js?v=6"></script>
+<script src="/static/js/pages/dashboards.js?v=13"></script>
 {% endblock %}

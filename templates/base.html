@@ -120,7 +120,7 @@
             top: 0;
             z-index: 5;
         }
-        .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer) {
+        .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer):not(.rms-sticky-serial):not(.rms-sticky-title):not(.rms-sticky-client) {
             z-index: 3;
         }
         /* 三键操作列固定宽（colgroup + 单元格双保险） */
@@ -397,7 +397,10 @@
         .crm-table thead .settlement-sticky-serial,
         .crm-table thead .settlement-sticky-date,
         .crm-table thead .settlement-sticky-customer,
-        .crm-table thead .turnover-sticky-right-actions {
+        .crm-table thead .turnover-sticky-right-actions,
+        .crm-table thead .rms-sticky-serial,
+        .crm-table thead .rms-sticky-title,
+        .crm-table thead .rms-sticky-client {
             background: #2f75b5;
             color: #fff;
             border-color: #1f5a94;
@@ -409,7 +412,10 @@
         .crm-table tbody .settlement-sticky-serial,
         .crm-table tbody .settlement-sticky-date,
         .crm-table tbody .settlement-sticky-customer,
-        .crm-table tbody .turnover-sticky-right-actions {
+        .crm-table tbody .turnover-sticky-right-actions,
+        .crm-table tbody .rms-sticky-serial,
+        .crm-table tbody .rms-sticky-title,
+        .crm-table tbody .rms-sticky-client {
             background: #fff;
         }
         .crm-table tbody tr:nth-child(even) .delivery-sticky-left-serial,
@@ -419,7 +425,10 @@
         .crm-table tbody tr:nth-child(even) .settlement-sticky-serial,
         .crm-table tbody tr:nth-child(even) .settlement-sticky-date,
         .crm-table tbody tr:nth-child(even) .settlement-sticky-customer,
-        .crm-table tbody tr:nth-child(even) .turnover-sticky-right-actions {
+        .crm-table tbody tr:nth-child(even) .turnover-sticky-right-actions,
+        .crm-table tbody tr:nth-child(even) .rms-sticky-serial,
+        .crm-table tbody tr:nth-child(even) .rms-sticky-title,
+        .crm-table tbody tr:nth-child(even) .rms-sticky-client {
             background: #f6f8fa;
         }
         .crm-table tbody tr:hover .delivery-sticky-left-serial,
@@ -429,7 +438,10 @@
         .crm-table tbody tr:hover .settlement-sticky-serial,
         .crm-table tbody tr:hover .settlement-sticky-date,
         .crm-table tbody tr:hover .settlement-sticky-customer,
-        .crm-table tbody tr:hover .turnover-sticky-right-actions {
+        .crm-table tbody tr:hover .turnover-sticky-right-actions,
+        .crm-table tbody tr:hover .rms-sticky-serial,
+        .crm-table tbody tr:hover .rms-sticky-title,
+        .crm-table tbody tr:hover .rms-sticky-client {
             background: #eef6ff;
         }
         /* 表头列宽拖拽（与客户拜访记录一致） */
@@ -2006,6 +2018,6 @@
         })();
     </script>
     {% block page_scripts %}{% endblock %}
-    <script src="/static/js/crm-table-resize.js?v=13"></script>
+    <script src="/static/js/crm-table-resize.js?v=20"></script>
 </body>
 </html>

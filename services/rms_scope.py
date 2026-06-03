@@ -8,7 +8,13 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
 from auth import data_scope as ds
-from auth.data_scope_catalog import RESOURCE_CRM_CLIENT, RESOURCE_RMS_APPLICATION, RESOURCE_RMS_JOB
+from auth.data_scope_catalog import (
+    CLIENT_RECRUITMENT_DEPT_COL,
+    CLIENT_RECRUITMENT_OWNER_COL,
+    RESOURCE_CRM_CLIENT,
+    RESOURCE_RMS_APPLICATION,
+    RESOURCE_RMS_JOB,
+)
 from auth.service import AuthContext
 
 
@@ -47,6 +53,36 @@ def scoped_applications_query(
     )
 
 
+def _recruitment_client_job_writable(
+    db: Session,
+    ctx: AuthContext,
+    client_id: int,
+    Client: Type[Any],
+) -> bool:
+    """True when user is the client's recruitment owner or in its recruitment dept subtree."""
+    if ctx.is_super:
+        return True
+    if ctx.user_id is None:
+        return False
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        return False
+    rec_owner_col = getattr(Client, CLIENT_RECRUITMENT_OWNER_COL, None)
+    rec_dept_col = getattr(Client, CLIENT_RECRUITMENT_DEPT_COL, None)
+    if rec_owner_col is not None:
+        rec_owner = getattr(client, CLIENT_RECRUITMENT_OWNER_COL, None)
+        if rec_owner is not None and int(rec_owner) == ctx.user_id:
+            return True
+    if rec_dept_col is None:
+        return False
+    rec_dept = getattr(client, CLIENT_RECRUITMENT_DEPT_COL, None)
+    if rec_dept is None:
+        return False
+    subtree = ds._dept_subtree_ids(db, [int(rec_dept)])
+    user_depts = ctx.dept_ids or ([ctx.primary_dept_id] if ctx.primary_dept_id else [])
+    return any(int(d) in subtree for d in user_depts)
+
+
 def _crm_client_id_visible(
     db: Session,
     ctx: AuthContext,
@@ -68,8 +104,10 @@ def assert_crm_client_visible_for_trial(
     client_id: int,
     Client: Type[Any],
 ) -> None:
-    """Trial path: CRM client visibility via RESOURCE_CRM_CLIENT read/write scope only."""
+    """Trial path: CRM client visibility or recruitment dept / owner on the client."""
     if ctx.is_super:
+        return
+    if _recruitment_client_job_writable(db, ctx, client_id, Client):
         return
     if _crm_client_id_visible(db, ctx, client_id, Client, "read"):
         return
@@ -84,6 +122,8 @@ def assert_rms_client_writable_regular(
     client_id: int,
     Client: Type[Any],
 ) -> None:
+    if _recruitment_client_job_writable(db, ctx, client_id, Client):
+        return
     ds.assert_client_in_scope(db, ctx, client_id, Client, RESOURCE_RMS_JOB, "write")
 
 

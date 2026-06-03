@@ -262,6 +262,9 @@ def test_dashboard_metadata(client, admin_auth):
     assert "count" in data["metrics"]
     # Twenty-parity style metadata.
     assert "blue" in data["colors"]
+    assert "jade" in data["colors"]
+    assert data["colors"][0] == "red"
+    assert data["color_shades"] == [0, 1, 2, 3, 4]
     assert "value_desc" in data["sorts"]
 
 
@@ -276,6 +279,7 @@ def _make_tab(client, headers, name):
     "bad_config,detail_part",
     [
         ({"metric": "count", "group_by": "stage", "color": "rainbow"}, "未知配色"),
+        ({"metric": "count", "group_by": "stage", "color": "blue", "color_shade": 9}, "color_shade"),
         ({"metric": "count", "group_by": "stage", "sort": "random"}, "未知排序"),
     ],
 )
@@ -289,6 +293,50 @@ def test_invalid_style_returns_400(client, admin_auth, bad_config, detail_part):
     )
     assert r.status_code == 400
     assert detail_part in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_chart_color_jade_and_shade_saves(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Color Jade Dash")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Jade chart",
+            "widget_type": "bar",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "color": "jade",
+                "color_shade": 4,
+            },
+        },
+    )
+    assert r.status_code == 200, r.text
+    cfg = r.json()["config"]
+    assert cfg["color"] == "jade"
+    assert cfg["color_shade"] == 4
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_chart_color_shade_defaults_to_2(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Color Default Shade Dash")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Legacy color",
+            "widget_type": "pie",
+            "source_key": "opportunities",
+            "config": {"metric": "count", "group_by": "stage", "color": "blue"},
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["config"]["color"] == "blue"
+    assert r.json()["config"]["color_shade"] == 2
     client.delete(f"/api/dashboards/{dash_id}", headers=headers)
 
 

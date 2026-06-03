@@ -847,6 +847,27 @@ def _ensure_visits_schema_compat():
         )
 
 
+def _ensure_rms_jobs_schema_compat():
+    """补齐 rms_jobs 表新增字段，兼容旧库。"""
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(rms_jobs)").fetchall()}
+        except Exception:
+            return
+        add_cols = {
+            "priority": "TEXT NOT NULL DEFAULT 'medium'",
+            "salary_cap": "TEXT NOT NULL DEFAULT ''",
+            "years_required": "TEXT NOT NULL DEFAULT ''",
+            "education": "TEXT NOT NULL DEFAULT ''",
+            "overtime_travel": "TEXT NOT NULL DEFAULT ''",
+            "interviewer": "TEXT NOT NULL DEFAULT ''",
+            "note": "TEXT NOT NULL DEFAULT ''",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE rms_jobs ADD COLUMN {col} {ddl}")
+
+
 _ensure_roster_schema_compat()
 _ensure_interview_schema_compat()
 _ensure_handbook_schema_compat()
@@ -859,6 +880,7 @@ _ensure_contacts_schema_compat()
 _ensure_visits_schema_compat()
 
 run_schema_migrations(engine)
+_ensure_rms_jobs_schema_compat()
 from models.rms import register_rms_models
 
 RMS_MODELS = register_rms_models(Base)

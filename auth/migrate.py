@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -10,6 +11,10 @@ from sqlalchemy.engine import Engine
 logger = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "migrations"
+ADD_COLUMN_RE = re.compile(
+    r"^\s*ALTER\s+TABLE\s+([A-Za-z_][\w]*)\s+ADD\s+COLUMN\s+([A-Za-z_][\w]*)\b",
+    re.IGNORECASE,
+)
 
 
 def _utc_now() -> str:
@@ -40,8 +45,12 @@ def run_all(engine: Engine) -> None:
             sql = path.read_text(encoding="utf-8")
             logger.info("migration applying: %s", mid)
             for stmt in _split_sql_statements(sql):
-                if stmt.strip():
-                    conn.execute(text(stmt))
+                if not stmt.strip():
+                    continue
+                if _add_column_already_applied(conn, stmt):
+                    logger.info("migration statement skipped, column exists: %s", mid)
+                    continue
+                conn.execute(text(stmt))
             conn.execute(
                 text(
                     "INSERT INTO schema_migrations (migration_id, applied_at) VALUES (:id, :at)"
@@ -65,3 +74,12 @@ def _split_sql_statements(sql: str) -> list[str]:
     if buf:
         parts.append("\n".join(buf))
     return parts
+
+
+def _add_column_already_applied(conn, stmt: str) -> bool:
+    match = ADD_COLUMN_RE.match(stmt)
+    if not match:
+        return False
+    table, column = match.groups()
+    rows = conn.execute(text(f"PRAGMA table_info({table})")).fetchall()
+    return column in {row[1] for row in rows}

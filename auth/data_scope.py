@@ -47,12 +47,13 @@ def _dept_subtree_ids(db: Session, dept_ids: List[int]) -> Set[int]:
         ).fetchone()
         if not prow:
             continue
-        path = str(prow[0] or "")
+        path_raw = str(prow[0] or "")
+        path = path_raw.rstrip("/") or path_raw
         if not path:
             continue
         rows = db.execute(
-            text("SELECT id FROM sys_dept WHERE path = :p OR path LIKE :pfx"),
-            {"p": path, "pfx": f"{path}/%"},
+            text("SELECT id FROM sys_dept WHERE path = :pr OR path = :p OR path LIKE :pfx"),
+            {"pr": path_raw, "p": path, "pfx": f"{path}/%"},
         ).fetchall()
         out.update(int(r[0]) for r in rows)
     return out

@@ -37,6 +37,10 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert 'data-rms-tab="applications"' in html
     assert "data-rms-error" in html
     assert "data-rms-empty" in html
+    assert "rms-sticky-serial" in html
+    assert "rms-jobs-table" in html
+    assert "rms-jobs-scroll-fill" in html
+    assert "crm-table" in html
     assert "/static/js/pages/rms.js" in html
 
     assert "Phase 2.5" in html

@@ -33,8 +33,15 @@ FILTER_OPS: FrozenSet[str] = frozenset({
 })
 
 # Style whitelists (Twenty-parity). Fixed enums only — no arbitrary CSS/colors.
-CHART_COLORS: FrozenSet[str] = frozenset({"blue", "green", "orange", "red", "purple", "gray"})
+CHART_COLOR_ORDER: Tuple[str, ...] = (
+    "red", "ruby", "crimson", "tomato", "orange", "amber", "yellow",
+    "lime", "grass", "green", "jade", "mint", "turquoise", "cyan", "sky", "blue",
+    "iris", "violet", "purple", "plum", "pink", "bronze", "gold", "brown", "gray",
+)
+CHART_COLORS: FrozenSet[str] = frozenset(CHART_COLOR_ORDER)
+COLOR_SHADES: FrozenSet[int] = frozenset({0, 1, 2, 3, 4})
 DEFAULT_COLOR = "blue"
+DEFAULT_COLOR_SHADE = 2
 SORT_MODES: FrozenSet[str] = frozenset({"label_asc", "label_desc", "value_asc", "value_desc"})
 DEFAULT_SORT = "value_desc"
 
@@ -213,6 +220,7 @@ def build_metadata() -> dict:
         "metrics": sorted(METRICS),
         "filter_ops": sorted(FILTER_OPS),
         "date_groups": sorted(DATE_GROUPS),
-        "colors": sorted(CHART_COLORS),
+        "colors": list(CHART_COLOR_ORDER),
+        "color_shades": sorted(COLOR_SHADES),
         "sorts": sorted(SORT_MODES),
     }

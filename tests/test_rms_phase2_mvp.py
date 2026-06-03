@@ -148,6 +148,53 @@ def _set_client_owner(engine, client_id: int, owner_user_id: int, delivery_owner
             )
 
 
+def _set_client_recruitment(
+    engine,
+    client_id: int,
+    *,
+    recruitment_dept_id: int | None = None,
+    recruitment_owner_user_id: int | None = None,
+) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE clients SET recruitment_dept_id = :did, recruitment_owner_user_id = :uid "
+                "WHERE id = :cid"
+            ),
+            {"did": recruitment_dept_id, "uid": recruitment_owner_user_id, "cid": client_id},
+        )
+
+
+def _ensure_dept(engine, dept_id: int, name: str, *, path: str, parent_id: int | None = None) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT OR REPLACE INTO sys_dept "
+                "(id, name, code, parent_id, path, dept_type, status, created_at, updated_at) "
+                "VALUES (:id, :name, :code, :pid, :path, 'internal', 'active', datetime('now'), datetime('now'))"
+            ),
+            {
+                "id": dept_id,
+                "name": name,
+                "code": f"DEPT{dept_id}",
+                "pid": parent_id,
+                "path": path,
+            },
+        )
+
+
+def _set_user_dept(engine, user_id: int, dept_id: int) -> None:
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM sys_user_dept WHERE user_id = :uid"), {"uid": user_id})
+        conn.execute(
+            text(
+                "INSERT INTO sys_user_dept (user_id, dept_id, is_primary, created_at) "
+                "VALUES (:uid, :did, 1, datetime('now'))"
+            ),
+            {"uid": user_id, "did": dept_id},
+        )
+
+
 def _enable_sales_rms_jobs_write(engine):
     _grant_role_permissions(engine, ROLE_SALES, ("rms.jobs.read", "rms.jobs.write"))
 
@@ -299,6 +346,111 @@ def test_first_job_regular_path_after_delivery_owner_set(client_rbac, admin_auth
     )
     assert second.status_code == 200, second.text
     assert second.json()["title"] == "Second"
+
+
+def test_create_job_recruitment_dept_regular_path(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    parent_dept = 880000 + (int(suffix[:6], 16) % 10000)
+    child_dept = parent_dept + 1
+    parent_path = f"ROOT/RECRUIT_{parent_dept}"
+    child_path = f"{parent_path}/TEAM_{child_dept}"
+    _ensure_dept(rms_engine, parent_dept, f"RecruitParent_{suffix}", path=parent_path)
+    _ensure_dept(
+        rms_engine,
+        child_dept,
+        f"RecruitChild_{suffix}",
+        path=child_path,
+        parent_id=parent_dept,
+    )
+
+    sales = f"rms2_rps_{suffix}"
+    delivery = f"rms2_rpd_{suffix}"
+    recruit = f"rms2_rpr_{suffix}"
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_SALES])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    recruit_uid = _create_user(client_rbac, admin_auth, recruit, [ROLE_DELIVERY])
+    _set_user_dept(rms_engine, recruit_uid, child_dept)
+
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS RecDept {suffix}")
+    _set_client_owner(rms_engine, cid, sales_uid, delivery_owner_user_id=delivery_uid)
+    _set_client_recruitment(rms_engine, cid, recruitment_dept_id=parent_dept)
+
+    login = _login(client_rbac, recruit)
+    r = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login.cookies,
+        json={
+            "client_id": cid,
+            "title": "Recruitment dept job",
+            "owner_user_id": recruit_uid,
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["client_id"] == cid
+
+
+def test_create_job_recruitment_owner_trial_path(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    sales_a = f"rms2_rta_{suffix}"
+    sales_b = f"rms2_rtb_{suffix}"
+    delivery = f"rms2_rtd_{suffix}"
+    recruit = f"rms2_rto_{suffix}"
+    uid_a = _create_user(client_rbac, admin_auth, sales_a, [ROLE_SALES])
+    _create_user(client_rbac, admin_auth, sales_b, [ROLE_SALES])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    recruit_uid = _create_user(client_rbac, admin_auth, recruit, [ROLE_DELIVERY])
+
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS RecOwner Trial {suffix}")
+    _set_client_owner(rms_engine, cid, uid_a, delivery_owner_user_id=None)
+    _set_client_recruitment(rms_engine, cid, recruitment_owner_user_id=recruit_uid)
+
+    login = _login(client_rbac, recruit)
+    r = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login.cookies,
+        json={
+            "client_id": cid,
+            "title": "Trial via recruitment owner",
+            "owner_user_id": recruit_uid,
+            "delivery_owner_user_id": delivery_uid,
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["title"] == "Trial via recruitment owner"
+
+
+def test_create_job_blocked_without_recruitment_or_delivery_scope(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    suffix = uniq
+    recruit_dept = 881000 + (int(suffix[:6], 16) % 10000)
+    other_dept = recruit_dept + 1
+    _ensure_dept(rms_engine, recruit_dept, f"RecruitOnly_{suffix}", path=f"ROOT/RECRUIT_{recruit_dept}")
+    _ensure_dept(rms_engine, other_dept, f"OtherDept_{suffix}", path=f"ROOT/OTHER_{other_dept}")
+
+    sales = f"rms2_blk_s_{suffix}"
+    delivery = f"rms2_blk_d_{suffix}"
+    outsider = f"rms2_blk_o_{suffix}"
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_SALES])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    outsider_uid = _create_user(client_rbac, admin_auth, outsider, [ROLE_DELIVERY])
+    _set_user_dept(rms_engine, outsider_uid, other_dept)
+
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS Blocked {suffix}")
+    _set_client_owner(rms_engine, cid, sales_uid, delivery_owner_user_id=delivery_uid)
+    _set_client_recruitment(rms_engine, cid, recruitment_dept_id=recruit_dept)
+
+    login = _login(client_rbac, outsider)
+    r = client_rbac.post(
+        "/api/rms/jobs",
+        cookies=login.cookies,
+        json={
+            "client_id": cid,
+            "title": "Should fail",
+            "owner_user_id": outsider_uid,
+        },
+    )
+    assert r.status_code == 404
 
 
 def test_candidate_created_by_visible(client_rbac, admin_auth, rms_engine, uniq):

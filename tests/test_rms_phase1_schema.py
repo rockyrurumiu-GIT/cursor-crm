@@ -126,6 +126,35 @@ def test_migration_005_idempotent_second_run(crm_main):
     assert int(count or 0) == 1
 
 
+def test_migration_007_applied_and_idempotent(crm_main):
+    run_schema_migrations(crm_main.engine)
+    with crm_main.engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT migration_id FROM schema_migrations "
+                "WHERE migration_id = '007_rms_jobs_extended.sql'"
+            )
+        ).fetchone()
+        assert row is not None
+        cols = _column_names(conn, "rms_jobs")
+    for col in (
+        "priority",
+        "salary_cap",
+        "years_required",
+        "education",
+        "overtime_travel",
+        "interviewer",
+        "note",
+    ):
+        assert col in cols
+    run_schema_migrations(crm_main.engine)
+    with crm_main.engine.connect() as conn:
+        count = conn.execute(
+            text("SELECT COUNT(*) FROM schema_migrations WHERE migration_id = '007_rms_jobs_extended.sql'")
+        ).scalar()
+    assert int(count or 0) == 1
+
+
 def test_orm_models_registered(crm_main):
     models = crm_main.RMS_MODELS
     assert set(models.keys()) == set(EXPECTED_ORM_TABLENAMES.keys())

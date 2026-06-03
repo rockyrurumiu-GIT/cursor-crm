@@ -24,6 +24,25 @@ FORBIDDEN_APPLICATION_BODY_KEYS = frozenset({
     "last_activity_at",
 })
 
+JOB_PRIORITIES = frozenset({"high", "medium", "low"})
+JOB_STATUSES = frozenset({"open", "closed", "freeze"})
+
+JOB_WRITABLE_STR_FIELDS = (
+    "title",
+    "department",
+    "location",
+    "job_description",
+    "requirements",
+    "status",
+    "priority",
+    "salary_cap",
+    "years_required",
+    "education",
+    "overtime_travel",
+    "interviewer",
+    "note",
+)
+
 
 def reject_forbidden_application_keys(body: dict) -> None:
     from fastapi import HTTPException
@@ -70,6 +89,13 @@ class JobCreate(BaseModel):
     job_description: str = ""
     requirements: str = ""
     status: str = "open"
+    priority: str = "medium"
+    salary_cap: str = ""
+    years_required: str = ""
+    education: str = ""
+    overtime_travel: str = ""
+    interviewer: str = ""
+    note: str = ""
     owner_user_id: int
     delivery_owner_user_id: Optional[int] = None
     sales_owner_user_id: Optional[int] = None
@@ -86,6 +112,13 @@ class JobUpdate(BaseModel):
     job_description: Optional[str] = None
     requirements: Optional[str] = None
     status: Optional[str] = None
+    priority: Optional[str] = None
+    salary_cap: Optional[str] = None
+    years_required: Optional[str] = None
+    education: Optional[str] = None
+    overtime_travel: Optional[str] = None
+    interviewer: Optional[str] = None
+    note: Optional[str] = None
     owner_user_id: Optional[int] = None
 
 
