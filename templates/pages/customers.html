@@ -156,14 +156,14 @@
                     <tr>
                         <th class="crm-th">客户名称</th>
                         <th class="crm-th">销售负责人</th>
-                        <th class="crm-th">交付部门</th>
-                        <th class="crm-th">交付负责人</th>
                         <th class="crm-th">外包规模</th>
                         <th class="crm-th">开拓阶段</th>
                         <th class="crm-th">预估金额</th>
                         <th class="crm-th">城市</th>
                         <th class="crm-th">首要联系人</th>
                         <th class="crm-th">商机</th>
+                        <th class="crm-th">交付部门</th>
+                        <th class="crm-th">交付负责人</th>
                         <th class="crm-th customers-handoff-col">交接状态</th>
                         <th class="crm-th">创建时间</th>
                         <th class="crm-th crm-sticky-right-op">操作</th>
@@ -173,8 +173,6 @@
                     <tr v-for="c in clients" :key="c.id">
                         <td class="crm-td crm-name-cell">{{ c.name }}</td>
                         <td class="crm-td">{{ c.owner }}</td>
-                        <td class="crm-td">{{ fmtDash(deliveryDeptDisplay(c)) }}</td>
-                        <td class="crm-td">{{ fmtDash(deliveryOwnerDisplay(c)) }}</td>
                         <td class="crm-td">{{ c.scale }}</td>
                         <td class="crm-td">
                             <span :class="phaseColor(c.phase)" class="px-2 py-1 rounded text-xs">{{ c.phase }}</span>
@@ -191,6 +189,8 @@
                             </template>
                             <span v-else class="text-gray-400">—</span>
                         </td>
+                        <td class="crm-td">{{ fmtDash(deliveryDeptDisplay(c)) }}</td>
+                        <td class="crm-td">{{ fmtDash(deliveryOwnerDisplay(c)) }}</td>
                         <td class="crm-td customers-handoff-col">
                             <a :href="`/customers/${c.id}/handoff`"
                                 :class="handoffBadge(resolveHandoffStatus(c.id))"

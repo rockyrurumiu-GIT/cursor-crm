@@ -1050,65 +1050,75 @@
             pointer-events: auto;
         }
         .crm-handbook-chat-ball {
-            width: 4.25rem;
-            height: 4.25rem;
+            width: 4.5rem;
+            height: 4.5rem;
             border-radius: 999px;
             border: 0;
-            background: transparent;
             padding: 0;
             position: relative;
             isolation: isolate;
-            transform: rotateX(10deg) rotateY(-12deg) translateZ(0);
-            transform-style: preserve-3d;
-            filter:
-                drop-shadow(0 22px 18px rgba(15, 23, 42, 0.32))
-                drop-shadow(0 8px 16px rgba(124, 58, 237, 0.34));
-            transition: transform 0.18s ease, filter 0.18s ease;
+            overflow: hidden;
+            background:
+                radial-gradient(125% 125% at 30% 20%, #fee2e2 0%, #fca5a5 32%, #b91c1c 100%);
+            box-shadow:
+                0 20px 28px rgba(15, 23, 42, 0.34),
+                0 8px 14px rgba(127, 29, 29, 0.34),
+                inset 0 3px 6px rgba(255, 255, 255, 0.55);
+            transform: rotateX(8deg) rotateY(-10deg);
+            animation: crm-chat-ball-float 4.2s ease-in-out infinite;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            will-change: transform;
+        }
+        @keyframes crm-chat-ball-float {
+            0%   { transform: translateY(0) rotateX(8deg) rotateY(-12deg); }
+            50%  { transform: translateY(-7px) rotateX(5deg) rotateY(-4deg); }
+            100% { transform: translateY(0) rotateX(8deg) rotateY(-12deg); }
         }
         .crm-handbook-chat-ball::before,
         .crm-handbook-chat-ball::after {
             content: '';
             position: absolute;
+            inset: 0;
             pointer-events: none;
             border-radius: 999px;
-        }
-        .crm-handbook-chat-ball::before {
-            inset: 7% 12% 44% 16%;
             z-index: 2;
-            background: linear-gradient(145deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
-            filter: blur(7px);
-            opacity: 0.5;
-            transform: translateZ(28px) rotate(-10deg);
+        }
+        /* glossy specular highlight (top-left) */
+        .crm-handbook-chat-ball::before {
+            background: radial-gradient(42% 36% at 32% 22%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 70%);
             mix-blend-mode: screen;
         }
+        /* sphere curvature shading (bottom + rim) */
         .crm-handbook-chat-ball::after {
-            left: 15%;
-            right: 10%;
-            bottom: -0.35rem;
-            height: 0.95rem;
-            z-index: -1;
-            background: radial-gradient(ellipse at center, rgba(15, 23, 42, 0.35), rgba(15, 23, 42, 0));
-            filter: blur(6px);
-            transform: translateZ(-24px) rotateX(72deg);
+            background: radial-gradient(120% 120% at 50% 118%, rgba(69, 10, 10, 0.55), rgba(69, 10, 10, 0) 55%);
+            box-shadow:
+                inset 0 -8px 14px rgba(69, 10, 10, 0.45),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.25);
         }
         .crm-handbook-chat-ball:hover {
-            transform: translateY(-5px) rotateX(10deg) rotateY(-12deg) translateZ(14px);
-            filter:
-                drop-shadow(0 28px 20px rgba(15, 23, 42, 0.34))
-                drop-shadow(0 12px 22px rgba(124, 58, 237, 0.42));
+            animation-play-state: paused;
+            transform: translateY(-6px) rotateX(6deg) rotateY(-9deg) scale(1.05);
+            box-shadow:
+                0 28px 34px rgba(15, 23, 42, 0.38),
+                0 12px 20px rgba(127, 29, 29, 0.4),
+                inset 0 3px 6px rgba(255, 255, 255, 0.6);
         }
         .crm-handbook-chat-ball:active {
-            transform: translateY(1px) rotateX(7deg) rotateY(-8deg) translateZ(4px) scale(0.97);
+            animation-play-state: paused;
+            transform: translateY(2px) rotateX(5deg) rotateY(-6deg) scale(0.96);
         }
         .crm-handbook-chat-ball img {
             display: block;
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            object-fit: cover;
+            object-position: center 12%;
             position: relative;
             z-index: 1;
-            transform: translateZ(22px);
             background: transparent;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .crm-handbook-chat-ball { animation: none; }
         }
         .crm-handbook-chat-panel {
             width: min(26rem, calc(100vw - 2rem));
@@ -1286,7 +1296,7 @@
             </form>
         </div>
         <button id="handbook-assistant-ball" type="button" class="crm-handbook-chat-ball flex items-center justify-center" title="手册问答" aria-label="打开手册问答">
-            <img src="/static/images/chatbot-logo.png?v=batman" alt="" decoding="async" />
+            <img src="/static/images/chatbot-logo-cutout.png?v=batman3d" alt="" decoding="async" />
         </button>
     </div>
     {% endblock %}
