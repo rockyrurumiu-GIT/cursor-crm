@@ -22,6 +22,7 @@ FieldKind = Literal["text", "numeric", "datetime"]
 # but NOT a chart and does not use the generic metric/group path.
 WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "pie", "line", "rich_text", "iframe", "roster_summary"})
 CHART_WIDGET_TYPES: FrozenSet[str] = frozenset({"bar", "pie", "line"})
+CHART_EXTRA_RENDERS: FrozenSet[str] = frozenset({"doughnut", "horizontal_bar"})
 DATA_WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "pie", "line"})
 
 METRICS: FrozenSet[str] = frozenset({"count", "sum", "avg", "min", "max"})
@@ -223,4 +224,5 @@ def build_metadata() -> dict:
         "colors": list(CHART_COLOR_ORDER),
         "color_shades": sorted(COLOR_SHADES),
         "sorts": sorted(SORT_MODES),
+        "chart_extra_renders": sorted(CHART_EXTRA_RENDERS),
     }

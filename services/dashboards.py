@@ -16,6 +16,7 @@ from auth import service as auth_svc
 from auth.service import AuthContext
 from schemas.dashboards import (
     CHART_COLORS,
+    CHART_EXTRA_RENDERS,
     COLOR_SHADES,
     DEFAULT_COLOR_SHADE,
     CHART_WIDGET_TYPES,
@@ -109,6 +110,54 @@ def validate_iframe_url(url: str) -> str:
     if not parsed.netloc:
         raise HTTPException(status_code=400, detail="iframe URL 无效")
     return url
+
+
+def _validate_extra_views(raw: Any, widget_type: str) -> list:
+    """Optional extra chart presentations for the same series data (chart widgets only)."""
+    if widget_type not in CHART_WIDGET_TYPES:
+        return []
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise HTTPException(status_code=400, detail="extra_views 必须是数组")
+    out: list = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail="extra_views 项必须是对象")
+        render = (item.get("render") or "").strip()
+        if render not in CHART_EXTRA_RENDERS:
+            raise HTTPException(status_code=400, detail=f"未知 extra_views.render: {render}")
+        try:
+            x = int(item.get("x", 0))
+            y = int(item.get("y", 0))
+            w = int(item.get("w", 4))
+            h = int(item.get("h", 4))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="extra_views 布局坐标必须是整数")
+        if x < 0 or x > 11:
+            raise HTTPException(status_code=400, detail="extra_views.x 须在 0–11 之间")
+        if w < 1 or w > 12 or x + w > 12:
+            raise HTTPException(status_code=400, detail="extra_views.w 须在 1–12 且不可超出栅格")
+        if y < 0:
+            raise HTTPException(status_code=400, detail="extra_views.y 须 ≥ 0")
+        if h < 1:
+            raise HTTPException(status_code=400, detail="extra_views.h 须 ≥ 1")
+        entry: dict = {"render": render, "x": x, "y": y, "w": w, "h": h}
+        title = (item.get("title") or "").strip()
+        if title:
+            entry["title"] = title
+        if render == "horizontal_bar":
+            limit = item.get("limit")
+            if limit is not None and limit != "":
+                try:
+                    limit = int(limit)
+                except (TypeError, ValueError):
+                    raise HTTPException(status_code=400, detail="extra_views.limit 必须是整数")
+                if limit < 1 or limit > 100:
+                    raise HTTPException(status_code=400, detail="extra_views.limit 须在 1–100 之间")
+                entry["limit"] = limit
+        out.append(entry)
+    return out
 
 
 def validate_rich_text(content: str) -> str:
@@ -253,6 +302,7 @@ def validate_widget_config(
     out["hide_empty"] = bool(config.get("hide_empty", False))
     if source_key == "roster_entries":
         out["include_left"] = bool(config.get("include_left", False))
+    out["extra_views"] = _validate_extra_views(config.get("extra_views"), widget_type)
     return out
 
 
@@ -1007,14 +1057,14 @@ def _roster_margin_preset_specs(sample_client_id) -> list:
             "widget_type": "roster_summary",
             "source_key": "roster_entries",
             "config": {},
-            "x": 0, "y": 0, "w": 6, "h": 6,
+            "x": 0, "y": 0, "w": 6, "h": 5,
         },
         {
             "title": "单客户毛利概览",
             "widget_type": "roster_summary",
             "source_key": "roster_entries",
             "config": dict(client_config),
-            "x": 6, "y": 0, "w": 6, "h": 6,
+            "x": 6, "y": 0, "w": 6, "h": 5,
         },
         {
             "title": "各客户月报价(含税)",
@@ -1026,7 +1076,7 @@ def _roster_margin_preset_specs(sample_client_id) -> list:
                 "data_labels": False, "hide_empty": True, "prefix": "¥",
                 "filters": list(active_filter),
             },
-            "x": 0, "y": 6, "w": 6, "h": 7,
+            "x": 0, "y": 5, "w": 6, "h": 5,
         },
         {
             "title": "各客户 GM$",
@@ -1038,7 +1088,7 @@ def _roster_margin_preset_specs(sample_client_id) -> list:
                 "data_labels": False, "hide_empty": True, "prefix": "¥",
                 "filters": list(active_filter),
             },
-            "x": 6, "y": 6, "w": 6, "h": 7,
+            "x": 6, "y": 5, "w": 6, "h": 5,
         },
     ]
 
@@ -1138,15 +1188,14 @@ def _sync_roster_margin_preset_layout(
     for spec in specs:
         w = _match_preset_widget(widgets, spec)
         if w:
-            w.x = spec["x"]
-            w.y = spec["y"]
-            w.w = spec["w"]
-            w.h = spec["h"]
-            w.updated_at = now
+            if int(w.h or 0) >= 6:
+                w.h = spec["h"]
+                w.updated_at = now
             if spec["widget_type"] == "bar":
                 cfg = _parse_json(w.config_json, {})
                 cfg["data_labels"] = False
                 w.config_json = _dump_json(cfg)
+                w.updated_at = now
         else:
             next_sort += 1
             w = DashboardWidget(
@@ -1167,29 +1216,6 @@ def _sync_roster_margin_preset_layout(
             db.flush()
             widgets.append(w)
         managed_preset_ids.add(w.id)
-
-    preset_rects = _preset_rects_from_specs(specs)
-    base_y = _max_preset_bottom(specs)
-    all_widgets = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).all()
-
-    to_relocate = []
-    for w in all_widgets:
-        if w.id in managed_preset_ids:
-            continue
-        _x, wy, _ww, _wh = _widget_rect(w)
-        if wy >= base_y and not _widget_overlaps_any_preset_rect(w, preset_rects):
-            continue
-        if _widget_overlaps_any_preset_rect(w, preset_rects):
-            to_relocate.append(w)
-
-    to_relocate.sort(key=lambda w: (int(w.y or 0), int(w.x or 0), w.id))
-    offset = 0
-    for w in to_relocate:
-        _x, _y, _ww, height = _widget_rect(w)
-        w.x = 0
-        w.y = base_y + offset
-        w.updated_at = now
-        offset += height
 
     db.commit()
 

@@ -7,19 +7,90 @@
 <style>
 .dash-root { display: flex; flex-direction: column; min-height: calc(100vh - 110px); background: #fafafa; }
 
-/* Toolbar */
-.dash-toolbar { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 1.25rem; background: #fff; border-bottom: 1px solid #e6e8eb; }
-.dash-breadcrumb { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; color: #4b5563; }
-.crumb-home { color: #6b7280; }
-.crumb-sep { color: #c4c8cd; }
-.dash-select { position: relative; }
-.dash-select-btn { display: flex; align-items: center; gap: 0.35rem; font-weight: 600; color: #1f2328; padding: 0.25rem 0.5rem; border-radius: 6px; cursor: pointer; }
-.dash-select-btn:hover { background: #f2f3f5; }
-.dash-menu { position: absolute; top: 110%; left: 0; min-width: 220px; background: #fff; border: 1px solid #e6e8eb; border-radius: 10px; box-shadow: 0 8px 28px rgba(0,0,0,0.12); padding: 0.35rem; z-index: 40; }
-.dash-menu li { padding: 0.45rem 0.6rem; border-radius: 6px; font-size: 0.875rem; cursor: pointer; color: #374151; }
-.dash-menu li:hover { background: #f2f3f5; }
-.dash-menu li.add { color: #2563eb; border-top: 1px solid #eef0f2; margin-top: 0.25rem; }
-.dash-toolbar-right { display: flex; align-items: center; gap: 0.4rem; }
+/* Toolbar + Twenty-style tabs */
+.dash-top-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.25rem;
+  background: #fff;
+  border-bottom: 1px solid #e6e8eb;
+}
+.dash-toolbar-right { display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.45rem; flex-shrink: 0; }
+.dash-tw-tabs {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0;
+  min-height: 42px;
+  flex: 1;
+  min-width: 0;
+}
+.dash-tw-tab {
+  position: relative;
+  padding: 0.7rem 1rem 0.55rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+.dash-tw-tab:hover { color: #1f2328; }
+.dash-tw-tab.active {
+  color: #1f2328;
+  font-weight: 600;
+}
+.dash-tw-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 0.65rem;
+  right: 0.65rem;
+  bottom: 0;
+  height: 2px;
+  background: #1f2328;
+  border-radius: 1px 1px 0 0;
+}
+.dash-tw-tab-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.7rem 1rem 0.55rem;
+  margin-bottom: -1px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.dash-tw-tab-add:hover { color: #1f2328; }
+.dash-tw-tab-add-icon {
+  font-size: 1rem;
+  line-height: 1;
+  font-weight: 400;
+}
+.dash-page-tabs-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1.25rem;
+  background: #fff;
+  border-bottom: 1px solid #e6e8eb;
+}
+.dash-page-tabs-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.45rem;
+  flex-shrink: 0;
+}
 .tbtn { display: inline-flex; align-items: center; justify-content: center; height: 32px; min-width: 32px; padding: 0 0.65rem; border-radius: 8px; border: 1px solid #e0e2e6; background: #fff; color: #374151; font-size: 0.85rem; cursor: pointer; }
 .tbtn:hover { background: #f2f3f5; }
 .tbtn:disabled { opacity: 0.4; cursor: default; }
@@ -28,16 +99,29 @@
 .tbtn-danger { color: #cf222e; border-color: #f0c4c4; }
 .tbtn-danger:hover { background: #fdf0f0; }
 
-/* Tabs */
-.dash-tabs { display: flex; align-items: center; gap: 0.25rem; padding: 0.5rem 1.25rem; background: #fff; border-bottom: 1px solid #e6e8eb; flex-wrap: wrap; }
-.tab-pill { padding: 0.35rem 0.8rem; border-radius: 8px; font-size: 0.85rem; color: #5b6370; cursor: pointer; border: 1px solid transparent; background: transparent; }
-.tab-pill:hover { background: #f2f3f5; }
-.tab-pill.active { background: #eef2ff; color: #1f2328; font-weight: 600; }
-
-/* Canvas + grid */
-.dash-canvas { flex: 1; padding: 1.25rem; overflow: auto; }
-.dash-grid { display: grid; grid-template-columns: repeat(12, 1fr); grid-auto-rows: 64px; gap: 16px; max-width: 1440px; margin: 0 auto; }
-.dash-card { background: #fff; border: 1px solid #eceef1; border-radius: 12px; padding: 1rem 1.1rem; display: flex; flex-direction: column; min-height: 0; box-shadow: none; transition: box-shadow .15s, border-color .15s; }
+/* Canvas + grid (Twenty-like density: ~52px/row → h=5 ≈ 320px card) */
+.dash-canvas { flex: 1; padding: 1rem 1.25rem; overflow: auto; }
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: 52px;
+  gap: 12px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.dash-card {
+  background: #fff;
+  border: 1px solid #eceef1;
+  border-radius: 10px;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  box-shadow: none;
+  transition: box-shadow .15s, border-color .15s;
+}
 .dash-card.editing { border-style: dashed; border-color: #d5d9de; }
 .dash-card.editing:hover { border-color: #9aa9bd; box-shadow: 0 2px 10px rgba(16,24,40,0.06); }
 .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; }
@@ -60,10 +144,10 @@
 .roster-client-select { border: 1px solid #d8dce0; border-radius: 8px; padding: 0.3rem 0.5rem; font-size: 0.82rem; color: #374151; max-width: 60%; }
 .roster-client-select:focus { outline: none; border-color: #7B96B8; }
 .roster-scope, .roster-headcount { font-size: 0.76rem; color: #98a2b3; }
-.roster-tiles { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; align-content: center; }
-.roster-tile { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.65rem 0.75rem; background: #fcfcfd; border: 1px solid #f2f3f5; border-radius: 10px; }
-.roster-tile-val { font-size: 1.4rem; font-weight: 600; line-height: 1.1; }
-.roster-tile-label { font-size: 0.72rem; color: #a8b0bd; }
+.roster-tiles { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; align-content: center; min-height: 0; }
+.roster-tile { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.45rem 0.55rem; background: #fcfcfd; border: 1px solid #f2f3f5; border-radius: 8px; min-height: 0; }
+.roster-tile-val { font-size: 1.1rem; font-weight: 600; line-height: 1.1; }
+.roster-tile-label { font-size: 0.68rem; color: #a8b0bd; }
 
 /* rich text */
 .rich-text { width: 100%; align-self: flex-start; }
@@ -75,7 +159,7 @@
 
 /* chart layout: canvas on top, light legend row beneath */
 .chart-area { display: flex; flex-direction: column; width: 100%; min-height: 0; gap: 0.6rem; }
-.chart-canvas-wrap { position: relative; flex: 1; min-width: 0; min-height: 120px; }
+.chart-canvas-wrap { position: relative; flex: 1; min-width: 0; min-height: 0; }
 .chart-canvas-wrap canvas { display: block; }
 .chart-legend { flex-shrink: 0; }
 .legend-items { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; justify-content: center; }
@@ -147,251 +231,43 @@
 .modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; align-items: center; justify-content: center; }
 .modal-panel { background: #fff; border-radius: 14px; padding: 1.25rem; width: 90%; max-width: 420px; }
 
-/* 交付毛利总览 — Twenty-style present mode (independent of dash-grid) */
-.margin-dashboard-view {
-  max-width: 1280px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-}
-.margin-panel {
-  height: 360px;
-  background: #fff;
-  border: 1px solid #eceef1;
-  border-radius: 10px;
-  padding: 16px 18px 12px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: none;
-}
-.margin-panel-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: #2f343a;
-  line-height: 1.2;
-  margin: 0 0 12px;
-  flex-shrink: 0;
-}
-.margin-panel-inner { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.margin-chart-body {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-}
-.margin-chart-body canvas { display: block; width: 100% !important; height: 100% !important; }
-.margin-legend {
-  height: 34px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  color: #6f747b;
-  font-size: 12px;
-  margin-top: 4px;
-}
-.margin-legend-item { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
-.margin-legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-.margin-legend-label { max-width: 88px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.margin-legend-nav {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #8f949b;
-  font-size: 11px;
-  flex-shrink: 0;
-}
-.margin-legend-nav span { opacity: 0.45; user-select: none; }
-.margin-metric-table {
-  flex: 1;
-  display: grid;
-  grid-template-rows: auto repeat(4, 1fr);
-  min-height: 0;
-}
-.margin-metric-head,
-.margin-metric-row {
-  display: grid;
-  grid-template-columns: 1.1fr 1fr 1fr;
-  align-items: center;
-  gap: 8px;
-  padding: 0 4px;
-}
-.margin-metric-head {
-  font-size: 11px;
-  font-weight: 500;
-  color: #8f949b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f2f3f5;
-  margin-bottom: 4px;
-}
-.margin-metric-row { font-size: 13px; color: #4b5563; }
-.margin-metric-row .margin-metric-label { color: #6f747b; font-size: 12px; }
-.margin-metric-row .margin-metric-val {
-  font-size: 15px;
-  font-weight: 500;
-  color: #2f343a;
-  text-align: right;
-}
-.margin-metric-foot {
-  flex-shrink: 0;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #f2f3f5;
-}
-.margin-client-select {
-  border: 1px solid #d8dce0;
-  border-radius: 8px;
-  padding: 0.35rem 0.5rem;
-  font-size: 0.82rem;
-  color: #374151;
-  max-width: 100%;
-  background: #fff;
-}
-.margin-client-select:focus { outline: none; border-color: #7B96B8; }
-.margin-panel-sub {
-  font-size: 0.72rem;
-  color: #8f949b;
-  line-height: 1.35;
-  margin: -6px 0 10px;
-}
-.margin-edit-section { max-width: 1280px; margin: 0 auto 1.25rem; }
-.margin-edit-section-title {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #2f343a;
-  margin: 0 0 0.75rem;
-}
-.margin-edit-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  grid-auto-rows: 320px;
-  max-width: 1280px;
-}
-.dash-card-margin-preset,
-.dash-card-margin-extra {
-  min-height: 320px;
-  height: 320px;
-  max-height: 320px;
-  overflow: hidden;
-}
-.card-head-preset {
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.35rem;
-}
-.preset-overview-tag {
-  flex: 1 1 100%;
+.extra-view-tag {
   font-size: 0.65rem;
   font-weight: 600;
   color: #3f6b9e;
   background: #eef4ff;
   border: 1px solid #d6e4f7;
   border-radius: 4px;
-  padding: 0.12rem 0.45rem;
-  line-height: 1.35;
+  padding: 0.1rem 0.4rem;
+  margin-right: 0.35rem;
 }
-.dash-card-margin-extra { border-color: #e8d4b0; background: #fffdf8; }
-.dash-card-margin-extra .card-title { color: #6f747b; }
-.dash-card-missing { border-color: #f0d4d4; background: #fffafa; }
+.dash-card-extra-view { border-color: #c5d9f0; }
+.extra-view-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+  align-items: end;
+}
+.extra-view-row .field { margin-bottom: 0; }
+.panel-add-link { font-size: 0.78rem; color: #2563eb; cursor: pointer; margin-top: 0.35rem; }
 
 </style>
 {% endblock %}
-{% macro margin_edit_card_body() -%}
-{% raw %}
-                <div class="card-body">
-                    <template v-if="!card.w">
-                        <p class="state-msg">未找到该总览组件</p>
-                    </template>
-                    <template v-else>
-                    <template v-if="widgetData[card.w.id] && widgetData[card.w.id].status === 'forbidden'">
-                        <p class="state-msg state-forbidden">无权限查看</p>
-                    </template>
-                    <template v-else-if="widgetData[card.w.id] && widgetData[card.w.id].status === 'error'">
-                        <p class="state-msg">加载失败</p>
-                    </template>
-                    <template v-else-if="card.w.widget_type === 'number'">
-                        <div class="num-wrap">
-                            <span class="num-value">{{ widgetData[card.w.id] ? widgetData[card.w.id].display : '—' }}</span>
-                            <span class="num-sub"><span class="num-dot" :style="{background: themeColor(card.w)}"></span>{{ sourceLabel(card.w.source_key) }}</span>
-                        </div>
-                    </template>
-                    <template v-else-if="card.w.widget_type === 'rich_text'">
-                        <div class="rich-text">
-                            <div v-if="richTitle(widgetData[card.w.id] && widgetData[card.w.id].content)" class="rich-title">{{ richTitle(widgetData[card.w.id] && widgetData[card.w.id].content) }}</div>
-                            <div class="rich-body">{{ richBody(widgetData[card.w.id] && widgetData[card.w.id].content) }}</div>
-                        </div>
-                    </template>
-                    <template v-else-if="card.w.widget_type === 'iframe'">
-                        <iframe v-if="widgetData[card.w.id] && widgetData[card.w.id].url" class="dash-iframe" :src="widgetData[card.w.id].url" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
-                    </template>
-                    <template v-else-if="card.w.widget_type === 'roster_summary'">
-                        <div class="roster-card">
-                            <div class="roster-meta">
-                                <select v-if="isRosterClientCard(card.w) && canWrite" class="roster-client-select" :value="(card.w.config && card.w.config.client_id) || ''" @change="changeRosterClient(card.w, $event.target.value)">
-                                    <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                                </select>
-                                <span v-else class="roster-scope">{{ rosterScopeLabel(card.w) }}</span>
-                                <span v-if="isRosterClientCard(card.w) && canWrite" class="roster-headcount">{{ rosterHeadcount(card.w) }}</span>
-                            </div>
-                            <div class="roster-tiles">
-                                <div v-for="t in rosterTiles(card.w)" :key="t.label" class="roster-tile">
-                                    <span class="roster-tile-val" :style="{color: t.color}">{{ t.display }}</span>
-                                    <span class="roster-tile-label">{{ t.label }}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                    <template v-else-if="['bar','pie','line'].includes(card.w.widget_type)">
-                        <div class="chart-area">
-                            <div class="chart-canvas-wrap">
-                                <canvas :id="'chart-' + card.w.id"></canvas>
-                            </div>
-                            <div v-if="card.w.widget_type === 'pie' && showLegend(card.w) && legendOf(card.w).length" class="chart-legend">
-                                <div class="legend-items">
-                                    <span v-for="item in legendOf(card.w)" :key="item.label" class="legend-row">
-                                        <span class="legend-dot" :style="{background: item.color}"></span>
-                                        <span class="legend-label" :title="item.label">{{ item.label }}</span>
-                                        <span class="legend-val">{{ item.value }}</span>
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                    <template v-else>
-                        <span class="state-msg">加载中…</span>
-                    </template>
-                    </template>
-                </div>
-{% endraw %}
-{%- endmacro %}
 {% block content %}
 {% raw %}
 <div id="page-app" class="dash-root">
-    <!-- Toolbar -->
-    <div class="dash-toolbar">
-        <div class="dash-breadcrumb">
-            <span class="crumb-home">仪表盘</span>
-            <span class="crumb-sep">/</span>
-            <div class="dash-select" v-click-outside="closeDashMenu">
-                <div class="dash-select-btn" @click="dashMenuOpen = !dashMenuOpen">
-                    <span>{{ activeDashboard ? activeDashboard.name : '—' }}</span>
-                    <span v-if="activeDashboard && activeDashboard.tabs.length" style="font-size:.8rem;color:#aab0b8;font-weight:400">({{ tabIndex }}/{{ activeDashboard.tabs.length }})</span>
-                    <span style="font-size:.7rem;color:#9aa0a6">▾</span>
-                </div>
-                <ul v-if="dashMenuOpen" class="dash-menu">
-                    <li v-for="d in dashboards" :key="d.id" @click="selectDashboard(d.id); dashMenuOpen=false">{{ d.name }}</li>
-                    <li v-if="canWrite" class="add" @click="openDashboardModal(); dashMenuOpen=false">+ 新建看板</li>
-                </ul>
-            </div>
-        </div>
+    <!-- 看板切换（Twenty 式下划线 Tab） -->
+    <div class="dash-top-bar">
+        <nav class="dash-tw-tabs" aria-label="看板">
+            <button v-for="d in dashboards" :key="d.id" type="button"
+                    :class="['dash-tw-tab', activeDashboardId === d.id ? 'active' : '']"
+                    @click="selectDashboard(d.id)">{{ d.name }}</button>
+            <button v-if="canWrite" type="button" class="dash-tw-tab-add" @click="openDashboardModal()">
+                <span class="dash-tw-tab-add-icon" aria-hidden="true">+</span> 新建看板
+            </button>
+        </nav>
         <div class="dash-toolbar-right">
-            <button class="tbtn" @click="stepDashboard(-1)" :disabled="dashboards.length < 2" title="上一个">‹</button>
-            <button class="tbtn" @click="stepDashboard(1)" :disabled="dashboards.length < 2" title="下一个">›</button>
             <button class="tbtn" disabled title="收藏（即将上线）">☆</button>
             <template v-if="canWrite">
                 <button v-if="!editMode" class="tbtn tbtn-primary" @click="editMode = true">编辑</button>
@@ -400,12 +276,17 @@
         </div>
     </div>
 
-    <!-- Tabs -->
-    <div class="dash-tabs" v-if="activeDashboard">
-        <button v-for="t in activeDashboard.tabs" :key="t.id" @click="activeTabId = t.id"
-                :class="['tab-pill', activeTabId === t.id ? 'active' : '']">{{ t.name }}</button>
-        <button v-if="editMode" class="tab-pill" @click="openTabModal()">+ 标签页</button>
-        <div class="ml-auto flex gap-2" v-if="editMode">
+    <!-- 标签页（Twenty 式下划线 Tab） -->
+    <div class="dash-page-tabs-row" v-if="activeDashboard">
+        <nav class="dash-tw-tabs" aria-label="标签页">
+            <button v-for="t in activeDashboard.tabs" :key="t.id" type="button"
+                    :class="['dash-tw-tab', activeTabId === t.id ? 'active' : '']"
+                    @click="activeTabId = t.id">{{ t.name }}</button>
+            <button v-if="editMode && canWrite" type="button" class="dash-tw-tab-add" @click="openTabModal()">
+                <span class="dash-tw-tab-add-icon" aria-hidden="true">+</span> 新建标签页
+            </button>
+        </nav>
+        <div v-if="editMode && canWrite" class="dash-page-tabs-actions">
             <button class="tbtn" @click="openWidgetPanel()" :disabled="!activeTabId">+ 组件</button>
             <button class="tbtn tbtn-danger" @click="deleteActiveDashboard()">删除看板</button>
         </div>
@@ -413,196 +294,73 @@
 
     <!-- Canvas -->
     <div class="dash-canvas">
-        <!-- 交付毛利总览 — present mode (2×2 Twenty-like, no dash-grid) -->
-        <div v-if="marginPresentMode" class="margin-dashboard-view">
-            <!-- 左上：各客户月报价(含税) -->
-            <section class="margin-panel margin-panel--bar">
-                <h3 class="margin-panel-title">{{ marginPanelLabels.quote.title }}</h3>
-                <p class="margin-panel-sub">{{ marginPanelLabels.quote.hint }}</p>
-                <div class="margin-panel-inner">
-                    <template v-if="marginPanelQuoteState === 'forbidden'"><p class="state-msg state-forbidden">无权限查看</p></template>
-                    <template v-else-if="marginPanelQuoteState === 'error'"><p class="state-msg">加载失败</p></template>
-                    <template v-else-if="marginPanelQuoteState === 'ok'">
-                        <div class="margin-chart-body"><canvas id="margin-revenue-bar"></canvas></div>
-                        <div class="margin-legend">
-                            <span v-for="item in marginQuoteLegend" :key="item.label" class="margin-legend-item">
-                                <span class="margin-legend-dot" :style="{background: item.color}"></span>
-                                <span class="margin-legend-label" :title="item.label">{{ item.label }}</span>
-                            </span>
-                            <span class="margin-legend-nav"><span>‹</span><span>1 / 2</span><span>›</span></span>
-                        </div>
-                    </template>
-                    <span v-else class="state-msg">{{ marginWidgets.quoteBar ? '加载中…' : '未配置月报价图表' }}</span>
-                </div>
-            </section>
-
-            <!-- 右上：各客户 GM$ 环形（同源柱图 widget，非历史 pie） -->
-            <section class="margin-panel margin-panel--donut">
-                <h3 class="margin-panel-title">{{ marginPanelLabels.gmDonut.title }}</h3>
-                <p class="margin-panel-sub">{{ marginPanelLabels.gmDonut.hint }}</p>
-                <div class="margin-panel-inner">
-                    <template v-if="marginPanelGmState === 'forbidden'"><p class="state-msg state-forbidden">无权限查看</p></template>
-                    <template v-else-if="marginPanelGmState === 'error'"><p class="state-msg">加载失败</p></template>
-                    <template v-else-if="marginPanelGmState === 'ok'">
-                        <div class="margin-chart-body"><canvas id="margin-gm-donut"></canvas></div>
-                        <div class="margin-legend">
-                            <span v-for="item in marginDonutLegend" :key="item.label" class="margin-legend-item">
-                                <span class="margin-legend-dot" :style="{background: item.color}"></span>
-                                <span class="margin-legend-label" :title="item.label">{{ item.label }}</span>
-                            </span>
-                            <span class="margin-legend-nav"><span>‹</span><span>1 / 2</span><span>›</span></span>
-                        </div>
-                    </template>
-                    <span v-else class="state-msg">{{ marginWidgets.gmBar ? '加载中…' : '未配置 GM$ 图表' }}</span>
-                </div>
-            </section>
-
-            <!-- 左下：各客户 GM$ 排名 -->
-            <section class="margin-panel margin-panel--hbar">
-                <h3 class="margin-panel-title">{{ marginPanelLabels.gmHbar.title }}</h3>
-                <p class="margin-panel-sub">{{ marginPanelLabels.gmHbar.hint }}</p>
-                <div class="margin-panel-inner">
-                    <template v-if="marginPanelGmState === 'forbidden'"><p class="state-msg state-forbidden">无权限查看</p></template>
-                    <template v-else-if="marginPanelGmState === 'error'"><p class="state-msg">加载失败</p></template>
-                    <template v-else-if="marginPanelGmState === 'ok'">
-                        <div class="margin-chart-body"><canvas id="margin-gm-hbar"></canvas></div>
-                    </template>
-                    <span v-else class="state-msg">{{ marginWidgets.gmBar ? '加载中…' : '未配置 GM$ 图表' }}</span>
-                </div>
-            </section>
-
-            <!-- 右下：毛利概览（roster 双卡，非 pie） -->
-            <section class="margin-panel margin-panel--metrics">
-                <h3 class="margin-panel-title">{{ marginPanelLabels.metrics.title }}</h3>
-                <p class="margin-panel-sub">{{ marginPanelLabels.metrics.hint }}</p>
-                <div class="margin-panel-inner">
-                    <template v-if="marginPanelMetricsState === 'forbidden'"><p class="state-msg state-forbidden">无权限查看</p></template>
-                    <template v-else-if="marginPanelMetricsState === 'error'"><p class="state-msg">加载失败</p></template>
-                    <template v-else-if="marginPanelMetricsState === 'ok'">
-                        <div class="margin-metric-table">
-                            <div class="margin-metric-head">
-                                <span></span>
-                                <span>全公司</span>
-                                <span>{{ marginClientColumnLabel }}</span>
-                            </div>
-                            <div v-for="row in marginMetricRows" :key="row.label" class="margin-metric-row">
-                                <span class="margin-metric-label">{{ row.label }}</span>
-                                <span class="margin-metric-val">{{ row.company }}</span>
-                                <span class="margin-metric-val">{{ row.client }}</span>
-                            </div>
-                        </div>
-                        <div v-if="marginWidgets.client && canWrite" class="margin-metric-foot">
-                            <select class="margin-client-select" :value="(marginWidgets.client.config && marginWidgets.client.config.client_id) || ''" @change="changeRosterClient(marginWidgets.client, $event.target.value)">
-                                <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                            </select>
-                        </div>
-                    </template>
-                    <span v-else class="state-msg">{{ marginWidgets.company && marginWidgets.client ? '加载中…' : '未配置毛利概览' }}</span>
-                </div>
-            </section>
-        </div>
-
-        <template v-else-if="activeTab && activeTab.widgets.length">
-        <template v-if="marginDashboardEditLayout">
-            <section class="margin-edit-section">
-                <h3 class="margin-edit-section-title">总览组件</h3>
-                <div class="dash-grid margin-edit-grid">
-                    <div v-for="card in marginPresetEditCards" :key="'preset-' + card.key"
-                         class="dash-card dash-card-margin-preset editing"
-                         :class="{ 'dash-card-missing': !card.w }"
-                         :style="card.style">
-                        <div class="card-head card-head-preset">
-                            <span class="preset-overview-tag">{{ card.editTag }}</span>
-                            <span class="card-title">{{ card.title }}</span>
-                            <div v-if="card.w" class="card-actions">
-                                <span class="icon-btn" @click="openWidgetPanel(card.w)" title="编辑">✎</span>
-                                <span class="icon-btn" @click="duplicateWidget(card.w)" title="复制">⧉</span>
-                                <span class="icon-btn danger" @click="deleteWidget(card.w.id)" title="删除">✕</span>
-                            </div>
-                        </div>
-{% endraw %}{{ margin_edit_card_body() }}{% raw %}
-                    </div>
-                </div>
-            </section>
-            <section v-if="marginExtraWidgets.length" class="margin-edit-section">
-                <h3 class="margin-edit-section-title">历史 / 额外组件（不参与总览展示）</h3>
-                <div class="dash-grid margin-edit-grid">
-                    <div v-for="card in marginExtraEditCards" :key="'extra-' + card.key"
-                         class="dash-card dash-card-margin-extra editing"
-                         :style="card.style">
-                        <div class="card-head">
-                            <span class="card-title">{{ card.title }}</span>
-                            <div class="card-actions">
-                                <span class="icon-btn" @click="openWidgetPanel(card.w)" title="编辑">✎</span>
-                                <span class="icon-btn" @click="duplicateWidget(card.w)" title="复制">⧉</span>
-                                <span class="icon-btn danger" @click="deleteWidget(card.w.id)" title="删除">✕</span>
-                            </div>
-                        </div>
-{% endraw %}{{ margin_edit_card_body() }}{% raw %}
-                    </div>
-                </div>
-            </section>
-        </template>
-        <div v-else class="dash-grid">
-            <div v-for="w in activeTab.widgets" :key="w.id" class="dash-card" :class="{editing: editMode}" :style="cardStyle(w)">
+        <div v-if="activeTab && displayItems.length" class="dash-grid">
+            <div v-for="item in displayItems" :key="item.key"
+                 class="dash-card"
+                 :class="{editing: editMode, 'dash-card-extra-view': item.isExtra}"
+                 :style="item.style">
                 <div class="card-head">
-                    <span class="card-title">{{ w.title }}</span>
-                    <div v-if="editMode" class="card-actions">
-                        <span class="icon-btn" @click="openWidgetPanel(w)" title="编辑">✎</span>
-                        <span class="icon-btn" @click="duplicateWidget(w)" title="复制">⧉</span>
-                        <span class="icon-btn danger" @click="deleteWidget(w.id)" title="删除">✕</span>
+                    <span v-if="item.isExtra" class="extra-view-tag">附加 · {{ extraRenderLabel(item.extraView.render) }}</span>
+                    <span class="card-title">{{ item.title }}</span>
+                    <div v-if="editMode && !item.isExtra" class="card-actions">
+                        <span class="icon-btn" @click="openDisplayItemPanel(item)" title="编辑">✎</span>
+                        <span class="icon-btn" @click="duplicateWidget(item.widget)" title="复制">⧉</span>
+                        <span class="icon-btn danger" @click="deleteWidget(item.widget.id)" title="删除">✕</span>
+                    </div>
+                    <div v-else-if="editMode && item.isExtra" class="card-actions">
+                        <span class="icon-btn" @click="openDisplayItemPanel(item)" title="编辑数据源组件">✎</span>
                     </div>
                 </div>
                 <div class="card-body">
-                    <template v-if="widgetData[w.id] && widgetData[w.id].status === 'forbidden'">
+                    <template v-if="widgetData[item.widget.id] && widgetData[item.widget.id].status === 'forbidden'">
                         <p class="state-msg state-forbidden">无权限查看</p>
                     </template>
-                    <template v-else-if="widgetData[w.id] && widgetData[w.id].status === 'error'">
+                    <template v-else-if="widgetData[item.widget.id] && widgetData[item.widget.id].status === 'error'">
                         <p class="state-msg">加载失败</p>
                     </template>
-                    <template v-else-if="w.widget_type === 'number'">
+                    <template v-else-if="item.widget.widget_type === 'number'">
                         <div class="num-wrap">
-                            <span class="num-value">{{ widgetData[w.id] ? widgetData[w.id].display : '—' }}</span>
-                            <span class="num-sub"><span class="num-dot" :style="{background: themeColor(w)}"></span>{{ sourceLabel(w.source_key) }}</span>
+                            <span class="num-value">{{ widgetData[item.widget.id] ? widgetData[item.widget.id].display : '—' }}</span>
+                            <span class="num-sub"><span class="num-dot" :style="{background: themeColor(item.widget)}"></span>{{ sourceLabel(item.widget.source_key) }}</span>
                         </div>
                     </template>
-                    <template v-else-if="w.widget_type === 'rich_text'">
+                    <template v-else-if="item.widget.widget_type === 'rich_text'">
                         <div class="rich-text">
-                            <div v-if="richTitle(widgetData[w.id] && widgetData[w.id].content)" class="rich-title">{{ richTitle(widgetData[w.id] && widgetData[w.id].content) }}</div>
-                            <div class="rich-body">{{ richBody(widgetData[w.id] && widgetData[w.id].content) }}</div>
+                            <div v-if="richTitle(widgetData[item.widget.id] && widgetData[item.widget.id].content)" class="rich-title">{{ richTitle(widgetData[item.widget.id] && widgetData[item.widget.id].content) }}</div>
+                            <div class="rich-body">{{ richBody(widgetData[item.widget.id] && widgetData[item.widget.id].content) }}</div>
                         </div>
                     </template>
-                    <template v-else-if="w.widget_type === 'iframe'">
-                        <iframe v-if="widgetData[w.id] && widgetData[w.id].url" class="dash-iframe" :src="widgetData[w.id].url" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+                    <template v-else-if="item.widget.widget_type === 'iframe'">
+                        <iframe v-if="widgetData[item.widget.id] && widgetData[item.widget.id].url" class="dash-iframe" :src="widgetData[item.widget.id].url" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
                     </template>
-                    <template v-else-if="w.widget_type === 'roster_summary'">
+                    <template v-else-if="item.widget.widget_type === 'roster_summary'">
                         <div class="roster-card">
                             <div class="roster-meta">
-                                <select v-if="isRosterClientCard(w) && canWrite" class="roster-client-select" :value="(w.config && w.config.client_id) || ''" @change="changeRosterClient(w, $event.target.value)">
+                                <select v-if="isRosterClientCard(item.widget) && canWrite" class="roster-client-select" :value="(item.widget.config && item.widget.config.client_id) || ''" @change="changeRosterClient(item.widget, $event.target.value)">
                                     <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
                                 </select>
-                                <span v-else class="roster-scope">{{ rosterScopeLabel(w) }}</span>
-                                <span v-if="isRosterClientCard(w) && canWrite" class="roster-headcount">{{ rosterHeadcount(w) }}</span>
+                                <span v-else class="roster-scope">{{ rosterScopeLabel(item.widget) }}</span>
+                                <span v-if="isRosterClientCard(item.widget) && canWrite" class="roster-headcount">{{ rosterHeadcount(item.widget) }}</span>
                             </div>
                             <div class="roster-tiles">
-                                <div v-for="t in rosterTiles(w)" :key="t.label" class="roster-tile">
+                                <div v-for="t in rosterTiles(item.widget)" :key="t.label" class="roster-tile">
                                     <span class="roster-tile-val" :style="{color: t.color}">{{ t.display }}</span>
                                     <span class="roster-tile-label">{{ t.label }}</span>
                                 </div>
                             </div>
                         </div>
                     </template>
-                    <template v-else-if="['bar','pie','line'].includes(w.widget_type)">
+                    <template v-else-if="['bar','pie','line'].includes(item.widget.widget_type)">
                         <div class="chart-area">
                             <div class="chart-canvas-wrap">
-                                <canvas :id="'chart-' + w.id"></canvas>
+                                <canvas :id="cardCanvasId(item)"></canvas>
                             </div>
-                            <div v-if="w.widget_type === 'pie' && showLegend(w) && legendOf(w).length" class="chart-legend">
+                            <div v-if="!item.isExtra && item.widget.widget_type === 'pie' && showLegend(item.widget) && legendOf(item.widget).length" class="chart-legend">
                                 <div class="legend-items">
-                                    <span v-for="item in legendOf(w)" :key="item.label" class="legend-row">
-                                        <span class="legend-dot" :style="{background: item.color}"></span>
-                                        <span class="legend-label" :title="item.label">{{ item.label }}</span>
-                                        <span class="legend-val">{{ item.value }}</span>
+                                    <span v-for="leg in legendOf(item.widget)" :key="leg.label" class="legend-row">
+                                        <span class="legend-dot" :style="{background: leg.color}"></span>
+                                        <span class="legend-label" :title="leg.label">{{ leg.label }}</span>
+                                        <span class="legend-val">{{ leg.value }}</span>
                                     </span>
                                 </div>
                             </div>
@@ -614,7 +372,6 @@
                 </div>
             </div>
         </div>
-        </template>
         <div v-else-if="activeDashboard && !activeTab" class="empty-canvas">暂无标签页{{ editMode ? '，点击上方「+ 标签页」新建。' : '。' }}</div>
         <div v-else-if="activeTab" class="empty-canvas">暂无组件{{ editMode ? '，点击上方「+ 组件」添加。' : '。' }}</div>
         <div v-else class="empty-canvas">暂无仪表盘。</div>
@@ -770,6 +527,35 @@
                         <div v-if="widgetForm.widget_type !== 'pie'" class="toggle-row"><span>显示数值标签</span><input type="checkbox" v-model="widgetForm.config.data_labels" /></div>
                         <div class="toggle-row"><span>隐藏空值</span><input type="checkbox" v-model="widgetForm.config.hide_empty" /></div>
                     </div>
+                    <div class="panel-section">
+                        <h4>附加展示（同源数据）</h4>
+                        <p style="font-size:0.76rem;color:#98a2b3;margin:0 0 0.5rem">在同一组件数据上，于其它栅格位置再渲染环形图或横向排名。</p>
+                        <div v-for="(ev, evIdx) in widgetForm.config.extra_views" :key="'ev-' + evIdx" class="extra-view-row" style="grid-template-columns:1fr 1fr 1fr auto">
+                            <div class="field">
+                                <label>形态</label>
+                                <select v-model="ev.render">
+                                    <option v-for="r in (metadata.chart_extra_renders || [])" :key="r" :value="r">{{ extraRenderLabel(r) }}</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label>标题（可选）</label>
+                                <input v-model="ev.title" placeholder="默认用组件标题" />
+                            </div>
+                            <div class="field" v-if="ev.render === 'horizontal_bar'">
+                                <label>条数</label>
+                                <input type="number" min="1" max="100" v-model.number="ev.limit" />
+                            </div>
+                            <span v-else class="field"></span>
+                            <span class="icon-btn danger" style="margin-bottom:0.35rem" @click="removeExtraView(evIdx)" title="删除">✕</span>
+                        </div>
+                        <div v-for="(ev, evIdx) in widgetForm.config.extra_views" :key="'evl-' + evIdx" class="type-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:0.5rem">
+                            <div class="field" style="margin:0"><label>x</label><input type="number" min="0" max="11" v-model.number="ev.x" /></div>
+                            <div class="field" style="margin:0"><label>y</label><input type="number" min="0" v-model.number="ev.y" /></div>
+                            <div class="field" style="margin:0"><label>宽</label><input type="number" min="1" max="12" v-model.number="ev.w" /></div>
+                            <div class="field" style="margin:0"><label>高</label><input type="number" min="1" v-model.number="ev.h" /></div>
+                        </div>
+                        <span class="panel-add-link" @click="addExtraView()">+ 添加附加展示</span>
+                    </div>
                 </template>
 
                 <div class="panel-section">
@@ -818,5 +604,5 @@
 {% endblock %}
 {% block handbook_assistant %}{% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/dashboards.js?v=13"></script>
+<script src="/static/js/pages/dashboards.js?v=16"></script>
 {% endblock %}

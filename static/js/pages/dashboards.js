@@ -7,7 +7,8 @@
 
   const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
   const chartInstances = {};
-  const marginChartInstances = {};
+
+  const EXTRA_RENDER_LABELS = { doughnut: "环形图", horizontal_bar: "横向排名（柱图）" };
 
   // Low-saturation accent per color key. Keys match the backend whitelist; only the
   // rendered hex is muted (Twenty-style). `base` is the single accent for bar/line/number.
@@ -238,93 +239,20 @@
   const TYPE_LABELS = { number: "数字", bar: "柱状", pie: "环形", line: "折线", rich_text: "文本", iframe: "网页", roster_summary: "花名册概览" };
   const TYPE_ICONS = { number: "#", bar: "▮", pie: "◔", line: "📈", rich_text: "¶", iframe: "▭", roster_summary: "▦" };
 
-  const MARGIN_DASHBOARD_NAME = "交付毛利总览";
-  const MARGIN_PRESENT_SPEC_ORDER = ["quoteBar", "gmBar", "company", "client"];
-  const MARGIN_PRESENT_SPECS = {
-    quoteBar: {
-      title: "各客户月报价(含税)",
-      widget_type: "bar",
-      source_key: "roster_entries",
-      panelTitle: "各客户月报价(含税)",
-      editTag: "总览使用：各客户月报价",
-    },
-    gmBar: {
-      title: "各客户 GM$",
-      widget_type: "bar",
-      source_key: "roster_entries",
-      panelTitle: "各客户 GM$",
-      editTag: "总览使用：GM$ 环形 + GM$ 排名",
-    },
-    company: {
-      title: "全公司毛利概览",
-      widget_type: "roster_summary",
-      source_key: "roster_entries",
-      panelTitle: "毛利概览",
-      editTag: "总览使用：毛利概览表",
-    },
-    client: {
-      title: "单客户毛利概览",
-      widget_type: "roster_summary",
-      source_key: "roster_entries",
-      panelTitle: "毛利概览",
-      editTag: "总览使用：毛利概览表",
-    },
-  };
-
-  const MARGIN_PRESET_EDIT_LAYOUT = {
-    quoteBar: { gridColumn: "1 / 2", gridRow: "1 / 2" },
-    gmBar: { gridColumn: "2 / 3", gridRow: "1 / 2" },
-    company: { gridColumn: "1 / 2", gridRow: "2 / 3" },
-    client: { gridColumn: "2 / 3", gridRow: "2 / 3" },
-  };
-
-  function matchMarginPresentSpec(w, spec) {
-    return !!w && w.title === spec.title && w.widget_type === spec.widget_type && w.source_key === spec.source_key;
+  function chartCanvasId(w, viewIndex) {
+    if (viewIndex == null || viewIndex === undefined) return "chart-" + w.id;
+    return "chart-" + w.id + "-ev-" + viewIndex;
   }
 
-  function findMarginWidget(tab, key) {
-    if (!tab || !tab.widgets) return null;
-    const spec = MARGIN_PRESENT_SPECS[key];
-    if (!spec) return null;
-    return tab.widgets.find(function (w) { return matchMarginPresentSpec(w, spec); }) || null;
+  function destroyChartKey(key) {
+    if (chartInstances[key]) {
+      chartInstances[key].destroy();
+      delete chartInstances[key];
+    }
   }
 
-  function isMarginPresetWidget(w) {
-    if (!w) return false;
-    return MARGIN_PRESENT_SPEC_ORDER.some(function (key) {
-      return matchMarginPresentSpec(w, MARGIN_PRESENT_SPECS[key]);
-    });
-  }
-
-  function destroyMarginCharts() {
-    Object.keys(marginChartInstances).forEach(function (k) {
-      if (marginChartInstances[k]) marginChartInstances[k].destroy();
-      delete marginChartInstances[k];
-    });
-  }
-
-  function marginChartLayout() {
-    return { responsive: true, maintainAspectRatio: false, animation: false };
-  }
-
-  function marginTooltip(labelFn) {
-    return {
-      backgroundColor: "#ffffff",
-      titleColor: "#1f2328",
-      bodyColor: "#6b7280",
-      borderColor: "#e6e8eb",
-      borderWidth: 1,
-      padding: 10,
-      callbacks: { label: labelFn },
-    };
-  }
-
-  function marginSeriesLegend(data, limit, colorAt) {
-    if (!data || data.kind !== "series" || data.status !== "ok") return [];
-    const labels = data.labels || [];
-    return labels.slice(0, limit).map(function (lab, i) {
-      return { label: lab, color: colorAt(i) };
-    });
+  function extraRenderLabel(render) {
+    return EXTRA_RENDER_LABELS[render] || render;
   }
 
   createApp({
@@ -345,7 +273,6 @@
       const widgetData = ref({});
       const canWrite = ref(false);
       const editMode = ref(false);
-      const dashMenuOpen = ref(false);
       const rosterClients = ref([]);
 
       const showDashboardModal = ref(false);
@@ -370,8 +297,9 @@
             show_legend: true, show_value_center: true, data_labels: false, hide_empty: false,
             url: "", content: "", prefix: "", suffix: "",
             client_id: null, include_left: false,
+            extra_views: [],
           },
-          x: 0, y: 0, w: 4, h: 4,
+          x: 0, y: 0, w: 6, h: 5,
         };
       }
 
@@ -382,188 +310,36 @@
         if (!activeDashboard.value) return null;
         return activeDashboard.value.tabs.find(function (t) { return t.id === activeTabId.value; }) || null;
       });
-      const tabIndex = computed(function () {
-        if (!activeDashboard.value) return 0;
-        const i = activeDashboard.value.tabs.findIndex(function (t) { return t.id === activeTabId.value; });
-        return i < 0 ? 1 : i + 1;
-      });
-
-      const marginPresentMode = computed(function () {
-        return !!activeDashboard.value
-          && activeDashboard.value.name === MARGIN_DASHBOARD_NAME
-          && !editMode.value;
-      });
-
-      const marginWidgets = computed(function () {
-        const tab = activeTab.value;
-        return {
-          company: findMarginWidget(tab, "company"),
-          client: findMarginWidget(tab, "client"),
-          quoteBar: findMarginWidget(tab, "quoteBar"),
-          gmBar: findMarginWidget(tab, "gmBar"),
-        };
-      });
-
-      function marginWidgetDataState(w) {
-        if (!w) return "missing";
-        const d = widgetData.value[w.id];
-        if (!d) return "loading";
-        if (d.status === "forbidden") return "forbidden";
-        if (d.status === "error") return "error";
-        if (d.kind === "series" && d.status === "ok") return "ok";
-        if (d.kind === "roster_summary") return "ok";
-        return "loading";
-      }
-
-      const marginPanelQuoteState = computed(function () {
-        return marginWidgetDataState(marginWidgets.value.quoteBar);
-      });
-      const marginPanelGmState = computed(function () {
-        return marginWidgetDataState(marginWidgets.value.gmBar);
-      });
-      const marginPanelMetricsState = computed(function () {
-        const mw = marginWidgets.value;
-        if (!mw.company || !mw.client) return mw.company || mw.client ? "loading" : "missing";
-        const cs = marginWidgetDataState(mw.company);
-        const cl = marginWidgetDataState(mw.client);
-        if (cs === "forbidden" || cl === "forbidden") return "forbidden";
-        if (cs === "error" || cl === "error") return "error";
-        if (cs === "ok" && cl === "ok") return "ok";
-        return "loading";
-      });
-
-      const marginQuoteLegend = computed(function () {
-        const w = marginWidgets.value.quoteBar;
-        if (!w) return [];
-        const d = widgetData.value[w.id];
-        const n = (d && d.labels) ? d.labels.length : 0;
-        const colors = shadeRamp(w.config || {}, n);
-        return marginSeriesLegend(d, 5, function (i) { return colors[i]; });
-      });
-
-      const marginDonutLegend = computed(function () {
-        const w = marginWidgets.value.gmBar;
-        if (!w) return [];
-        const d = widgetData.value[w.id];
-        const n = (d && d.labels) ? d.labels.length : 0;
-        const colors = shadeRamp(w.config || {}, n);
-        return marginSeriesLegend(d, 5, function (i) { return colors[i]; });
-      });
-
-      const marginClientColumnLabel = computed(function () {
-        const w = marginWidgets.value.client;
-        if (!w) return "当前客户";
-        const d = widgetData.value[w.id];
-        if (d && d.kind === "roster_summary" && d.client_name) return d.client_name;
-        return rosterScopeLabel(w) || "当前客户";
-      });
-
-      const marginMetricRows = computed(function () {
-        const mw = marginWidgets.value;
-        const cd = mw.company ? widgetData.value[mw.company.id] : null;
-        const ld = mw.client ? widgetData.value[mw.client.id] : null;
-        if (!cd || cd.kind !== "roster_summary" || !ld || ld.kind !== "roster_summary") return [];
-        return [
-          { label: "月报价", company: cd.revenue ? cd.revenue.display : "—", client: ld.revenue ? ld.revenue.display : "—" },
-          { label: "税前工资", company: cd.salary ? cd.salary.display : "—", client: ld.salary ? ld.salary.display : "—" },
-          { label: "GM$", company: cd.gms ? cd.gms.display : "—", client: ld.gms ? ld.gms.display : "—" },
-          { label: "GM%", company: cd.gm_pct ? cd.gm_pct.display : "—", client: ld.gm_pct ? ld.gm_pct.display : "—" },
-        ];
-      });
-
-      const marginPanelLabels = computed(function () {
-        const specs = MARGIN_PRESENT_SPECS;
-        const mw = marginWidgets.value;
-        const gmTitle = specs.gmBar.title;
-        return {
-          quote: {
-            title: specs.quoteBar.panelTitle,
-            hint: "配色与编辑态「" + specs.quoteBar.title + "」一致",
-          },
-          gmDonut: {
-            title: gmTitle + "（环形）",
-            hint: "配色来自「" + gmTitle + "」柱图（非历史 pie）",
-          },
-          gmHbar: {
-            title: gmTitle + "（排名）",
-            hint: "配色来自「" + gmTitle + "」柱图",
-          },
-          metrics: {
-            title: specs.company.panelTitle,
-            hint: "数据来自「" + specs.company.title + "」「" + specs.client.title + "」",
-          },
-        };
-      });
-
-      const marginDashboardEditLayout = computed(function () {
-        return !!activeDashboard.value
-          && activeDashboard.value.name === MARGIN_DASHBOARD_NAME
-          && editMode.value;
-      });
-
-      const marginPresetWidgets = computed(function () {
+      const displayItems = computed(function () {
         const tab = activeTab.value;
         if (!tab || !tab.widgets) return [];
-        return MARGIN_PRESENT_SPEC_ORDER.map(function (key) {
-          const spec = MARGIN_PRESENT_SPECS[key];
-          return {
-            key: key,
-            spec: spec,
-            widget: findMarginWidget(tab, key),
-            editTag: spec.editTag,
-          };
-        });
-      });
-
-      const marginExtraWidgets = computed(function () {
-        const tab = activeTab.value;
-        if (!tab || !tab.widgets) return [];
-        return tab.widgets.filter(function (w) { return !isMarginPresetWidget(w); });
-      });
-
-      const marginPresetEditCards = computed(function () {
-        return marginPresetWidgets.value.map(function (item) {
-          return {
-            key: item.key,
-            w: item.widget,
-            title: item.widget ? item.widget.title : item.spec.title,
-            editTag: item.editTag,
-            style: marginPresetEditCardStyle(item.key),
-          };
-        });
-      });
-
-      const marginExtraEditCards = computed(function () {
-        return marginExtraWidgets.value.map(function (w, idx) {
-          return {
-            key: String(w.id),
-            w: w,
+        const items = [];
+        tab.widgets.forEach(function (w) {
+          items.push({
+            key: "p-" + w.id,
+            kind: "primary",
+            widget: w,
+            viewIndex: null,
             title: w.title,
-            style: marginExtraEditCardStyle(idx),
-          };
+            style: cardStyle(w),
+            isExtra: false,
+          });
+          const views = (w.config && w.config.extra_views) || [];
+          views.forEach(function (ev, idx) {
+            items.push({
+              key: "e-" + w.id + "-" + idx,
+              kind: "extra",
+              widget: w,
+              viewIndex: idx,
+              extraView: ev,
+              title: (ev.title || "").trim() || w.title,
+              style: cardStyle(ev),
+              isExtra: true,
+            });
+          });
         });
+        return items;
       });
-
-      function marginPresetEditCardStyle(key) {
-        const layout = MARGIN_PRESET_EDIT_LAYOUT[key] || { gridColumn: "1 / 2", gridRow: "1 / 2" };
-        return {
-          gridColumn: layout.gridColumn,
-          gridRow: layout.gridRow,
-          minHeight: "320px",
-          height: "320px",
-        };
-      }
-
-      function marginExtraEditCardStyle(index) {
-        const col = (index % 2) + 1;
-        const row = Math.floor(index / 2) + 1;
-        return {
-          gridColumn: col + " / " + (col + 1),
-          gridRow: row + " / " + (row + 1),
-          minHeight: "320px",
-          height: "320px",
-        };
-      }
 
       const needsDataSource = computed(function () {
         return ["number", "bar", "pie", "line"].indexOf(widgetForm.value.widget_type) >= 0;
@@ -699,132 +475,18 @@
       }
 
       function destroyCharts() {
-        destroyMarginCharts();
         Object.keys(chartInstances).forEach(function (k) {
-          if (chartInstances[k]) chartInstances[k].destroy();
-          delete chartInstances[k];
+          destroyChartKey(k);
         });
       }
 
-      function renderMarginCharts() {
-        if (!marginPresentMode.value) return;
-        destroyMarginCharts();
-        const mw = marginWidgets.value;
-        const quoteData = mw.quoteBar ? widgetData.value[mw.quoteBar.id] : null;
-        const gmData = mw.gmBar ? widgetData.value[mw.gmBar.id] : null;
-        const layout = marginChartLayout();
-
-        if (quoteData && quoteData.status === "ok" && quoteData.kind === "series" && mw.quoteBar) {
-          const canvas = document.getElementById("margin-revenue-bar");
-          if (canvas && typeof Chart !== "undefined") {
-            const prefix = quoteData.prefix || "";
-            const quoteValues = quoteData.values || [];
-            const quoteCfg = mw.quoteBar.config || {};
-            const barColors = shadeRamp(quoteCfg, quoteValues.length);
-            const barHover = shadeHover(quoteCfg);
-            marginChartInstances.revenueBar = new Chart(canvas, {
-              type: "bar",
-              data: {
-                labels: quoteData.labels || [],
-                datasets: [{
-                  data: quoteValues,
-                  backgroundColor: barColors,
-                  hoverBackgroundColor: barHover,
-                  borderRadius: 6,
-                  categoryPercentage: 0.65,
-                  barPercentage: 0.85,
-                }],
-              },
-              options: {
-                responsive: layout.responsive,
-                maintainAspectRatio: layout.maintainAspectRatio,
-                animation: layout.animation,
-                plugins: {
-                  legend: { display: false },
-                  datalabels: { display: false },
-                  tooltip: marginTooltip(function (c) { return prefix + fmtNum(c.parsed.y); }),
-                },
-                scales: {
-                  x: { grid: { display: false }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 }, maxRotation: 0 } },
-                  y: { beginAtZero: true, grid: { color: "#f2f3f5" }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
-                },
-              },
-            });
-          }
-        }
-
-        if (gmData && gmData.status === "ok" && gmData.kind === "series" && mw.gmBar) {
-          const labels = gmData.labels || [];
-          const values = gmData.values || [];
-          const prefix = gmData.prefix || "";
-          const gmCfg = mw.gmBar.config || {};
-          const donutColors = shadeRamp(gmCfg, labels.length);
-          const topN = 6;
-          const hLabels = labels.slice(0, topN);
-          const hValues = values.slice(0, topN);
-          const hColors = shadeRamp(gmCfg, hValues.length);
-
-          const donutCanvas = document.getElementById("margin-gm-donut");
-          if (donutCanvas && typeof Chart !== "undefined") {
-            marginChartInstances.gmDonut = new Chart(donutCanvas, {
-              type: "doughnut",
-              data: {
-                labels: labels,
-                datasets: [{
-                  data: values,
-                  backgroundColor: donutColors,
-                  borderColor: "#fff",
-                  borderWidth: 2,
-                }],
-              },
-              options: {
-                responsive: layout.responsive,
-                maintainAspectRatio: layout.maintainAspectRatio,
-                animation: layout.animation,
-                cutout: "68%",
-                plugins: {
-                  legend: { display: false },
-                  datalabels: { display: false },
-                  centerTotal: { display: true, text: prefix + fmtNum(gmData.total) },
-                  tooltip: marginTooltip(function (c) { return c.label + ": " + prefix + fmtNum(c.parsed); }),
-                },
-              },
-            });
-          }
-
-          const hCanvas = document.getElementById("margin-gm-hbar");
-          if (hCanvas && typeof Chart !== "undefined") {
-            marginChartInstances.gmHbar = new Chart(hCanvas, {
-              type: "bar",
-              data: {
-                labels: hLabels,
-                datasets: [{ data: hValues, backgroundColor: hColors, borderRadius: 6, barPercentage: 0.72 }],
-              },
-              options: {
-                responsive: layout.responsive,
-                maintainAspectRatio: layout.maintainAspectRatio,
-                animation: layout.animation,
-                indexAxis: "y",
-                plugins: {
-                  legend: { display: false },
-                  datalabels: { display: false },
-                  tooltip: marginTooltip(function (c) { return prefix + fmtNum(c.parsed.x); }),
-                },
-                scales: {
-                  x: { beginAtZero: true, grid: { color: "#f2f3f5" }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
-                  y: { grid: { display: false }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
-                },
-              },
-            });
-          }
-        }
-      }
-
-      function renderChart(w, data) {
+      function renderChart(w, data, opts) {
+        opts = opts || {};
         if (!data || data.status !== "ok" || data.kind !== "series") return;
-        const canvas = document.getElementById("chart-" + w.id);
+        const canvasId = opts.canvasId || chartCanvasId(w, opts.viewIndex);
+        const canvas = document.getElementById(canvasId);
         if (!canvas || typeof Chart === "undefined") return;
-        if (chartInstances[w.id]) { chartInstances[w.id].destroy(); delete chartInstances[w.id]; }
+        destroyChartKey(canvasId);
 
         const cfg = w.config || {};
         const labels = data.labels || [];
@@ -832,9 +494,10 @@
         const prefix = data.prefix || "";
         const pal = widgetPalette(cfg);
         const accent = pal[selectedShade(cfg)];
+        const render = opts.render || null;
 
-        if (w.widget_type === "pie") {
-          chartInstances[w.id] = new Chart(canvas, {
+        if (render === "doughnut" || (!render && w.widget_type === "pie")) {
+          chartInstances[canvasId] = new Chart(canvas, {
             type: "doughnut",
             data: {
               labels: labels,
@@ -850,8 +513,41 @@
           return;
         }
 
-        if (w.widget_type === "bar") {
-          chartInstances[w.id] = new Chart(canvas, {
+        if (render === "horizontal_bar") {
+          const topN = opts.limit != null ? opts.limit : 6;
+          const hLabels = labels.slice(0, topN);
+          const hValues = values.slice(0, topN);
+          chartInstances[canvasId] = new Chart(canvas, {
+            type: "bar",
+            data: {
+              labels: hLabels,
+              datasets: [{
+                data: hValues,
+                backgroundColor: shadeRamp(cfg, hValues.length),
+                borderRadius: 6,
+                barPercentage: 0.72,
+              }],
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              indexAxis: "y",
+              plugins: {
+                legend: { display: false },
+                datalabels: { display: false },
+                tooltip: whiteTooltip(function (c) { return prefix + fmtNum(c.parsed.x); }),
+              },
+              scales: {
+                x: { beginAtZero: true, grid: { color: "#f2f3f5" }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
+                y: { grid: { display: false }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
+              },
+            },
+          });
+          return;
+        }
+
+        if (!render && w.widget_type === "bar") {
+          chartInstances[canvasId] = new Chart(canvas, {
             type: "bar",
             data: {
               labels: labels,
@@ -870,31 +566,39 @@
           return;
         }
 
-        chartInstances[w.id] = new Chart(canvas, {
-          type: "line",
-          data: {
-            labels: labels,
-            datasets: [{
-              label: w.title, data: values, borderColor: accent,
-              backgroundColor: hexA(pal[0], 0.12), fill: true, tension: 0.25,
-              pointRadius: 0, pointBackgroundColor: accent, borderWidth: 2,
-            }],
-          },
-          options: lineChartOptions(cfg, prefix),
-        });
+        if (!render && w.widget_type === "line") {
+          chartInstances[canvasId] = new Chart(canvas, {
+            type: "line",
+            data: {
+              labels: labels,
+              datasets: [{
+                label: w.title, data: values, borderColor: accent,
+                backgroundColor: hexA(pal[0], 0.12), fill: true, tension: 0.25,
+                pointRadius: 0, pointBackgroundColor: accent, borderWidth: 2,
+              }],
+            },
+            options: lineChartOptions(cfg, prefix),
+          });
+        }
       }
 
       function renderVisibleCharts() {
-        if (marginPresentMode.value) {
-          renderMarginCharts();
-          return;
-        }
         const tab = activeTab.value;
         if (!tab || !tab.widgets) return;
         tab.widgets.forEach(function (w) {
-          if (["bar", "pie", "line"].indexOf(w.widget_type) >= 0) {
-            renderChart(w, widgetData.value[w.id]);
-          }
+          if (["bar", "pie", "line"].indexOf(w.widget_type) < 0) return;
+          const data = widgetData.value[w.id];
+          if (!data) return;
+          renderChart(w, data, { viewIndex: null });
+          const views = (w.config && w.config.extra_views) || [];
+          views.forEach(function (ev, idx) {
+            renderChart(w, data, {
+              render: ev.render,
+              viewIndex: idx,
+              canvasId: chartCanvasId(w, idx),
+              limit: ev.limit != null ? ev.limit : 6,
+            });
+          });
         });
       }
 
@@ -935,20 +639,7 @@
         const d = dashboards.value.find(function (x) { return x.id === id; });
         activeTabId.value = (d && d.tabs.length) ? d.tabs[0].id : null;
       }
-      function stepDashboard(dir) {
-        if (dashboards.value.length < 2) return;
-        const idx = dashboards.value.findIndex(function (d) { return d.id === activeDashboardId.value; });
-        const next = (idx + dir + dashboards.value.length) % dashboards.value.length;
-        selectDashboard(dashboards.value[next].id);
-      }
-      function closeDashMenu() { dashMenuOpen.value = false; }
-
       watch(activeTab, function () { reloadActiveTabData(); });
-
-      watch(marginPresentMode, function () {
-        destroyCharts();
-        nextTick(function () { renderVisibleCharts(); });
-      });
 
       watch(editMode, function () {
         destroyCharts();
@@ -997,7 +688,12 @@
           const merged = Object.assign(
             base.config,
             w.config || {},
-            { filters: (w.config && w.config.filters) ? w.config.filters.map(function (f) { return Object.assign({}, f); }) : [] }
+            {
+              filters: (w.config && w.config.filters) ? w.config.filters.map(function (f) { return Object.assign({}, f); }) : [],
+              extra_views: (w.config && w.config.extra_views)
+                ? w.config.extra_views.map(function (ev) { return Object.assign({}, ev); })
+                : [],
+            }
           );
           if (merged.color_shade === undefined || merged.color_shade === null) merged.color_shade = 2;
           if (!merged.color) merged.color = base.config.color;
@@ -1020,6 +716,19 @@
       function closePanel() { panelOpen.value = false; colorPickerOpen.value = false; }
       function addFilter() {
         widgetForm.value.config.filters.push({ field: "", op: "eq", value: "" });
+      }
+
+      function blankExtraView() {
+        return { render: "doughnut", x: 0, y: 0, w: 6, h: 6, limit: 6, title: "" };
+      }
+
+      function addExtraView() {
+        if (!widgetForm.value.config.extra_views) widgetForm.value.config.extra_views = [];
+        widgetForm.value.config.extra_views.push(blankExtraView());
+      }
+
+      function removeExtraView(idx) {
+        widgetForm.value.config.extra_views.splice(idx, 1);
       }
 
       function buildConfig() {
@@ -1050,6 +759,21 @@
           out.show_value_center = !!c.show_value_center;
           out.data_labels = !!c.data_labels;
           out.hide_empty = !!c.hide_empty;
+          out.extra_views = (c.extra_views || []).map(function (ev) {
+            const row = {
+              render: ev.render,
+              x: Number(ev.x) || 0,
+              y: Number(ev.y) || 0,
+              w: Number(ev.w) || 4,
+              h: Number(ev.h) || 4,
+            };
+            const t = (ev.title || "").trim();
+            if (t) row.title = t;
+            if (ev.render === "horizontal_bar" && ev.limit != null && ev.limit !== "") {
+              row.limit = Number(ev.limit);
+            }
+            return row;
+          });
         }
         return out;
       }
@@ -1084,7 +808,11 @@
           title: w.title + " 副本",
           widget_type: w.widget_type,
           source_key: w.source_key || "",
-          config: Object.assign({}, w.config || {}),
+          config: Object.assign({}, w.config || {}, {
+            extra_views: (w.config && w.config.extra_views)
+              ? w.config.extra_views.map(function (ev) { return Object.assign({}, ev); })
+              : [],
+          }),
           x: w.x, y: (w.y || 0) + (w.h || 4), w: w.w, h: w.h,
         };
         api("POST", "/api/dashboard-tabs/" + activeTabId.value + "/widgets", payload)
@@ -1108,7 +836,7 @@
           })
           .then(function (data) {
             widgetData.value[w.id] = data;
-            if (marginPresentMode.value) nextTick(function () { renderMarginCharts(); });
+            nextTick(function () { renderVisibleCharts(); });
           })
           .catch(function (e) { alert(e.message); });
       }
@@ -1127,15 +855,19 @@
         loadDashboards();
       });
 
+      function cardCanvasId(item) {
+        if (item.kind === "extra") return chartCanvasId(item.widget, item.viewIndex);
+        return chartCanvasId(item.widget, null);
+      }
+
+      function openDisplayItemPanel(item) {
+        openWidgetPanel(item.widget);
+      }
+
       return {
-        dashboards, activeDashboardId, activeTabId, activeDashboard, activeTab, tabIndex,
-        marginPresentMode, marginWidgets, marginPanelLabels,
-        marginDashboardEditLayout, marginPresetWidgets, marginExtraWidgets,
-        marginPresetEditCards, marginExtraEditCards,
-        marginPresetEditCardStyle, marginExtraEditCardStyle, isMarginPresetWidget,
-        marginPanelQuoteState, marginPanelGmState, marginPanelMetricsState,
-        marginQuoteLegend, marginDonutLegend, marginMetricRows, marginClientColumnLabel,
-        metadata, widgetData, canWrite, editMode, dashMenuOpen, rosterClients, rosterScope,
+        dashboards, activeDashboardId, activeTabId, activeDashboard, activeTab,
+        displayItems, cardCanvasId, openDisplayItemPanel, extraRenderLabel,
+        metadata, widgetData, canWrite, editMode, rosterClients, rosterScope,
         showDashboardModal, showTabModal, panelOpen,
         dashboardForm, tabForm, widgetForm,
         needsDataSource, needsField, needsGroupBy, isChart, isDateGroup, isRosterSummary,
@@ -1145,9 +877,9 @@
         cardStyle, themeColor, swatchColor, sourceLabel, metricLabel, typeLabel, typeIcon,
         richTitle, richBody, showLegend, legendOf,
         rosterTiles, rosterScopeLabel, rosterHeadcount, isRosterClientCard,
-        selectDashboard, stepDashboard, closeDashMenu,
+        selectDashboard,
         openDashboardModal, saveDashboard, deleteActiveDashboard,
-        openTabModal, saveTab, openWidgetPanel, closePanel, addFilter, saveWidget, deleteWidget,
+        openTabModal, saveTab, openWidgetPanel, closePanel, addFilter, addExtraView, removeExtraView, saveWidget, deleteWidget,
         duplicateWidget, changeRosterClient,
       };
     },

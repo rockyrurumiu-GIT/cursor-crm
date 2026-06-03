@@ -266,6 +266,8 @@ def test_dashboard_metadata(client, admin_auth):
     assert data["colors"][0] == "red"
     assert data["color_shades"] == [0, 1, 2, 3, 4]
     assert "value_desc" in data["sorts"]
+    assert "doughnut" in data["chart_extra_renders"]
+    assert "horizontal_bar" in data["chart_extra_renders"]
 
 
 def _make_tab(client, headers, name):
@@ -318,6 +320,72 @@ def test_chart_color_jade_and_shade_saves(client, admin_auth):
     cfg = r.json()["config"]
     assert cfg["color"] == "jade"
     assert cfg["color_shade"] == 4
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+@pytest.mark.parametrize(
+    "bad_extra,detail_part",
+    [
+        ([{"render": "invalid", "x": 0, "y": 0, "w": 6, "h": 6}], "extra_views.render"),
+        ([{"render": "doughnut", "x": 12, "y": 0, "w": 6, "h": 6}], "extra_views.x"),
+        ([{"render": "horizontal_bar", "x": 0, "y": 0, "w": 0, "h": 6}], "extra_views.w"),
+    ],
+)
+def test_invalid_extra_views_returns_400(client, admin_auth, bad_extra, detail_part):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Extra Views Bad")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "GM",
+            "widget_type": "bar",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "extra_views": bad_extra,
+            },
+        },
+    )
+    assert r.status_code == 400
+    assert detail_part in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_extra_views_persist_round_trip(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Extra Views OK")
+    extra = [
+        {"render": "doughnut", "x": 6, "y": 0, "w": 6, "h": 6, "title": "环形"},
+        {"render": "horizontal_bar", "x": 0, "y": 6, "w": 6, "h": 5, "limit": 8},
+    ]
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "By client",
+            "widget_type": "bar",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "extra_views": extra,
+            },
+        },
+    )
+    assert r.status_code == 200, r.text
+    cfg = r.json()["config"]
+    assert len(cfg["extra_views"]) == 2
+    assert cfg["extra_views"][0]["render"] == "doughnut"
+    assert cfg["extra_views"][0]["title"] == "环形"
+    assert cfg["extra_views"][1]["limit"] == 8
+
+    listed = client.get("/api/dashboards", headers=headers).json()
+    dash = next(d for d in listed if d["id"] == dash_id)
+    tab = next(t for t in dash["tabs"] if t["id"] == tab_id)
+    w = next(x for x in tab["widgets"] if x["title"] == "By client")
+    assert w["config"]["extra_views"] == cfg["extra_views"]
     client.delete(f"/api/dashboards/{dash_id}", headers=headers)
 
 
@@ -585,11 +653,10 @@ def test_seed_roster_margin_dashboard_exists(client, admin_auth):
 
 
 def test_roster_margin_preset_layout_sync(client, admin_auth):
-    """Sync preset layout; relocate legacy/user overlap; idempotent relocate."""
+    """Sync adds missing presets and preserves user layout/config; backfills extra_views on GM bar."""
     import main as crm_main
     from services.dashboards import (
         _ROSTER_SEED_NAME,
-        _max_preset_bottom,
         _roster_margin_preset_specs,
         seed_default_dashboards,
     )
@@ -708,8 +775,6 @@ def test_roster_margin_preset_layout_sync(client, admin_auth):
             crm_main.DashboardWidget,
         )
         db.expire_all()
-        pie_y1 = db.query(crm_main.DashboardWidget).filter_by(id=pie_id).one().y
-        copy_y1 = db.query(crm_main.DashboardWidget).filter_by(id=copy_id).one().y
 
         seed_default_dashboards(
             db,
@@ -720,7 +785,6 @@ def test_roster_margin_preset_layout_sync(client, admin_auth):
         db.expire_all()
 
         specs = _roster_margin_preset_specs(None)
-        base_y = _max_preset_bottom(specs)
         for spec in specs:
             matches = (
                 db.query(crm_main.DashboardWidget)
@@ -733,11 +797,9 @@ def test_roster_margin_preset_layout_sync(client, admin_auth):
                 .all()
             )
             assert len(matches) == 1, spec
-            w = matches[0]
-            assert w.x == spec["x"] and w.y == spec["y"] and w.w == spec["w"] and w.h == spec["h"]
 
         bar_quote = db.query(crm_main.DashboardWidget).filter_by(id=bar_quote_id).one()
-        assert bar_quote.w == 6 and bar_quote.h == 7
+        assert bar_quote.w == 4 and bar_quote.h == 5
         synced = json.loads(bar_quote.config_json or "{}")
         assert synced["data_labels"] is False
         assert synced["color"] == "purple"
@@ -746,12 +808,21 @@ def test_roster_margin_preset_layout_sync(client, admin_auth):
         single_client = db.query(crm_main.DashboardWidget).filter_by(id=single_client_id).one()
         assert json.loads(single_client.config_json or "{}")["client_id"] == 424242
 
+        gm_bar = (
+            db.query(crm_main.DashboardWidget)
+            .filter(
+                crm_main.DashboardWidget.tab_id == tab.id,
+                crm_main.DashboardWidget.title == "各客户 GM$",
+                crm_main.DashboardWidget.widget_type == "bar",
+            )
+            .one()
+        )
+        assert gm_bar.h == 5
+
         pie = db.query(crm_main.DashboardWidget).filter_by(id=pie_id).one()
         copy_row = db.query(crm_main.DashboardWidget).filter_by(id=copy_id).one()
-        assert pie.y >= base_y
-        assert copy_row.y >= base_y
-        assert pie.y == pie_y1
-        assert copy_row.y == copy_y1
+        assert pie.y == 0
+        assert copy_row.y == 5
 
         assert db.query(crm_main.DashboardWidget).filter_by(id=user_w_id).count() == 1
         assert db.query(crm_main.DashboardWidget).filter_by(id=pie_id).count() == 1
