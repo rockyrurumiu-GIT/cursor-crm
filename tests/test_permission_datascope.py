@@ -347,3 +347,44 @@ def test_migration_006_recruitment_columns(client):
     assert row is not None
     assert "recruitment_owner_user_id" in cols
     assert "recruitment_dept_id" in cols
+
+
+def test_migration_006_skips_existing_columns_and_records_ledger(client):
+    """Columns pre-exist (compat/create_all) but 006 not in ledger: runner must skip ADD COLUMN."""
+    import main as crm_main
+
+    from auth.migrate import run_all as run_schema_migrations
+
+    mid = "006_client_recruitment_owner.sql"
+    with crm_main.engine.begin() as conn:
+        cols = {r[1] for r in conn.execute(text("PRAGMA table_info(clients)")).fetchall()}
+        assert "recruitment_owner_user_id" in cols
+        assert "recruitment_dept_id" in cols
+        conn.execute(text("DELETE FROM schema_migrations WHERE migration_id = :id"), {"id": mid})
+
+    run_schema_migrations(crm_main.engine)
+
+    with crm_main.engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT migration_id FROM schema_migrations WHERE migration_id = :id"),
+            {"id": mid},
+        ).fetchone()
+        assert row is not None
+        indexes = {str(r[1]) for r in conn.execute(text("PRAGMA index_list(clients)")).fetchall()}
+    assert "idx_clients_recruitment_owner_user_id" in indexes
+    assert "idx_clients_recruitment_dept_id" in indexes
+
+
+def test_migration_006_idempotent_second_run(client):
+    import main as crm_main
+
+    from auth.migrate import run_all as run_schema_migrations
+
+    run_schema_migrations(crm_main.engine)
+    run_schema_migrations(crm_main.engine)
+    with crm_main.engine.connect() as conn:
+        count = conn.execute(
+            text("SELECT COUNT(*) FROM schema_migrations WHERE migration_id = :id"),
+            {"id": "006_client_recruitment_owner.sql"},
+        ).scalar()
+    assert int(count or 0) == 1
