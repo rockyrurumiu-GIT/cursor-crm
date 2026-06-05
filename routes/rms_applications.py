@@ -1,6 +1,7 @@
 """RMS applications API routes (Phase 2)."""
 from __future__ import annotations
 
+import json
 from typing import Any, Callable, Dict, Optional, Type
 
 from fastapi import Body, Depends, File, Form, HTTPException, UploadFile
@@ -16,17 +17,21 @@ from schemas.rms import (
     reject_forbidden_application_keys,
 )
 from services import rms_applications as app_svc
+from services import rms_candidates as cand_svc
+from services import rms_resumes as resume_svc
 
 
 def register_rms_applications_routes(
     app,
     *,
     get_db: Callable,
+    upload_dir: str,
     Client: Type[Any],
     RmsJob: Type[Any],
     RmsCandidate: Type[Any],
     RmsApplication: Type[Any],
     RmsApplicationStatusHistory: Type[Any],
+    RmsResume: Type[Any],
 ):
     @app.get("/api/rms/applications")
     async def api_list_applications(
@@ -58,6 +63,79 @@ def register_rms_applications_routes(
     ):
         content = await file.read()
         return app_svc.parse_resume_draft(file.filename or "", content)
+
+    @app.post("/api/rms/applications/candidate-report")
+    async def api_submit_candidate_report(
+        report_json: str = Form(...),
+        file: Optional[UploadFile] = File(None),
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.applications.write")),
+    ):
+        try:
+            report = json.loads(report_json)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="推荐报告格式无效")
+        if not isinstance(report, dict):
+            raise HTTPException(status_code=400, detail="推荐报告格式无效")
+
+        candidate_payload = {
+            "name": str(report.get("name") or "").strip(),
+            "phone": str(report.get("phone") or "").strip(),
+            "email_wechat": str(report.get("email_wechat") or "").strip(),
+            "age": str(report.get("age") or "").strip(),
+            "work_years": str(report.get("work_years") or "").strip(),
+            "target_job_id": report.get("job_id"),
+            "target_client_id": report.get("client_id"),
+            "current_salary": str(report.get("current_salary") or "").strip(),
+            "expected_salary": str(report.get("expected_salary") or "").strip(),
+            "available_date": str(report.get("available_date") or "").strip(),
+            "education_level": str(report.get("education_level") or "").strip(),
+            "school": str(report.get("school") or "").strip(),
+            "major": str(report.get("major") or "").strip(),
+            "gender": str(report.get("gender") or "").strip(),
+            "marital_status": str(report.get("marital_status") or "").strip(),
+            "city": str(report.get("city") or "").strip(),
+            "source": str(report.get("source") or "").strip(),
+        }
+        candidate = cand_svc.create_candidate(
+            db,
+            ctx,
+            candidate_payload,
+            RmsCandidate,
+            RmsResume=RmsResume,
+            RmsJob=RmsJob,
+            Client=Client,
+            RmsApplication=RmsApplication,
+        )
+        resume_id = None
+        if file is not None and file.filename:
+            resume = await resume_svc.upload_candidate_resume(
+                db,
+                ctx,
+                int(candidate["id"]),
+                file,
+                upload_dir=upload_dir,
+                RmsCandidate=RmsCandidate,
+                RmsApplication=RmsApplication,
+                Client=Client,
+                RmsResume=RmsResume,
+            )
+            resume_id = resume.get("id")
+        application = app_svc.create_application(
+            db,
+            ctx,
+            {
+                "job_id": int(report.get("job_id") or 0),
+                "candidate_id": int(candidate["id"]),
+                "resume_id": resume_id,
+            },
+            RmsJob,
+            RmsCandidate,
+            RmsApplication,
+            Client,
+        )
+        return {"candidate": candidate, "application": application}
 
     @app.get("/api/rms/applications/delivery-review")
     async def api_list_delivery_review_applications(

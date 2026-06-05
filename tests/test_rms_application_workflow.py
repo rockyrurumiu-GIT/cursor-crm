@@ -2,12 +2,19 @@
 from __future__ import annotations
 
 import importlib
+import json
 import uuid
+from datetime import date
 
 import pytest
 from starlette.testclient import TestClient
 
 from auth.permissions import ROLE_DELIVERY
+from services.rms_applications import (
+    _extract_draft_fields_from_text,
+    _extract_explicit_work_years,
+    _parse_work_years_from_periods,
+)
 from tests.test_rms_phase2_mvp import (
     _create_user,
     _enable_delivery_rms_mvp,
@@ -18,6 +25,7 @@ from tests.test_rms_phase2_mvp import (
 
 PARSE_DRAFT_URL = "/api/rms/applications/candidate-report/parse-draft"
 DELIVERY_REVIEW_LIST_URL = "/api/rms/applications/delivery-review"
+_FIXED_TODAY = date(2026, 6, 5)
 
 
 @pytest.fixture
@@ -92,6 +100,68 @@ def _assert_contact_and_education_draft(draft: dict) -> None:
     assert "DLP" not in major
     assert "杭州" not in school
     assert "2015" not in school
+
+
+def _assert_contact_and_education_draft(draft: dict) -> None:
+    assert draft.get("phone") == "15988192434"
+    assert draft.get("email_wechat") == "15988192434@163.com"
+    assert draft.get("school") == "西安工业大学"
+    assert draft.get("major") == "仪器仪表工程"
+    assert draft.get("education_level") == "硕士"
+    major = draft.get("major") or ""
+    school = draft.get("school") or ""
+    assert "毕业论文" not in major
+    assert "DLP" not in major
+    assert "杭州" not in school
+    assert "2015" not in school
+
+
+def _resume_with_work_periods() -> str:
+    return (
+        _resume_with_contact_and_education()
+        + "\n2024.02-至今  某科技公司  高级工程师\n"
+        "工作经历\n"
+        "2022.08-2023.10  某研究院  研究员\n"
+        "实习经历\n"
+        "2020.10-2021.9  某创业公司  实习生\n"
+    )
+
+
+def test_parse_work_years_from_periods_mixed_education_and_work():
+    text = _resume_with_work_periods()
+    assert _parse_work_years_from_periods(text, today=_FIXED_TODAY) == "4年8个月"
+    draft = _extract_draft_fields_from_text(text)
+    assert draft.get("work_years") == "4年8个月"
+    _assert_contact_and_education_draft(draft)
+
+
+def test_parse_work_years_from_periods_education_only():
+    text = _resume_with_contact_and_education()
+    assert _parse_work_years_from_periods(text, today=_FIXED_TODAY) == ""
+
+
+def test_parse_work_years_from_periods_overlapping_ranges():
+    text = "工作经历\n2022.01-2023.01  公司A\n2022.06-2022.12  公司B\n"
+    assert _parse_work_years_from_periods(text, today=_FIXED_TODAY) == "1年1个月"
+
+
+def test_extract_draft_fields_explicit_work_years_overrides_periods():
+    text = "工作年限：5年\n" + _resume_with_work_periods()
+    assert _extract_draft_fields_from_text(text).get("work_years") == "5年"
+
+
+def test_extract_draft_fields_explicit_work_years_variants():
+    assert _extract_explicit_work_years("工作年限：5") == "5年"
+    assert _extract_explicit_work_years("工作年限：5年") == "5年"
+    assert _extract_explicit_work_years("8年以上工作经验") == "8年以上"
+    text = "8年以上工作经验\n" + _resume_with_work_periods()
+    assert _extract_draft_fields_from_text(text).get("work_years") == "8年以上"
+
+
+def test_explicit_work_years_does_not_match_date_tokens():
+    text = "项目经历\n2020年10月 - 2021年9月  某公司  工程师\n"
+    assert _extract_explicit_work_years(text) == ""
+    assert _extract_draft_fields_from_text(text).get("work_years") == "1年"
 
 
 def test_parse_draft_route_not_captured_by_application_id(client_rbac, admin_auth, rms_engine, uniq):
@@ -193,6 +263,45 @@ def test_parse_draft_unknown_extension_returns_400(client_rbac, admin_auth, rms_
         files={"file": ("resume.exe", b"binary", "application/octet-stream")},
     )
     assert r.status_code == 400, r.text
+
+
+def test_submit_candidate_report_creates_candidate_and_application(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, job_id, _cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"report_{uniq}"
+    )
+    report = {
+        "job_id": job_id,
+        "client_id": client_id,
+        "recommendation_note": "匹配客户要求",
+        "current_salary": "16000",
+        "expected_salary": "18000",
+        "name": "陈昭兵",
+        "age": "28",
+        "work_years": "4年8个月",
+        "phone": "15988192434",
+        "email_wechat": "15988192434@163.com",
+        "education_level": "硕士",
+        "school": "西安工业大学",
+        "major": "仪器仪表工程",
+        "gender": "男",
+        "source": "其他",
+    }
+    r = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+        files={"file": ("resume.txt", b"resume content", "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["candidate"]["id"]
+    assert body["candidate"]["target_client_id"] == client_id
+    assert body["candidate"]["school"] == "西安工业大学"
+    assert body["application"]["job_id"] == job_id
+    assert body["application"]["candidate_id"] == body["candidate"]["id"]
+    assert body["application"]["resume_id"]
 
 
 def test_delivery_review_route_not_captured_by_application_id(client_rbac, admin_auth, rms_engine, uniq):

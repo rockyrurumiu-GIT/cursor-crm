@@ -110,12 +110,14 @@
   function buildReportJson(form, stripSalaryCommas) {
     return {
       job_id: Number(form.job_id),
+      client_id: Number(form.client_id),
       recommendation_note: (form.recommendation_note || "").trim(),
       current_salary: stripSalaryCommas(form.current_salary),
       expected_salary: stripSalaryCommas(form.expected_salary),
       name: (form.name || "").trim(),
       age: (form.age || "").trim(),
       work_years: (form.work_years || "").trim(),
+      phone: (form.phone || "").trim(),
       email_wechat: (form.email_wechat || "").trim(),
       available_date: form.available_date || "",
       education_level: form.education_level || "",

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple, Type
 
@@ -27,7 +27,25 @@ _RE_PHONE = re.compile(r"1[3-9]\d{9}")
 _RE_EMAIL = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 _RE_NAME = re.compile(r"姓名\s*[:：]\s*(\S+)")
 _RE_AGE = re.compile(r"年龄\s*[:：]\s*(\d{1,2})")
-_RE_WORK_YEARS = re.compile(r"工作年限\s*[:：]\s*(\d+\s*年?)")
+_RE_WORK_YEARS_LABEL = re.compile(
+    r"工作年限\s*[:：]\s*(\d+\s*(?:年(?:以上)?)?)"
+)
+_RE_WORK_YEARS_EXPERIENCE = re.compile(
+    r"(?<![0-9])(\d+\s*年(?:以上)?)\s*(?:工作)?经验"
+)
+_DATE_TOKEN = r"(?:\d{4}[./]\d{1,2}|\d{4}年\d{1,2}月?)"
+_END_TOKEN = rf"(?:至今|现在|present|current|{_DATE_TOKEN})"
+WORK_PERIOD_RE = re.compile(
+    rf"(?P<start>{_DATE_TOKEN})\s*(?:[-—–~至]\s*)?(?P<end>{_END_TOKEN})",
+    re.IGNORECASE,
+)
+_WORK_SECTION_START = re.compile(
+    r"^(?:工作经历|工作经验|项目经历|实习经历|自我描述)\s*$"
+)
+_WORK_SECTION_STOP = re.compile(
+    r"^(?:教育(?:背景|经历)|工作经历|工作经验|项目经历|实习经历|自我描述|"
+    r"专业技能|自我评价|毕业论文|毕业设计)\s*$"
+)
 _RE_CURRENT_SALARY = re.compile(r"(?:当前薪资|目前薪资|现薪资)\s*[:：]\s*([^\n\r]{1,40})")
 _RE_EXPECTED_SALARY = re.compile(r"(?:期望薪资|期望工资|期望薪酬)\s*[:：]\s*([^\n\r]{1,40})")
 _RE_EDUCATION = re.compile(r"(博士研究生|博士|硕士研究生|硕士|本科|大专|专科|高中|中专|MBA|EMBA)")
@@ -390,12 +408,159 @@ def _first_match(pattern: re.Pattern[str], text: str) -> str:
 
 
 def _normalize_work_years(raw: str) -> str:
-    val = (raw or "").strip()
+    val = re.sub(r"\s+", "", raw or "")
+    val = re.sub(r"(?:工作)?经验$", "", val)
     if not val:
         return ""
+    if val.endswith("年以上"):
+        return val
     if val.endswith("年"):
-        return val.replace(" ", "")
-    return f"{val}年"
+        return val
+    if val.isdigit():
+        return f"{val}年"
+    return val
+
+
+def _extract_explicit_work_years(src: str) -> str:
+    for pattern in (_RE_WORK_YEARS_LABEL, _RE_WORK_YEARS_EXPERIENCE):
+        m = pattern.search(src)
+        if m:
+            return _normalize_work_years(m.group(1))
+    return ""
+
+
+def _parse_year_month(token: str) -> Optional[Tuple[int, int]]:
+    t = (token or "").strip()
+    if not t:
+        return None
+    m = re.match(r"^(\d{4})[./](\d{1,2})$", t, re.IGNORECASE)
+    if m:
+        year, month = int(m.group(1)), int(m.group(2))
+        if 1 <= month <= 12:
+            return year, month
+        return None
+    m = re.match(r"^(\d{4})年(\d{1,2})月?$", t)
+    if m:
+        year, month = int(m.group(1)), int(m.group(2))
+        if 1 <= month <= 12:
+            return year, month
+    return None
+
+
+def _month_index(year: int, month: int) -> int:
+    return year * 12 + month
+
+
+def _parse_work_periods(
+    text: str,
+    today: Optional[date] = None,
+) -> List[Tuple[int, int]]:
+    ref = today or date.today()
+    periods: List[Tuple[int, int]] = []
+    open_end_tokens = {"至今", "现在", "present", "current"}
+    for m in WORK_PERIOD_RE.finditer(text or ""):
+        start_parsed = _parse_year_month(m.group("start"))
+        if not start_parsed:
+            continue
+        end_raw = (m.group("end") or "").strip()
+        if end_raw.lower() in open_end_tokens or end_raw in open_end_tokens:
+            end_parsed = (ref.year, ref.month)
+        else:
+            end_parsed = _parse_year_month(end_raw)
+        if not end_parsed:
+            continue
+        start_idx = _month_index(*start_parsed)
+        end_idx = _month_index(*end_parsed)
+        if start_idx > end_idx:
+            continue
+        periods.append((start_idx, end_idx))
+    return periods
+
+
+def _merge_period_months(periods: List[Tuple[int, int]]) -> int:
+    if not periods:
+        return 0
+    merged: List[Tuple[int, int]] = [sorted(periods)[0]]
+    for start, end in sorted(periods)[1:]:
+        prev_start, prev_end = merged[-1]
+        if start <= prev_end + 1:
+            merged[-1] = (prev_start, max(prev_end, end))
+        else:
+            merged.append((start, end))
+    return sum(end - start + 1 for start, end in merged)
+
+
+def _format_work_years(total_months: int) -> str:
+    if total_months <= 0:
+        return ""
+    if total_months < 12:
+        return f"{total_months}个月"
+    years, months = divmod(total_months, 12)
+    if months == 0:
+        return f"{years}年"
+    return f"{years}年{months}个月"
+
+
+def _text_without_education_block(text: str) -> str:
+    lines = (text or "").splitlines()
+    result: List[str] = []
+    in_edu = False
+    for line in lines:
+        stripped = line.strip()
+        if not in_edu:
+            if _EDU_BLOCK_START.match(stripped):
+                in_edu = True
+                continue
+            result.append(line)
+            continue
+        if _EDU_BLOCK_STOP.match(stripped):
+            in_edu = False
+            result.append(line)
+    return "\n".join(result).strip()
+
+
+def _extract_work_experience_text(text: str) -> str:
+    lines = (text or "").splitlines()
+    blocks: List[str] = []
+    current: List[str] = []
+    in_work = False
+
+    for line in lines:
+        stripped = line.strip()
+        if _WORK_SECTION_START.match(stripped):
+            if in_work and current:
+                blocks.append("\n".join(current))
+            current = []
+            in_work = True
+            continue
+        if in_work:
+            if stripped and _WORK_SECTION_STOP.match(stripped):
+                if current:
+                    blocks.append("\n".join(current))
+                current = []
+                in_work = False
+                continue
+            current.append(stripped)
+
+    if in_work and current:
+        blocks.append("\n".join(current))
+
+    if blocks:
+        return "\n".join(blocks)
+
+    return _text_without_education_block(text)
+
+
+def _parse_work_years_from_periods(
+    text: str,
+    today: Optional[date] = None,
+) -> str:
+    work_text = _extract_work_experience_text(text)
+    if not work_text:
+        return ""
+    periods = _parse_work_periods(work_text, today=today)
+    total = _merge_period_months(periods)
+    return _format_work_years(total)
 
 
 def _extract_education_block(text: str) -> str:
@@ -504,9 +669,13 @@ def _extract_draft_fields_from_text(text: str) -> Dict[str, str]:
     if age:
         fields["age"] = age
 
-    work_years = _first_match(_RE_WORK_YEARS, src)
+    work_years = _extract_explicit_work_years(src)
     if work_years:
-        fields["work_years"] = _normalize_work_years(work_years)
+        fields["work_years"] = work_years
+    else:
+        parsed = _parse_work_years_from_periods(src)
+        if parsed:
+            fields["work_years"] = parsed
 
     current_salary = _first_match(_RE_CURRENT_SALARY, src)
     if current_salary:

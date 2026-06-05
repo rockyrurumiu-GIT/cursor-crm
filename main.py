@@ -1518,11 +1518,13 @@ register_rms_candidates_routes(
 register_rms_applications_routes(
     app,
     get_db=get_db,
+    upload_dir=UPLOAD_DIR,
     Client=Client,
     RmsJob=RMS_MODELS["RmsJob"],
     RmsCandidate=RMS_MODELS["RmsCandidate"],
     RmsApplication=RMS_MODELS["RmsApplication"],
     RmsApplicationStatusHistory=RMS_MODELS["RmsApplicationStatusHistory"],
+    RmsResume=RMS_MODELS["RmsResume"],
 )
 
 register_rms_shell_routes(app, page_renderer=_page)
