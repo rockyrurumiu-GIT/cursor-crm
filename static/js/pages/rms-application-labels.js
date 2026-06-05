@@ -77,7 +77,9 @@
   }
 
   function receiveLabel(status) {
-    return RECEIVE_STATUS_LABELS[status] || status || "—";
+    var s = status == null ? "" : String(status).trim();
+    if (!s) s = "pending";
+    return RECEIVE_STATUS_LABELS[s] || s || "—";
   }
 
   function deriveProtectionStatus(status) {
@@ -119,6 +121,84 @@
     return "#" + userId;
   }
 
+  var DELIVERY_REVIEW_STATUS_LABELS = {
+    pending: "待内审",
+    passed: "内审通过",
+    failed: "内审失败",
+  };
+
+  function createAppDisplayHelpers(options) {
+    options = options || {};
+    var getJobs = options.getJobs || function () { return []; };
+    var getCandidates = options.getCandidates || function () { return []; };
+    var getUsers = options.getUsers || function () { return []; };
+    var clientNameById = options.clientNameById || function () { return ""; };
+    var labelJob = options.labelJob || function (id) { return "#" + id; };
+
+    return {
+      appCandidateName: function (a) {
+        var direct = (a && a.candidate_name || "").trim();
+        if (direct) return direct;
+        if (!a || a.candidate_id == null || a.candidate_id === "") return "—";
+        var c = candidateById(getCandidates(), a.candidate_id);
+        if (c && (c.name || "").trim()) return c.name.trim();
+        return "#" + a.candidate_id;
+      },
+      appClientName: function (a) {
+        var direct = (a && a.client_name || "").trim();
+        if (direct) return direct;
+        var job = a && a.job_id != null && a.job_id !== "" ? jobById(getJobs(), a.job_id) : null;
+        if (job && (job.client_name || "").trim()) return job.client_name.trim();
+        if (job && job.client_id != null && job.client_id !== "") {
+          var fromJobClient = (clientNameById(job.client_id) || "").trim();
+          if (fromJobClient) return fromJobClient;
+        }
+        if (a && a.client_id != null && a.client_id !== "") {
+          var fromClient = (clientNameById(a.client_id) || "").trim();
+          if (fromClient) return fromClient;
+          return "#" + a.client_id;
+        }
+        return "—";
+      },
+      appJobTitle: function (a) {
+        var direct = (a && a.job_title || "").trim();
+        if (direct) return direct;
+        if (!a || a.job_id == null || a.job_id === "") return "—";
+        var job = jobById(getJobs(), a.job_id);
+        if (job && (job.title || "").trim()) return job.title.trim();
+        var labeled = (labelJob(a.job_id) || "").trim();
+        return labeled || "—";
+      },
+      appJobLocation: function (a) {
+        var direct = (a && a.job_location || "").trim();
+        if (direct) return direct;
+        if (!a || a.job_id == null || a.job_id === "") return "—";
+        var job = jobById(getJobs(), a.job_id);
+        if (job && (job.location || "").trim()) return job.location.trim();
+        return "—";
+      },
+      appRecommenderLabel: function (a) {
+        var direct = (a && a.recommended_by_name || "").trim();
+        if (direct) return direct;
+        return userLabelById(getUsers(), a && a.recommended_by);
+      },
+      appDeliveryLabel: function (a) {
+        var direct = (a && a.delivery_owner_label || "").trim();
+        if (direct) return direct;
+
+        var job = a && a.job_id != null && a.job_id !== "" ? jobById(getJobs(), a.job_id) : null;
+        if (job && (job.delivery_owner_label || "").trim()) return job.delivery_owner_label.trim();
+        if (job && job.delivery_owner_user_id != null && job.delivery_owner_user_id !== "") {
+          return userLabelById(getUsers(), job.delivery_owner_user_id);
+        }
+        if (a && a.delivery_owner_user_id != null && a.delivery_owner_user_id !== "") {
+          return userLabelById(getUsers(), a.delivery_owner_user_id);
+        }
+        return "—";
+      },
+    };
+  }
+
   global.RmsApplicationLabels = {
     RECEIVE_STATUS_LABELS: RECEIVE_STATUS_LABELS,
     APPLICATION_PROGRESS_LABELS: APPLICATION_PROGRESS_LABELS,
@@ -130,6 +210,7 @@
     jobById: jobById,
     candidateById: candidateById,
     userLabelById: userLabelById,
+    createAppDisplayHelpers: createAppDisplayHelpers,
     isProgressTerminal: function (status) {
       return !!PROGRESS_TERMINAL[status];
     },

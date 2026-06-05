@@ -577,11 +577,19 @@
         });
       }
 
+      const RMS_LIST_TABLE_IDS = {
+        candidates: "rms-candidates",
+        applications: "rms-applications",
+        deliveryReview: "rms-delivery-review",
+      };
+
       function scheduleCandidatesTableColumnFit() {
         nextTick(function () {
           requestAnimationFrame(function () {
-            var table = document.querySelector("table[data-table-id=\"rms-candidates\"]");
-            if (!table || activeTab.value !== "candidates") return;
+            var tableId = RMS_LIST_TABLE_IDS[activeTab.value];
+            if (!tableId) return;
+            var table = document.querySelector('table[data-table-id="' + tableId + '"]');
+            if (!table) return;
             if (typeof window.crmFitTableColumnsToContent === "function") {
               window.crmFitTableColumnsToContent(table);
             } else if (typeof window.crmInitTableColumnResize === "function") {
@@ -641,6 +649,7 @@
           applicationsState.items = Array.isArray(r.data) ? r.data : [];
         } finally {
           applicationsState.loading = false;
+          scheduleCandidatesTableColumnFit();
         }
       }
 
@@ -1237,7 +1246,7 @@
       }
 
       watch(activeTab, function (tab) {
-        if (tab === "candidates") {
+        if (tab === "candidates" || tab === "applications" || tab === "deliveryReview") {
           scheduleCandidatesTableColumnFit();
         }
         if (tab === "deliveryReview") {

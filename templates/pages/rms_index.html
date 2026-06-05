@@ -642,46 +642,48 @@
         <div v-if="applicationsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ applicationsState.error }}</div>
         <div v-else-if="applicationsState.loading" class="text-sm text-[#57606a]">加载中…</div>
         <div v-else-if="!applicationsState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无推荐记录</div>
-        <div v-else class="overflow-x-auto rounded-lg border border-[#d0d7de]">
-            <table class="rms-table w-full">
-                <thead class="bg-[#f6f8fa] border-b border-[#d0d7de]">
+        <div v-else class="rms-candidates-frame border border-[#d0d7de]">
+            <div class="rms-candidates-scroll crm-table-scroll">
+            <table class="crm-table rms-candidates-table" data-table-id="rms-applications">
+                <thead>
                     <tr>
-                        <th class="px-3 py-2">候选人</th>
-                        <th class="px-3 py-2">客户</th>
-                        <th class="px-3 py-2">推荐职位</th>
-                        <th class="px-3 py-2">职位地点</th>
-                        <th class="px-3 py-2">推荐时间</th>
-                        <th class="px-3 py-2">接收状态</th>
-                        <th class="px-3 py-2">招聘进展</th>
-                        <th class="px-3 py-2">保护期状态</th>
-                        <th class="px-3 py-2">交付</th>
-                        <th class="px-3 py-2">推荐人</th>
-                        <th class="px-3 py-2">操作</th>
+                        <th class="crm-th rms-candidate-sticky-name">候选人</th>
+                        <th class="crm-th">客户</th>
+                        <th class="crm-th">推荐职位</th>
+                        <th class="crm-th">职位地点</th>
+                        <th class="crm-th">推荐时间</th>
+                        <th class="crm-th">接收状态</th>
+                        <th class="crm-th">招聘进展</th>
+                        <th class="crm-th">保护期状态</th>
+                        <th class="crm-th">交付</th>
+                        <th class="crm-th">推荐人</th>
+                        <th class="crm-th crm-sticky-right-op crm-op-col-wide">操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="a in applicationsState.items" :key="a.id" class="border-b border-[#d0d7de] last:border-0">
-                        <td class="px-3 py-2">{{ appCandidateName(a) }}</td>
-                        <td class="px-3 py-2">{{ appClientName(a) }}</td>
-                        <td class="px-3 py-2">{{ appJobTitle(a) }}</td>
-                        <td class="px-3 py-2">{{ appJobLocation(a) }}</td>
-                        <td class="px-3 py-2">{{ a.recommended_at || '—' }}</td>
-                        <td class="px-3 py-2">{{ receiveLabel(a.receive_status) }}</td>
-                        <td class="px-3 py-2">{{ progressLabel(a.status) }}</td>
-                        <td class="px-3 py-2" :title="'保护期规则后续单独实现'">{{ protectionLabel(a.status) }}</td>
-                        <td class="px-3 py-2">{{ appDeliveryLabel(a) }}</td>
-                        <td class="px-3 py-2">{{ appRecommenderLabel(a) }}</td>
-                        <td class="px-3 py-2">
-                            <div v-if="canWriteApplications && a.receive_status === 'accepted'" class="flex flex-wrap gap-1">
+                    <tr v-for="a in applicationsState.items" :key="a.id">
+                        <td class="crm-td crm-name-cell rms-candidate-sticky-name">{{ appCandidateName(a) }}</td>
+                        <td class="crm-td">{{ appClientName(a) }}</td>
+                        <td class="crm-td">{{ appJobTitle(a) }}</td>
+                        <td class="crm-td">{{ appJobLocation(a) }}</td>
+                        <td class="crm-td">{{ a.recommended_at || '—' }}</td>
+                        <td class="crm-td">{{ receiveLabel(a.receive_status) }}</td>
+                        <td class="crm-td">{{ progressLabel(a.status) }}</td>
+                        <td class="crm-td" :title="'保护期规则后续单独实现'">{{ protectionLabel(a.status) }}</td>
+                        <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
+                        <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
+                        <td class="crm-td crm-sticky-right-op crm-op-col-wide whitespace-nowrap">
+                            <div v-if="canWriteApplications && a.receive_status === 'accepted'" class="crm-op-actions">
                                 <button v-for="next in progressTransitionsFor(a.status)" :key="next" type="button"
-                                    @click="transitionProgress(a.id, next)"
-                                    class="text-xs border border-[#d0d7de] px-2 py-0.5 rounded hover:bg-[#f6f8fa]">{{ progressLabel(next) }}</button>
+                                    class="crm-op-btn-edit"
+                                    @click="transitionProgress(a.id, next)">{{ progressLabel(next) }}</button>
                             </div>
-                            <span v-else class="text-xs text-[#57606a]">—</span>
+                            <span v-else class="text-[#57606a]">—</span>
                         </td>
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </section>
 
@@ -693,38 +695,43 @@
         <div v-if="deliveryReviewState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ deliveryReviewState.error }}</div>
         <div v-else-if="deliveryReviewState.loading" class="text-sm text-[#57606a]">加载中…</div>
         <div v-else-if="!deliveryReviewState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无待内审推荐</div>
-        <div v-else class="overflow-x-auto rounded-lg border border-[#d0d7de]">
-            <table class="rms-table w-full">
-                <thead class="bg-[#f6f8fa] border-b border-[#d0d7de]">
+        <div v-else class="rms-candidates-frame border border-[#d0d7de]">
+            <div class="rms-candidates-scroll crm-table-scroll">
+            <table class="crm-table rms-candidates-table" data-table-id="rms-delivery-review">
+                <thead>
                     <tr>
-                        <th class="px-3 py-2">候选人</th>
-                        <th class="px-3 py-2">客户</th>
-                        <th class="px-3 py-2">岗位</th>
-                        <th class="px-3 py-2">城市</th>
-                        <th class="px-3 py-2">推荐人</th>
-                        <th class="px-3 py-2">推荐时间</th>
-                        <th class="px-3 py-2">简历</th>
-                        <th class="px-3 py-2">操作</th>
+                        <th class="crm-th rms-candidate-sticky-name">候选人</th>
+                        <th class="crm-th">客户</th>
+                        <th class="crm-th">岗位</th>
+                        <th class="crm-th">城市</th>
+                        <th class="crm-th">推荐人</th>
+                        <th class="crm-th">推荐时间</th>
+                        <th class="crm-th">简历</th>
+                        <th class="crm-th crm-sticky-right-op">操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="a in deliveryReviewState.items" :key="'dr'+a.id" class="border-b border-[#d0d7de] last:border-0">
-                        <td class="px-3 py-2">{{ appCandidateName(a) }}</td>
-                        <td class="px-3 py-2">{{ appClientName(a) }}</td>
-                        <td class="px-3 py-2">{{ appJobTitle(a) }}</td>
-                        <td class="px-3 py-2">{{ appJobLocation(a) }}</td>
-                        <td class="px-3 py-2">{{ appRecommenderLabel(a) }}</td>
-                        <td class="px-3 py-2">{{ a.recommended_at || '—' }}</td>
-                        <td class="px-3 py-2">
+                    <tr v-for="a in deliveryReviewState.items" :key="'dr'+a.id">
+                        <td class="crm-td crm-name-cell rms-candidate-sticky-name">{{ appCandidateName(a) }}</td>
+                        <td class="crm-td">{{ appClientName(a) }}</td>
+                        <td class="crm-td">{{ appJobTitle(a) }}</td>
+                        <td class="crm-td">{{ appJobLocation(a) }}</td>
+                        <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
+                        <td class="crm-td">{{ a.recommended_at || '—' }}</td>
+                        <td class="crm-td whitespace-nowrap">
                             <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
                             <span v-else class="text-[#57606a]">—</span>
                         </td>
-                        <td class="px-3 py-2">
-                            <button v-if="canWriteApplications" type="button" class="crm-op-btn-edit" @click="openDeliveryReviewModal(a)">内审</button>
+                        <td class="crm-td crm-sticky-right-op whitespace-nowrap">
+                            <div v-if="canWriteApplications" class="crm-op-actions">
+                                <button type="button" class="crm-op-btn-edit" @click="openDeliveryReviewModal(a)">内审</button>
+                            </div>
+                            <span v-else class="text-[#57606a]">—</span>
                         </td>
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </section>
 
