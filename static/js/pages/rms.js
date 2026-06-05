@@ -5,16 +5,8 @@
 (function () {
   "use strict";
 
-  /** Keep in sync with schemas/rms.py ALLOWED_TRANSITIONS */
-  const ALLOWED_TRANSITIONS = {
-    recommended: ["screening", "rejected", "withdrawn"],
-    screening: ["interview", "rejected", "withdrawn"],
-    interview: ["offer", "rejected", "withdrawn"],
-    offer: ["hired", "rejected", "withdrawn"],
-    hired: [],
-    rejected: [],
-    withdrawn: [],
-  };
+  const Labels = window.RmsApplicationLabels || {};
+  const CandidateReport = window.RmsCandidateReport || {};
 
   const PRIORITY_OPTIONS = [
     { value: "high", label: "高" },
@@ -84,6 +76,15 @@
     return "请求失败 (" + status + ")" + (d ? "：" + d : "");
   }
 
+  function workflowMessageForStatus(status, detail, endpoint) {
+    if (status === 404) {
+      if (endpoint === "parse-draft") return "简历解析接口暂未接通";
+      if (endpoint === "candidate-report") return "推荐上报接口暂未接通";
+      if (endpoint === "delivery-review") return "交付内审接口暂未接通";
+    }
+    return messageForStatus(status, detail);
+  }
+
   async function rmsRequest(method, url, body) {
     const headers = Object.assign({}, authHeaders());
     const opts = { method: method, headers: headers, credentials: "same-origin" };
@@ -124,16 +125,82 @@
     return { ok: true, data: payload };
   }
 
+  function showRmsBootError(msg) {
+    var el = document.getElementById("rms-app");
+    if (!el) return;
+    el.removeAttribute("v-cloak");
+    if (el.querySelector("[data-rms-boot-error]")) return;
+    var box = document.createElement("div");
+    box.setAttribute("data-rms-boot-error", "1");
+    box.className = "rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 mb-4";
+    box.textContent = msg;
+    el.insertBefore(box, el.firstChild);
+  }
+
+  if (typeof Vue === "undefined" || !Vue.createApp) {
+    showRmsBootError("页面依赖 Vue 未能加载，请刷新后重试。");
+    return;
+  }
+
   const { createApp, ref, reactive, computed, watch, onMounted, nextTick } = Vue;
 
+  try {
   createApp({
     setup() {
       const activeTab = ref("jobs");
+      const viewMode = ref(null);
       const me = ref({ user: { id: null }, permissions: [] });
 
       const jobsState = reactive({ loading: false, items: [], error: "" });
       const candidatesState = reactive({ loading: false, items: [], error: "" });
       const applicationsState = reactive({ loading: false, items: [], error: "" });
+      const deliveryReviewState = reactive({ loading: false, items: [], error: "" });
+      const reviewModal = ref(null);
+      const reviewModalSaving = ref(false);
+      const reviewModalError = ref("");
+      const reportSaving = ref(false);
+      const reportError = ref("");
+      const reportResumeFile = ref(null);
+      const reportResumeInput = ref(null);
+      const reportResumeDraftStatus = ref("idle");
+      const reportResumeDraftError = ref("");
+      const reportResumePreviewText = ref("");
+      const reportResumePreviewError = ref("");
+      const reportResumeDragging = ref(false);
+      const reportAutoFilledFields = reactive({});
+      const reportForm = reactive(CandidateReport.emptyReportForm ? CandidateReport.emptyReportForm() : {});
+
+      let reportPageDragGuardOn = false;
+      function onReportPageDragOver(ev) {
+        ev.preventDefault();
+      }
+      function onReportPageDrop(ev) {
+        ev.preventDefault();
+      }
+      function installReportPageDragGuard() {
+        if (reportPageDragGuardOn) return;
+        reportPageDragGuardOn = true;
+        document.addEventListener("dragover", onReportPageDragOver);
+        document.addEventListener("drop", onReportPageDrop);
+      }
+      function removeReportPageDragGuard() {
+        if (!reportPageDragGuardOn) return;
+        reportPageDragGuardOn = false;
+        document.removeEventListener("dragover", onReportPageDragOver);
+        document.removeEventListener("drop", onReportPageDrop);
+      }
+      async function rmsRequestWorkflow(method, url, body, endpoint) {
+        const r = await rmsRequest(method, url, body);
+        if (!r.ok && r.status === 404) {
+          return { ok: false, status: 404, message: workflowMessageForStatus(404, "", endpoint) };
+        }
+        return r;
+      }
+      const deliveryReviewApi = CandidateReport.createDeliveryReviewApi
+        ? CandidateReport.createDeliveryReviewApi(function (method, url, body) {
+            return rmsRequestWorkflow(method, url, body, "delivery-review");
+          })
+        : null;
 
       const modal = ref(null);
       const modalError = ref("");
@@ -203,12 +270,6 @@
       const jobPickerOpen = ref(false);
       const clientPickerQuery = ref("");
       const clientPickerOpen = ref(false);
-      const applicationForm = reactive({
-        job_id: "",
-        candidate_id: "",
-        resume_id: "",
-      });
-
       const canWriteJobs = computed(function () {
         return me.value.permissions.indexOf("rms.jobs.write") !== -1;
       });
@@ -228,7 +289,6 @@
         if (modal.value === "candidate") {
           return candidateModalMode.value === "edit" ? "修改候选人" : "新建候选人";
         }
-        if (modal.value === "application") return "新建推荐";
         return "";
       });
 
@@ -451,8 +511,45 @@
         return { ok: true, data: payload };
       }
 
-      function transitionsFor(status) {
-        return ALLOWED_TRANSITIONS[status] || [];
+      function progressLabel(status) {
+        return Labels.progressLabel ? Labels.progressLabel(status) : status;
+      }
+
+      function receiveLabel(status) {
+        return Labels.receiveLabel ? Labels.receiveLabel(status) : status;
+      }
+
+      function protectionLabel(status) {
+        return Labels.deriveProtectionStatus ? Labels.deriveProtectionStatus(status) : "—";
+      }
+
+      function progressTransitionsFor(status) {
+        return Labels.progressTransitionsFor ? Labels.progressTransitionsFor(status) : [];
+      }
+
+      const appDisplay = Labels.createAppDisplayHelpers
+        ? Labels.createAppDisplayHelpers({
+            getJobs: function () { return jobsState.items; },
+            getCandidates: function () { return candidatesState.items; },
+            getUsers: function () { return userOptions.value; },
+            clientNameById: clientNameById,
+            labelJob: labelJob,
+          })
+        : {};
+      const appCandidateName = appDisplay.appCandidateName || function () { return "—"; };
+      const appClientName = appDisplay.appClientName || function () { return "—"; };
+      const appJobTitle = appDisplay.appJobTitle || function () { return "—"; };
+      const appJobLocation = appDisplay.appJobLocation || function () { return "—"; };
+      const appDeliveryLabel = appDisplay.appDeliveryLabel || function () { return "—"; };
+      const appRecommenderLabel = appDisplay.appRecommenderLabel || function () { return "—"; };
+
+      function resumeViewUrlById(resumeId) {
+        if (resumeId == null || resumeId === "") return "#";
+        return "/api/rms/resumes/" + resumeId + "/view";
+      }
+
+      function resumeCanViewByName(fileName) {
+        return /\.(pdf|txt|rtf)$/i.test(String(fileName || ""));
       }
 
       async function loadMe() {
@@ -544,6 +641,12 @@
           applicationsState.items = Array.isArray(r.data) ? r.data : [];
         } finally {
           applicationsState.loading = false;
+        }
+      }
+
+      async function loadDeliveryReview() {
+        if (deliveryReviewApi) {
+          await deliveryReviewApi.loadDeliveryReview(deliveryReviewState);
         }
       }
 
@@ -690,16 +793,6 @@
         await loadJobFormOptions();
       }
 
-      async function openJobDetail(row) {
-        modalError.value = "";
-        jobModalMode.value = "view";
-        editingJobId.value = row.id;
-        modal.value = "job";
-        resetJobForm();
-        fillJobFormFromRow(row);
-        await loadJobFormOptions();
-      }
-
       async function openJobEdit(row) {
         modalError.value = "";
         jobModalMode.value = "edit";
@@ -823,12 +916,209 @@
         await loadCandidates();
       }
 
-      function openApplicationModal() {
-        modalError.value = "";
-        applicationForm.job_id = "";
-        applicationForm.candidate_id = "";
-        applicationForm.resume_id = "";
-        modal.value = "application";
+      function clearReportResumePreview() {
+        reportResumePreviewText.value = "";
+        reportResumePreviewError.value = "";
+      }
+
+      function resetReportDraftUi() {
+        reportResumeDraftStatus.value = "idle";
+        reportResumeDraftError.value = "";
+        reportResumeDragging.value = false;
+        clearReportResumePreview();
+        Object.keys(reportAutoFilledFields).forEach(function (k) {
+          delete reportAutoFilledFields[k];
+        });
+      }
+
+      function formatReportFileSize(bytes) {
+        return CandidateReport.formatFileSize
+          ? CandidateReport.formatFileSize(bytes)
+          : String(bytes || 0);
+      }
+
+      function openCandidateReport(job) {
+        reportError.value = "";
+        reportSaving.value = false;
+        reportResumeFile.value = null;
+        resetReportDraftUi();
+        Object.assign(
+          reportForm,
+          CandidateReport.emptyReportForm ? CandidateReport.emptyReportForm() : {}
+        );
+        if (CandidateReport.fillFromJob) {
+          CandidateReport.fillFromJob(reportForm, job, clientNameById);
+        }
+        viewMode.value = "candidateReport";
+        installReportPageDragGuard();
+      }
+
+      function closeCandidateReport() {
+        removeReportPageDragGuard();
+        viewMode.value = null;
+        reportError.value = "";
+        clearReportResumeFile();
+      }
+
+      function clearReportResumeFile() {
+        if (CandidateReport.clearAutoFilledFields) {
+          CandidateReport.clearAutoFilledFields(reportForm, reportAutoFilledFields);
+        }
+        reportResumeFile.value = null;
+        reportResumeDraftStatus.value = "idle";
+        reportResumeDraftError.value = "";
+        reportResumeDragging.value = false;
+        clearReportResumePreview();
+        if (reportResumeInput.value) reportResumeInput.value.value = "";
+      }
+
+      async function parseReportResumeDraft(file) {
+        if (!file || !CandidateReport.parseCandidateReportDraft) return;
+        reportResumeDraftStatus.value = "parsing";
+        reportResumeDraftError.value = "";
+        clearReportResumePreview();
+        const r = await CandidateReport.parseCandidateReportDraft(
+          file,
+          reportForm.job_id,
+          authHeaders,
+          function (status, detail) {
+            return workflowMessageForStatus(status, detail, "parse-draft");
+          }
+        );
+        if (!r.ok) {
+          reportResumeDraftStatus.value = "error";
+          reportResumeDraftError.value = r.message;
+          reportResumePreviewText.value = "";
+          reportResumePreviewError.value = r.message;
+          return;
+        }
+        const data = r.data || {};
+        const draft = data.draft_fields || {};
+        const filled = CandidateReport.applyDraftToForm
+          ? CandidateReport.applyDraftToForm(reportForm, draft, reportAutoFilledFields)
+          : 0;
+        const n = CandidateReport.countDraftFields
+          ? CandidateReport.countDraftFields(draft)
+          : filled;
+        if (n > 0 || filled > 0) {
+          reportResumeDraftStatus.value = "ok";
+        } else {
+          reportResumeDraftStatus.value = "empty";
+        }
+        if (data.message) reportResumeDraftError.value = data.message;
+        const preview = String(data.parsed_text || "").trim();
+        if (preview) {
+          reportResumePreviewText.value = preview;
+          reportResumePreviewError.value = "";
+        } else if (data.message) {
+          reportResumePreviewText.value = "";
+          reportResumePreviewError.value = data.message;
+        } else {
+          reportResumePreviewText.value = "";
+          reportResumePreviewError.value = "";
+        }
+      }
+
+      function onReportFilePicked(file) {
+        if (!file) return;
+        reportResumeFile.value = file;
+        parseReportResumeDraft(file);
+      }
+
+      function onReportResumeChange(ev) {
+        const f = ev.target && ev.target.files && ev.target.files[0];
+        onReportFilePicked(f || null);
+      }
+
+      function onReportDrop(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        reportResumeDragging.value = false;
+        const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+        onReportFilePicked(f || null);
+      }
+
+      function onReportDragEnter(ev) {
+        ev.preventDefault();
+        reportResumeDragging.value = true;
+      }
+
+      function onReportDragLeave(ev) {
+        ev.preventDefault();
+        reportResumeDragging.value = false;
+      }
+
+      async function submitCandidateReport() {
+        reportSaving.value = true;
+        reportError.value = "";
+        if (!reportForm.job_id) {
+          reportError.value = "请选择应聘岗位";
+          reportSaving.value = false;
+          return;
+        }
+        if (!(reportForm.recommendation_note || "").trim()) {
+          reportError.value = "请填写推荐评语";
+          reportSaving.value = false;
+          return;
+        }
+        if (!(reportForm.name || "").trim()) {
+          reportError.value = "请填写姓名";
+          reportSaving.value = false;
+          return;
+        }
+        const reportPhone = (reportForm.phone || "").trim();
+        if (!PHONE_RE.test(reportPhone)) {
+          reportError.value = "请填写有效的11位手机号";
+          reportSaving.value = false;
+          return;
+        }
+        if (!(reportForm.email_wechat || "").trim()) {
+          reportError.value = "请填写邮箱/微信";
+          reportSaving.value = false;
+          return;
+        }
+        const r = await CandidateReport.submitCandidateReport(
+          reportForm,
+          reportResumeFile.value,
+          authHeaders,
+          function (status, detail) {
+            return workflowMessageForStatus(status, detail, "candidate-report");
+          }
+        );
+        reportSaving.value = false;
+        if (!r.ok) {
+          reportError.value = r.message;
+          return;
+        }
+        toast("推荐已提交", false);
+        closeCandidateReport();
+        await Promise.all([loadApplications(), loadCandidates(), loadDeliveryReview()]);
+      }
+
+      function openDeliveryReviewModal(app) {
+        reviewModalError.value = "";
+        reviewModalSaving.value = false;
+        reviewModal.value = app;
+      }
+
+      function closeDeliveryReviewModal() {
+        reviewModal.value = null;
+        reviewModalError.value = "";
+      }
+
+      async function submitDeliveryReview(result) {
+        if (!reviewModal.value || !deliveryReviewApi) return;
+        reviewModalSaving.value = true;
+        reviewModalError.value = "";
+        const r = await deliveryReviewApi.submitDeliveryReview(reviewModal.value.id, result);
+        reviewModalSaving.value = false;
+        if (!r.ok) {
+          reviewModalError.value = r.message;
+          return;
+        }
+        toast(result === "passed" ? "内审通过" : "内审失败", false);
+        closeDeliveryReviewModal();
+        await Promise.all([loadDeliveryReview(), loadApplications()]);
       }
 
       function closeModal() {
@@ -914,23 +1204,6 @@
             }
           }
           if (r.ok) await loadCandidates();
-        } else if (modal.value === "application") {
-          if (applicationForm.job_id === "" || applicationForm.job_id == null) {
-            modalError.value = "请选择岗位";
-            modalSaving.value = false;
-            return;
-          }
-          if (applicationForm.candidate_id === "" || applicationForm.candidate_id == null) {
-            modalError.value = "请选择或填写候选人";
-            modalSaving.value = false;
-            return;
-          }
-          const body = {
-            job_id: Number(applicationForm.job_id),
-            candidate_id: Number(applicationForm.candidate_id),
-          };
-          r = await rmsRequest("POST", "/api/rms/applications", body);
-          if (r.ok) await loadApplications();
         } else {
           modalSaving.value = false;
           return;
@@ -944,23 +1217,24 @@
         closeModal();
       }
 
-      async function transitionStatus(applicationId, toStatus) {
-        const r = await rmsRequest("POST", "/api/rms/applications/" + applicationId + "/status", {
+      async function transitionProgress(applicationId, toStatus) {
+        const r = await rmsRequest("POST", "/api/rms/applications/" + applicationId + "/progress", {
           to_status: toStatus,
-          reason: "",
-          note: "",
         });
         if (!r.ok) {
           toast(r.message, true);
           return;
         }
-        toast("状态已更新为 " + toStatus, false);
+        toast("招聘进展已更新为 " + progressLabel(toStatus), false);
         await loadApplications();
       }
 
       watch(activeTab, function (tab) {
         if (tab === "candidates") {
           scheduleCandidatesTableColumnFit();
+        }
+        if (tab === "deliveryReview") {
+          loadDeliveryReview();
         }
       });
 
@@ -970,6 +1244,7 @@
           loadJobs(),
           loadCandidates(),
           loadApplications(),
+          loadDeliveryReview(),
           loadJobFormOptions(),
         ]);
         if (activeTab.value === "candidates") {
@@ -979,9 +1254,25 @@
 
       return {
         activeTab,
+        viewMode,
         jobsState,
         candidatesState,
         applicationsState,
+        deliveryReviewState,
+        reviewModal,
+        reviewModalSaving,
+        reviewModalError,
+        reportForm,
+        reportSaving,
+        reportError,
+        reportResumeFile,
+        reportResumeInput,
+        reportResumeDraftStatus,
+        reportResumeDraftError,
+        reportResumePreviewText,
+        reportResumePreviewError,
+        reportResumeDragging,
+        formatReportFileSize,
         canWriteJobs,
         canWriteCandidates,
         canWriteApplications,
@@ -1033,7 +1324,18 @@
         selectJobPicker,
         selectClientPicker,
         onCandidateResumeChange,
-        applicationForm,
+        progressLabel,
+        receiveLabel,
+        protectionLabel,
+        progressTransitionsFor,
+        appCandidateName,
+        appClientName,
+        appJobTitle,
+        appJobLocation,
+        appDeliveryLabel,
+        appRecommenderLabel,
+        resumeViewUrlById,
+        resumeCanViewByName,
         userOptionLabel,
         onJobClientChange,
         clientNameById,
@@ -1044,19 +1346,33 @@
         scheduleCandidatesTableColumnFit,
         labelJob,
         labelCandidate,
-        transitionsFor,
         openJobModal,
-        openJobDetail,
         openJobEdit,
         removeJob,
+        openCandidateReport,
+        closeCandidateReport,
+        onReportResumeChange,
+        onReportDrop,
+        onReportDragEnter,
+        onReportDragLeave,
+        clearReportResumeFile,
+        submitCandidateReport,
+        openDeliveryReviewModal,
+        closeDeliveryReviewModal,
+        submitDeliveryReview,
         openCandidateModal,
         openCandidateEdit,
         removeCandidate,
-        openApplicationModal,
         closeModal,
         submitModal,
-        transitionStatus,
+        transitionProgress,
       };
     },
   }).mount("#rms-app");
+  } catch (bootErr) {
+    console.error("RMS mount failed:", bootErr);
+    showRmsBootError(
+      "招聘页面初始化失败：" + (bootErr && bootErr.message ? bootErr.message : String(bootErr))
+    );
+  }
 })();

@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block title %}招聘 · ITO CRM{% endblock %}
 {% block head_extra %}
-<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
     .rms-tab-active { background: #eef2ff; color: #1f2328; font-weight: 600; border-color: #d0d7de; }
     .rms-job-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem 1rem; }
@@ -34,6 +33,53 @@
     }
     .rms-combobox-item { padding: 0.5rem 0.75rem; font-size: 0.875rem; cursor: pointer; }
     .rms-combobox-item:hover { background: #f6f8fa; }
+    .rms-report-dropzone {
+        border: 2px dashed #d0d7de;
+        border-radius: 0.5rem;
+        padding: 1.25rem 1rem;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+    }
+    .rms-report-dropzone.is-dragging {
+        border-color: #0969da;
+        background: #eef6ff;
+    }
+    .rms-report-dropzone.has-file {
+        text-align: left;
+    }
+    .rms-report-file-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        font-size: 0.875rem;
+    }
+    .rms-report-file-remove {
+        color: #57606a;
+        font-size: 1.125rem;
+        line-height: 1;
+        padding: 0 0.25rem;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+    }
+    .rms-report-file-remove:hover { color: #cf222e; }
+    .rms-report-preview-body {
+        max-height: 28rem;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        margin-top: 0.5rem;
+        padding: 0.75rem;
+        font-size: 0.75rem;
+        line-height: 1.5;
+        color: #1f2328;
+        background: #fff;
+        border: 1px solid #d0d7de;
+        border-radius: 0.375rem;
+    }
+    .rms-required-mark { color: #dc2626; font-weight: 700; }
     /* 滚动区勿加左右 padding，否则横向滚动后冻结列与圆角边框之间会露白缝 */
     .rms-candidates-scroll {
         padding: 0;
@@ -71,6 +117,13 @@
         border-collapse: separate;
         border-spacing: 0;
         --rms-jobs-jd-width: 35em;
+        --rms-jobs-op-col-width: 10.5rem;
+    }
+    .crm-table.rms-jobs-table th.crm-sticky-right-op.crm-op-col-xl,
+    .crm-table.rms-jobs-table td.crm-sticky-right-op.crm-op-col-xl {
+        width: var(--rms-jobs-op-col-width) !important;
+        min-width: var(--rms-jobs-op-col-width) !important;
+        max-width: var(--rms-jobs-op-col-width) !important;
     }
     .crm-table.rms-jobs-table .rms-sticky-serial {
         position: sticky;
@@ -214,7 +267,129 @@
 {% raw %}
 <div id="rms-app" class="container mx-auto max-w-[1280px] py-6 px-4 sm:px-6" v-cloak>
     <h1 class="text-2xl font-semibold text-[#1f2328] mb-2">招聘（RMS）</h1>
-    <p class="text-[#57606a] text-sm mb-6">Phase 2.5：前端 MVP 已接入。支持岗位、候选人、推荐记录与状态流转；简历、AI、面试、Offer 与入职转花名册将在后续阶段开放。</p>
+    <p class="text-[#57606a] text-sm mb-6">Plan 34：推荐流程、候选人报告、交付内审已接入；保护期完整规则与 OCR 自动填充将在后续阶段开放。</p>
+
+    <div v-if="viewMode === 'candidateReport'" class="fixed inset-0 z-[60] bg-white overflow-y-auto p-4 sm:p-6">
+        <div class="max-w-6xl mx-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-[#1f2328]">新建候选人报告</h2>
+                <button type="button" class="text-sm border border-[#d0d7de] px-3 py-1.5 rounded-md" @click="closeCandidateReport">返回</button>
+            </div>
+            <p v-if="reportError" class="mb-3 text-sm text-red-700">{{ reportError }}</p>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="border border-[#d0d7de] rounded-lg p-4 bg-[#f6f8fa]">
+                    <p class="text-sm font-medium mb-2">拖拽上传简历</p>
+                    <div
+                        data-rms-report-dropzone
+                        class="rms-report-dropzone"
+                        :class="{ 'is-dragging': reportResumeDragging, 'has-file': !!reportResumeFile }"
+                        @click="reportResumeInput && reportResumeInput.click()"
+                        @dragover.prevent
+                        @dragenter.prevent="onReportDragEnter"
+                        @dragleave.prevent="onReportDragLeave"
+                        @drop.prevent="onReportDrop"
+                    >
+                        <input
+                            ref="reportResumeInput"
+                            type="file"
+                            accept=".pdf,.doc,.docx,.txt,.rtf"
+                            class="hidden"
+                            @change="onReportResumeChange"
+                        />
+                        <template v-if="!reportResumeFile">
+                            <p class="text-sm text-[#57606a]">点击或拖拽文件到此处</p>
+                            <p class="text-xs text-[#656d76] mt-1">PDF / TXT / RTF 自动解析；Word 仅上传</p>
+                        </template>
+                        <div v-else class="rms-report-file-row">
+                            <span class="min-w-0 truncate">{{ reportResumeFile.name }}（{{ formatReportFileSize(reportResumeFile.size) }}）</span>
+                            <button type="button" data-rms-report-file-remove class="rms-report-file-remove shrink-0" title="移除文件" @click.stop="clearReportResumeFile">×</button>
+                        </div>
+                    </div>
+                    <p v-if="reportResumeDraftStatus === 'parsing'" class="text-xs text-[#57606a] mt-2">解析中…</p>
+                    <p v-else-if="reportResumeDraftStatus === 'ok'" class="text-xs text-green-700 mt-2">已识别字段并填入右侧空项</p>
+                    <p v-else-if="reportResumeDraftStatus === 'empty'" class="text-xs text-[#656d76] mt-2">未识别到可自动填充字段</p>
+                    <p v-else-if="reportResumeDraftStatus === 'error'" class="text-xs text-red-700 mt-2">{{ reportResumeDraftError }}</p>
+                    <p v-else-if="reportResumeDraftError" class="text-xs text-amber-800 mt-1">{{ reportResumeDraftError }}</p>
+                    <div data-rms-report-preview class="mt-3">
+                        <p class="text-sm font-medium text-[#1f2328]">简历内容</p>
+                        <pre v-if="reportResumePreviewText" class="rms-report-preview-body">{{ reportResumePreviewText }}</pre>
+                        <p v-else-if="reportResumePreviewError" class="text-xs text-amber-800 mt-2">{{ reportResumePreviewError }}</p>
+                        <p v-else class="text-xs text-[#656d76] mt-2">上传 PDF/TXT/RTF 后将在这里显示可提取文本</p>
+                    </div>
+                </div>
+                <div class="space-y-3 text-sm">
+                    <label class="block"><span class="text-[#57606a]">应聘岗位 <span class="rms-required-mark">*</span></span>
+                        <input :value="reportForm.job_title" disabled class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-gray-50" /></label>
+                    <label class="block"><span class="text-[#57606a]">应聘项目 <span class="rms-required-mark">*</span></span>
+                        <input :value="reportForm.client_name" disabled class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-gray-50" /></label>
+                    <label class="block"><span class="text-[#57606a]">城市 <span class="rms-required-mark">*</span></span>
+                        <input :value="reportForm.location" disabled class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-gray-50" /></label>
+                    <label class="block"><span class="text-[#57606a]">推荐评语 <span class="rms-required-mark">*</span></span>
+                        <textarea v-model="reportForm.recommendation_note" rows="2" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5"></textarea></label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="block"><span class="text-[#57606a]">当前薪资 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.current_salary" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                        <label class="block"><span class="text-[#57606a]">期望薪资 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.expected_salary" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="block"><span class="text-[#57606a]">姓名 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.name" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                        <label class="block"><span class="text-[#57606a]">年龄 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.age" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="block"><span class="text-[#57606a]">年限 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.work_years" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                        <label class="block"><span class="text-[#57606a]">手机号 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.phone" type="tel" maxlength="11" pattern="1[0-9]{10}"
+                                class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="11位手机号" /></label>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="block"><span class="text-[#57606a]">邮箱/微信 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.email_wechat" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                        <label class="block"><span class="text-[#57606a]">到岗时间 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.available_date" type="date" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="block"><span class="text-[#57606a]">学历 <span class="rms-required-mark">*</span></span>
+                            <select v-model="reportForm.education_level" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                                <option value="">请选择</option>
+                                <option v-for="e in educationOptions" :key="'red'+e" :value="e">{{ e }}</option>
+                            </select></label>
+                        <label class="block"><span class="text-[#57606a]">来源 <span class="rms-required-mark">*</span></span>
+                            <select v-model="reportForm.source" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                                <option value="">请选择</option>
+                                <option v-for="s in sourceOptions" :key="'rs'+s" :value="s">{{ s }}</option>
+                            </select></label>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="block"><span class="text-[#57606a]">学校 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.school" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                        <label class="block"><span class="text-[#57606a]">专业 <span class="rms-required-mark">*</span></span>
+                            <input v-model="reportForm.major" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label class="block"><span class="text-[#57606a]">性别 <span class="rms-required-mark">*</span></span>
+                            <select v-model="reportForm.gender" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                                <option value="">请选择</option>
+                                <option v-for="g in genderOptions" :key="'rg'+g" :value="g">{{ g }}</option>
+                            </select></label>
+                        <label class="block"><span class="text-[#57606a]">婚姻状况 <span class="rms-required-mark">*</span></span>
+                            <select v-model="reportForm.marital_status" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
+                                <option value="">请选择</option>
+                                <option v-for="m in maritalOptions" :key="'rm'+m" :value="m">{{ m }}</option>
+                            </select></label>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2">
+                        <button type="button" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md" @click="closeCandidateReport">取消</button>
+                        <button v-if="canWriteApplications && canWriteCandidates" type="button" class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50"
+                            :disabled="reportSaving" @click="submitCandidateReport">提交推荐</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="flex flex-wrap gap-2 mb-4 border-b border-[#d0d7de] pb-2">
         <button type="button" data-rms-tab="jobs" @click="activeTab = 'jobs'"
@@ -226,10 +401,13 @@
         <button type="button" data-rms-tab="applications" @click="activeTab = 'applications'"
             :class="activeTab === 'applications' ? 'rms-tab-active' : ''"
             class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">推荐</button>
+        <button type="button" data-rms-tab="deliveryReview" @click="activeTab = 'deliveryReview'"
+            :class="activeTab === 'deliveryReview' ? 'rms-tab-active' : ''"
+            class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">交付内审</button>
     </div>
 
     <!-- Jobs -->
-    <section v-show="activeTab === 'jobs'" class="rms-jobs-panel bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 flex flex-col gap-2 min-h-0 overflow-hidden">
+    <section v-show="activeTab === 'jobs' && viewMode !== 'candidateReport'" class="rms-jobs-panel bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 flex flex-col gap-2 min-h-0 overflow-hidden">
         <div class="rounded-lg border border-gray-200 bg-gray-50 shrink-0">
             <div
                 v-if="!jobFilterPanelExpanded"
@@ -336,7 +514,7 @@
                         <th class="crm-th">交付</th>
                         <th class="crm-th">招聘</th>
                         <th class="crm-th rms-col-note">备注</th>
-                        <th class="crm-th crm-sticky-right-op">操作</th>
+                        <th class="crm-th crm-sticky-right-op crm-op-col-xl">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -359,9 +537,9 @@
                         <td class="crm-td">{{ j.delivery_owner_label || '—' }}</td>
                         <td class="crm-td">{{ j.recruitment_owner_label || '—' }}</td>
                         <td class="crm-td rms-col-note"><div class="crm-cell-clip">{{ j.note || '—' }}</div></td>
-                        <td class="crm-td whitespace-nowrap crm-sticky-right-op">
+                        <td class="crm-td whitespace-nowrap crm-sticky-right-op crm-op-col-xl">
                             <div class="crm-op-actions">
-                                <button type="button" class="crm-op-btn-detail" @click="openJobDetail(j)">详情</button>
+                                <button v-if="canWriteApplications && canWriteCandidates" type="button" class="crm-op-btn-detail" @click="openCandidateReport(j)">推荐候选人</button>
                                 <button v-if="canWriteJobs" type="button" class="crm-op-btn-edit" @click="openJobEdit(j)">修改</button>
                                 <button v-if="canWriteJobs" type="button" class="crm-op-btn-delete" @click="removeJob(j)">删除</button>
                             </div>
@@ -376,7 +554,7 @@
     </section>
 
     <!-- Candidates -->
-    <section v-show="activeTab === 'candidates'">
+    <section v-show="activeTab === 'candidates' && viewMode !== 'candidateReport'">
         <div class="flex justify-between items-center mb-3">
             <h2 class="text-lg font-medium text-[#1f2328]">候选人</h2>
             <button v-if="canWriteCandidates" type="button" @click="openCandidateModal"
@@ -457,11 +635,9 @@
     </section>
 
     <!-- Applications -->
-    <section v-show="activeTab === 'applications'">
+    <section v-show="activeTab === 'applications' && viewMode !== 'candidateReport'">
         <div class="flex justify-between items-center mb-3">
             <h2 class="text-lg font-medium text-[#1f2328]">推荐记录</h2>
-            <button v-if="canWriteApplications" type="button" @click="openApplicationModal"
-                class="text-sm bg-[#0969da] text-white px-3 py-1.5 rounded-md hover:bg-[#0860ca]">新建推荐</button>
         </div>
         <div v-if="applicationsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ applicationsState.error }}</div>
         <div v-else-if="applicationsState.loading" class="text-sm text-[#57606a]">加载中…</div>
@@ -470,26 +646,36 @@
             <table class="rms-table w-full">
                 <thead class="bg-[#f6f8fa] border-b border-[#d0d7de]">
                     <tr>
-                        <th class="px-3 py-2">ID</th>
-                        <th class="px-3 py-2">岗位</th>
                         <th class="px-3 py-2">候选人</th>
-                        <th class="px-3 py-2">状态</th>
-                        <th class="px-3 py-2">客户 ID</th>
+                        <th class="px-3 py-2">客户</th>
+                        <th class="px-3 py-2">推荐职位</th>
+                        <th class="px-3 py-2">职位地点</th>
+                        <th class="px-3 py-2">推荐时间</th>
+                        <th class="px-3 py-2">接收状态</th>
+                        <th class="px-3 py-2">招聘进展</th>
+                        <th class="px-3 py-2">保护期状态</th>
+                        <th class="px-3 py-2">交付</th>
+                        <th class="px-3 py-2">推荐人</th>
                         <th class="px-3 py-2">操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="a in applicationsState.items" :key="a.id" class="border-b border-[#d0d7de] last:border-0">
-                        <td class="px-3 py-2">{{ a.id }}</td>
-                        <td class="px-3 py-2">{{ labelJob(a.job_id) }}</td>
-                        <td class="px-3 py-2">{{ labelCandidate(a.candidate_id) }}</td>
-                        <td class="px-3 py-2">{{ a.status }}</td>
-                        <td class="px-3 py-2">{{ a.client_id }}</td>
+                        <td class="px-3 py-2">{{ appCandidateName(a) }}</td>
+                        <td class="px-3 py-2">{{ appClientName(a) }}</td>
+                        <td class="px-3 py-2">{{ appJobTitle(a) }}</td>
+                        <td class="px-3 py-2">{{ appJobLocation(a) }}</td>
+                        <td class="px-3 py-2">{{ a.recommended_at || '—' }}</td>
+                        <td class="px-3 py-2">{{ receiveLabel(a.receive_status) }}</td>
+                        <td class="px-3 py-2">{{ progressLabel(a.status) }}</td>
+                        <td class="px-3 py-2" :title="'保护期规则后续单独实现'">{{ protectionLabel(a.status) }}</td>
+                        <td class="px-3 py-2">{{ appDeliveryLabel(a) }}</td>
+                        <td class="px-3 py-2">{{ appRecommenderLabel(a) }}</td>
                         <td class="px-3 py-2">
-                            <div v-if="canWriteApplications" class="flex flex-wrap gap-1">
-                                <button v-for="next in transitionsFor(a.status)" :key="next" type="button"
-                                    @click="transitionStatus(a.id, next)"
-                                    class="text-xs border border-[#d0d7de] px-2 py-0.5 rounded hover:bg-[#f6f8fa]">{{ next }}</button>
+                            <div v-if="canWriteApplications && a.receive_status === 'accepted'" class="flex flex-wrap gap-1">
+                                <button v-for="next in progressTransitionsFor(a.status)" :key="next" type="button"
+                                    @click="transitionProgress(a.id, next)"
+                                    class="text-xs border border-[#d0d7de] px-2 py-0.5 rounded hover:bg-[#f6f8fa]">{{ progressLabel(next) }}</button>
                             </div>
                             <span v-else class="text-xs text-[#57606a]">—</span>
                         </td>
@@ -498,6 +684,68 @@
             </table>
         </div>
     </section>
+
+    <!-- Delivery review -->
+    <section v-show="activeTab === 'deliveryReview' && viewMode !== 'candidateReport'">
+        <div class="flex justify-between items-center mb-3">
+            <h2 class="text-lg font-medium text-[#1f2328]">交付内审</h2>
+        </div>
+        <div v-if="deliveryReviewState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ deliveryReviewState.error }}</div>
+        <div v-else-if="deliveryReviewState.loading" class="text-sm text-[#57606a]">加载中…</div>
+        <div v-else-if="!deliveryReviewState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无待内审推荐</div>
+        <div v-else class="overflow-x-auto rounded-lg border border-[#d0d7de]">
+            <table class="rms-table w-full">
+                <thead class="bg-[#f6f8fa] border-b border-[#d0d7de]">
+                    <tr>
+                        <th class="px-3 py-2">候选人</th>
+                        <th class="px-3 py-2">客户</th>
+                        <th class="px-3 py-2">岗位</th>
+                        <th class="px-3 py-2">城市</th>
+                        <th class="px-3 py-2">推荐人</th>
+                        <th class="px-3 py-2">推荐时间</th>
+                        <th class="px-3 py-2">简历</th>
+                        <th class="px-3 py-2">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="a in deliveryReviewState.items" :key="'dr'+a.id" class="border-b border-[#d0d7de] last:border-0">
+                        <td class="px-3 py-2">{{ appCandidateName(a) }}</td>
+                        <td class="px-3 py-2">{{ appClientName(a) }}</td>
+                        <td class="px-3 py-2">{{ appJobTitle(a) }}</td>
+                        <td class="px-3 py-2">{{ appJobLocation(a) }}</td>
+                        <td class="px-3 py-2">{{ appRecommenderLabel(a) }}</td>
+                        <td class="px-3 py-2">{{ a.recommended_at || '—' }}</td>
+                        <td class="px-3 py-2">
+                            <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
+                            <span v-else class="text-[#57606a]">—</span>
+                        </td>
+                        <td class="px-3 py-2">
+                            <button v-if="canWriteApplications" type="button" class="crm-op-btn-edit" @click="openDeliveryReviewModal(a)">内审</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- Delivery review resume modal -->
+    <div v-if="reviewModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="closeDeliveryReviewModal">
+        <div class="bg-white rounded-lg border border-[#d0d7de] shadow-lg w-full max-w-4xl max-h-[90vh] flex flex-col p-5" @click.stop>
+            <h3 class="text-lg font-medium mb-2">内审 — {{ appCandidateName(reviewModal) }}</h3>
+            <p v-if="reviewModalError" class="mb-2 text-sm text-red-700">{{ reviewModalError }}</p>
+            <div class="flex-1 min-h-0 overflow-hidden border border-[#d0d7de] rounded mb-4">
+                <iframe v-if="reviewModal.resume_id" :src="resumeViewUrlById(reviewModal.resume_id)" class="w-full h-[50vh]" title="简历预览"></iframe>
+                <p v-else class="p-4 text-sm text-[#57606a]">无简历附件，可直接内审。</p>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md" @click="closeDeliveryReviewModal">取消</button>
+                <button type="button" class="px-3 py-1.5 text-sm border border-red-300 text-red-700 rounded-md disabled:opacity-50"
+                    :disabled="reviewModalSaving" @click="submitDeliveryReview('failed')">内审失败</button>
+                <button type="button" class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50"
+                    :disabled="reviewModalSaving" @click="submitDeliveryReview('passed')">内审通过</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Modals -->
     <div v-if="modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="closeModal">
@@ -674,30 +922,6 @@
                 </div>
             </template>
 
-            <template v-else-if="modal === 'application'">
-                <div class="space-y-3 text-sm">
-                    <p v-if="!jobsState.items.length" class="text-xs text-amber-800">岗位列表为空或不可见，请先在「岗位」tab 确认有可读岗位。</p>
-                    <label class="block"><span class="text-[#57606a]">岗位</span>
-                        <select v-model.number="applicationForm.job_id"
-                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
-                            <option value="" disabled>请选择岗位</option>
-                            <option v-for="j in jobsState.items" :key="'aj'+j.id" :value="j.id">{{ j.title || ('#' + j.id) }}</option>
-                        </select>
-                    </label>
-                    <p v-if="candidatesState.error" class="text-xs text-amber-800">{{ candidatesState.error }}</p>
-                    <p v-else-if="!candidatesState.items.length" class="text-xs text-amber-800">候选人列表为空或不可见，可手动输入 ID。</p>
-                    <label class="block"><span class="text-[#57606a]">候选人</span>
-                        <select v-if="candidatesState.items.length" v-model.number="applicationForm.candidate_id"
-                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
-                            <option value="" disabled>请选择候选人</option>
-                            <option v-for="c in candidatesState.items" :key="'ac'+c.id" :value="c.id">{{ c.name || ('#' + c.id) }}</option>
-                        </select>
-                        <input v-else v-model.number="applicationForm.candidate_id" type="number"
-                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="候选人 ID" />
-                    </label>
-                </div>
-            </template>
-
             <div class="flex justify-end gap-2 mt-5 shrink-0">
                 <button type="button" @click="closeModal" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md">{{ modalCloseLabel }}</button>
                 <button v-if="modalShowSave" type="button" @click="submitModal" :disabled="modalSaving"
@@ -709,7 +933,10 @@
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
+<script src="/static/js/vendor/vue.global.prod.js"></script>
 <script src="/static/js/core/crm-api.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
+<script src="/static/js/pages/rms-application-labels.js"></script>
+<script src="/static/js/pages/rms-candidate-report.js"></script>
 <script src="/static/js/pages/rms.js"></script>
 {% endblock %}

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional, Type
 
-from fastapi import Body, Depends, HTTPException
+from fastapi import Body, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from auth.deps import get_current_context, require_permission
@@ -47,6 +47,16 @@ def register_rms_applications_routes(
             client_id=client_id,
             status=status,
         )
+
+    @app.post("/api/rms/applications/candidate-report/parse-draft")
+    async def api_parse_candidate_report_draft(
+        file: UploadFile = File(...),
+        job_id: Optional[int] = Form(None),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.applications.write")),
+    ):
+        content = await file.read()
+        return app_svc.parse_resume_draft(file.filename or "", content)
 
     @app.get("/api/rms/applications/{application_id}")
     async def api_get_application(
