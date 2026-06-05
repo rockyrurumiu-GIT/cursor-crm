@@ -12,6 +12,7 @@ from schemas.rms import (
     ApplicationCreate,
     ApplicationStatusBody,
     ApplicationUpdate,
+    DeliveryReviewBody,
     reject_forbidden_application_keys,
 )
 from services import rms_applications as app_svc
@@ -57,6 +58,14 @@ def register_rms_applications_routes(
     ):
         content = await file.read()
         return app_svc.parse_resume_draft(file.filename or "", content)
+
+    @app.get("/api/rms/applications/delivery-review")
+    async def api_list_delivery_review_applications(
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.applications.read")),
+    ):
+        return app_svc.list_delivery_review_applications(db, ctx, RmsApplication, Client)
 
     @app.get("/api/rms/applications/{application_id}")
     async def api_get_application(
@@ -108,6 +117,23 @@ def register_rms_applications_routes(
             data,
             RmsJob,
             RmsCandidate,
+            RmsApplication,
+            Client,
+        )
+
+    @app.post("/api/rms/applications/{application_id}/delivery-review")
+    async def api_submit_delivery_review(
+        application_id: int,
+        body: DeliveryReviewBody,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.applications.write")),
+    ):
+        return app_svc.submit_delivery_review(
+            db,
+            ctx,
+            application_id,
+            body.model_dump(),
             RmsApplication,
             Client,
         )

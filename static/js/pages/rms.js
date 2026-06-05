@@ -1116,6 +1116,13 @@
           reviewModalError.value = r.message;
           return;
         }
+        const warnMsg = r.data && r.data.message;
+        if (warnMsg) {
+          toast(warnMsg, true);
+          closeDeliveryReviewModal();
+          await Promise.all([loadDeliveryReview(), loadApplications()]);
+          return;
+        }
         toast(result === "passed" ? "内审通过" : "内审失败", false);
         closeDeliveryReviewModal();
         await Promise.all([loadDeliveryReview(), loadApplications()]);

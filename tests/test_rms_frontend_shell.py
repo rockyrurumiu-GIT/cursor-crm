@@ -37,6 +37,9 @@ def test_rms_frontend_js_assets_exist():
     rms_src = rms.read_text(encoding="utf-8")
 
     assert "parseCandidateReportDraft" in report_src
+    assert '"phone"' in report_src
+    assert 'phone: ""' in report_src
+    assert "form.email_wechat = String(draft.phone)" not in report_src
     for sym in (
         "reportForm",
         "reportResumeFile",

@@ -1,7 +1,7 @@
 """RMS request/response schemas and status transition constants (Phase 2)."""
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -75,6 +75,13 @@ class ApplicationStatusBody(BaseModel):
 
     to_status: str
     reason: str = ""
+    note: str = ""
+
+
+class DeliveryReviewBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result: Literal["passed", "failed"]
     note: str = ""
 
 

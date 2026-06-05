@@ -9,6 +9,7 @@
     "name",
     "age",
     "work_years",
+    "phone",
     "email_wechat",
     "current_salary",
     "expected_salary",
@@ -31,6 +32,7 @@
       name: "",
       age: "",
       work_years: "",
+      phone: "",
       email_wechat: "",
       available_date: "",
       education_level: "",
@@ -73,11 +75,6 @@
       if (tracker) tracker[field] = form[field];
       filled += 1;
     });
-    if (draft.phone && canAutoFillField(form, "email_wechat", tracker)) {
-      form.email_wechat = String(draft.phone).trim();
-      if (tracker) tracker.email_wechat = form.email_wechat;
-      filled += 1;
-    }
     return filled;
   }
 
@@ -99,7 +96,6 @@
     DRAFT_FORM_FIELDS.forEach(function (f) {
       if (draft[f] != null && String(draft[f]).trim() !== "") n += 1;
     });
-    if (draft.phone && !draft.email_wechat) n += 1;
     return n;
   }
 

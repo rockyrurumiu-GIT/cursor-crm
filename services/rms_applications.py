@@ -8,6 +8,7 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,6 +21,7 @@ PARSE_DRAFT_ALLOWED_SUFFIXES = frozenset({".pdf", ".txt", ".rtf"})
 PARSE_DRAFT_WORD_SUFFIXES = frozenset({".doc", ".docx"})
 PARSE_DRAFT_TEXT_MAX = 2000
 _WORD_UNSUPPORTED_MSG = "Word 文档暂不支持自动解析，请手动填写或上传 PDF/TXT"
+_DELIVERY_REVIEW_NOT_PERSISTED_MSG = "内审状态列尚未接入，本次未持久化状态"
 
 _RE_PHONE = re.compile(r"1[3-9]\d{9}")
 _RE_EMAIL = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
@@ -33,13 +35,23 @@ _RE_SCHOOL = re.compile(r"(?:毕业院校|学校|院校)\s*[:：]\s*([^\n\r]{2,4
 _RE_MAJOR = re.compile(r"专业\s*[:：]\s*([^\n\r]{2,40})")
 _RE_GENDER = re.compile(r"性别\s*[:：]\s*(男|女)")
 
+SCHOOL_ENTITY_RE = re.compile(r"([\u4e00-\u9fa5A-Za-z0-9·]{2,30}(?:大学|学院|学校))")
+_EDU_BLOCK_START = re.compile(r"^教育(?:背景|经历)\s*$")
+_EDU_BLOCK_STOP = re.compile(
+    r"^(?:工作经历|项目经历|专业技能|自我评价|毕业论文|毕业设计)"
+)
+_DATE_RANGE_RE = re.compile(
+    r"\d{4}[./年]\d{1,2}\s*[-—–~至]+\s*\d{4}[./年]\d{1,2}"
+)
+_DEGREE_IN_PARENS = re.compile(r"[（(]([^）)]+)[）)]")
+
 
 def _utc_now_str() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def application_to_dict(row: Any) -> Dict[str, Any]:
-    return {
+    d: Dict[str, Any] = {
         "id": row.id,
         "job_id": row.job_id,
         "candidate_id": row.candidate_id,
@@ -53,6 +65,11 @@ def application_to_dict(row: Any) -> Dict[str, Any]:
         "created_at": row.created_at or "",
         "updated_at": row.updated_at or "",
     }
+    if hasattr(row, "delivery_review_status"):
+        d["delivery_review_status"] = row.delivery_review_status or ""
+    if hasattr(row, "receive_status"):
+        d["receive_status"] = row.receive_status or ""
+    return d
 
 
 def status_history_to_dict(row: Any) -> Dict[str, Any]:
@@ -263,6 +280,56 @@ def list_status_history(
     return [status_history_to_dict(r) for r in rows]
 
 
+def list_delivery_review_applications(
+    db: Session,
+    ctx: AuthContext,
+    RmsApplication: Type[Any],
+    Client: Type[Any],
+) -> List[Dict[str, Any]]:
+    q = rms_ds.scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
+    q = q.filter(RmsApplication.status == "recommended")
+    if hasattr(RmsApplication, "delivery_review_status"):
+        q = q.filter(
+            or_(
+                RmsApplication.delivery_review_status == "pending",
+                RmsApplication.delivery_review_status == "",
+                RmsApplication.delivery_review_status.is_(None),
+            )
+        )
+    rows = q.order_by(RmsApplication.id.desc()).all()
+    return [application_to_dict(r) for r in rows]
+
+
+def submit_delivery_review(
+    db: Session,
+    ctx: AuthContext,
+    application_id: int,
+    data: Dict[str, Any],
+    RmsApplication: Type[Any],
+    Client: Type[Any],
+) -> Dict[str, Any]:
+    row = _get_writable_application(db, ctx, application_id, RmsApplication, Client)
+    result = str(data.get("result") or "").strip()
+
+    if not hasattr(RmsApplication, "delivery_review_status"):
+        return {
+            **application_to_dict(row),
+            "message": _DELIVERY_REVIEW_NOT_PERSISTED_MSG,
+        }
+
+    now = _utc_now_str()
+    if result == "passed":
+        row.delivery_review_status = "passed"
+        if hasattr(row, "receive_status"):
+            row.receive_status = "pending"
+    elif result == "failed":
+        row.delivery_review_status = "failed"
+    row.updated_at = now
+    db.commit()
+    db.refresh(row)
+    return application_to_dict(row)
+
+
 def _extract_pdf_text(content: bytes) -> str:
     text = ""
     try:
@@ -331,6 +398,90 @@ def _normalize_work_years(raw: str) -> str:
     return f"{val}年"
 
 
+def _extract_education_block(text: str) -> str:
+    lines = (text or "").splitlines()
+    in_block = False
+    block_lines: List[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not in_block:
+            if _EDU_BLOCK_START.match(stripped):
+                in_block = True
+            continue
+        if _EDU_BLOCK_STOP.match(stripped):
+            break
+        block_lines.append(stripped)
+    return "\n".join(block_lines).strip()
+
+
+def _normalize_education_level(degree_text: str) -> str:
+    t = (degree_text or "").strip()
+    if not t:
+        return ""
+    if "博士" in t:
+        return "其他"
+    if "硕士" in t:
+        return "硕士"
+    if "学士" in t or "本科" in t:
+        return "统本"
+    if "大专" in t or "专科" in t:
+        return "专科"
+    return ""
+
+
+def _clean_major(raw: str, school: str = "") -> str:
+    val = (raw or "").strip()
+    if not val:
+        return ""
+    val = _DEGREE_IN_PARENS.sub("", val)
+    val = _DATE_RANGE_RE.sub("", val)
+    if school:
+        val = val.replace(school, "")
+    val = re.sub(r"专业\s*$", "", val.strip())
+    val = val.strip(" \t:：,，;；|")
+    val = val.strip()
+    if not val:
+        return ""
+    if "毕业论文" in val or "毕业设计" in val:
+        return ""
+    if school and school in val:
+        return ""
+    if _DATE_RANGE_RE.search(val):
+        return ""
+    if SCHOOL_ENTITY_RE.search(val):
+        return ""
+    return val.strip()
+
+
+def _parse_education_from_text(edu_block: str) -> Dict[str, str]:
+    result: Dict[str, str] = {}
+    if not edu_block:
+        return result
+    for line in edu_block.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if re.match(r"^(?:毕业论文|毕业设计)", stripped):
+            continue
+        school_m = SCHOOL_ENTITY_RE.search(stripped)
+        if not school_m:
+            continue
+        school = school_m.group(1)
+        after = stripped[school_m.end():]
+        level = ""
+        for p in _DEGREE_IN_PARENS.findall(stripped):
+            normalized = _normalize_education_level(p)
+            if normalized:
+                level = normalized
+        major = _clean_major(after, school=school)
+        result["school"] = school
+        if major:
+            result["major"] = major
+        if level:
+            result["education_level"] = level
+    return result
+
+
 def _extract_draft_fields_from_text(text: str) -> Dict[str, str]:
     src = (text or "").strip()
     fields: Dict[str, str] = {}
@@ -365,17 +516,30 @@ def _extract_draft_fields_from_text(text: str) -> Dict[str, str]:
     if expected_salary:
         fields["expected_salary"] = expected_salary
 
-    edu_m = _RE_EDUCATION.search(src)
-    if edu_m:
-        fields["education_level"] = edu_m.group(1)
+    edu_block = _extract_education_block(src)
+    edu = _parse_education_from_text(edu_block) if edu_block else {}
+    if edu.get("school"):
+        fields["school"] = edu["school"]
+    else:
+        school = _first_match(_RE_SCHOOL, src)
+        if school:
+            fields["school"] = school
 
-    school = _first_match(_RE_SCHOOL, src)
-    if school:
-        fields["school"] = school
+    if edu.get("major"):
+        fields["major"] = edu["major"]
+    else:
+        major = _first_match(_RE_MAJOR, src)
+        if major:
+            fields["major"] = major
 
-    major = _first_match(_RE_MAJOR, src)
-    if major:
-        fields["major"] = major
+    if edu.get("education_level"):
+        fields["education_level"] = edu["education_level"]
+    else:
+        edu_m = _RE_EDUCATION.search(src)
+        if edu_m:
+            normalized = _normalize_education_level(edu_m.group(1))
+            if normalized:
+                fields["education_level"] = normalized
 
     gender = _first_match(_RE_GENDER, src)
     if gender:
