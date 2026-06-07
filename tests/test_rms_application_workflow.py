@@ -232,6 +232,93 @@ def test_extract_draft_fields_name_not_merged_with_phone_label():
     assert draft.get("phone") == "18161749101"
 
 
+def test_extract_draft_fields_boss_style_header():
+    text = (
+        "邓明超\n"
+        "男 | 41岁 | 13510304005\n"
+        "19年工作经验 | 求职意向：设计总监/经理 | 期望城市：深圳\n"
+    )
+    draft = _extract_draft_fields_from_text(text)
+    assert draft.get("name") == "邓明超"
+    assert draft.get("age") == "41"
+    assert draft.get("phone") == "13510304005"
+    assert draft.get("work_years") == "19年"
+
+
+def test_extract_draft_fields_boss_style_work_line_before_profile():
+    text = (
+        "邓明超\n"
+        "19年工作经验 | 求职意向：设计总监/经理 | 期望城市：深圳\n"
+        "男 | 41岁 | 13510304005\n"
+    )
+    draft = _extract_draft_fields_from_text(text)
+    assert draft.get("name") == "邓明超"
+    assert draft.get("age") == "41"
+    assert draft.get("gender") == "男"
+    assert draft.get("phone") == "13510304005"
+    assert draft.get("work_years") == "19年"
+
+
+def test_extract_draft_fields_boss_style_bare_age_without_sui():
+    text = (
+        "邓明超\n"
+        "19年工作经验 | 求职意向：设计总监/经理 | 期望城市：深圳\n"
+        "男 | 41\n"
+    )
+    draft = _extract_draft_fields_from_text(text)
+    assert draft.get("name") == "邓明超"
+    assert draft.get("age") == "41"
+    assert draft.get("gender") == "男"
+
+
+def test_extract_draft_fields_boss_style_profile_on_work_line():
+    text = (
+        "邓明超\n"
+        "19年工作经验 | 求职意向：设计总监/经理 | 期望城市：深圳 | 男 | 41岁 | 13510304005\n"
+    )
+    draft = _extract_draft_fields_from_text(text)
+    assert draft.get("name") == "邓明超"
+    assert draft.get("age") == "41"
+    assert draft.get("phone") == "13510304005"
+
+
+def test_extract_draft_fields_name_from_filename_fallback():
+    text = "19年工作经验 | 求职意向：结构设计\n男 | 41岁 | 13510304005\n"
+    draft = _extract_draft_fields_from_text(
+        text,
+        file_name="海桥OSSOFT-结构设计-邓明超-东莞.pdf",
+    )
+    assert draft.get("name") == "邓明超"
+    assert draft.get("age") == "41"
+
+
+def test_extract_draft_fields_boss_style_does_not_treat_section_as_name():
+    text = (
+        "个人信息\n"
+        "男 | 41岁 | 13510304005\n"
+    )
+    draft = _extract_draft_fields_from_text(text)
+    assert "name" not in draft
+
+
+def test_parse_draft_route_boss_style_resume(client_rbac, admin_auth, rms_engine, uniq):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    txt = (
+        "邓明超\n"
+        "男 | 41岁 | 13510304005\n"
+        "19年工作经验 | 求职意向：结构设计\n"
+    )
+    r = client_rbac.post(
+        PARSE_DRAFT_URL,
+        cookies=login.cookies,
+        files={"file": ("resume.txt", txt.encode("utf-8"), "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    draft = r.json().get("draft_fields") or {}
+    assert draft.get("name") == "邓明超"
+    assert draft.get("age") == "41"
+
+
 def test_parse_draft_route_not_captured_by_application_id(client_rbac, admin_auth, rms_engine, uniq):
     login = _delivery_login(client_rbac, admin_auth, uniq)
     txt = "姓名：路由测试\n手机 13800138000\nemail: route@test.com"
@@ -442,6 +529,7 @@ def test_submit_candidate_report_creates_candidate_and_application(
     report = {
         "job_id": job_id,
         "client_id": client_id,
+        "city": "西安",
         "recommendation_note": "匹配客户要求",
         "current_salary": "16000",
         "expected_salary": "18000",
@@ -466,10 +554,40 @@ def test_submit_candidate_report_creates_candidate_and_application(
     body = r.json()
     assert body["candidate"]["id"]
     assert body["candidate"]["target_client_id"] == client_id
+    assert body["candidate"]["city"] == "西安"
     assert body["candidate"]["school"] == "西安工业大学"
     assert body["application"]["job_id"] == job_id
     assert body["application"]["candidate_id"] == body["candidate"]["id"]
     assert body["application"]["resume_id"]
+    assert body["application"]["recommended_at"]
+    listed = client_rbac.get("/api/rms/candidates", cookies=login.cookies)
+    assert listed.status_code == 200, listed.text
+    cand_row = next(
+        item for item in listed.json() if item["id"] == body["candidate"]["id"]
+    )
+    assert cand_row["recommended_at"] == body["application"]["recommended_at"]
+
+
+def test_submit_candidate_report_requires_city(client_rbac, admin_auth, rms_engine, uniq):
+    login, job_id, _cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"report_city_{uniq}"
+    )
+    report = {
+        "job_id": job_id,
+        "client_id": client_id,
+        "recommendation_note": "匹配客户要求",
+        "name": "无城市",
+        "phone": "15988192435",
+        "email_wechat": "nocity@163.com",
+        "source": "其他",
+    }
+    r = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+    )
+    assert r.status_code == 400, r.text
+    assert "城市" in r.json().get("detail", "")
 
 
 def test_delivery_review_route_not_captured_by_application_id(client_rbac, admin_auth, rms_engine, uniq):
@@ -635,5 +753,66 @@ def test_delivery_review_submit_invalid_result(client_rbac, admin_auth, rms_engi
         json={"result": "maybe", "note": ""},
     )
     assert r.status_code == 422, r.text
+
+
+def test_delete_application_cascades_and_allows_candidate_delete(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, app_id = _create_recommended_application(
+        client_rbac, admin_auth, rms_engine, f"del_app_{uniq}"
+    )
+    cand_id = client_rbac.get(f"/api/rms/applications/{app_id}", cookies=login.cookies).json()[
+        "candidate_id"
+    ]
+    client_rbac.post(
+        f"/api/rms/applications/{app_id}/delivery-review",
+        cookies=login.cookies,
+        json={"result": "passed"},
+    )
+    hist_before = client_rbac.get(
+        f"/api/rms/applications/{app_id}/status-history",
+        cookies=login.cookies,
+    )
+    assert hist_before.status_code == 200
+    assert len(hist_before.json()) >= 1
+
+    blocked = client_rbac.delete(f"/api/rms/candidates/{cand_id}", cookies=login.cookies)
+    assert blocked.status_code == 409
+
+    deleted = client_rbac.delete(f"/api/rms/applications/{app_id}", cookies=login.cookies)
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json() == {"ok": True, "id": app_id, "candidate_id": cand_id}
+
+    missing = client_rbac.get(f"/api/rms/applications/{app_id}", cookies=login.cookies)
+    assert missing.status_code == 404
+
+    hist_after = client_rbac.get(
+        f"/api/rms/applications/{app_id}/status-history",
+        cookies=login.cookies,
+    )
+    assert hist_after.status_code == 404
+
+    ok = client_rbac.delete(f"/api/rms/candidates/{cand_id}", cookies=login.cookies)
+    assert ok.status_code == 200, ok.text
+    assert ok.json() == {"ok": True, "id": cand_id}
+
+
+def test_delete_application_not_found(client_rbac, admin_auth, rms_engine, uniq):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    r = client_rbac.delete("/api/rms/applications/999999999", cookies=login.cookies)
+    assert r.status_code == 404
+
+
+def test_delete_application_post_fallback(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _create_recommended_application(
+        client_rbac, admin_auth, rms_engine, f"del_post_{uniq}"
+    )
+    r = client_rbac.post(f"/api/rms/applications/{app_id}/delete", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    assert r.json()["ok"] is True
+    assert r.json()["id"] == app_id
+
+    missing = client_rbac.get(f"/api/rms/applications/{app_id}", cookies=login.cookies)
+    assert missing.status_code == 404
 
 

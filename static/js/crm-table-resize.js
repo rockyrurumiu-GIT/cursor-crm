@@ -15,7 +15,7 @@
     /** 大表按内容测宽时抽样行数，避免上千行卡顿 */
     const CONTENT_SAMPLE_ROWS = 48;
     const STORAGE_VERSION = 'v5';
-    const RMS_JOBS_STORAGE_VERSION = 'v11';
+    const RMS_JOBS_STORAGE_VERSION = 'v12';
     /** 候选人表列顺序重建后须 bump，避免 localStorage 列宽错位 */
     const RMS_CANDIDATES_STORAGE_VERSION = 'v2';
 
@@ -34,21 +34,31 @@
     function isOpColumnTh(th) {
         return th.classList.contains('crm-sticky-right-op')
             || th.classList.contains('roster-sticky-op')
+            || th.classList.contains('rms-sticky-recommend')
+            || th.classList.contains('rms-col-manage')
             || th.classList.contains('crm-op-col-wide')
             || th.classList.contains('crm-op-col-xl');
     }
 
-    function rmsJobsOpColumnWidthPx(th) {
+    function rmsJobsStickyColWidthPx(th, varName, fallbackPx) {
         const table = th && th.closest ? th.closest('.rms-jobs-table') : null;
         if (!table) return null;
-        const raw = getComputedStyle(table).getPropertyValue('--rms-jobs-op-col-width').trim();
+        const raw = getComputedStyle(table).getPropertyValue(varName).trim();
         const num = parseFloat(raw);
-        if (!Number.isFinite(num) || num <= 0) return null;
+        if (!Number.isFinite(num) || num <= 0) return fallbackPx;
         if (raw.includes('rem')) {
             const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
             return Math.round(num * remPx);
         }
         return Math.round(num);
+    }
+
+    function rmsJobsRecommendColumnWidthPx(th) {
+        return rmsJobsStickyColWidthPx(th, '--rms-jobs-recommend-col-width', 120);
+    }
+
+    function rmsJobsManageColumnWidthPx(th) {
+        return rmsJobsStickyColWidthPx(th, '--rms-jobs-manage-col-width', OP_COL_WIDTH);
     }
 
     function opColumnWidthPx(th) {
@@ -63,9 +73,11 @@
         if (th && th.closest('table[data-table-id="system-users"]')) {
             return Math.round(xl * (2 / 3));
         }
-        if (th && th.closest('.rms-jobs-table') && th.classList.contains('crm-op-col-xl')) {
-            const w = rmsJobsOpColumnWidthPx(th);
-            if (w) return w;
+        if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-sticky-recommend')) {
+            return rmsJobsRecommendColumnWidthPx(th);
+        }
+        if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-col-manage')) {
+            return rmsJobsManageColumnWidthPx(th);
         }
         if (th.classList.contains('crm-op-col-xl')) return xl;
         if (th.classList.contains('crm-op-col-wide')) return wide;
@@ -102,9 +114,16 @@
     }
 
     function opColumnIndex(ths) {
-        const last = ths.length - 1;
-        if (last >= 0 && isOpColumnTh(ths[last])) return last;
-        return ths.findIndex((th) => isOpColumnTh(th));
+        for (let i = ths.length - 1; i >= 0; i -= 1) {
+            if (isOpColumnTh(ths[i])) return i;
+        }
+        return -1;
+    }
+
+    function applyAllOpColumnWidths(ths, setColWidth) {
+        ths.forEach((th, i) => {
+            if (isOpColumnTh(th)) setColWidth(i, opColumnWidthPx(th));
+        });
     }
 
     function checkinColumnIndex(ths) {
@@ -199,9 +218,13 @@
     function tagOpColElement(col, th) {
         if (!col) return;
         const w = opColumnWidthPx(th);
-        col.classList.remove('crm-col-op', 'crm-col-op-wide', 'crm-col-op-xl', 'crm-col-rms-jobs-op');
-        if (th && th.closest('.rms-jobs-table') && th.classList.contains('crm-op-col-xl')) {
-            col.classList.add('crm-col-rms-jobs-op');
+        col.classList.remove('crm-col-op', 'crm-col-op-wide', 'crm-col-op-xl', 'crm-col-rms-jobs-recommend', 'crm-col-rms-jobs-manage');
+        if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-sticky-recommend')) {
+            col.classList.add('crm-col-rms-jobs-recommend');
+        } else if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-col-manage')) {
+            col.classList.add('crm-col-rms-jobs-manage');
+        } else if (th && th.closest('.rms-jobs-table') && th.classList.contains('crm-op-col-xl')) {
+            col.classList.add('crm-col-rms-jobs-recommend');
         } else if (th && th.classList.contains('crm-op-col-xl')) col.classList.add('crm-col-op-xl');
         else if (th && th.classList.contains('crm-op-col-wide')) col.classList.add('crm-col-op-wide');
         else col.classList.add('crm-col-op');
@@ -239,13 +262,34 @@
             table.style.setProperty('--interview-sticky-serial-width', px(0));
             return;
         }
+        if (table.classList.contains('rms-jobs-table')) {
+            table.style.setProperty('--rms-jobs-sticky-serial-width', px(0));
+            table.style.setProperty('--rms-jobs-sticky-title-width', px(1));
+        }
+    }
+
+    function tableScrollContainerWidth(table) {
+        const wrap = table && table.closest
+            ? table.closest('.crm-table-scroll, .rms-candidates-scroll, .rms-jobs-scroll')
+            : null;
+        if (!wrap) return 0;
+        const w = wrap.clientWidth || 0;
+        return w > 0 ? w : 0;
+    }
+
+    function isTableLayoutVisible(table) {
+        if (!table) return false;
+        const st = window.getComputedStyle(table);
+        if (st.display === 'none' || st.visibility === 'hidden') return false;
+        const rect = table.getBoundingClientRect();
+        return rect.width > 0 || rect.height > 0;
     }
 
     function flexGrowColumnIndex(ths) {
         const opIdx = opColumnIndex(ths);
         if (opIdx > 0) {
             for (let i = opIdx - 1; i >= 0; i--) {
-                if (isCheckinColumnTh(ths[i]) || isRmsJdColumnTh(ths[i])) continue;
+                if (isCheckinColumnTh(ths[i]) || isRmsJdColumnTh(ths[i]) || isOpColumnTh(ths[i])) continue;
                 const label = (ths[i].textContent || '').trim();
                 if (label === '备注' || label === '说明' || label.includes('原因') || label.includes('纪要') || label.includes('沟通')) return i;
             }
@@ -356,7 +400,8 @@
         };
         const syncTableWidth = () => {
             let total = cols.reduce((sum, _c, i) => sum + readColWidth(i), 0);
-            const target = Math.max(total, tableMin);
+            const containerW = tableScrollContainerWidth(table);
+            const target = Math.max(total, tableMin, containerW);
             let extra = target - total;
             if (extra > 0.5) {
                 const flexIdx = flexGrowColumnIndex(ths);
@@ -386,6 +431,7 @@
     /** 按表头 + 表体内容适配列宽，保证默认不重叠 */
     function fitTableColumnsToContent(table, options) {
         if (!table) return false;
+        if (!isTableLayoutVisible(table)) return false;
         if (table.dataset.colResizeReady !== '1') {
             initCrmTableColumnResize(table);
         }
@@ -415,9 +461,7 @@
         if (!cols.length) return false;
         if (!table.style.tableLayout) table.style.tableLayout = 'fixed';
         const { setColWidth, syncTableWidth } = buildColumnHelpers(table, ths, cols, {});
-        const opIdx = opColumnIndex(ths);
-        if (opIdx < 0) return false;
-        setColWidth(opIdx, opColumnWidthPx(ths[opIdx]));
+        applyAllOpColumnWidths(ths, setColWidth);
         syncTableWidth();
         return true;
     }
@@ -426,6 +470,7 @@
         const scope = root && root.querySelectorAll ? root : document;
         scope.querySelectorAll('table.crm-table, table.visit-table').forEach((table) => {
             if (table.dataset.colResize === 'off') return;
+            if (!isTableLayoutVisible(table)) return;
             if (tbodyDataRows(table).length > 0 && table.dataset.colContentFit !== '1') {
                 fitTableColumnsToContent(table);
             } else {
@@ -441,6 +486,7 @@
     function initCrmTableColumnResize(table, options) {
         if (!table || table.dataset.colResize === 'off') return false;
         if (table.dataset.colResizeReady === '1') {
+            if (!isTableLayoutVisible(table)) return true;
             if (tbodyDataRows(table).length > 0 && table.dataset.colContentFit !== '1') {
                 fitTableColumnsToContent(table);
             } else {
@@ -485,7 +531,9 @@
         const contentWidths = () => measureContentWidths(table, ths, cols);
         const normalizeSaved = (widths) => {
             const next = [...widths];
-            if (opIdx >= 0) next[opIdx] = opColumnWidthPx(ths[opIdx]);
+            ths.forEach((th, i) => {
+                if (isOpColumnTh(th)) next[i] = opColumnWidthPx(th);
+            });
             if (checkinIdx >= 0) next[checkinIdx] = CHECKIN_COL_WIDTH;
             const rmsJdIdx = ths.findIndex(isRmsJdColumnTh);
             if (rmsJdIdx >= 0) {
@@ -515,14 +563,16 @@
             applyWidths(contentWidths());
         }
         if (!hasBodyRows) {
-            if (opIdx >= 0) setColWidth(opIdx, opColumnWidthPx(ths[opIdx]));
+            applyAllOpColumnWidths(ths, setColWidth);
             if (checkinIdx >= 0) setColWidth(checkinIdx, CHECKIN_COL_WIDTH);
             syncTableWidth();
         }
 
         const persistWidths = () => {
             const payload = cols.map((_c, i) => readColWidth(i));
-            if (opIdx >= 0) payload[opIdx] = opColumnWidthPx(ths[opIdx]);
+            ths.forEach((th, i) => {
+                if (isOpColumnTh(th)) payload[i] = opColumnWidthPx(th);
+            });
             if (checkinIdx >= 0) payload[checkinIdx] = CHECKIN_COL_WIDTH;
             localStorage.setItem(storageKey, JSON.stringify(payload));
         };
@@ -593,10 +643,7 @@
         let cols = [...table.querySelectorAll('colgroup col')];
         if (cols.length !== ths.length) cols = ensureColgroup(table, ths.length);
         const { setColWidth, syncTableWidth, readColWidth } = buildColumnHelpers(table, ths, cols, {});
-        const opIdx = opColumnIndex(ths);
-        if (opIdx >= 0) {
-            setColWidth(opIdx, opColumnWidthPx(ths[opIdx]));
-        }
+        applyAllOpColumnWidths(ths, setColWidth);
         const def = rmsJdDefaultWidthPx(ths[rmsJdIdx]) + COL_CONTENT_PAD;
         const current = readColWidth(rmsJdIdx);
         if (!Number.isFinite(current) || current < 120 || current > def * 2) {

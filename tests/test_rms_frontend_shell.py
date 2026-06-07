@@ -67,6 +67,7 @@ def test_rms_frontend_js_assets_exist():
     assert "parseCandidateReportDraft" in report_src
     assert '"phone"' in report_src
     assert 'phone: ""' in report_src
+    assert "city: (form.location || \"\").trim()" in report_src
     assert "form.email_wechat = String(draft.phone)" not in report_src
     for sym in (
         "reportForm",
@@ -302,12 +303,17 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert ">岗位</" in html or ">岗位<" in html
     assert ">候选人</" in html or ">候选人<" in html
     assert ">推荐</" in html or ">推荐<" in html
+    assert "活跃推荐数" in html
+    assert "历史推荐数" in html
     assert "交付内审" in html
     assert "推荐候选人" in html
 
     assert "data-rms-error" in html
     assert "data-rms-empty" in html
     assert "rms-sticky-serial" in html
+    assert "rms-sticky-title" in html
+    assert "rms-col-manage" in html
+    assert "rms-sticky-recommend" in html
     assert "rms-candidate-sticky-name" in html
     assert "rms-jobs-table" in html
     assert "rms-candidates-table" in html
@@ -320,6 +326,11 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "resumeViewUrl" in html
     assert "resumeCanView" in html
     assert ">年限</th>" in html
+    cand_table_start = html.index('data-table-id="rms-candidates"')
+    cand_slice = html[cand_table_start : cand_table_start + 3000]
+    assert cand_slice.index(">来源</th>") < cand_slice.index(">推荐时间</th>")
+    assert cand_slice.index(">推荐时间</th>") < cand_slice.index(">简历</th>")
+    assert "formatRmsDate(c.recommended_at)" in html
     assert "crm-sticky-right-op" in html
     assert "maritalOptions" in html or "未婚" in html
     assert "rms-jobs-scroll-fill" in html
@@ -356,6 +367,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "crmConfirmActionDialog" in base_html
     assert "openApplicationDetailModal" in apps_region
     assert "openStatusHistoryModal" in apps_region
+    assert "removeApplication" in apps_region
+    assert "确认删除推荐记录" in apps_region
 
     assert "Plan 34" not in html
     assert "占位" not in html

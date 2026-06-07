@@ -45,6 +45,31 @@ _RE_NAME = re.compile(
     re.IGNORECASE,
 )
 _RE_AGE = re.compile(r"年龄\s*[:：]\s*(\d{1,2})")
+_RE_AGE_PROFILE = re.compile(r"(?:男|女)\s*[|｜]\s*(\d{1,2})\s*岁")
+_RE_AGE_PROFILE_BARE = re.compile(r"(?:男|女)\s*[|｜]\s*(\d{1,2})(?:\s*[|｜]|$)")
+_RE_AGE_PIPE = re.compile(r"[|｜]\s*(\d{1,2})\s*岁\s*[|｜]")
+_RE_AGE_GENDER_NEAR = re.compile(r"(?:男|女)[^|\n]{0,20}(\d{1,2})\s*岁")
+_RE_AGE_LOOSE = re.compile(r"(?<![0-9])(\d{1,2})\s*岁(?!\s*(?:工作|以上)?经验)")
+_RE_GENDER_PROFILE = re.compile(r"(?:^|[|｜]\s*)(男|女)(?:\s*[|｜])")
+_RE_NAME_STANDALONE = re.compile(r"^[\u4e00-\u9fa5·]{2,6}$")
+_RE_PROFILE_LINE = re.compile(
+    r"(?:男|女).*(?:\d{1,2}岁|1[3-9]\d{9})|"
+    r"(?:\d{1,2}岁|1[3-9]\d{9}).*(?:男|女)|"
+    r"^(?:男|女)\s*[|｜]\s*\d{1,2}(?:\s*[|｜]|$)",
+    re.MULTILINE,
+)
+_NAME_HEADER_SKIP = frozenset({
+    "个人信息",
+    "基本资料",
+    "联系方式",
+    "求职意向",
+    "自我评价",
+    "工作经历",
+    "工作经验",
+    "教育经历",
+    "教育背景",
+    "项目经历",
+})
 _RE_WORK_YEARS_LABEL = re.compile(
     r"工作年限\s*[:：]\s*(\d+\s*(?:年(?:以上)?)?)"
 )
@@ -117,8 +142,13 @@ def _normalize_resume_line(line: str) -> str:
     return _collapse_chinese_spaces(re.sub(r"[ \t]+", " ", (line or "").strip()))
 
 
+def _normalize_resume_digits(text: str) -> str:
+    return (text or "").translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+
+
 def _normalize_resume_text(text: str) -> str:
-    return "\n".join(_normalize_resume_line(line) for line in (text or "").splitlines())
+    normalized = _normalize_resume_digits(text)
+    return "\n".join(_normalize_resume_line(line) for line in normalized.splitlines())
 
 
 def _normalize_school_name(name: str) -> str:
@@ -412,6 +442,60 @@ def list_status_history(
     return [status_history_to_dict(r) for r in rows]
 
 
+def _delete_application_children(
+    db: Session,
+    application_id: int,
+    *,
+    RmsApplicationStatusHistory: Type[Any],
+    RmsInterview: Optional[Type[Any]] = None,
+    RmsOffer: Optional[Type[Any]] = None,
+    RmsMatchResult: Optional[Type[Any]] = None,
+) -> None:
+    db.query(RmsApplicationStatusHistory).filter(
+        RmsApplicationStatusHistory.application_id == application_id
+    ).delete(synchronize_session=False)
+    if RmsInterview is not None:
+        db.query(RmsInterview).filter(
+            RmsInterview.application_id == application_id
+        ).delete(synchronize_session=False)
+    if RmsOffer is not None:
+        db.query(RmsOffer).filter(
+            RmsOffer.application_id == application_id
+        ).delete(synchronize_session=False)
+    if RmsMatchResult is not None:
+        db.query(RmsMatchResult).filter(
+            RmsMatchResult.application_id == application_id
+        ).delete(synchronize_session=False)
+
+
+def delete_application(
+    db: Session,
+    ctx: AuthContext,
+    application_id: int,
+    RmsApplication: Type[Any],
+    RmsApplicationStatusHistory: Type[Any],
+    Client: Type[Any],
+    *,
+    RmsInterview: Optional[Type[Any]] = None,
+    RmsOffer: Optional[Type[Any]] = None,
+    RmsMatchResult: Optional[Type[Any]] = None,
+) -> Dict[str, Any]:
+    row = _get_writable_application(db, ctx, application_id, RmsApplication, Client)
+    app_id = int(row.id)
+    candidate_id = int(row.candidate_id)
+    _delete_application_children(
+        db,
+        app_id,
+        RmsApplicationStatusHistory=RmsApplicationStatusHistory,
+        RmsInterview=RmsInterview,
+        RmsOffer=RmsOffer,
+        RmsMatchResult=RmsMatchResult,
+    )
+    db.delete(row)
+    db.commit()
+    return {"ok": True, "id": app_id, "candidate_id": candidate_id}
+
+
 def list_delivery_review_applications(
     db: Session,
     ctx: AuthContext,
@@ -678,9 +762,94 @@ def _clean_extracted_name(raw: str) -> str:
 
 def _extract_name(text: str) -> str:
     match = _RE_NAME.search(text or "")
-    if not match:
+    if match:
+        return _clean_extracted_name(match.group(1))
+    return _extract_name_from_header(text or "")
+
+
+def _extract_name_from_header(text: str) -> str:
+    lines = [_normalize_resume_line(line) for line in (text or "").splitlines()]
+    nonempty = [line for line in lines if line]
+    if not nonempty:
         return ""
-    return _clean_extracted_name(match.group(1))
+    header = nonempty[:10]
+    header_text = "\n".join(header)
+    if not (
+        _RE_PROFILE_LINE.search(header_text)
+        or _RE_PHONE.search(header_text)
+        or _RE_AGE_LOOSE.search(header_text)
+    ):
+        return ""
+    for line in header[:4]:
+        if line in _NAME_HEADER_SKIP:
+            continue
+        if _RE_NAME_STANDALONE.fullmatch(line):
+            return line
+    return ""
+
+
+def _extract_name_from_filename(file_name: str) -> str:
+    stem = os.path.splitext(os.path.basename(file_name or ""))[0]
+    parts = [part.strip() for part in re.split(r"[-—_]", stem) if part.strip()]
+    candidates: List[str] = []
+    for part in reversed(parts):
+        if not _RE_NAME_STANDALONE.fullmatch(part):
+            continue
+        if re.search(r"[A-Za-z0-9]", part):
+            continue
+        candidates.append(part)
+    if not candidates:
+        return ""
+    longish = [candidate for candidate in candidates if len(candidate) >= 3]
+    if longish:
+        return longish[0]
+    return candidates[0]
+
+
+def _is_plausible_age(raw: str) -> bool:
+    try:
+        age = int(str(raw or "").strip())
+    except ValueError:
+        return False
+    return 16 <= age <= 70
+
+
+def _extract_age(text: str) -> str:
+    src = text or ""
+    for pattern in (
+        _RE_AGE,
+        _RE_AGE_PROFILE,
+        _RE_AGE_PROFILE_BARE,
+        _RE_AGE_PIPE,
+        _RE_AGE_GENDER_NEAR,
+    ):
+        age = _first_match(pattern, src)
+        if age and _is_plausible_age(age):
+            return age
+    header = "\n".join((src or "").splitlines()[:12])
+    for match in _RE_AGE_LOOSE.finditer(header):
+        age = match.group(1)
+        if _is_plausible_age(age):
+            return age
+    return ""
+
+
+def _extract_gender(text: str) -> str:
+    src = text or ""
+    gender = _first_match(_RE_GENDER, src)
+    if gender:
+        return gender
+    header_lines = (src or "").splitlines()[:12]
+    header = "\n".join(header_lines)
+    gender = _first_match(_RE_GENDER_PROFILE, header)
+    if gender:
+        return gender
+    for line in header_lines:
+        stripped = _normalize_resume_line(line)
+        match = re.match(r"^(男|女)\s*[|｜]", stripped)
+        if match:
+            return match.group(1)
+    return ""
 
 
 def _normalize_work_years(raw: str) -> str:
@@ -1071,7 +1240,7 @@ def _parse_education_from_text(edu_block: str) -> Dict[str, str]:
     return result
 
 
-def _extract_draft_fields_from_text(text: str) -> Dict[str, str]:
+def _extract_draft_fields_from_text(text: str, *, file_name: str = "") -> Dict[str, str]:
     src = _normalize_resume_text(text).strip()
     fields: Dict[str, str] = {}
     if not src:
@@ -1086,10 +1255,12 @@ def _extract_draft_fields_from_text(text: str) -> Dict[str, str]:
         fields["email_wechat"] = email_m.group(0)
 
     name = _extract_name(src)
+    if not name and file_name:
+        name = _extract_name_from_filename(file_name)
     if name:
         fields["name"] = name
 
-    age = _first_match(_RE_AGE, src)
+    age = _extract_age(src)
     if age:
         fields["age"] = age
 
@@ -1140,7 +1311,7 @@ def _extract_draft_fields_from_text(text: str) -> Dict[str, str]:
             if normalized:
                 fields["education_level"] = normalized
 
-    gender = _first_match(_RE_GENDER, src)
+    gender = _extract_gender(src)
     if gender:
         fields["gender"] = gender
 
@@ -1157,7 +1328,7 @@ def parse_resume_draft(file_name: str, content: bytes) -> Dict[str, Any]:
         return _empty_parse_draft_response(word_msg)
 
     cleaned_text = _clean_resume_text_for_parse(raw_text)
-    draft_fields = _extract_draft_fields_from_text(cleaned_text)
+    draft_fields = _extract_draft_fields_from_text(cleaned_text, file_name=file_name)
     extract_warning = _build_extract_warning(
         raw_text,
         cleaned_text,

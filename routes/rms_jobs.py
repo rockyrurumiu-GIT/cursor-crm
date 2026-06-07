@@ -29,7 +29,7 @@ def register_rms_jobs_routes(
         _user: str = Depends(require_permission("rms.jobs.read")),
     ):
         return job_svc.list_jobs(
-            db, ctx, RmsJob, Client, client_id=client_id, status=status
+            db, ctx, RmsJob, Client, RmsApplication, client_id=client_id, status=status
         )
 
     @app.get("/api/rms/jobs/{job_id}")
@@ -39,7 +39,7 @@ def register_rms_jobs_routes(
         ctx: AuthContext = Depends(get_current_context),
         _user: str = Depends(require_permission("rms.jobs.read")),
     ):
-        return job_svc.get_job(db, ctx, job_id, RmsJob, Client)
+        return job_svc.get_job(db, ctx, job_id, RmsJob, Client, RmsApplication)
 
     @app.post("/api/rms/jobs")
     async def api_create_job(

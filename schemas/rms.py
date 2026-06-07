@@ -145,6 +145,22 @@ ACTIVE_PIPELINE_STATUSES = frozenset({
     "onboarding",
 })
 
+# Raw DB statuses counted as 活跃推荐 on job list (includes legacy aliases).
+# Excludes terminal/inactive progress: hired, onboarding, and all fail/drop statuses.
+JOB_ACTIVE_RECOMMENDATION_RAW_STATUSES = frozenset({
+    "recommended",
+    "pending_internal_screen",
+    "screening",
+    "pending_client_screen",
+    "scheduling_interview",
+    "interview",
+    "pending_first_interview",
+    "first_interview_passed",
+    "second_interview_passed",
+    "offer",
+    "pending_offer",
+})
+
 APPLICATION_PROGRESS_STATUSES = frozenset({
     "pending_internal_screen",
     "internal_screen_failed",

@@ -4,12 +4,13 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Set, Type
 
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import case, func, text
 from sqlalchemy.orm import Session
 
 from auth import service as auth_svc
 from auth.service import AuthContext
 from schemas.rms import (
+    JOB_ACTIVE_RECOMMENDATION_RAW_STATUSES,
     JOB_PRIORITIES,
     JOB_SALARY_CAP_MAX,
     JOB_SALARY_CAP_MIN,
@@ -102,6 +103,7 @@ def job_to_dict(
     *,
     client: Any = None,
     db: Optional[Session] = None,
+    recommendation_counts: Optional[Dict[str, int]] = None,
 ) -> Dict[str, Any]:
     d = _job_core_dict(job)
     sales_uid = None
@@ -123,6 +125,9 @@ def job_to_dict(
         d["sales_owner_label"] = ""
         d["delivery_owner_label"] = ""
         d["recruitment_owner_label"] = ""
+    counts = recommendation_counts or {}
+    d["active_recommendation_count"] = int(counts.get("active_recommendation_count", 0) or 0)
+    d["historical_recommendation_count"] = int(counts.get("historical_recommendation_count", 0) or 0)
     return d
 
 
@@ -133,11 +138,45 @@ def _clients_by_id(db: Session, Client: Type[Any], client_ids: Set[int]) -> Dict
     return {int(c.id): c for c in rows}
 
 
+def _application_recommendation_counts_by_job(
+    db: Session,
+    ctx: AuthContext,
+    RmsApplication: Type[Any],
+    Client: Type[Any],
+    job_ids: Set[int],
+) -> Dict[int, Dict[str, int]]:
+    if not job_ids:
+        return {}
+    active_case = case(
+        (RmsApplication.status.in_(tuple(JOB_ACTIVE_RECOMMENDATION_RAW_STATUSES)), 1),
+        else_=0,
+    )
+    q = rms_ds.scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
+    rows = (
+        q.filter(RmsApplication.job_id.in_(job_ids))
+        .with_entities(
+            RmsApplication.job_id,
+            func.count(RmsApplication.id).label("total"),
+            func.sum(active_case).label("active"),
+        )
+        .group_by(RmsApplication.job_id)
+        .all()
+    )
+    out: Dict[int, Dict[str, int]] = {}
+    for job_id, total, active in rows:
+        out[int(job_id)] = {
+            "active_recommendation_count": int(active or 0),
+            "historical_recommendation_count": int(total or 0),
+        }
+    return out
+
+
 def list_jobs(
     db: Session,
     ctx: AuthContext,
     RmsJob: Type[Any],
     Client: Type[Any],
+    RmsApplication: Type[Any],
     *,
     client_id: Optional[int] = None,
     status: Optional[str] = None,
@@ -149,7 +188,17 @@ def list_jobs(
         q = q.filter(RmsJob.status == status)
     rows = q.order_by(RmsJob.id.desc()).all()
     client_map = _clients_by_id(db, Client, {int(r.client_id) for r in rows if r.client_id is not None})
-    return [job_to_dict(r, client=client_map.get(int(r.client_id)), db=db) for r in rows]
+    job_ids = {int(r.id) for r in rows}
+    count_map = _application_recommendation_counts_by_job(db, ctx, RmsApplication, Client, job_ids)
+    return [
+        job_to_dict(
+            r,
+            client=client_map.get(int(r.client_id)),
+            db=db,
+            recommendation_counts=count_map.get(int(r.id)),
+        )
+        for r in rows
+    ]
 
 
 def get_job(
@@ -158,12 +207,18 @@ def get_job(
     job_id: int,
     RmsJob: Type[Any],
     Client: Type[Any],
+    RmsApplication: Optional[Type[Any]] = None,
 ) -> Dict[str, Any]:
     row = rms_ds.scoped_jobs_query(db, ctx, RmsJob, Client, action="read").filter(RmsJob.id == job_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="岗位不存在")
     client = db.query(Client).filter(Client.id == row.client_id).first()
-    return job_to_dict(row, client=client, db=db)
+    count_map: Dict[int, Dict[str, int]] = {}
+    if RmsApplication is not None:
+        count_map = _application_recommendation_counts_by_job(
+            db, ctx, RmsApplication, Client, {int(job_id)}
+        )
+    return job_to_dict(row, client=client, db=db, recommendation_counts=count_map.get(int(job_id)))
 
 
 def _apply_client_owners_from_job_data(db: Session, client: Any, data: Dict[str, Any]) -> None:

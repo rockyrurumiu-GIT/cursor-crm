@@ -677,6 +677,50 @@ def test_application_create_syncs_client_id_from_job(client_rbac, admin_auth, rm
     assert r.json()["status"] == "recommended"
 
 
+def test_job_recommendation_counts(client_rbac, admin_auth, rms_engine, uniq):
+    login, job_id, _, _ = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, uniq
+    )
+
+    def _create_app(name: str) -> int:
+        cand_r = client_rbac.post(
+            "/api/rms/candidates",
+            cookies=login.cookies,
+            json=_candidate_json(job_id, name=name, phone=_unique_phone()),
+        )
+        assert cand_r.status_code == 200, cand_r.text
+        app_r = client_rbac.post(
+            "/api/rms/applications",
+            cookies=login.cookies,
+            json={"job_id": job_id, "candidate_id": cand_r.json()["id"]},
+        )
+        assert app_r.status_code == 200, app_r.text
+        return int(app_r.json()["id"])
+
+    _create_app("Active A")
+    app_active_b = _create_app("Active B")
+    app_pending_first = _create_app("Pending First")
+    app_onboarding = _create_app("Onboarding")
+    app_hired = _create_app("Hired")
+
+    _set_application_status(rms_engine, app_active_b, "first_interview_passed")
+    _set_application_status(rms_engine, app_pending_first, "pending_first_interview")
+    _set_application_status(rms_engine, app_onboarding, "onboarding")
+    _set_application_status(rms_engine, app_hired, "hired", hired_at="2026-01-01")
+
+    jobs_r = client_rbac.get("/api/rms/jobs", cookies=login.cookies)
+    assert jobs_r.status_code == 200, jobs_r.text
+    job = next(j for j in jobs_r.json() if j["id"] == job_id)
+    assert job["historical_recommendation_count"] == 5
+    assert job["active_recommendation_count"] == 3
+
+    job_detail = client_rbac.get(f"/api/rms/jobs/{job_id}", cookies=login.cookies)
+    assert job_detail.status_code == 200, job_detail.text
+    body = job_detail.json()
+    assert body["historical_recommendation_count"] == 5
+    assert body["active_recommendation_count"] == 3
+
+
 def test_application_rejects_invisible_candidate(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
     login_a, job_id, _, _ = _trial_job_and_candidate(client_rbac, rms_engine, admin_auth, suffix)

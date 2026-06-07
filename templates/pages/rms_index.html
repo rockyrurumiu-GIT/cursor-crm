@@ -44,6 +44,12 @@
         border: 2px dashed #d0d7de;
         border-radius: 0.5rem;
         padding: 1.25rem 1rem;
+        min-height: calc(4.5rem * 5);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
         text-align: center;
         cursor: pointer;
         transition: border-color 0.15s, background 0.15s;
@@ -53,6 +59,8 @@
         background: #eef6ff;
     }
     .rms-report-dropzone.has-file {
+        min-height: 4.5rem;
+        align-items: stretch;
         text-align: left;
     }
     .rms-report-file-row {
@@ -139,29 +147,70 @@
         border-collapse: separate;
         border-spacing: 0;
         --rms-jobs-jd-width: 35em;
-        --rms-jobs-op-col-width: 11rem;
+        --rms-jobs-recommend-col-width: 7.5rem;
+        --rms-jobs-manage-col-width: 6.75rem;
+        --rms-jobs-sticky-serial-width: 4.5rem;
+        --rms-jobs-sticky-title-width: 7.5rem;
     }
-    .crm-table.rms-jobs-table col.crm-col-rms-jobs-op {
-        width: var(--rms-jobs-op-col-width) !important;
-        min-width: var(--rms-jobs-op-col-width) !important;
-        max-width: var(--rms-jobs-op-col-width) !important;
+    .crm-table.rms-jobs-table col.crm-col-rms-jobs-recommend {
+        width: var(--rms-jobs-recommend-col-width) !important;
+        min-width: var(--rms-jobs-recommend-col-width) !important;
+        max-width: var(--rms-jobs-recommend-col-width) !important;
     }
-    .crm-table.rms-jobs-table th.crm-sticky-right-op.crm-op-col-xl,
-    .crm-table.rms-jobs-table td.crm-sticky-right-op.crm-op-col-xl {
-        width: var(--rms-jobs-op-col-width) !important;
-        min-width: var(--rms-jobs-op-col-width) !important;
-        max-width: var(--rms-jobs-op-col-width) !important;
+    .crm-table.rms-jobs-table col.crm-col-rms-jobs-manage {
+        width: var(--rms-jobs-manage-col-width) !important;
+        min-width: var(--rms-jobs-manage-col-width) !important;
+        max-width: var(--rms-jobs-manage-col-width) !important;
+    }
+    .crm-table.rms-jobs-table th.rms-col-manage,
+    .crm-table.rms-jobs-table td.rms-col-manage {
+        width: var(--rms-jobs-manage-col-width) !important;
+        min-width: var(--rms-jobs-manage-col-width) !important;
+        max-width: var(--rms-jobs-manage-col-width) !important;
+        text-align: center;
+    }
+    .crm-table.rms-jobs-table th.rms-sticky-recommend,
+    .crm-table.rms-jobs-table td.rms-sticky-recommend {
+        position: sticky;
+        right: 0;
+        width: var(--rms-jobs-recommend-col-width) !important;
+        min-width: var(--rms-jobs-recommend-col-width) !important;
+        max-width: var(--rms-jobs-recommend-col-width) !important;
+        z-index: 3;
+        background-clip: padding-box;
+        border-left: 1px solid #e5e7eb;
+        box-shadow: -6px 0 12px -10px rgba(15, 23, 42, 0.14);
+        text-align: center;
+    }
+    .crm-table.rms-jobs-table td.rms-sticky-recommend {
+        background: #fff;
+    }
+    .crm-table.rms-jobs-table tbody tr:nth-child(even) .rms-sticky-recommend {
+        background: #f6f8fa;
+    }
+    .crm-table.rms-jobs-table tbody tr:hover .rms-sticky-recommend {
+        background: #eef6ff;
     }
     .crm-table.rms-jobs-table .rms-sticky-serial {
         position: sticky;
         left: 0;
-        z-index: 1;
+        z-index: 2;
         background: #fff;
         border-right: 1px solid #e5e7eb;
         box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
         background-clip: border-box;
     }
-    .crm-table.rms-jobs-table tbody .crm-sticky-right-op {
+    .crm-table.rms-jobs-table .rms-sticky-title {
+        position: sticky;
+        left: var(--rms-jobs-sticky-serial-width);
+        z-index: 1;
+        background: #fff;
+        border-right: 1px solid #e5e7eb;
+        box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
+        background-clip: padding-box;
+    }
+    .crm-table.rms-jobs-table tbody .crm-sticky-right-op,
+    .crm-table.rms-jobs-table tbody .rms-sticky-recommend {
         z-index: 2 !important;
     }
     .crm-table-scroll .crm-table.rms-jobs-table thead {
@@ -176,8 +225,20 @@
         z-index: 45;
         background: #2f75b5;
     }
-    .crm-table.rms-jobs-table thead .crm-sticky-right-op {
+    .crm-table.rms-jobs-table thead .rms-sticky-title {
+        top: 0;
+        z-index: 44;
+        background: #2f75b5;
+    }
+    .crm-table.rms-jobs-table thead .crm-sticky-right-op,
+    .crm-table.rms-jobs-table thead .rms-sticky-recommend {
         z-index: 46 !important;
+        background: #2f75b5 !important;
+        color: #fff !important;
+        border-color: #1f5a94;
+    }
+    .crm-table.rms-jobs-table thead th.rms-sticky-recommend {
+        right: 0 !important;
     }
     .crm-table.rms-candidates-table {
         table-layout: fixed;
@@ -372,14 +433,20 @@
                     <label class="block"><span class="text-[#57606a]">应聘项目 <span class="rms-required-mark">*</span></span>
                         <input :value="reportForm.client_name" disabled class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-gray-50" /></label>
                     <label class="block"><span class="text-[#57606a]">城市 <span class="rms-required-mark">*</span></span>
-                        <input :value="reportForm.location" disabled class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-gray-50" /></label>
+                        <input v-model.trim="reportForm.location" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="默认岗位 base 地，可按候选人实际所在地修改" /></label>
                     <label class="block"><span class="text-[#57606a]">推荐评语 <span class="rms-required-mark">*</span></span>
                         <textarea v-model="reportForm.recommendation_note" rows="2" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5"></textarea></label>
                     <div class="grid grid-cols-2 gap-3">
                         <label class="block"><span class="text-[#57606a]">当前薪资 <span class="rms-required-mark">*</span></span>
-                            <input v-model="reportForm.current_salary" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                            <input v-model="reportForm.current_salary" inputmode="decimal"
+                                class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 tabular-nums"
+                                placeholder="如 20,000"
+                                @blur="formatReportSalaryField('current_salary')" /></label>
                         <label class="block"><span class="text-[#57606a]">期望薪资 <span class="rms-required-mark">*</span></span>
-                            <input v-model="reportForm.expected_salary" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
+                            <input v-model="reportForm.expected_salary" inputmode="decimal"
+                                class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 tabular-nums"
+                                placeholder="如 23,000"
+                                @blur="formatReportSalaryField('expected_salary')" /></label>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <label class="block"><span class="text-[#57606a]">姓名 <span class="rms-required-mark">*</span></span>
@@ -531,10 +598,12 @@
                 <thead>
                     <tr>
                         <th class="crm-th rms-sticky-serial">序号</th>
-                        <th class="crm-th">岗位名称</th>
+                        <th class="crm-th rms-sticky-title">岗位名称</th>
                         <th class="crm-th">客户</th>
                         <th class="crm-th">优先级</th>
                         <th class="crm-th">状态</th>
+                        <th class="crm-th">活跃推荐数</th>
+                        <th class="crm-th">历史推荐数</th>
                         <th class="crm-th rms-col-jd" data-col-default-em="35">JD</th>
                         <th class="crm-th">HC数</th>
                         <th class="crm-th">薪资帽</th>
@@ -548,16 +617,19 @@
                         <th class="crm-th">交付</th>
                         <th class="crm-th">招聘</th>
                         <th class="crm-th rms-col-note">备注</th>
-                        <th class="crm-th crm-sticky-right-op crm-op-col-xl">操作</th>
+                        <th class="crm-th rms-col-manage crm-op-col">操作</th>
+                        <th class="crm-th rms-sticky-recommend crm-sticky-right-op crm-op-col-xl">推荐</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="(j, idx) in filteredJobs" :key="j.id">
                         <td class="crm-td rms-sticky-serial">{{ idx + 1 }}</td>
-                        <td class="crm-td crm-name-cell">{{ j.title || '—' }}</td>
+                        <td class="crm-td crm-name-cell rms-sticky-title">{{ j.title || '—' }}</td>
                         <td class="crm-td">{{ j.client_name || clientNameById(j.client_id) || '—' }}</td>
                         <td class="crm-td">{{ priorityLabel(j.priority) }}</td>
                         <td class="crm-td">{{ statusLabel(j.status) }}</td>
+                        <td class="crm-td tabular-nums">{{ j.active_recommendation_count ?? 0 }}</td>
+                        <td class="crm-td tabular-nums">{{ j.historical_recommendation_count ?? 0 }}</td>
                         <td class="crm-td rms-col-jd"><div class="crm-cell-clip">{{ j.job_description || '—' }}</div></td>
                         <td class="crm-td">{{ j.headcount }}</td>
                         <td class="crm-td tabular-nums">{{ displayJobSalaryCap(j.salary_cap) }}</td>
@@ -571,16 +643,20 @@
                         <td class="crm-td">{{ j.delivery_owner_label || '—' }}</td>
                         <td class="crm-td">{{ j.recruitment_owner_label || '—' }}</td>
                         <td class="crm-td rms-col-note"><div class="crm-cell-clip">{{ j.note || '—' }}</div></td>
-                        <td class="crm-td whitespace-nowrap crm-sticky-right-op crm-op-col-xl">
+                        <td class="crm-td whitespace-nowrap rms-col-manage crm-op-col">
                             <div class="crm-op-actions">
-                                <button v-if="canWriteApplications && canWriteCandidates" type="button" class="crm-op-btn-detail" @click="openCandidateReport(j)">推荐候选人</button>
                                 <button v-if="canWriteJobs" type="button" class="crm-op-btn-edit" @click="openJobEdit(j)">修改</button>
                                 <button v-if="canWriteJobs" type="button" class="crm-op-btn-delete" @click="removeJob(j)">删除</button>
                             </div>
                         </td>
+                        <td class="crm-td whitespace-nowrap rms-sticky-recommend crm-sticky-right-op crm-op-col-xl">
+                            <div class="crm-op-actions">
+                                <button v-if="canWriteApplications && canWriteCandidates" type="button" class="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700 shrink-0" @click="openCandidateReport(j)">推荐候选人</button>
+                            </div>
+                        </td>
                     </tr>
                     <tr v-if="!filteredJobs.length">
-                        <td colspan="19" class="crm-td text-center text-gray-400 py-8" data-rms-empty>暂无岗位，可点击「新建岗位」添加</td>
+                        <td colspan="22" class="crm-td text-center text-gray-400 py-8" data-rms-empty>暂无岗位，可点击「新建岗位」添加</td>
                     </tr>
                 </tbody>
             </table>
@@ -619,6 +695,7 @@
                         <th class="crm-th">性别</th>
                         <th class="crm-th">婚姻状况</th>
                         <th class="crm-th">来源</th>
+                        <th class="crm-th">推荐时间</th>
                         <th class="crm-th">简历</th>
                         <th class="crm-th crm-sticky-right-op">操作</th>
                     </tr>
@@ -642,6 +719,7 @@
                         <td class="crm-td">{{ c.gender || '—' }}</td>
                         <td class="crm-td">{{ c.marital_status || '—' }}</td>
                         <td class="crm-td">{{ c.source || '—' }}</td>
+                        <td class="crm-td">{{ formatRmsDate(c.recommended_at) }}</td>
                         <td class="crm-td whitespace-nowrap">
                             <template v-if="c.resume_id">
                                 <a v-if="resumeCanView(c)" :href="resumeViewUrl(c)" target="_blank" rel="noopener"
@@ -713,6 +791,11 @@
                                 <button type="button" class="crm-op-btn-detail" @click="openApplicationDetailModal(a)">查看详情</button>
                                 <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
                                 <button type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)">状态历史</button>
+                                <button v-if="canWriteApplications" type="button" class="crm-op-btn-delete"
+                                    data-crm-delete-title="确认删除推荐记录"
+                                    :data-crm-delete-target="'将删除推荐：' + (appCandidateName(a) || ('#' + a.id)) + ' · ' + (appJobTitle(a) || '—')"
+                                    data-crm-delete-hint="将同时删除状态历史、面试、Offer 等关联数据；候选人本身不会被删除。"
+                                    @click="removeApplication(a)">删除</button>
                             </div>
                         </td>
                     </tr>
@@ -742,7 +825,7 @@
                         <th class="crm-th">推荐人</th>
                         <th class="crm-th">推荐时间</th>
                         <th class="crm-th">简历</th>
-                        <th class="crm-th crm-sticky-right-op">操作</th>
+                        <th class="crm-th crm-sticky-right-op crm-op-col-wide">操作</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -757,9 +840,14 @@
                             <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
                             <span v-else class="text-[#57606a]">—</span>
                         </td>
-                        <td class="crm-td crm-sticky-right-op whitespace-nowrap">
-                            <div v-if="canWriteApplications" class="crm-op-actions">
+                        <td class="crm-td crm-sticky-right-op crm-op-col-wide whitespace-nowrap">
+                            <div v-if="canWriteApplications" class="crm-op-actions flex flex-wrap items-center gap-1">
                                 <button type="button" class="crm-op-btn-edit" @click="openDeliveryReviewModal(a)">内审</button>
+                                <button type="button" class="crm-op-btn-delete"
+                                    data-crm-delete-title="确认删除推荐记录"
+                                    :data-crm-delete-target="'将删除推荐：' + (appCandidateName(a) || ('#' + a.id)) + ' · ' + (appJobTitle(a) || '—')"
+                                    data-crm-delete-hint="将同时删除状态历史等关联数据；候选人本身不会被删除。"
+                                    @click="removeApplication(a)">删除</button>
                             </div>
                             <span v-else class="text-[#57606a]">—</span>
                         </td>

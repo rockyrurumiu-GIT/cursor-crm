@@ -34,6 +34,9 @@ def register_rms_applications_routes(
     RmsApplicationStatusHistory: Type[Any],
     RmsResume: Type[Any],
     RosterEntry: Type[Any],
+    RmsInterview: Type[Any],
+    RmsOffer: Type[Any],
+    RmsMatchResult: Type[Any],
 ):
     @app.get("/api/rms/applications")
     async def api_list_applications(
@@ -81,6 +84,21 @@ def register_rms_applications_routes(
         if not isinstance(report, dict):
             raise HTTPException(status_code=400, detail="推荐报告格式无效")
 
+        city = str(report.get("city") or report.get("location") or "").strip()
+        if not city:
+            job_id_raw = report.get("job_id")
+            if job_id_raw is not None:
+                try:
+                    job_id = int(job_id_raw)
+                except (TypeError, ValueError):
+                    job_id = 0
+                if job_id > 0:
+                    job_row = db.query(RmsJob).filter(RmsJob.id == job_id).first()
+                    if job_row:
+                        city = str(getattr(job_row, "location", None) or "").strip()
+        if not city:
+            raise HTTPException(status_code=400, detail="城市不能为空")
+
         candidate_payload = {
             "name": str(report.get("name") or "").strip(),
             "phone": str(report.get("phone") or "").strip(),
@@ -97,7 +115,7 @@ def register_rms_applications_routes(
             "major": str(report.get("major") or "").strip(),
             "gender": str(report.get("gender") or "").strip(),
             "marital_status": str(report.get("marital_status") or "").strip(),
-            "city": str(report.get("city") or "").strip(),
+            "city": city,
             "source": str(report.get("source") or "").strip(),
         }
         candidate = cand_svc.create_candidate(
@@ -280,3 +298,35 @@ def register_rms_applications_routes(
             RmsApplicationStatusHistory,
             Client,
         )
+
+    def _delete_application_impl(application_id: int, db: Session, ctx: AuthContext):
+        return app_svc.delete_application(
+            db,
+            ctx,
+            application_id,
+            RmsApplication,
+            RmsApplicationStatusHistory,
+            Client,
+            RmsInterview=RmsInterview,
+            RmsOffer=RmsOffer,
+            RmsMatchResult=RmsMatchResult,
+        )
+
+    @app.delete("/api/rms/applications/{application_id}")
+    async def api_delete_application(
+        application_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.applications.write")),
+    ):
+        return _delete_application_impl(application_id, db, ctx)
+
+    @app.post("/api/rms/applications/{application_id}/delete")
+    async def api_delete_application_post(
+        application_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.applications.write")),
+    ):
+        """POST fallback when DELETE is blocked by proxy or old clients."""
+        return _delete_application_impl(application_id, db, ctx)

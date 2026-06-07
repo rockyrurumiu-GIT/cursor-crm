@@ -1529,6 +1529,9 @@ register_rms_applications_routes(
     RmsApplicationStatusHistory=RMS_MODELS["RmsApplicationStatusHistory"],
     RmsResume=RMS_MODELS["RmsResume"],
     RosterEntry=RosterEntry,
+    RmsInterview=RMS_MODELS["RmsInterview"],
+    RmsOffer=RMS_MODELS["RmsOffer"],
+    RmsMatchResult=RMS_MODELS["RmsMatchResult"],
 )
 register_rms_dashboard_routes(
     app,

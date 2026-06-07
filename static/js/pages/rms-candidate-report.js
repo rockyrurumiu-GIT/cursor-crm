@@ -111,6 +111,7 @@
     return {
       job_id: Number(form.job_id),
       client_id: Number(form.client_id),
+      city: (form.location || "").trim(),
       recommendation_note: (form.recommendation_note || "").trim(),
       current_salary: stripSalaryCommas(form.current_salary),
       expected_salary: stripSalaryCommas(form.expected_salary),

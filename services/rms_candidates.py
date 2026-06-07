@@ -149,6 +149,46 @@ def _client_names_by_id(db: Session, client_ids: List[int], Client: Type[Any]) -
     return {int(r[0]): str(r[1] or "") for r in rows}
 
 
+def _recommended_at_by_candidate(
+    db: Session,
+    RmsApplication: Type[Any],
+    rows: List[Any],
+) -> Dict[int, str]:
+    candidate_ids = [r.id for r in rows]
+    if not candidate_ids:
+        return {}
+    app_rows = (
+        db.query(RmsApplication)
+        .filter(RmsApplication.candidate_id.in_(candidate_ids))
+        .order_by(RmsApplication.candidate_id, RmsApplication.id.desc())
+        .all()
+    )
+    apps_by_candidate: Dict[int, List[Any]] = {}
+    for app in app_rows:
+        apps_by_candidate.setdefault(app.candidate_id, []).append(app)
+    target_job_by_candidate = {
+        r.id: getattr(r, "target_job_id", None) for r in rows
+    }
+    out: Dict[int, str] = {}
+    for cid in candidate_ids:
+        apps = apps_by_candidate.get(cid, [])
+        if not apps:
+            continue
+        target_job_id = target_job_by_candidate.get(cid)
+        chosen = None
+        if target_job_id:
+            for app in apps:
+                if app.job_id == target_job_id:
+                    chosen = app
+                    break
+        if chosen is None:
+            chosen = apps[0]
+        rec_at = (chosen.recommended_at or "").strip()
+        if rec_at:
+            out[cid] = rec_at
+    return out
+
+
 def candidate_to_dict(
     ctx: AuthContext,
     row: Any,
@@ -156,6 +196,7 @@ def candidate_to_dict(
     resume_row: Any = None,
     job_title: str = "",
     client_name: str = "",
+    recommended_at: str = "",
 ) -> Dict[str, Any]:
     can_view_contacts = ctx.is_super or "rms.contacts.view" in ctx.permissions
     phone = row.phone or ""
@@ -194,6 +235,7 @@ def candidate_to_dict(
         "current_title": row.current_title or "",
         "city": row.city or "",
         "source": row.source or "",
+        "recommended_at": normalize_rms_date(recommended_at),
         "tags": row.tags or "[]",
         "resume_id": resume_row.id if resume_row else None,
         "resume_file_name": (resume_row.file_name or "") if resume_row else "",
@@ -228,9 +270,13 @@ def _rows_to_dicts(
     RmsResume: Optional[Type[Any]] = None,
     RmsJob: Optional[Type[Any]] = None,
     Client: Optional[Type[Any]] = None,
+    RmsApplication: Optional[Type[Any]] = None,
 ) -> List[Dict[str, Any]]:
     ids = [r.id for r in rows]
     resume_map = _latest_resumes_by_candidate(db, RmsResume, ids) if RmsResume else {}
+    recommended_map = (
+        _recommended_at_by_candidate(db, RmsApplication, rows) if RmsApplication else {}
+    )
     job_ids = [int(r.target_job_id) for r in rows if getattr(r, "target_job_id", None)]
     client_ids = [int(r.target_client_id) for r in rows if getattr(r, "target_client_id", None)]
     job_titles = _job_titles_by_id(db, job_ids, RmsJob) if RmsJob else {}
@@ -246,6 +292,7 @@ def _rows_to_dicts(
                 resume_row=resume_map.get(row.id),
                 job_title=job_titles.get(int(jid), "") if jid else "",
                 client_name=client_names.get(int(cid), "") if cid else "",
+                recommended_at=recommended_map.get(row.id, ""),
             )
         )
     return out
@@ -274,6 +321,7 @@ def list_candidates(
         RmsResume=RmsResume,
         RmsJob=RmsJob,
         Client=Client,
+        RmsApplication=RmsApplication,
     )
 
 
@@ -300,6 +348,7 @@ def get_candidate(
         RmsResume=RmsResume,
         RmsJob=RmsJob,
         Client=Client,
+        RmsApplication=RmsApplication,
     )
     return items[0]
 

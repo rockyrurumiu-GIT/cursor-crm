@@ -92,6 +92,9 @@
     if (status === 409) return "重复推荐 (409)" + (d ? "：" + d : "");
     if (status === 400) return "请求无效 (400)" + (d ? "：" + d : "");
     if (status === 422) return "数据校验失败 (422)" + (d ? "：" + d : "");
+    if (status === 405) {
+      return "请求方法不被允许 (405)" + (d ? "：" + d : "（请重启后端服务，或当前环境不支持 DELETE）");
+    }
     return "请求失败 (" + status + ")" + (d ? "：" + d : "");
   }
 
@@ -511,6 +514,10 @@
         candidateForm[field] = formatSalaryThousands(candidateForm[field]);
       }
 
+      function formatReportSalaryField(field) {
+        reportForm[field] = formatSalaryThousands(reportForm[field]);
+      }
+
       function onJobSalaryCapInput() {
         jobForm.salary_cap = stripJobSalaryCapInput(jobForm.salary_cap).slice(0, 5);
       }
@@ -775,8 +782,14 @@
       }
 
       async function loadDeliveryReview() {
-        if (deliveryReviewApi) {
-          await deliveryReviewApi.loadDeliveryReview(deliveryReviewState);
+        try {
+          if (deliveryReviewApi) {
+            await deliveryReviewApi.loadDeliveryReview(deliveryReviewState);
+          }
+        } finally {
+          if (activeTab.value === "deliveryReview") {
+            scheduleCandidatesTableColumnFit();
+          }
         }
       }
 
@@ -1087,6 +1100,20 @@
         await loadCandidates();
       }
 
+      async function removeApplication(row) {
+        const base = "/api/rms/applications/" + row.id;
+        let r = await rmsRequest("DELETE", base);
+        if (!r.ok && r.status === 405) {
+          r = await rmsRequest("POST", base + "/delete");
+        }
+        if (!r.ok) {
+          toast(r.message, true);
+          return;
+        }
+        toast("已删除推荐记录", false);
+        await Promise.all([loadApplications(), loadCandidates(), loadDeliveryReview()]);
+      }
+
       function reportResumeFileExt(file) {
         const name = (file && file.name) || "";
         const dot = name.lastIndexOf(".");
@@ -1218,6 +1245,8 @@
         const filled = CandidateReport.applyDraftToForm
           ? CandidateReport.applyDraftToForm(reportForm, draft, reportAutoFilledFields)
           : 0;
+        formatReportSalaryField("current_salary");
+        formatReportSalaryField("expected_salary");
         const n = CandidateReport.countDraftFields
           ? CandidateReport.countDraftFields(draft)
           : filled;
@@ -1284,6 +1313,11 @@
           reportSaving.value = false;
           return;
         }
+        if (!(reportForm.location || "").trim()) {
+          reportError.value = "请填写城市";
+          reportSaving.value = false;
+          return;
+        }
         if (!(reportForm.recommendation_note || "").trim()) {
           reportError.value = "请填写推荐评语";
           reportSaving.value = false;
@@ -1332,6 +1366,9 @@
       function closeDeliveryReviewModal() {
         reviewModal.value = null;
         reviewModalError.value = "";
+        if (activeTab.value === "deliveryReview") {
+          scheduleCandidatesTableColumnFit();
+        }
       }
 
       async function submitDeliveryReview(result) {
@@ -1712,6 +1749,7 @@
         displaySalary,
         displayJobSalaryCap,
         formatCandidateSalaryField,
+        formatReportSalaryField,
         onJobSalaryCapInput,
         formatJobSalaryCapField,
         resumeViewUrl,
@@ -1765,6 +1803,7 @@
         openCandidateModal,
         openCandidateEdit,
         removeCandidate,
+        removeApplication,
         closeModal,
         submitModal,
       };
