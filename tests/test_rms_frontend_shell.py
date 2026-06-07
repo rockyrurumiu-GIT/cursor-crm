@@ -65,6 +65,13 @@ def test_rms_frontend_js_assets_exist():
     rms_src = rms.read_text(encoding="utf-8")
 
     assert "parseCandidateReportDraft" in report_src
+    assert "validateReportForm" in report_src
+    assert "validateCandidateCreateForm" in report_src
+    assert "fieldKeyForValidationMessage" in report_src
+    assert "data-rms-report-field" in (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
+    assert "focusReportField" in rms_src
+    assert "showValidationPrompt" in rms_src
+    assert "到岗时间" in report_src
     assert '"phone"' in report_src
     assert 'phone: ""' in report_src
     assert "city: (form.location || \"\").trim()" in report_src
@@ -100,6 +107,20 @@ def test_rms_frontend_js_assets_exist():
         assert sym in labels_src, f"missing pipeline helper: {sym}"
     assert "progressOptions" in rms_src
     assert "filteredPipelineApplications" in rms_src
+    assert "candidateFilter" in rms_src
+    assert "filteredCandidates" in rms_src
+    assert "resetCandidateFilter" in rms_src
+    rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
+    assert 'data-rms-region="candidates"' in rms_html
+    assert "candidateFilter.name" in rms_html
+    assert "暂无符合条件的候选人" in rms_html
+    assert "openDeliveryReviewFailModal" in rms_html
+    assert "reviewFailPromptOpen" in rms_html
+    assert "reviewModalNote" not in rms_html
+    assert "openDeliveryReviewFailModal" in rms_src
+    assert "reviewFailPromptOpen" in rms_src
+    assert "内审失败须填写理由" in rms_src
+    assert "请说明内审未通过原因" in rms_src
     assert "userOptions.value" in rms_src
     assert "jobFormOptions.users" not in rms_src
     assert '"interview_scheduling"' not in labels_src
@@ -203,9 +224,17 @@ const fs = require("fs");
 eval(fs.readFileSync({str(labels)!r}, "utf8"));
 const L = globalThis.RmsApplicationLabels;
 const ok = {{ receive_status: "accepted", delivery_review_status: "passed", status: "pending_client_screen", job_id: 1, client_id: 10, recommended_at: "2026-06-01" }};
-const fail = {{ receive_status: "pending", delivery_review_status: "failed", status: "recommended" }};
+const fail = {{ receive_status: "pending", delivery_review_status: "failed", status: "internal_screen_failed" }};
 if (!L.isPipelineEligible(ok)) {{ console.error("eligible failed"); process.exit(1); }}
 if (L.isPipelineEligible(fail)) {{ console.error("ineligible passed"); process.exit(1); }}
+if (L.deriveProtectionStatus("internal_screen_failed") !== "已终止") {{
+  console.error("internal_screen_failed protection");
+  process.exit(1);
+}}
+if (L.deriveProtectionStatus("pending_client_screen") !== "生效中") {{
+  console.error("pending_client_screen protection");
+  process.exit(1);
+}}
 if (!L.isApplicationTerminal("rejected")) {{ console.error("rejected not terminal"); process.exit(1); }}
 if (!L.isApplicationTerminal("withdrawn")) {{ console.error("withdrawn not terminal"); process.exit(1); }}
 if (L.isProgressTerminal("rejected")) {{ console.error("isProgressTerminal must not include rejected"); process.exit(1); }}
@@ -241,6 +270,34 @@ const withTerminal = L.filterPipelineApplications([
   getUsers: () => [],
   clientNameById: () => "ACME",
 }});
+const multiStatus = L.filterPipelineApplications([
+  ok,
+  {{ receive_status: "accepted", delivery_review_status: "passed", status: "first_interview_passed", job_id: 1, client_id: 10, recommended_at: "2026-06-04" }},
+  {{ receive_status: "accepted", delivery_review_status: "passed", status: "hired", job_id: 1, client_id: 10, recommended_at: "2026-06-05" }},
+], {{
+  filters: {{ activeOnly: false, statuses: ["pending_client_screen", "first_interview_passed"] }},
+  getJobs: () => [{{ id: 1, location: "上海", client_id: 10 }}],
+  getCandidates: () => [],
+  getUsers: () => [],
+  clientNameById: () => "ACME",
+}});
+if (multiStatus.length !== 2) {{
+  console.error("multi status: got " + JSON.stringify(multiStatus.map(r => r.status)));
+  process.exit(1);
+}}
+const legacyScreen = L.filterPipelineApplications([
+  {{ receive_status: "accepted", delivery_review_status: "passed", status: "screening", job_id: 1, client_id: 10, recommended_at: "2026-06-06" }},
+], {{
+  filters: {{ activeOnly: false, statuses: ["pending_client_screen"] }},
+  getJobs: () => [{{ id: 1, location: "上海", client_id: 10 }}],
+  getCandidates: () => [],
+  getUsers: () => [],
+  clientNameById: () => "ACME",
+}});
+if (legacyScreen.length !== 1) {{
+  console.error("legacy screening alias: got " + legacyScreen.length);
+  process.exit(1);
+}}
 if (withTerminal.length !== 2) {{
   console.error("include terminal: got " + withTerminal.length);
   process.exit(1);
@@ -306,6 +363,18 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "活跃推荐数" in html
     assert "历史推荐数" in html
     assert "交付内审" in html
+    dr_table_start = html.index('data-table-id="rms-delivery-review"')
+    dr_slice = html[dr_table_start : dr_table_start + 4000]
+    for col in (">年龄</th>", ">年限</th>", ">当前薪资</th>", ">期望薪资</th>", ">到岗时间</th>", ">学历</th>"):
+        assert col in dr_slice, f"missing delivery review column {col}"
+    assert ">简历</th>" not in dr_slice
+    assert 'class="crm-op-btn-detail">简历</a>' in dr_slice
+    assert "rms-delivery-review-op" in dr_slice
+    assert "--rms-delivery-review-op-col-width" in html
+    resize_js = (REPO_ROOT / "static/js/crm-table-resize.js").read_text(encoding="utf-8")
+    assert "rms-delivery-review-op-col" in resize_js
+    assert "RMS_DELIVERY_REVIEW_STORAGE_VERSION" in resize_js
+    assert "appCandidateAge" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
     assert "推荐候选人" in html
 
     assert "data-rms-error" in html
@@ -344,6 +413,11 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "保护期状态" in html
     assert "deliveryReviewLabel" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
 
+    rms_js = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    assert "人选已存在系统中" in rms_js
+    assert "showCandidateDuplicateDialog" in rms_js
+    assert 'window.confirm("人选已存在系统中")' not in rms_js
+
     apps_region = _extract_rms_region(html, "applications")
     pipe_region = _extract_rms_region(html, "pipeline")
     assert apps_region, "applications region not found"
@@ -363,9 +437,19 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert 'data-rms-action="progress-transition"' not in pipe_region
     assert "transitionProgress" not in pipe_region
     assert "progressOptions" in pipe_region
+    assert "pipelineFilter.statuses" in pipe_region
+    assert "rms-pipeline-status-filter" in pipe_region
+    assert "pipelineStatusFilterSummary" in rms_src
+    assert "applyPipelineStatusFilter" in rms_src
+    assert "pipelineStatusMatches" in rms_src
+    assert "statusMatchesFilter" in labels_src
+    assert ">确定</button>" in pipe_region
     base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
     assert "crmConfirmActionDialog" in base_html
     assert "openApplicationDetailModal" in apps_region
+    assert "内审失败原因" in html
+    assert "applicationDetailFailNote" in html
+    assert "deliveryReviewFailNoteFromHistory" in rms_src
     assert "openStatusHistoryModal" in apps_region
     assert "removeApplication" in apps_region
     assert "确认删除推荐记录" in apps_region

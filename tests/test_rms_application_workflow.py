@@ -17,12 +17,15 @@ from services.rms_applications import (
     _extract_explicit_work_years,
     _parse_work_years_from_periods,
 )
+from sqlalchemy import text
+
 from tests.test_rms_phase2_mvp import (
     _create_user,
     _enable_delivery_rms_mvp,
     _enable_sales_rms_jobs_write,
     _login,
     _trial_job_and_candidate,
+    _unique_phone,
 )
 
 PARSE_DRAFT_URL = "/api/rms/applications/candidate-report/parse-draft"
@@ -59,6 +62,31 @@ def rms_engine(client_rbac):
 @pytest.fixture
 def uniq():
     return uuid.uuid4().hex[:8]
+
+
+def _full_candidate_report(job_id: int, client_id: int, **overrides) -> dict:
+    payload = {
+        "job_id": job_id,
+        "client_id": client_id,
+        "city": "西安",
+        "recommendation_note": "匹配客户要求",
+        "current_salary": "16000",
+        "expected_salary": "18000",
+        "name": "陈昭兵",
+        "age": "28",
+        "work_years": "4年8个月",
+        "phone": "15988192434",
+        "email_wechat": "15988192434@163.com",
+        "available_date": "2026-06-08",
+        "education_level": "硕士",
+        "school": "西安工业大学",
+        "major": "仪器仪表工程",
+        "gender": "男",
+        "marital_status": "未婚",
+        "source": "其他",
+    }
+    payload.update(overrides)
+    return payload
 
 
 def _delivery_login(client, admin_auth, uniq_suffix: str):
@@ -526,24 +554,7 @@ def test_submit_candidate_report_creates_candidate_and_application(
     login, job_id, _cand_id, client_id = _trial_job_and_candidate(
         client_rbac, rms_engine, admin_auth, f"report_{uniq}"
     )
-    report = {
-        "job_id": job_id,
-        "client_id": client_id,
-        "city": "西安",
-        "recommendation_note": "匹配客户要求",
-        "current_salary": "16000",
-        "expected_salary": "18000",
-        "name": "陈昭兵",
-        "age": "28",
-        "work_years": "4年8个月",
-        "phone": "15988192434",
-        "email_wechat": "15988192434@163.com",
-        "education_level": "硕士",
-        "school": "西安工业大学",
-        "major": "仪器仪表工程",
-        "gender": "男",
-        "source": "其他",
-    }
+    report = _full_candidate_report(job_id, client_id)
     r = client_rbac.post(
         "/api/rms/applications/candidate-report",
         cookies=login.cookies,
@@ -568,19 +579,61 @@ def test_submit_candidate_report_creates_candidate_and_application(
     assert cand_row["recommended_at"] == body["application"]["recommended_at"]
 
 
+def test_candidate_report_duplicate_blocks_candidate_and_application(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, job_id, _cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"report_dup_{uniq}"
+    )
+    phone = _unique_phone()
+    report = _full_candidate_report(
+        job_id,
+        client_id,
+        name=f"ReportDup_{uniq}",
+        phone=phone,
+        email_wechat=f"{phone}@163.com",
+    )
+    files = {"file": ("resume.txt", b"resume content", "text/plain")}
+    first = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+        files=files,
+    )
+    assert first.status_code == 200, first.text
+
+    with rms_engine.connect() as conn:
+        cand_count = conn.execute(text("SELECT COUNT(*) FROM rms_candidates")).scalar()
+        app_count = conn.execute(text("SELECT COUNT(*) FROM rms_applications")).scalar()
+        resume_count = conn.execute(text("SELECT COUNT(*) FROM rms_resumes")).scalar()
+
+    dup = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+        files=files,
+    )
+    assert dup.status_code == 409, dup.text
+    assert dup.json().get("detail") == "人选已存在系统中"
+
+    with rms_engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM rms_candidates")).scalar() == cand_count
+        assert conn.execute(text("SELECT COUNT(*) FROM rms_applications")).scalar() == app_count
+        assert conn.execute(text("SELECT COUNT(*) FROM rms_resumes")).scalar() == resume_count
+
+
 def test_submit_candidate_report_requires_city(client_rbac, admin_auth, rms_engine, uniq):
     login, job_id, _cand_id, client_id = _trial_job_and_candidate(
         client_rbac, rms_engine, admin_auth, f"report_city_{uniq}"
     )
-    report = {
-        "job_id": job_id,
-        "client_id": client_id,
-        "recommendation_note": "匹配客户要求",
-        "name": "无城市",
-        "phone": "15988192435",
-        "email_wechat": "nocity@163.com",
-        "source": "其他",
-    }
+    report = _full_candidate_report(
+        job_id,
+        client_id,
+        city="",
+        name="无城市",
+        phone="15988192435",
+        email_wechat="nocity@163.com",
+    )
     r = client_rbac.post(
         "/api/rms/applications/candidate-report",
         cookies=login.cookies,
@@ -588,6 +641,20 @@ def test_submit_candidate_report_requires_city(client_rbac, admin_auth, rms_engi
     )
     assert r.status_code == 400, r.text
     assert "城市" in r.json().get("detail", "")
+
+
+def test_submit_candidate_report_requires_available_date(client_rbac, admin_auth, rms_engine, uniq):
+    login, job_id, _cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"report_avail_{uniq}"
+    )
+    report = _full_candidate_report(job_id, client_id, available_date="")
+    r = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+    )
+    assert r.status_code == 400, r.text
+    assert r.json().get("detail") == "请填写到岗时间"
 
 
 def test_delivery_review_route_not_captured_by_application_id(client_rbac, admin_auth, rms_engine, uniq):
@@ -666,7 +733,7 @@ def test_delivery_review_submit_passed_enters_pipeline(client_rbac, admin_auth, 
     assert _pipeline_eligible(found) is True
 
 
-def test_delivery_review_submit_failed_leaves_recommended_visible(
+def test_delivery_review_submit_failed_sets_internal_screen_failed(
     client_rbac, admin_auth, rms_engine, uniq
 ):
     login, app_id = _create_recommended_application(
@@ -675,13 +742,14 @@ def test_delivery_review_submit_failed_leaves_recommended_visible(
     r = client_rbac.post(
         f"/api/rms/applications/{app_id}/delivery-review",
         cookies=login.cookies,
-        json={"result": "failed", "note": ""},
+        json={"result": "failed", "note": "简历不符"},
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["delivery_review_status"] == "failed"
     assert body["receive_status"] == "pending"
-    assert body["status"] == "recommended"
+    assert body["status"] == "internal_screen_failed"
+    assert body["current_stage"] == "internal_screen_failed"
 
     listed = client_rbac.get(DELIVERY_REVIEW_LIST_URL, cookies=login.cookies)
     assert listed.status_code == 200
@@ -692,7 +760,19 @@ def test_delivery_review_submit_failed_leaves_recommended_visible(
     found = next((a for a in all_apps.json() if a["id"] == app_id), None)
     assert found is not None
     assert found["delivery_review_status"] == "failed"
+    assert found["status"] == "internal_screen_failed"
     assert _pipeline_eligible(found) is False
+
+    hist = client_rbac.get(
+        f"/api/rms/applications/{app_id}/status-history",
+        cookies=login.cookies,
+    )
+    assert hist.status_code == 200, hist.text
+    items = hist.json()
+    assert len(items) == 1
+    assert items[0]["from_status"] == "recommended"
+    assert items[0]["to_status"] == "internal_screen_failed"
+    assert items[0]["reason"] == "delivery_review_failed"
 
 
 def test_hired_requires_hired_at(client_rbac, admin_auth, rms_engine, uniq):
@@ -741,6 +821,26 @@ def test_hired_roster_check_route_not_422(client_rbac, admin_auth, rms_engine, u
     r = client_rbac.get("/api/rms/applications/hired-roster-check", cookies=login.cookies)
     assert r.status_code != 422, r.text
     assert r.status_code == 200, r.text
+
+
+def test_delivery_review_submit_failed_requires_note(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _create_recommended_application(
+        client_rbac, admin_auth, rms_engine, f"dr_no_note_{uniq}"
+    )
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/delivery-review",
+        cookies=login.cookies,
+        json={"result": "failed", "note": ""},
+    )
+    assert r.status_code == 400, r.text
+    assert "内审失败须填写理由" in r.json().get("detail", "")
+
+    short = client_rbac.post(
+        f"/api/rms/applications/{app_id}/delivery-review",
+        cookies=login.cookies,
+        json={"result": "failed", "note": "短"},
+    )
+    assert short.status_code == 400, short.text
 
 
 def test_delivery_review_submit_invalid_result(client_rbac, admin_auth, rms_engine, uniq):

@@ -107,6 +107,122 @@
     return (n / (1024 * 1024)).toFixed(1) + " MB";
   }
 
+  var REPORT_PHONE_RE = /^1\d{10}$/;
+
+  function stripSalaryValue(value) {
+    return String(value == null ? "" : value).replace(/,/g, "").trim();
+  }
+
+  var REPORT_LABEL_TO_FIELD = {
+    "推荐评语": "recommendation_note",
+    "城市": "location",
+    "当前薪资": "current_salary",
+    "期望薪资": "expected_salary",
+    "姓名": "name",
+    "年龄": "age",
+    "年限": "work_years",
+    "手机号": "phone",
+    "邮箱/微信": "email_wechat",
+    "到岗时间": "available_date",
+    "学历": "education_level",
+    "来源": "source",
+    "学校": "school",
+    "专业": "major",
+    "性别": "gender",
+    "婚姻状况": "marital_status",
+  };
+
+  function fieldKeyForValidationMessage(message) {
+    var text = String(message || "").trim();
+    var fillMatch = text.match(/^请填写(.+)$/);
+    if (fillMatch) {
+      return REPORT_LABEL_TO_FIELD[fillMatch[1]] || "";
+    }
+    if (text.indexOf("手机号") >= 0) {
+      return "phone";
+    }
+    return "";
+  }
+
+  function _candidateFieldChecks(form, extraChecks) {
+    var checks = [
+      { field: "location", label: "城市", value: (form.location || form.city || "").trim() },
+      { field: "current_salary", label: "当前薪资", value: stripSalaryValue(form.current_salary) },
+      { field: "expected_salary", label: "期望薪资", value: stripSalaryValue(form.expected_salary) },
+      { field: "name", label: "姓名", value: (form.name || "").trim() },
+      { field: "age", label: "年龄", value: (form.age || "").trim() },
+      { field: "work_years", label: "年限", value: (form.work_years || "").trim() },
+      { field: "phone", label: "手机号", value: (form.phone || "").trim() },
+      { field: "email_wechat", label: "邮箱/微信", value: (form.email_wechat || "").trim() },
+      { field: "available_date", label: "到岗时间", value: (form.available_date || "").trim() },
+      { field: "education_level", label: "学历", value: (form.education_level || "").trim() },
+      { field: "source", label: "来源", value: (form.source || "").trim() },
+      { field: "school", label: "学校", value: (form.school || "").trim() },
+      { field: "major", label: "专业", value: (form.major || "").trim() },
+      { field: "gender", label: "性别", value: (form.gender || "").trim() },
+      { field: "marital_status", label: "婚姻状况", value: (form.marital_status || "").trim() },
+    ];
+    if (extraChecks && extraChecks.length) {
+      checks = extraChecks.concat(checks);
+    }
+    return checks;
+  }
+
+  function _runRequiredChecks(form, extraChecks) {
+    if (!form || !form.job_id) {
+      return { ok: false, message: "请选择应聘岗位", field: "" };
+    }
+    var checks = _candidateFieldChecks(form, extraChecks);
+    for (var i = 0; i < checks.length; i++) {
+      if (!checks[i].value) {
+        return {
+          ok: false,
+          message: "请填写" + checks[i].label,
+          field: checks[i].field || "",
+        };
+      }
+    }
+    if (!REPORT_PHONE_RE.test((form.phone || "").trim())) {
+      return { ok: false, message: "请填写有效的11位手机号", field: "phone" };
+    }
+    return { ok: true, message: "", field: "" };
+  }
+
+  function validateReportForm(form) {
+    return _runRequiredChecks(form, [
+      {
+        field: "recommendation_note",
+        label: "推荐评语",
+        value: (form.recommendation_note || "").trim(),
+      },
+    ]);
+  }
+
+  function validateCandidateCreateForm(form) {
+    var normalized = form || {};
+    return _runRequiredChecks(
+      {
+        job_id: normalized.job_id || normalized.target_job_id,
+        city: normalized.city,
+        current_salary: normalized.current_salary,
+        expected_salary: normalized.expected_salary,
+        name: normalized.name,
+        age: normalized.age,
+        work_years: normalized.work_years,
+        phone: normalized.phone,
+        email_wechat: normalized.email_wechat,
+        available_date: normalized.available_date,
+        education_level: normalized.education_level,
+        source: normalized.source,
+        school: normalized.school,
+        major: normalized.major,
+        gender: normalized.gender,
+        marital_status: normalized.marital_status,
+      },
+      []
+    );
+  }
+
   function buildReportJson(form, stripSalaryCommas) {
     return {
       job_id: Number(form.job_id),
@@ -196,7 +312,12 @@
     }
     if (!resp.ok) {
       var detail = payload && payload.detail != null ? payload.detail : "";
-      return { ok: false, status: resp.status, message: messageForStatus(resp.status, detail) };
+      return {
+        ok: false,
+        status: resp.status,
+        detail: detail,
+        message: messageForStatus(resp.status, detail),
+      };
     }
     return { ok: true, data: payload };
   }
@@ -218,10 +339,10 @@
           state.loading = false;
         }
       },
-      submitDeliveryReview: async function (appId, result) {
+      submitDeliveryReview: async function (appId, result, note) {
         return rmsRequest("POST", "/api/rms/applications/" + appId + "/delivery-review", {
           result: result,
-          note: "",
+          note: String(note == null ? "" : note).trim(),
         });
       },
     };
@@ -234,6 +355,9 @@
     clearAutoFilledFields: clearAutoFilledFields,
     countDraftFields: countDraftFields,
     formatFileSize: formatFileSize,
+    validateReportForm: validateReportForm,
+    validateCandidateCreateForm: validateCandidateCreateForm,
+    fieldKeyForValidationMessage: fieldKeyForValidationMessage,
     parseCandidateReportDraft: parseCandidateReportDraft,
     submitCandidateReport: submitCandidateReport,
     createDeliveryReviewApi: createDeliveryReviewApi,

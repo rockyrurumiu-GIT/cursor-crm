@@ -309,6 +309,15 @@ def validate_status_correction_note(note: str) -> str:
     return v
 
 
+def validate_delivery_review_failed_note(note: str) -> str:
+    from fastapi import HTTPException
+
+    v = (note or "").strip()
+    if len(v) < 2:
+        raise HTTPException(status_code=400, detail="内审失败须填写理由")
+    return v
+
+
 def reject_forbidden_application_keys(body: dict) -> None:
     from fastapi import HTTPException
 

@@ -21,6 +21,23 @@ from services import rms_scope as rms_ds
 
 PHONE_RE = re.compile(r"^1\d{10}$")
 
+_CANDIDATE_CREATE_REQUIRED = (
+    ("name", "姓名"),
+    ("city", "城市"),
+    ("current_salary", "当前薪资"),
+    ("expected_salary", "期望薪资"),
+    ("age", "年龄"),
+    ("work_years", "年限"),
+    ("email_wechat", "邮箱/微信"),
+    ("available_date", "到岗时间"),
+    ("education_level", "学历"),
+    ("source", "来源"),
+    ("school", "学校"),
+    ("major", "专业"),
+    ("gender", "性别"),
+    ("marital_status", "婚姻状况"),
+)
+
 def _mask_phone(value: str) -> str:
     s = (value or "").strip()
     if len(s) <= 7:
@@ -147,6 +164,39 @@ def _client_names_by_id(db: Session, client_ids: List[int], Client: Type[Any]) -
         return {}
     rows = db.query(Client.id, Client.name).filter(Client.id.in_(client_ids)).all()
     return {int(r[0]): str(r[1] or "") for r in rows}
+
+
+def _strip_salary_field(value: Any) -> str:
+    return str(value or "").replace(",", "").strip()
+
+
+def validate_candidate_create_payload(data: Dict[str, Any]) -> None:
+    for key, label in _CANDIDATE_CREATE_REQUIRED:
+        if key in ("current_salary", "expected_salary"):
+            val = _strip_salary_field(data.get(key))
+        else:
+            val = str(data.get(key) or "").strip()
+        if not val:
+            raise HTTPException(status_code=400, detail=f"请填写{label}")
+
+
+def _find_duplicate_candidate(
+    db: Session,
+    RmsCandidate: Type[Any],
+    *,
+    name: str,
+    phone: str,
+) -> Optional[Any]:
+    if not name or not phone:
+        return None
+    return (
+        db.query(RmsCandidate)
+        .filter(
+            RmsCandidate.name == name,
+            RmsCandidate.phone == phone,
+        )
+        .first()
+    )
 
 
 def _recommended_at_by_candidate(
@@ -385,12 +435,18 @@ def create_candidate(
 ) -> Dict[str, Any]:
     if RmsJob is None or Client is None:
         raise HTTPException(status_code=500, detail="RMS 岗位校验未配置")
+    data["name"] = str(data.get("name") or "").strip()
     data["phone"] = _normalize_phone(data.get("phone"), required=True)
+    validate_candidate_create_payload(data)
     data["target_job_id"] = _validate_target_open_job(
         db, ctx, data.get("target_job_id"), RmsJob, Client
     )
     _validate_candidate_enums(data)
     _sync_email_wechat_fields(data)
+    if _find_duplicate_candidate(
+        db, RmsCandidate, name=data["name"], phone=data["phone"]
+    ):
+        raise HTTPException(status_code=409, detail="人选已存在系统中")
     now = utc_date_str()
     row = RmsCandidate(
         created_by_user_id=ctx.user_id,

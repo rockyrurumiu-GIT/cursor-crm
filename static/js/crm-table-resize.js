@@ -18,6 +18,8 @@
     const RMS_JOBS_STORAGE_VERSION = 'v12';
     /** 候选人表列顺序重建后须 bump，避免 localStorage 列宽错位 */
     const RMS_CANDIDATES_STORAGE_VERSION = 'v2';
+    /** 交付内审操作列收窄后须 bump，避免 localStorage 沿用旧宽 */
+    const RMS_DELIVERY_REVIEW_STORAGE_VERSION = 'v2';
 
     function readCssLengthPx(varName, fallbackPx) {
         const root = getComputedStyle(document.documentElement);
@@ -37,7 +39,21 @@
             || th.classList.contains('rms-sticky-recommend')
             || th.classList.contains('rms-col-manage')
             || th.classList.contains('crm-op-col-wide')
-            || th.classList.contains('crm-op-col-xl');
+            || th.classList.contains('crm-op-col-xl')
+            || th.classList.contains('rms-delivery-review-op');
+    }
+
+    function rmsDeliveryReviewOpColumnWidthPx(th) {
+        const table = th && th.closest ? th.closest('table[data-table-id="rms-delivery-review"]') : null;
+        if (!table) return null;
+        const fontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const raw = getComputedStyle(table).getPropertyValue('--rms-delivery-review-op-col-width').trim();
+        const num = parseFloat(raw);
+        if (Number.isFinite(num) && num > 0) {
+            if (raw.includes('rem')) return Math.round(num * fontPx);
+            return Math.round(num);
+        }
+        return Math.round(OP_COL_WIDTH_WIDE * (3 / 4));
     }
 
     function rmsJobsStickyColWidthPx(th, varName, fallbackPx) {
@@ -72,6 +88,10 @@
         }
         if (th && th.closest('table[data-table-id="system-users"]')) {
             return Math.round(xl * (2 / 3));
+        }
+        if (th && th.classList.contains('rms-delivery-review-op')) {
+            const drW = rmsDeliveryReviewOpColumnWidthPx(th);
+            if (drW != null) return drW;
         }
         if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-sticky-recommend')) {
             return rmsJobsRecommendColumnWidthPx(th);
@@ -167,6 +187,7 @@
         let version = STORAGE_VERSION;
         if (id === 'rms-jobs') version = RMS_JOBS_STORAGE_VERSION;
         else if (id === 'rms-candidates') version = RMS_CANDIDATES_STORAGE_VERSION;
+        else if (id === 'rms-delivery-review') version = RMS_DELIVERY_REVIEW_STORAGE_VERSION;
         return `crm-col-widths:${version}:${location.pathname}:${id}`;
     }
 
@@ -218,8 +239,13 @@
     function tagOpColElement(col, th) {
         if (!col) return;
         const w = opColumnWidthPx(th);
-        col.classList.remove('crm-col-op', 'crm-col-op-wide', 'crm-col-op-xl', 'crm-col-rms-jobs-recommend', 'crm-col-rms-jobs-manage');
-        if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-sticky-recommend')) {
+        col.classList.remove(
+            'crm-col-op', 'crm-col-op-wide', 'crm-col-op-xl',
+            'crm-col-rms-jobs-recommend', 'crm-col-rms-jobs-manage', 'rms-delivery-review-op-col',
+        );
+        if (th && th.classList.contains('rms-delivery-review-op')) {
+            col.classList.add('rms-delivery-review-op-col');
+        } else if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-sticky-recommend')) {
             col.classList.add('crm-col-rms-jobs-recommend');
         } else if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-col-manage')) {
             col.classList.add('crm-col-rms-jobs-manage');

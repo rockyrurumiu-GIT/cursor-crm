@@ -136,6 +136,19 @@ def _candidate_json(job_id: int, **overrides) -> dict:
         "name": "Candidate",
         "phone": _unique_phone(),
         "target_job_id": job_id,
+        "city": "上海",
+        "current_salary": "15000",
+        "expected_salary": "18000",
+        "age": "28",
+        "work_years": "5年",
+        "email_wechat": "candidate@example.com",
+        "available_date": "2026-06-08",
+        "education_level": "统本",
+        "source": "Boss",
+        "school": "测试大学",
+        "major": "计算机",
+        "gender": "男",
+        "marital_status": "未婚",
     }
     payload.update(overrides)
     return payload
@@ -582,6 +595,54 @@ def test_candidate_create_rejects_invalid_phone(client_rbac, admin_auth, rms_eng
     )
     assert r.status_code == 400
     assert "手机号" in r.json().get("detail", "")
+
+
+def test_candidate_create_duplicate_name_phone_returns_409(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    suffix = uniq
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"dup_{suffix}")
+    phone = _unique_phone()
+    payload = _candidate_json(job_id, name=f"DupCand_{suffix}", phone=phone)
+
+    first = client_rbac.post("/api/rms/candidates", cookies=login.cookies, json=payload)
+    assert first.status_code == 200, first.text
+
+    with rms_engine.connect() as conn:
+        cand_count = conn.execute(text("SELECT COUNT(*) FROM rms_candidates")).scalar()
+
+    dup = client_rbac.post("/api/rms/candidates", cookies=login.cookies, json=payload)
+    assert dup.status_code == 409, dup.text
+    assert dup.json().get("detail") == "人选已存在系统中"
+
+    with rms_engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM rms_candidates")).scalar() == cand_count
+
+    other_phone = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(job_id, name=f"DupCand_{suffix}", phone=_unique_phone()),
+    )
+    assert other_phone.status_code == 200, other_phone.text
+
+    other_name = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(job_id, name=f"Other_{suffix}", phone=phone),
+    )
+    assert other_name.status_code == 200, other_name.text
+
+
+def test_candidate_create_requires_available_date(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"avail_{suffix}")
+    r = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(job_id, available_date=""),
+    )
+    assert r.status_code == 400, r.text
+    assert r.json().get("detail") == "请填写到岗时间"
 
 
 def test_candidate_create_rejects_non_open_job(client_rbac, admin_auth, rms_engine, uniq):

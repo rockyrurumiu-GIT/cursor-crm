@@ -135,6 +135,25 @@
     return LEGACY_STATUS_NORMALIZE[s] || s;
   }
 
+  function filterProgressStatus(status) {
+    var raw = status == null ? "" : String(status).trim();
+    if (!raw) return "";
+    if (raw === "recommended") return "pending_internal_screen";
+    return normalizeProgressStatus(raw);
+  }
+
+  function statusMatchesFilter(appStatus, selectedStatuses) {
+    if (!selectedStatuses.length) return true;
+    var raw = appStatus == null ? "" : String(appStatus).trim();
+    var normalized = filterProgressStatus(raw);
+    for (var i = 0; i < selectedStatuses.length; i++) {
+      var want = String(selectedStatuses[i] == null ? "" : selectedStatuses[i]).trim();
+      if (!want) continue;
+      if (raw === want || normalized === want) return true;
+    }
+    return false;
+  }
+
   function progressTransitionsFor(status) {
     return ALLOWED_PROGRESS_TRANSITIONS[normalizeProgressStatus(status)] || [];
   }
@@ -210,10 +229,21 @@
     var list = Array.isArray(items) ? items : [];
     var out = [];
     var activeOnly = filters.activeOnly !== false;
+    var statusListEarly = filters.statuses;
+    if (!Array.isArray(statusListEarly)) {
+      statusListEarly = filters.status !== "" && filters.status != null ? [filters.status] : [];
+    }
+    var hasStatusFilter = false;
+    for (var se = 0; se < statusListEarly.length; se++) {
+      if (String(statusListEarly[se] == null ? "" : statusListEarly[se]).trim()) {
+        hasStatusFilter = true;
+        break;
+      }
+    }
     for (var i = 0; i < list.length; i++) {
       var a = list[i];
       if (!isPipelineEligible(a)) continue;
-      if (activeOnly && isApplicationTerminal(a.status)) continue;
+      if (activeOnly && !hasStatusFilter && isApplicationTerminal(a.status)) continue;
       if (filters.client_id !== "" && filters.client_id != null) {
         var wantClient = Number(filters.client_id);
         var appClient = resolveApplicationClientId(a, getJobs);
@@ -222,9 +252,16 @@
       if (filters.job_id !== "" && filters.job_id != null) {
         if (Number(a.job_id) !== Number(filters.job_id)) continue;
       }
-      if (filters.status !== "" && filters.status != null) {
-        if (String(a.status || "") !== String(filters.status)) continue;
+      var statusList = filters.statuses;
+      if (!Array.isArray(statusList)) {
+        statusList = filters.status !== "" && filters.status != null ? [filters.status] : [];
       }
+      var selectedStatuses = [];
+      for (var si = 0; si < statusList.length; si++) {
+        var sv = String(statusList[si] == null ? "" : statusList[si]).trim();
+        if (sv) selectedStatuses.push(sv);
+      }
+      if (selectedStatuses.length && !statusMatchesFilter(a.status, selectedStatuses)) continue;
       var recDate = parseDateOnly(a.recommended_at);
       var from = parseDateOnly(filters.date_from);
       var to = parseDateOnly(filters.date_to);
@@ -369,6 +406,8 @@
     isPipelineEligible: isPipelineEligible,
     isApplicationTerminal: isApplicationTerminal,
     filterPipelineApplications: filterPipelineApplications,
+    filterProgressStatus: filterProgressStatus,
+    statusMatchesFilter: statusMatchesFilter,
     isProgressTerminal: function (status) {
       return !!PROGRESS_TERMINAL[status];
     },

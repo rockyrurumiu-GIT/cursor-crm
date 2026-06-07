@@ -21,6 +21,7 @@ from schemas.rms import (
     normalize_application_status,
     normalize_rms_date,
     utc_date_str,
+    validate_delivery_review_failed_note,
     validate_hired_at,
     validate_status_correction_note,
 )
@@ -31,6 +32,24 @@ PARSE_DRAFT_ALLOWED_SUFFIXES = frozenset({".pdf", ".txt", ".rtf"})
 PARSE_DRAFT_WORD_SUFFIXES = frozenset({".doc", ".docx"})
 PARSE_DRAFT_TEXT_MAX = 2000
 _WORD_UNSUPPORTED_MSG = "Word 文档暂不支持自动解析，请手动填写或上传 PDF/TXT"
+
+_CANDIDATE_REPORT_REQUIRED = (
+    ("recommendation_note", "推荐评语"),
+    ("current_salary", "当前薪资"),
+    ("expected_salary", "期望薪资"),
+    ("name", "姓名"),
+    ("age", "年龄"),
+    ("work_years", "年限"),
+    ("phone", "手机号"),
+    ("email_wechat", "邮箱/微信"),
+    ("available_date", "到岗时间"),
+    ("education_level", "学历"),
+    ("source", "来源"),
+    ("school", "学校"),
+    ("major", "专业"),
+    ("gender", "性别"),
+    ("marital_status", "婚姻状况"),
+)
 
 _RE_PHONE = re.compile(r"1[3-9]\d{9}")
 _RE_PHONE_LABEL = re.compile(
@@ -257,6 +276,23 @@ def _get_writable_application(
     if not row:
         raise HTTPException(status_code=404, detail="推荐记录不存在")
     return row
+
+
+def _strip_salary_field(value: Any) -> str:
+    return str(value or "").replace(",", "").strip()
+
+
+def validate_candidate_report_payload(report: Dict[str, Any]) -> None:
+    """Validate required fields for candidate-report submission (city validated separately)."""
+    if not report.get("job_id"):
+        raise HTTPException(status_code=400, detail="请选择应聘岗位")
+    for key, label in _CANDIDATE_REPORT_REQUIRED:
+        if key in ("current_salary", "expected_salary"):
+            val = _strip_salary_field(report.get(key))
+        else:
+            val = str(report.get(key) or "").strip()
+        if not val:
+            raise HTTPException(status_code=400, detail=f"请填写{label}")
 
 
 def create_application(
@@ -546,7 +582,24 @@ def submit_delivery_review(
             )
             db.add(hist)
     elif result == "failed":
+        fail_note = validate_delivery_review_failed_note(str(data.get("note") or ""))
         row.delivery_review_status = "failed"
+        prev_status = (row.status or "").strip() or "recommended"
+        row.status = "internal_screen_failed"
+        row.current_stage = "internal_screen_failed"
+        row.last_activity_at = now
+        hist = RmsApplicationStatusHistory(
+            application_id=row.id,
+            from_status=prev_status,
+            to_status="internal_screen_failed",
+            reason="delivery_review_failed",
+            note=fail_note,
+            changed_by=ctx.user_id,
+            changed_at=now,
+        )
+        db.add(hist)
+    else:
+        raise HTTPException(status_code=400, detail=f"非法内审结果 {result}")
     row.updated_at = now
     db.commit()
     db.refresh(row)

@@ -84,6 +84,8 @@ def register_rms_applications_routes(
         if not isinstance(report, dict):
             raise HTTPException(status_code=400, detail="推荐报告格式无效")
 
+        app_svc.validate_candidate_report_payload(report)
+
         city = str(report.get("city") or report.get("location") or "").strip()
         if not city:
             job_id_raw = report.get("job_id")
