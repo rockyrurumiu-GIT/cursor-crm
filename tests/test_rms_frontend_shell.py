@@ -410,10 +410,20 @@ def test_rms_dashboard_twenty_shell():
         "招聘人效",
         "花名册核对",
         "/static/js/pages/rms-dashboard.js",
-        "rms-dashboard-twenty-5",
+        "rms-dashboard-twenty-12",
         "dashboard-widget-kit.js",
-        "layout-grid",
-        "数据源",
+        "inspector-section",
+        "inspector-row",
+        "X 轴",
+        "Y 轴",
+        "Style",
+        "轴名称",
+        "堆叠条形图",
+        "数据标签",
+        "Legend",
+        "来源",
+        "过滤",
+        "调整选项顺序",
         "附加展示",
         "新建看板",
         "编辑",
@@ -430,6 +440,7 @@ def test_rms_dashboard_twenty_shell():
         "crm-table",
         "crm-th",
         "open 岗位",
+        "布局（栅格 12 列）",
     ):
         assert forbidden not in html, f"forbidden {forbidden!r} in rms_dashboard.html"
 
@@ -443,6 +454,16 @@ def test_rms_dashboard_twenty_shell():
         "DashboardWidgetKit",
         "reloadActiveTabData",
         "gridColumn",
+        "panelView",
+        "activePicker",
+        "manual_order",
+        "openManualOrder",
+        "manualOrderRowStyle",
+        "manualDragGhostStyle",
+        "manualDragIndex",
+        "primary_axis_order",
+        "grouped_series",
+        "normalizeWidgetConfig",
     ):
         assert js_required in js, f"missing {js_required!r} in rms-dashboard.js"
 

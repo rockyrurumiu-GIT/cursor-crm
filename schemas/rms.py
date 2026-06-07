@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict
 
@@ -182,6 +182,29 @@ APPLICATION_PROGRESS_STATUSES = frozenset({
     "onboarding_lost",
     "hired",
 })
+
+# Ordered pipeline — keep values in sync with static/js/pages/rms-application-labels.js
+APPLICATION_PROGRESS_ORDER: Tuple[str, ...] = (
+    "pending_internal_screen",
+    "internal_screen_failed",
+    "pending_client_screen",
+    "client_screen_failed",
+    "scheduling_interview",
+    "interview_scheduling_failed",
+    "pending_first_interview",
+    "first_interview_passed",
+    "first_interview_failed",
+    "second_interview_passed",
+    "second_interview_failed",
+    "second_interview_abandoned",
+    "final_interview_failed",
+    "final_interview_abandoned",
+    "pending_offer",
+    "offer_dropped",
+    "onboarding",
+    "onboarding_lost",
+    "hired",
+)
 
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     "pending_internal_screen": {"internal_screen_failed", "pending_client_screen"},

@@ -15,10 +15,17 @@ from auth import data_scope as ds
 from auth import service as auth_svc
 from auth.service import AuthContext
 from schemas.dashboards import (
+    AXIS_NAME_DISPLAY,
+    AXIS_SORT_MODES,
     CHART_COLORS,
     CHART_EXTRA_RENDERS,
     COLOR_SHADES,
+    DEFAULT_AXIS_NAME_DISPLAY,
     DEFAULT_COLOR_SHADE,
+    DEFAULT_DATE_GROUP,
+    DEFAULT_GROUP_MODE,
+    DEFAULT_PRIMARY_AXIS_SORT,
+    DEFAULT_SECONDARY_AXIS_SORT,
     CHART_WIDGET_TYPES,
     DATA_WIDGET_TYPES,
     DATA_SOURCES,
@@ -26,8 +33,10 @@ from schemas.dashboards import (
     DEFAULT_COLOR,
     DEFAULT_SORT,
     FILTER_OPS,
+    GROUP_MODES,
     METRICS,
     NUMERIC_METRICS,
+    SECONDARY_AXIS_SORT_MODES,
     SORT_MODES,
     WIDGET_TYPES,
     RMS_BLOCK_KEYS,
@@ -37,7 +46,12 @@ from schemas.dashboards import (
 from services.clients import scoped_client_query
 from services import rms_scope as rms_ds
 from services.delivery_roster import sql_roster_employment_active_pool
-from schemas.rms import RMS_ENUM_GROUP_FIELDS, RMS_FK_GROUP_FIELDS, resolve_rms_group_label
+from schemas.rms import (
+    APPLICATION_PROGRESS_ORDER,
+    RMS_ENUM_GROUP_FIELDS,
+    RMS_FK_GROUP_FIELDS,
+    resolve_rms_group_label,
+)
 
 _DEFAULT_SEED_NAME = "经营总览"
 _ROSTER_SEED_NAME = "交付毛利总览"
@@ -173,6 +187,142 @@ def validate_rich_text(content: str) -> str:
     return text
 
 
+_METRIC_LABELS = {"count": "计数", "sum": "求和", "avg": "平均", "min": "最小", "max": "最大"}
+_SECONDARY_CHART_TYPES = frozenset({"bar", "horizontal_bar", "line"})
+
+
+def _primary_sort_to_legacy(sort: str) -> str:
+    return {
+        "position_asc": "label_asc",
+        "position_desc": "label_desc",
+        "sum_asc": "value_asc",
+        "sum_desc": "value_desc",
+        "manual": "label_asc",
+    }.get(sort, sort)
+
+
+def _parse_range_value(raw: Any) -> str:
+    if raw is None or raw == "":
+        return ""
+    s = str(raw).strip()
+    if not s:
+        return ""
+    try:
+        float(s)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="range_min/range_max 必须是数字或空")
+    return s
+
+
+def _normalize_widget_config(config: dict) -> dict:
+    """Dual-read: new fields preferred, legacy fields as fallback."""
+    c = dict(config or {})
+
+    aggregate_field = (c.get("aggregate_field") if c.get("aggregate_field") is not None else c.get("field") or "")
+    aggregate_field = str(aggregate_field).strip()
+
+    primary_axis_field = (
+        c.get("primary_axis_field") if c.get("primary_axis_field") is not None else c.get("group_by") or ""
+    )
+    primary_axis_field = str(primary_axis_field).strip()
+
+    date_group = str(c.get("date_group") or "").strip()
+    if date_group and not primary_axis_field:
+        primary_axis_field = str(c.get("group_by") or "created_at").strip()
+
+    if "display_data_label" in c:
+        display_data_label = bool(c.get("display_data_label"))
+    else:
+        display_data_label = bool(c.get("data_labels", False))
+
+    if "display_legend" in c:
+        display_legend = bool(c.get("display_legend"))
+    else:
+        display_legend = bool(c.get("show_legend", True))
+
+    if "omit_null_values" in c:
+        omit_null_values = bool(c.get("omit_null_values"))
+    else:
+        omit_null_values = bool(c.get("hide_empty", False))
+
+    primary_axis_sort = str(
+        c.get("primary_axis_sort") or c.get("sort") or DEFAULT_PRIMARY_AXIS_SORT
+    ).strip()
+    primary_axis_sort = {
+        "value_asc": "sum_asc",
+        "value_desc": "sum_desc",
+    }.get(primary_axis_sort, primary_axis_sort)
+
+    secondary_axis_field = str(c.get("secondary_axis_field") or "").strip()
+    secondary_axis_sort = str(c.get("secondary_axis_sort") or DEFAULT_SECONDARY_AXIS_SORT).strip()
+    group_mode = str(c.get("group_mode") or DEFAULT_GROUP_MODE).strip()
+    axis_name_display = str(c.get("axis_name_display") or DEFAULT_AXIS_NAME_DISPLAY).strip()
+
+    raw_order = c.get("primary_axis_order")
+    primary_axis_order: list = []
+    if isinstance(raw_order, list):
+        for item in raw_order:
+            s = str(item).strip()
+            if s:
+                primary_axis_order.append(s)
+
+    out = {
+        "metric": str(c.get("metric") or "count").strip(),
+        "aggregate_field": aggregate_field,
+        "field": aggregate_field,
+        "primary_axis_field": primary_axis_field,
+        "group_by": primary_axis_field,
+        "date_group": date_group,
+        "primary_axis_sort": primary_axis_sort,
+        "sort": _primary_sort_to_legacy(primary_axis_sort),
+        "secondary_axis_field": secondary_axis_field,
+        "secondary_axis_sort": secondary_axis_sort,
+        "omit_null_values": omit_null_values,
+        "hide_empty": omit_null_values,
+        "range_min": "" if c.get("range_min") in (None, "") else str(c.get("range_min")).strip(),
+        "range_max": "" if c.get("range_max") in (None, "") else str(c.get("range_max")).strip(),
+        "primary_axis_order": primary_axis_order,
+        "group_mode": group_mode,
+        "axis_name_display": axis_name_display,
+        "display_data_label": display_data_label,
+        "data_labels": display_data_label,
+        "display_legend": display_legend,
+        "show_legend": display_legend,
+        "filters": c.get("filters") if isinstance(c.get("filters"), list) else [],
+        "limit": c.get("limit", 20),
+        "prefix": str(c.get("prefix") or ""),
+        "suffix": str(c.get("suffix") or ""),
+        "color": str(c.get("color") or DEFAULT_COLOR).strip(),
+        "color_shade": c.get("color_shade", DEFAULT_COLOR_SHADE),
+        "show_value_center": bool(c.get("show_value_center", True)),
+        "extra_views": c.get("extra_views") if isinstance(c.get("extra_views"), list) else [],
+    }
+    if "include_left" in c:
+        out["include_left"] = bool(c.get("include_left"))
+    if "client_id" in c:
+        out["client_id"] = c.get("client_id")
+    return out
+
+
+def _axis_labels(source_key: str, config: dict) -> Tuple[str, str]:
+    primary = config.get("primary_axis_field") or config.get("group_by") or ""
+    metric = config.get("metric") or "count"
+    x_label = ""
+    if primary:
+        if primary == "client":
+            x_label = "客户"
+        else:
+            fdef = get_field(source_key, primary)
+            x_label = fdef.label if fdef else primary
+    y_label = _METRIC_LABELS.get(metric, metric)
+    if metric != "count":
+        agg = config.get("aggregate_field") or config.get("field") or ""
+        fdef = get_field(source_key, agg)
+        if fdef:
+            y_label = f"{fdef.label}（{_METRIC_LABELS.get(metric, metric)}）"
+    return x_label, y_label
+
+
 def validate_widget_config(
     widget_type: str,
     source_key: str,
@@ -182,34 +332,29 @@ def validate_widget_config(
     if widget_type not in WIDGET_TYPES:
         raise HTTPException(status_code=400, detail=f"未知 widget 类型: {widget_type}")
 
-    out: dict = {}
-
     if widget_type == "iframe":
-        out["url"] = validate_iframe_url(config.get("url", ""))
-        return out
+        return {"url": validate_iframe_url(config.get("url", ""))}
 
     if widget_type == "rich_text":
-        out["content"] = validate_rich_text(config.get("content", ""))
-        return out
+        return {"content": validate_rich_text(config.get("content", ""))}
 
     if widget_type == "roster_summary":
         if source_key != "roster_entries":
             raise HTTPException(status_code=400, detail="roster_summary 仅支持花名册数据源")
+        out: dict = {"include_left": bool(config.get("include_left", False))}
         client_id = config.get("client_id")
         if client_id not in (None, "", 0):
             try:
                 out["client_id"] = int(client_id)
             except (TypeError, ValueError):
                 raise HTTPException(status_code=400, detail="client_id 必须是整数")
-        out["include_left"] = bool(config.get("include_left", False))
         return out
 
     if widget_type == "rms_block":
         block = (config.get("block") or "").strip()
         if block not in RMS_BLOCK_KEYS:
             raise HTTPException(status_code=400, detail=f"未知 RMS 组件: {block}")
-        out["block"] = block
-        return out
+        return {"block": block}
 
     if widget_type not in DATA_WIDGET_TYPES:
         raise HTTPException(status_code=400, detail=f"widget 类型不支持数据配置: {widget_type}")
@@ -219,43 +364,59 @@ def validate_widget_config(
     if allowed_source_keys is not None and source_key not in allowed_source_keys:
         raise HTTPException(status_code=400, detail=f"数据源不可用: {source_key}")
 
-    metric = (config.get("metric") or "count").strip()
+    norm = _normalize_widget_config(config)
+
+    metric = norm["metric"]
     if metric not in METRICS:
         raise HTTPException(status_code=400, detail=f"未知聚合方式: {metric}")
 
-    field = (config.get("field") or "").strip()
+    aggregate_field = norm["aggregate_field"]
     if metric in NUMERIC_METRICS:
-        if not field:
-            raise HTTPException(status_code=400, detail="sum/avg/min/max 需要指定 field")
-        fdef = get_field(source_key, field)
+        if not aggregate_field:
+            raise HTTPException(status_code=400, detail="sum/avg/min/max 需要指定 aggregate_field")
+        fdef = get_field(source_key, aggregate_field)
         if not fdef or fdef.kind != "numeric":
-            raise HTTPException(status_code=400, detail=f"字段不可用于数值聚合: {field}")
-    elif field:
-        fdef = get_field(source_key, field)
+            raise HTTPException(status_code=400, detail=f"字段不可用于数值聚合: {aggregate_field}")
+    elif aggregate_field:
+        fdef = get_field(source_key, aggregate_field)
         if not fdef:
-            raise HTTPException(status_code=400, detail=f"未知字段: {field}")
+            raise HTTPException(status_code=400, detail=f"未知字段: {aggregate_field}")
 
-    group_by = (config.get("group_by") or "").strip()
-    if group_by:
-        gdef = get_field(source_key, group_by)
-        if not gdef:
-            raise HTTPException(status_code=400, detail=f"未知分组字段: {group_by}")
-        if gdef.kind == "datetime":
-            raise HTTPException(status_code=400, detail="datetime 字段请使用 date_group 而非 group_by")
+    primary_axis_field = norm["primary_axis_field"]
+    date_group = norm["date_group"]
+    secondary_axis_field = norm["secondary_axis_field"]
 
-    date_group = (config.get("date_group") or "").strip()
+    if primary_axis_field and primary_axis_field != "client":
+        pdef = get_field(source_key, primary_axis_field)
+        if not pdef:
+            raise HTTPException(status_code=400, detail=f"未知 primary_axis_field: {primary_axis_field}")
+        if pdef.kind == "datetime" and not date_group:
+            date_group = DEFAULT_DATE_GROUP
+            norm["date_group"] = date_group
+
     if date_group:
         if date_group not in DATE_GROUPS:
             raise HTTPException(status_code=400, detail=f"未知 date_group: {date_group}")
-        dg_field = (config.get("group_by") or "created_at").strip()
-        dgdef = get_field(source_key, dg_field)
+        if not primary_axis_field:
+            primary_axis_field = "created_at"
+            norm["primary_axis_field"] = primary_axis_field
+            norm["group_by"] = primary_axis_field
+        dgdef = get_field(source_key, primary_axis_field)
         if not dgdef or dgdef.kind != "datetime":
-            raise HTTPException(status_code=400, detail="date_group 仅支持 datetime 字段")
-        group_by = dg_field
+            raise HTTPException(status_code=400, detail="date_group 仅支持 datetime 类型的 primary_axis_field")
 
-    filters = config.get("filters") or []
-    if not isinstance(filters, list):
-        raise HTTPException(status_code=400, detail="filters 必须是数组")
+    if secondary_axis_field:
+        if widget_type in ("pie", "number"):
+            raise HTTPException(status_code=400, detail="pie/number 不支持 secondary_axis_field")
+        if widget_type not in _SECONDARY_CHART_TYPES:
+            raise HTTPException(status_code=400, detail=f"{widget_type} 不支持 secondary_axis_field")
+        sdef = get_field(source_key, secondary_axis_field)
+        if not sdef:
+            raise HTTPException(status_code=400, detail=f"未知 secondary_axis_field: {secondary_axis_field}")
+        if sdef.kind == "datetime":
+            raise HTTPException(status_code=400, detail="secondary_axis_field 不支持 datetime")
+
+    filters = norm.get("filters") or []
     clean_filters = []
     for flt in filters:
         if not isinstance(flt, dict):
@@ -269,56 +430,94 @@ def validate_widget_config(
             raise HTTPException(status_code=400, detail=f"未知 filter 字段: {fname}")
         clean_filters.append({"field": fname, "op": op, "value": flt.get("value", "")})
 
-    limit = config.get("limit", 20)
     try:
-        limit = int(limit)
+        limit = int(norm.get("limit") or 20)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="limit 必须是整数")
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="limit 须在 1–100 之间")
 
-    if widget_type in CHART_WIDGET_TYPES and not group_by and metric == "count":
-        pass  # count without group is ok for number widget only
-    if widget_type in CHART_WIDGET_TYPES and not group_by:
-        raise HTTPException(status_code=400, detail="图表 widget 需要 group_by 或 date_group")
+    if widget_type in CHART_WIDGET_TYPES and not primary_axis_field:
+        raise HTTPException(status_code=400, detail="图表 widget 需要 primary_axis_field")
 
-    out["metric"] = metric
-    out["field"] = field
-    out["group_by"] = group_by
-    if date_group:
-        out["date_group"] = date_group
-    out["filters"] = clean_filters
-    out["limit"] = limit
-    out["prefix"] = str(config.get("prefix") or "")
-    out["suffix"] = str(config.get("suffix") or "")
+    primary_axis_sort = norm["primary_axis_sort"]
+    if primary_axis_sort not in AXIS_SORT_MODES:
+        raise HTTPException(status_code=400, detail=f"未知 primary_axis_sort: {primary_axis_sort}")
 
-    # Style options (Twenty-parity) — fixed enums / booleans only.
-    color = (config.get("color") or DEFAULT_COLOR).strip()
+    secondary_axis_sort = norm["secondary_axis_sort"]
+    if secondary_axis_sort not in SECONDARY_AXIS_SORT_MODES:
+        raise HTTPException(status_code=400, detail=f"未知 secondary_axis_sort: {secondary_axis_sort}")
+
+    group_mode = norm["group_mode"]
+    if group_mode not in GROUP_MODES:
+        raise HTTPException(status_code=400, detail=f"未知 group_mode: {group_mode}")
+
+    axis_name_display = norm["axis_name_display"]
+    if axis_name_display not in AXIS_NAME_DISPLAY:
+        raise HTTPException(status_code=400, detail=f"未知 axis_name_display: {axis_name_display}")
+
+    range_min = _parse_range_value(norm.get("range_min"))
+    range_max = _parse_range_value(norm.get("range_max"))
+
+    color = norm["color"]
     if color not in CHART_COLORS:
         raise HTTPException(status_code=400, detail=f"未知配色: {color}")
-    out["color"] = color
 
-    raw_shade = config.get("color_shade", DEFAULT_COLOR_SHADE)
     try:
-        color_shade = int(raw_shade)
+        color_shade = int(norm.get("color_shade", DEFAULT_COLOR_SHADE))
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="color_shade 必须是 0–4 的整数")
     if color_shade not in COLOR_SHADES:
         raise HTTPException(status_code=400, detail="color_shade 须在 0–4 之间")
-    out["color_shade"] = color_shade
 
-    sort_mode = (config.get("sort") or DEFAULT_SORT).strip()
-    if sort_mode not in SORT_MODES:
-        raise HTTPException(status_code=400, detail=f"未知排序: {sort_mode}")
-    out["sort"] = sort_mode
+    legacy_sort = _primary_sort_to_legacy(primary_axis_sort)
+    if legacy_sort not in SORT_MODES:
+        legacy_sort = DEFAULT_SORT
 
-    out["show_legend"] = bool(config.get("show_legend", True))
-    out["show_value_center"] = bool(config.get("show_value_center", True))
-    out["data_labels"] = bool(config.get("data_labels", False))
-    out["hide_empty"] = bool(config.get("hide_empty", False))
+    raw_order = norm.get("primary_axis_order")
+    primary_axis_order: list = []
+    if raw_order is not None:
+        if not isinstance(raw_order, list):
+            raise HTTPException(status_code=400, detail="primary_axis_order 必须是数组")
+        for item in raw_order:
+            s = str(item).strip()
+            if s:
+                primary_axis_order.append(s)
+
+    out = {
+        "metric": metric,
+        "aggregate_field": aggregate_field,
+        "field": aggregate_field,
+        "primary_axis_field": primary_axis_field,
+        "group_by": primary_axis_field,
+        "primary_axis_sort": primary_axis_sort,
+        "sort": legacy_sort,
+        "primary_axis_order": primary_axis_order,
+        "secondary_axis_field": secondary_axis_field,
+        "secondary_axis_sort": secondary_axis_sort,
+        "omit_null_values": norm["omit_null_values"],
+        "hide_empty": norm["omit_null_values"],
+        "range_min": range_min,
+        "range_max": range_max,
+        "group_mode": group_mode,
+        "axis_name_display": axis_name_display,
+        "display_data_label": norm["display_data_label"],
+        "data_labels": norm["display_data_label"],
+        "display_legend": norm["display_legend"],
+        "show_legend": norm["display_legend"],
+        "filters": clean_filters,
+        "limit": limit,
+        "prefix": norm["prefix"],
+        "suffix": norm["suffix"],
+        "color": color,
+        "color_shade": color_shade,
+        "show_value_center": norm["show_value_center"],
+        "extra_views": _validate_extra_views(norm.get("extra_views"), widget_type),
+    }
+    if date_group:
+        out["date_group"] = date_group
     if source_key == "roster_entries":
-        out["include_left"] = bool(config.get("include_left", False))
-    out["extra_views"] = _validate_extra_views(config.get("extra_views"), widget_type)
+        out["include_left"] = bool(norm.get("include_left", False))
     return out
 
 
@@ -533,28 +732,145 @@ def _display_group_labels(
     return labels
 
 
+def _merge_by_display_labels(
+    raw_labels: list,
+    values: list,
+    source_key: str,
+    group_by: str,
+    db: Session,
+    models: dict,
+) -> Tuple[list, list]:
+    """Combine buckets whose raw keys resolve to the same display label."""
+    merged: Dict[str, float] = {}
+    for rl, val in zip(raw_labels, values):
+        dl = _display_group_labels([str(rl)], source_key, group_by, db, models)[0]
+        merged[dl] = merged.get(dl, 0.0) + float(val)
+    labels = list(merged.keys())
+    out_values = [merged[l] for l in labels]
+    return labels, out_values
+
+
+def _resolve_sort_mode(config: dict) -> str:
+    return str(config.get("primary_axis_sort") or DEFAULT_PRIMARY_AXIS_SORT).strip()
+
+
+def _field_position_label_order(source_key: str, field_key: str) -> Optional[Dict[str, int]]:
+    if source_key == "rms_applications" and field_key in ("current_stage", "status"):
+        return {
+            resolve_rms_group_label(source_key, field_key, s): i
+            for i, s in enumerate(APPLICATION_PROGRESS_ORDER)
+        }
+    return None
+
+
+def _sort_display_pairs(
+    pairs: list,
+    sort_mode: str,
+    source_key: str,
+    field_key: str,
+    manual_order: Optional[list] = None,
+) -> list:
+    if not pairs:
+        return pairs
+    if sort_mode == "manual":
+        return _apply_manual_order(pairs, manual_order or [])
+    if sort_mode in ("position_asc", "position_desc"):
+        order_map = _field_position_label_order(source_key, field_key)
+        if order_map:
+            reverse = sort_mode == "position_desc"
+            return sorted(pairs, key=lambda p: order_map.get(str(p[0]), 9999), reverse=reverse)
+        sort_mode = "label_asc" if sort_mode == "position_asc" else "label_desc"
+    return _sort_label_pairs(pairs, sort_mode)
+
+
+def _order_entries_by_sorted_pairs(entries: list, sorted_pairs: list) -> list:
+    """Reorder {pl, val, pk} entries to match sorted (label, value) pairs."""
+    if not entries:
+        return entries
+    used: set = set()
+    ordered = []
+    for pl, val in sorted_pairs:
+        matched = False
+        for i, e in enumerate(entries):
+            if i in used:
+                continue
+            if e["pl"] == pl and e["val"] == val:
+                ordered.append(e)
+                used.add(i)
+                matched = True
+                break
+        if matched:
+            continue
+        for i, e in enumerate(entries):
+            if i in used:
+                continue
+            if e["pl"] == pl:
+                ordered.append(e)
+                used.add(i)
+                break
+    for i, e in enumerate(entries):
+        if i not in used:
+            ordered.append(e)
+    return ordered
+
+
+def _sort_label_pairs(pairs: list, sort_mode: str) -> list:
+    if sort_mode == "label_asc":
+        return sorted(pairs, key=lambda x: str(x[0]))
+    if sort_mode == "label_desc":
+        return sorted(pairs, key=lambda x: str(x[0]), reverse=True)
+    if sort_mode in ("value_asc", "sum_asc"):
+        return sorted(pairs, key=lambda x: x[1])
+    if sort_mode in ("value_desc", "sum_desc"):
+        return sorted(pairs, key=lambda x: x[1], reverse=True)
+    return pairs
+
+
+def _apply_manual_order(pairs: list, manual_order: list) -> list:
+    if not manual_order:
+        return pairs
+    order_map = {str(label): idx for idx, label in enumerate(manual_order)}
+    max_idx = len(manual_order)
+    known = [p for p in pairs if str(p[0]) in order_map]
+    unknown = [p for p in pairs if str(p[0]) not in order_map]
+    known.sort(key=lambda p: order_map[str(p[0])])
+    unknown.sort(key=lambda p: str(p[0]))
+    return known + unknown
+
+
+def _resolve_field_label(
+    raw: Any,
+    source_key: str,
+    field_key: str,
+    db: Session,
+    models: dict,
+) -> str:
+    if field_key == "client":
+        return str(raw) if raw else "(未知客户)"
+    s = str(raw or "(空)")
+    if s == "(空)":
+        return "(空)"
+    if (source_key, field_key) in RMS_ENUM_GROUP_FIELDS:
+        return resolve_rms_group_label(source_key, field_key, s)
+    if (source_key, field_key) in RMS_FK_GROUP_FIELDS:
+        fk_map = _rms_fk_label_map(db, source_key, field_key, [s], models)
+        return fk_map.get(s, s)
+    return s
+
+
 def _finalize_series(
     labels: list,
     values: list,
-    sort_mode: str,
     hide_empty: bool,
     limit: int,
     prefix: str,
     suffix: str,
-    preserve_order: bool = False,
+    x_axis_label: str = "",
+    y_axis_label: str = "",
 ) -> dict:
     pairs = list(zip(labels, values))
     if hide_empty:
         pairs = [(l, v) for (l, v) in pairs if v]
-    if not preserve_order:
-        if sort_mode == "label_asc":
-            pairs.sort(key=lambda x: str(x[0]))
-        elif sort_mode == "label_desc":
-            pairs.sort(key=lambda x: str(x[0]), reverse=True)
-        elif sort_mode == "value_asc":
-            pairs.sort(key=lambda x: x[1])
-        else:  # value_desc (default)
-            pairs.sort(key=lambda x: x[1], reverse=True)
     pairs = pairs[:limit]
     out_labels = [p[0] for p in pairs]
     out_values = [p[1] for p in pairs]
@@ -566,7 +882,301 @@ def _finalize_series(
         "total": sum(out_values),
         "prefix": prefix,
         "suffix": suffix,
+        "xAxisLabel": x_axis_label,
+        "yAxisLabel": y_axis_label,
     }
+
+
+def _finalize_sorted_series(
+    labels: list,
+    values: list,
+    sort_mode: str,
+    source_key: str,
+    field_key: str,
+    hide_empty: bool,
+    limit: int,
+    prefix: str,
+    suffix: str,
+    manual_order: Optional[list] = None,
+    x_axis_label: str = "",
+    y_axis_label: str = "",
+) -> dict:
+    pairs = _sort_display_pairs(list(zip(labels, values)), sort_mode, source_key, field_key, manual_order)
+    sorted_labels = [p[0] for p in pairs]
+    sorted_values = [p[1] for p in pairs]
+    return _finalize_series(
+        sorted_labels,
+        sorted_values,
+        hide_empty,
+        limit,
+        prefix,
+        suffix,
+        x_axis_label=x_axis_label,
+        y_axis_label=y_axis_label,
+    )
+
+
+def _finalize_grouped_series(
+    primary_labels: list,
+    secondary_labels: list,
+    matrix: Dict[str, Dict[str, float]],
+    group_mode: str,
+    prefix: str,
+    suffix: str,
+    x_axis_label: str,
+    y_axis_label: str,
+    hide_empty: bool,
+    limit: int,
+) -> dict:
+    data_rows = []
+    for pl in primary_labels:
+        sec_map = matrix.get(pl, {})
+        row: dict = {"label": pl}
+        for sl in secondary_labels:
+            row[sl] = sec_map.get(sl, 0.0)
+        if hide_empty and not any(row.get(sl, 0) for sl in secondary_labels):
+            continue
+        data_rows.append(row)
+    data_rows = data_rows[:limit]
+    out_primary = [r["label"] for r in data_rows]
+    series = [{"key": sl, "label": sl} for sl in secondary_labels]
+    return {
+        "status": "ok",
+        "kind": "grouped_series",
+        "labels": out_primary,
+        "indexBy": "label",
+        "keys": secondary_labels,
+        "series": series,
+        "data": data_rows,
+        "groupMode": group_mode,
+        "xAxisLabel": x_axis_label,
+        "yAxisLabel": y_axis_label,
+        "prefix": prefix,
+        "suffix": suffix,
+    }
+
+
+def _bucket_rows_dual(
+    rows: list,
+    primary_field: str,
+    secondary_field: str,
+    date_group: str,
+    Model: Type[Any],
+) -> Dict[Any, Dict[Any, list]]:
+    buckets: Dict[Any, Dict[Any, list]] = {}
+    primary_col = None if primary_field == "client" else _column(Model, primary_field)
+    secondary_col = None if secondary_field == "client" else _column(Model, secondary_field)
+    for row in rows:
+        if primary_field == "client":
+            pk = getattr(row, "client_id", None)
+        elif date_group and primary_field:
+            col = _column(Model, primary_field)
+            raw = getattr(row, primary_field, None)
+            pk = _date_bucket_value(raw, date_group)
+        else:
+            pk = getattr(row, primary_field, None)
+        if secondary_field == "client":
+            sk = getattr(row, "client_id", None)
+        else:
+            sk = getattr(row, secondary_field, None)
+        pk = pk if pk is not None else "(空)"
+        sk = sk if sk is not None else "(空)"
+        buckets.setdefault(pk, {}).setdefault(sk, []).append(row)
+    return buckets
+
+
+def _date_bucket_value(raw: Any, date_group: str) -> str:
+    if raw is None:
+        return "(空)"
+    if isinstance(raw, datetime):
+        dt = raw
+    else:
+        s = str(raw).strip()
+        if not s:
+            return "(空)"
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00")[:19])
+        except ValueError:
+            return s
+    if date_group == "day":
+        return dt.strftime("%Y-%m-%d")
+    if date_group == "week":
+        return dt.strftime("%Y-W%W")
+    if date_group == "month":
+        return dt.strftime("%Y-%m")
+    if date_group == "year":
+        return dt.strftime("%Y")
+    return dt.strftime("%Y-%m")
+
+
+def _query_grouped_series(
+    db: Session,
+    source_key: str,
+    config: dict,
+    models: dict,
+    q,
+    Model: Type[Any],
+) -> dict:
+    primary = config.get("primary_axis_field") or config.get("group_by") or ""
+    secondary = config.get("secondary_axis_field") or ""
+    metric = config.get("metric", "count")
+    field_key = config.get("aggregate_field") or config.get("field") or ""
+    date_group = config.get("date_group") or ""
+    primary_sort = _resolve_sort_mode(config)
+    secondary_sort = config.get("secondary_axis_sort") or DEFAULT_SECONDARY_AXIS_SORT
+    hide_empty = bool(config.get("omit_null_values") or config.get("hide_empty"))
+    limit = int(config.get("limit") or 20)
+    prefix = config.get("prefix", "")
+    suffix = config.get("suffix", "")
+    group_mode = config.get("group_mode") or DEFAULT_GROUP_MODE
+    x_axis_label, y_axis_label = _axis_labels(source_key, config)
+
+    use_python = (
+        metric != "count"
+        or bool(date_group)
+        or primary == "client"
+        or secondary == "client"
+    )
+
+    matrix_raw: Dict[Any, Dict[Any, float]] = {}
+
+    if use_python:
+        rows = q.all()
+        buckets = _bucket_rows_dual(rows, primary, secondary, date_group, Model)
+        for pk, sec_buckets in buckets.items():
+            matrix_raw.setdefault(pk, {})
+            for sk, bucket_rows in sec_buckets.items():
+                if metric == "count":
+                    matrix_raw[pk][sk] = float(len(bucket_rows))
+                else:
+                    matrix_raw[pk][sk] = _aggregate_rows(bucket_rows, metric, field_key)
+    else:
+        pcol = _column(Model, primary)
+        scol = _column(Model, secondary)
+        agg = func.count().label("cnt") if metric == "count" else None
+        if metric == "count":
+            rows = (
+                q.with_entities(pcol.label("pl"), scol.label("sl"), func.count().label("cnt"))
+                .group_by(pcol, scol)
+                .all()
+            )
+            for r in rows:
+                pk = r.pl if r.pl is not None else "(空)"
+                sk = r.sl if r.sl is not None else "(空)"
+                matrix_raw.setdefault(pk, {})[sk] = float(r.cnt)
+        else:
+            rows = q.all()
+            buckets = _bucket_rows_dual(rows, primary, secondary, date_group, Model)
+            for pk, sec_buckets in buckets.items():
+                matrix_raw.setdefault(pk, {})
+                for sk, bucket_rows in sec_buckets.items():
+                    matrix_raw[pk][sk] = _aggregate_rows(bucket_rows, metric, field_key)
+
+    # Resolve client names for client axis
+    Client = models.get("Client")
+    if Client and (primary == "client" or secondary == "client"):
+        all_cids = set()
+        for pk, sec in matrix_raw.items():
+            if primary == "client" and pk != "(空)":
+                try:
+                    all_cids.add(int(pk))
+                except (TypeError, ValueError):
+                    pass
+            if secondary == "client":
+                for sk in sec:
+                    if sk != "(空)":
+                        try:
+                            all_cids.add(int(sk))
+                        except (TypeError, ValueError):
+                            pass
+        name_map = {}
+        if all_cids:
+            for cid, cname in db.query(Client.id, Client.name).filter(Client.id.in_(all_cids)).all():
+                name_map[cid] = cname
+        remapped: Dict[Any, Dict[Any, float]] = {}
+        for pk, sec in matrix_raw.items():
+            if primary == "client":
+                disp_p = name_map.get(int(pk), "(未知客户)") if pk != "(空)" else "(空)"
+            else:
+                disp_p = pk
+            remapped.setdefault(disp_p, {})
+            for sk, val in sec.items():
+                if secondary == "client":
+                    disp_s = name_map.get(int(sk), "(未知客户)") if sk != "(空)" else "(空)"
+                else:
+                    disp_s = sk
+                remapped[disp_p][disp_s] = remapped[disp_p].get(disp_s, 0) + val
+        matrix_raw = remapped
+        primary_raw_keys = list(matrix_raw.keys())
+        secondary_raw_set: set = set()
+        for sec in matrix_raw.values():
+            secondary_raw_set.update(sec.keys())
+        secondary_raw_keys = list(secondary_raw_set)
+    else:
+        primary_raw_keys = list(matrix_raw.keys())
+        secondary_raw_set: set = set()
+        for sec in matrix_raw.values():
+            secondary_raw_set.update(sec.keys())
+        secondary_raw_keys = list(secondary_raw_set)
+
+    manual_order = config.get("primary_axis_order") or []
+
+    entries = []
+    for pk in primary_raw_keys:
+        if primary == "client":
+            pl = str(pk)
+        else:
+            pl = _resolve_field_label(pk, source_key, primary, db, models)
+        entries.append({"pk": pk, "pl": pl, "val": sum(matrix_raw.get(pk, {}).values())})
+
+    if not (date_group and primary_sort in ("position_asc", "position_desc")):
+        sorted_pairs = _sort_display_pairs(
+            [(e["pl"], e["val"]) for e in entries],
+            primary_sort,
+            source_key,
+            primary,
+            manual_order,
+        )
+        entries = _order_entries_by_sorted_pairs(entries, sorted_pairs)
+
+    primary_raw_keys = [e["pk"] for e in entries]
+    primary_labels = [e["pl"] for e in entries]
+
+    if secondary == "client":
+        secondary_display = [str(sk) for sk in secondary_raw_keys]
+    else:
+        secondary_display = [
+            _resolve_field_label(sk, source_key, secondary, db, models)
+            for sk in secondary_raw_keys
+        ]
+
+    sec_pairs = list(zip(secondary_raw_keys, secondary_display))
+    if secondary_sort == "label_desc":
+        sec_pairs.sort(key=lambda x: str(x[1]), reverse=True)
+    else:
+        sec_pairs.sort(key=lambda x: str(x[1]))
+    secondary_raw_keys = [p[0] for p in sec_pairs]
+    secondary_display = [p[1] for p in sec_pairs]
+
+    matrix: Dict[str, Dict[str, float]] = {}
+    for pk, pl in zip(primary_raw_keys, primary_labels):
+        matrix[pl] = {}
+        raw_sec = matrix_raw.get(pk, {})
+        for sr, sd in zip(secondary_raw_keys, secondary_display):
+            matrix[pl][sd] = raw_sec.get(sr, 0.0)
+
+    return _finalize_grouped_series(
+        primary_labels,
+        secondary_display,
+        matrix,
+        group_mode,
+        prefix,
+        suffix,
+        x_axis_label,
+        y_axis_label,
+        hide_empty,
+        limit,
+    )
 
 
 def query_widget_data(
@@ -579,21 +1189,28 @@ def query_widget_data(
     if not user_can_read_source(ctx, source_key):
         return {"status": "forbidden", "message": "无权限查看该数据源"}
 
+    config = _normalize_widget_config(config)
     metric = config.get("metric", "count")
-    field_key = config.get("field", "")
-    group_by = config.get("group_by", "")
-    date_group = config.get("date_group", "")
+    field_key = config.get("aggregate_field") or config.get("field") or ""
+    group_by = config.get("primary_axis_field") or config.get("group_by") or ""
+    secondary = config.get("secondary_axis_field") or ""
+    date_group = config.get("date_group") or ""
     filters = config.get("filters") or []
     limit = int(config.get("limit") or 20)
     prefix = config.get("prefix", "")
     suffix = config.get("suffix", "")
-    sort_mode = config.get("sort") or DEFAULT_SORT
-    hide_empty = bool(config.get("hide_empty", False))
+    sort_mode = _resolve_sort_mode(config)
+    hide_empty = bool(config.get("omit_null_values") or config.get("hide_empty"))
+    x_axis_label, y_axis_label = _axis_labels(source_key, config)
+    manual_order = config.get("primary_axis_order") or []
 
     Model = _get_model(models, source_key)
     q = _scoped_query(db, ctx, source_key, models)
     q = _apply_roster_active_pool(q, source_key, config, Model)
     q = _apply_filters(q, Model, filters)
+
+    if secondary:
+        return _query_grouped_series(db, source_key, config, models, q, Model)
 
     if group_by == "client":
         src = get_source(source_key)
@@ -617,7 +1234,12 @@ def query_widget_data(
                 values.append(float(len(bucket_rows)))
             else:
                 values.append(_aggregate_rows(bucket_rows, metric, field_key))
-        return _finalize_series(labels, values, sort_mode, hide_empty, limit, prefix, suffix)
+        return _finalize_sorted_series(
+            labels, values, sort_mode, source_key, "client",
+            hide_empty, limit, prefix, suffix,
+            manual_order=manual_order,
+            x_axis_label=x_axis_label, y_axis_label=y_axis_label,
+        )
 
     if group_by:
         col = _column(Model, group_by)
@@ -631,10 +1253,11 @@ def query_widget_data(
             )
             labels = [str(r.label or "(空)") for r in rows]
             values = [float(r.cnt) for r in rows]
-            # Time series: keep chronological order regardless of sort.
-            return _finalize_series(
-                labels, values, sort_mode, hide_empty, limit, prefix, suffix,
-                preserve_order=True,
+            return _finalize_sorted_series(
+                labels, values, sort_mode, source_key, group_by,
+                hide_empty, limit, prefix, suffix,
+                manual_order=manual_order,
+                x_axis_label=x_axis_label, y_axis_label=y_axis_label,
             )
 
         if metric == "count":
@@ -643,11 +1266,22 @@ def query_widget_data(
                 .group_by(col)
                 .all()
             )
-            labels = [str(r.label or "(空)") for r in rows]
-            values = [float(r.cnt) for r in rows]
-            labels = _display_group_labels(labels, source_key, group_by, db, models)
+            display_buckets: Dict[str, float] = {}
+            for r in rows:
+                rl = str(r.label or "(空)")
+                if (source_key, group_by) in RMS_ENUM_GROUP_FIELDS or (source_key, group_by) in RMS_FK_GROUP_FIELDS:
+                    dl = _display_group_labels([rl], source_key, group_by, db, models)[0]
+                else:
+                    dl = rl
+                display_buckets[dl] = display_buckets.get(dl, 0.0) + float(r.cnt)
+
+            pairs = list(display_buckets.items())
+            pairs = _sort_display_pairs(pairs, sort_mode, source_key, group_by, manual_order)
+            labels = [p[0] for p in pairs]
+            values = [p[1] for p in pairs]
             return _finalize_series(
-                labels, values, sort_mode, hide_empty, limit, prefix, suffix,
+                labels, values, hide_empty, limit, prefix, suffix,
+                x_axis_label=x_axis_label, y_axis_label=y_axis_label,
             )
 
         # grouped numeric metric — compute in Python
@@ -656,14 +1290,20 @@ def query_widget_data(
         for row in all_rows:
             key = str(getattr(row, group_by, None) or "(空)")
             buckets.setdefault(key, []).append(row)
-        labels = []
-        values = []
-        for label, bucket_rows in buckets.items():
-            labels.append(label)
-            values.append(_aggregate_rows(bucket_rows, metric, field_key))
-        labels = _display_group_labels(labels, source_key, group_by, db, models)
+        merged: Dict[str, float] = {}
+        for raw_key, bucket_rows in buckets.items():
+            val = _aggregate_rows(bucket_rows, metric, field_key)
+            if (source_key, group_by) in RMS_ENUM_GROUP_FIELDS or (source_key, group_by) in RMS_FK_GROUP_FIELDS:
+                dl = _display_group_labels([raw_key], source_key, group_by, db, models)[0]
+            else:
+                dl = raw_key
+            merged[dl] = merged.get(dl, 0.0) + float(val)
+        pairs = _sort_display_pairs(list(merged.items()), sort_mode, source_key, group_by, manual_order)
+        labels = [p[0] for p in pairs]
+        values = [p[1] for p in pairs]
         return _finalize_series(
-            labels, values, sort_mode, hide_empty, limit, prefix, suffix,
+            labels, values, hide_empty, limit, prefix, suffix,
+            x_axis_label=x_axis_label, y_axis_label=y_axis_label,
         )
 
     # scalar

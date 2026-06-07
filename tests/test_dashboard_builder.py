@@ -194,7 +194,7 @@ def test_widget_data_forbidden_without_source_permission(client, client_rbac, ad
     [
         ({"title": "Bad", "widget_type": "number", "source_key": "unknown_src", "config": {"metric": "count"}}, "未知数据源"),
         ({"title": "Bad", "widget_type": "number", "source_key": "clients", "config": {"metric": "sum", "field": "bad_field"}}, "bad_field"),
-        ({"title": "Bad", "widget_type": "bar", "source_key": "clients", "config": {"metric": "count", "group_by": "bad_col", "limit": 5}}, "未知分组字段"),
+        ({"title": "Bad", "widget_type": "bar", "source_key": "clients", "config": {"metric": "count", "group_by": "bad_col", "limit": 5}}, "bad_col"),
     ],
 )
 def test_invalid_widget_config_returns_400(client, admin_auth, payload, detail_part):
@@ -284,7 +284,7 @@ def _make_tab(client, headers, name):
     [
         ({"metric": "count", "group_by": "stage", "color": "rainbow"}, "未知配色"),
         ({"metric": "count", "group_by": "stage", "color": "blue", "color_shade": 9}, "color_shade"),
-        ({"metric": "count", "group_by": "stage", "sort": "random"}, "未知排序"),
+        ({"metric": "count", "group_by": "stage", "sort": "random"}, "random"),
     ],
 )
 def test_invalid_style_returns_400(client, admin_auth, bad_config, detail_part):

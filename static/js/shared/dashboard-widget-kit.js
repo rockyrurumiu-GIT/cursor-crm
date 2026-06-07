@@ -49,6 +49,71 @@
     return { key: t[0], label: t[1], shades: buildHueShades(t[2]) };
   });
 
+  function primarySortToLegacy(sort) {
+    var map = {
+      position_asc: "label_asc", position_desc: "label_desc",
+      sum_asc: "value_asc", sum_desc: "value_desc", manual: "label_asc",
+    };
+    return map[sort] || sort;
+  }
+
+  function normalizeWidgetConfig(config) {
+    var c = config || {};
+    var aggregateField = c.aggregate_field != null ? c.aggregate_field : (c.field || "");
+    aggregateField = String(aggregateField).trim();
+    var primaryAxisField = c.primary_axis_field != null ? c.primary_axis_field : (c.group_by || "");
+    primaryAxisField = String(primaryAxisField).trim();
+    var dateGroup = String(c.date_group || "").trim();
+    if (dateGroup && !primaryAxisField) primaryAxisField = String(c.group_by || "created_at").trim();
+    var displayDataLabel = "display_data_label" in c ? !!c.display_data_label : !!c.data_labels;
+    var displayLegend = "display_legend" in c ? !!c.display_legend : (c.show_legend !== false);
+    var omitNull = "omit_null_values" in c ? !!c.omit_null_values : !!c.hide_empty;
+    var primarySort = String(c.primary_axis_sort || c.sort || "position_asc").trim();
+    primarySort = { value_asc: "sum_asc", value_desc: "sum_desc" }[primarySort] || primarySort;
+    var rawOrder = c.primary_axis_order;
+    var primaryAxisOrder = [];
+    if (Array.isArray(rawOrder)) {
+      rawOrder.forEach(function (item) {
+        var s = String(item || "").trim();
+        if (s) primaryAxisOrder.push(s);
+      });
+    }
+    return {
+      metric: String(c.metric || "count").trim(),
+      aggregate_field: aggregateField,
+      field: aggregateField,
+      primary_axis_field: primaryAxisField,
+      group_by: primaryAxisField,
+      date_group: dateGroup,
+      primary_axis_sort: primarySort,
+      sort: primarySortToLegacy(primarySort),
+      primary_axis_order: primaryAxisOrder,
+      secondary_axis_field: String(c.secondary_axis_field || "").trim(),
+      secondary_axis_sort: String(c.secondary_axis_sort || "label_asc").trim(),
+      omit_null_values: omitNull,
+      hide_empty: omitNull,
+      range_min: c.range_min == null || c.range_min === "" ? "" : String(c.range_min).trim(),
+      range_max: c.range_max == null || c.range_max === "" ? "" : String(c.range_max).trim(),
+      group_mode: String(c.group_mode || "stacked").trim(),
+      axis_name_display: String(c.axis_name_display || "none").trim(),
+      display_data_label: displayDataLabel,
+      data_labels: displayDataLabel,
+      display_legend: displayLegend,
+      show_legend: displayLegend,
+      filters: Array.isArray(c.filters) ? c.filters.slice() : [],
+      limit: c.limit != null ? c.limit : 20,
+      prefix: String(c.prefix || ""),
+      suffix: String(c.suffix || ""),
+      color: String(c.color || "green").trim(),
+      color_shade: c.color_shade != null ? c.color_shade : 2,
+      show_value_center: c.show_value_center !== false,
+      extra_views: Array.isArray(c.extra_views) ? c.extra_views.slice() : [],
+      include_left: !!c.include_left,
+      client_id: c.client_id,
+      url: c.url, content: c.content, block: c.block,
+    };
+  }
+
   function colorRowOf(key) {
     var k = String(key || "blue").toLowerCase();
     var row = TWENTY_COLOR_ROWS.find(function (r) { return r.key === k; });
@@ -97,6 +162,165 @@
       callbacks: { label: labelFn },
     };
   }
+  function parseRange(v) {
+    if (v == null || v === "") return undefined;
+    var n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  }
+
+  function chartMotionOptions(base) {
+    base = base || {};
+    if (!base.animation) {
+      base.animation = { duration: 420, easing: "easeOutQuart" };
+    }
+    if (!base.transitions) {
+      base.transitions = {
+        active: { animation: { duration: 420, easing: "easeOutQuart" } },
+        resize: { animation: { duration: 0 } },
+        show: {
+          animations: {
+            x: { duration: 0 },
+            y: { duration: 0 },
+            colors: { duration: 0 },
+          },
+        },
+        hide: {
+          animations: {
+            x: { duration: 0 },
+            y: { duration: 0 },
+          },
+        },
+      };
+    }
+    return base;
+  }
+
+  function resolveChartType(w, opts) {
+    var render = opts && opts.render ? opts.render : null;
+    if (render === "doughnut" || (!render && w.widget_type === "pie")) return "doughnut";
+    if (render === "horizontal_bar" || (!render && w.widget_type === "horizontal_bar")) return "bar";
+    if (!render && w.widget_type === "bar") return "bar";
+    if (!render && w.widget_type === "line") return "line";
+    return null;
+  }
+
+  function resolveIndexAxis(w, opts) {
+    var render = opts && opts.render ? opts.render : null;
+    return (render === "horizontal_bar" || (!render && w.widget_type === "horizontal_bar")) ? "y" : undefined;
+  }
+
+  function canAnimateChartUpdate(chart, w, data, opts) {
+    if (!chart || !chart.config || !data || data.status !== "ok") return false;
+    if (opts && opts.forceRecreate) return false;
+    if (data.kind === "grouped_series") {
+      if (w.widget_type !== "bar" && w.widget_type !== "line" && w.widget_type !== "horizontal_bar") return false;
+      return chart.config.type === "bar" || chart.config.type === "line";
+    }
+    if (data.kind !== "series") return false;
+    var chartType = resolveChartType(w, opts);
+    if (!chartType) return false;
+    if (chartType === "doughnut") return chart.config.type === "doughnut";
+    if (chartType === "line") return chart.config.type === "line";
+    if (chart.config.type !== "bar") return false;
+    var wantAxis = resolveIndexAxis(w, opts);
+    var haveAxis = chart.options.indexAxis;
+    return (wantAxis || undefined) === (haveAxis || undefined);
+  }
+
+  function colorsEqual(a, b) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  function applySeriesChartData(chart, w, data, opts) {
+    opts = opts || {};
+    var cfg = normalizeWidgetConfig(w.config || {});
+    var labels = data.labels || [];
+    var values = data.values || [];
+    var chartType = resolveChartType(w, opts);
+    if (!chartType) return false;
+    if (chartType === "doughnut") {
+      chart.data.labels = labels.slice();
+      chart.data.datasets[0].data = values.slice();
+      chart.data.datasets[0].backgroundColor = shadeRamp(cfg, labels.length);
+      if (chart.options.plugins && chart.options.plugins.centerTotal) {
+        chart.options.plugins.centerTotal.text = (data.prefix || "") + fmtNum(data.total);
+      }
+      return true;
+    }
+    var topN = opts.limit != null ? opts.limit : (cfg.limit != null ? cfg.limit : 6);
+    if (resolveIndexAxis(w, opts) === "y") {
+      chart.data.labels = labels.slice(0, topN);
+      chart.data.datasets[0].data = values.slice(0, topN);
+      var nextHColors = shadeRamp(cfg, Math.max(1, Math.min(topN, values.length)));
+      var prevHColors = chart.data.datasets[0].backgroundColor;
+      if (!colorsEqual(prevHColors, nextHColors)) {
+        chart.data.datasets[0].backgroundColor = nextHColors;
+      }
+      return true;
+    }
+    chart.data.labels = labels.slice();
+    chart.data.datasets[0].data = values.slice();
+    if (chartType === "bar") {
+      var nextColors = shadeRamp(cfg, values.length);
+      var prevColors = chart.data.datasets[0].backgroundColor;
+      if (!colorsEqual(prevColors, nextColors)) {
+        chart.data.datasets[0].backgroundColor = nextColors;
+      }
+    }
+    return true;
+  }
+
+  function applyGroupedChartData(chart, w, data) {
+    var keys = data.keys || [];
+    var rows = data.data || [];
+    if (!chart.data.datasets || chart.data.datasets.length !== keys.length) return false;
+    chart.data.labels = rows.map(function (r) { return r.label; });
+    keys.forEach(function (key, i) {
+      chart.data.datasets[i].label = key;
+      chart.data.datasets[i].data = rows.map(function (r) { return r[key] || 0; });
+    });
+    return true;
+  }
+  function applyAxisNames(scales, cfg, data, widgetType) {
+    var mode = (cfg.axis_name_display || "none").toLowerCase();
+    var xTitle = data.xAxisLabel || "";
+    var yTitle = data.yAxisLabel || "";
+    if (mode === "x" || mode === "both") {
+      if (widgetType === "horizontal_bar") {
+        scales.y = scales.y || {};
+        scales.y.title = { display: !!xTitle, text: xTitle, color: "#8f949b", font: { size: 11 } };
+      } else {
+        scales.x = scales.x || {};
+        scales.x.title = { display: !!xTitle, text: xTitle, color: "#8f949b", font: { size: 11 } };
+      }
+    }
+    if (mode === "y" || mode === "both") {
+      if (widgetType === "horizontal_bar") {
+        scales.x = scales.x || {};
+        scales.x.title = { display: !!yTitle, text: yTitle, color: "#8f949b", font: { size: 11 } };
+      } else {
+        scales.y = scales.y || {};
+        scales.y.title = { display: !!yTitle, text: yTitle, color: "#8f949b", font: { size: 11 } };
+      }
+    }
+  }
+  function applyRange(scales, cfg, widgetType) {
+    var rmin = parseRange(cfg.range_min);
+    var rmax = parseRange(cfg.range_max);
+    if (widgetType === "horizontal_bar") {
+      scales.x = scales.x || {};
+      if (rmin != null) scales.x.min = rmin;
+      if (rmax != null) scales.x.max = rmax;
+    } else {
+      scales.y = scales.y || {};
+      if (rmin != null) scales.y.min = rmin;
+      if (rmax != null) scales.y.max = rmax;
+    }
+  }
   function cartesianScales(xGrid) {
     return {
       x: { grid: xGrid, border: { display: false }, ticks: { font: { size: 10 }, color: "#b0b5bc", maxRotation: 0 } },
@@ -104,43 +328,53 @@
     };
   }
   function doughnutChartOptions(cfg, prefix, totalText) {
-    return {
+    return chartMotionOptions({
       responsive: true, maintainAspectRatio: false, cutout: "74%",
       plugins: {
         legend: { display: false }, datalabels: { display: false },
         centerTotal: { display: cfg.show_value_center !== false, text: totalText },
         tooltip: whiteTooltip(function (c) { return c.label + ": " + prefix + fmtNum(c.parsed); }),
       },
-    };
+    });
   }
-  function barChartOptions(cfg, prefix) {
-    return {
+  function barChartOptions(cfg, prefix, data, widgetType) {
+    var scales = cartesianScales({ display: false });
+    applyAxisNames(scales, cfg, data || {}, widgetType || "bar");
+    applyRange(scales, cfg, widgetType || "bar");
+    return chartMotionOptions({
       responsive: true, maintainAspectRatio: false,
-      layout: { padding: { top: cfg.data_labels ? 18 : 6 } },
+      layout: { padding: { top: cfg.display_data_label || cfg.data_labels ? 18 : 6 } },
       plugins: {
-        legend: { display: false },
-        datalabels: cfg.data_labels
+        legend: { display: !!(cfg.display_legend || cfg.show_legend) },
+        datalabels: (cfg.display_data_label || cfg.data_labels)
           ? { display: true, anchor: "end", align: "end", clip: false, color: "#98a2b3", font: { size: 10, weight: "500" }, formatter: dataLabel(prefix) }
           : { display: false },
         tooltip: whiteTooltip(function (c) { return prefix + fmtNum(c.parsed.y); }),
       },
-      scales: cartesianScales({ display: false }),
-    };
+      scales: scales,
+    });
   }
-  function lineChartOptions(cfg, prefix) {
-    return {
+  function lineChartOptions(cfg, prefix, data, stacked) {
+    var scales = cartesianScales({ color: "#f5f6f8" });
+    if (stacked) {
+      scales.x.stacked = true;
+      scales.y.stacked = true;
+    }
+    applyAxisNames(scales, cfg, data || {}, "line");
+    applyRange(scales, cfg, "line");
+    return chartMotionOptions({
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       elements: { point: { hoverRadius: 6, hitRadius: 12 } },
       plugins: {
-        legend: { display: false },
-        datalabels: cfg.data_labels
+        legend: { display: !!(cfg.display_legend || cfg.show_legend) },
+        datalabels: (cfg.display_data_label || cfg.data_labels)
           ? { display: true, align: "top", color: "#98a2b3", font: { size: 10 }, formatter: dataLabel(prefix) }
           : { display: false },
-        tooltip: whiteTooltip(function (c) { return prefix + fmtNum(c.parsed.y); }),
+        tooltip: whiteTooltip(function (c) { return (c.dataset.label ? c.dataset.label + ": " : "") + prefix + fmtNum(c.parsed.y); }),
       },
-      scales: cartesianScales({ color: "#f5f6f8" }),
-    };
+      scales: scales,
+    });
   }
 
   var centerTotalPlugin = {
@@ -191,9 +425,18 @@
       widget_type: defaults.widget_type || "number",
       source_key: defaults.source_key || "clients",
       config: Object.assign({
-        metric: "count", field: "", group_by: "", date_group: "month",
-        filters: [], limit: 20, color: "green", color_shade: 2, sort: "value_desc",
-        show_legend: true, show_value_center: true, data_labels: false, hide_empty: false,
+        metric: "count", aggregate_field: "", field: "",
+        primary_axis_field: "", group_by: "", date_group: "",
+        primary_axis_sort: "position_asc", sort: "label_asc",
+        primary_axis_order: [],
+        secondary_axis_field: "", secondary_axis_sort: "label_asc",
+        omit_null_values: false, hide_empty: false,
+        range_min: "", range_max: "",
+        group_mode: "stacked", axis_name_display: "none",
+        display_data_label: true, data_labels: true,
+        display_legend: true, show_legend: true,
+        filters: [], limit: 20, color: "green", color_shade: 2,
+        show_value_center: true,
         url: "", content: "", prefix: "", suffix: "",
         client_id: null, include_left: false, block: "kpi_jobs",
         extra_views: [],
@@ -215,24 +458,33 @@
         include_left: !!f.config.include_left,
       };
     }
-    var c = f.config;
+    var c = normalizeWidgetConfig(f.config);
     var out = {
-      metric: c.metric, field: c.field, group_by: c.group_by,
+      metric: c.metric,
+      aggregate_field: c.aggregate_field,
+      primary_axis_field: c.primary_axis_field,
+      date_group: c.date_group,
+      primary_axis_sort: c.primary_axis_sort,
+      sort: c.sort,
+      primary_axis_order: c.primary_axis_order,
+      secondary_axis_field: c.secondary_axis_field,
+      secondary_axis_sort: c.secondary_axis_sort,
+      omit_null_values: c.omit_null_values,
+      range_min: c.range_min,
+      range_max: c.range_max,
+      group_mode: c.group_mode,
+      axis_name_display: c.axis_name_display,
+      display_data_label: c.display_data_label,
+      display_legend: c.display_legend,
       filters: (c.filters || []).filter(function (x) { return x.field; }),
       prefix: c.prefix || "", suffix: c.suffix || "",
     };
-    if (isDateGroupFn && isDateGroupFn()) { out.group_by = ""; out.date_group = c.date_group; }
     if (isChartFn && isChartFn()) {
       var lim = Number(c.limit);
       out.limit = Number.isFinite(lim) && lim >= 1 ? lim : 20;
       out.color = c.color;
       out.color_shade = Number(c.color_shade);
       if (!Number.isFinite(out.color_shade) || out.color_shade < 0 || out.color_shade > 4) out.color_shade = 2;
-      out.sort = c.sort;
-      out.show_legend = !!c.show_legend;
-      out.show_value_center = !!c.show_value_center;
-      out.data_labels = !!c.data_labels;
-      out.hide_empty = !!c.hide_empty;
       out.extra_views = (c.extra_views || []).map(function (ev) {
         var row = { render: ev.render, x: Number(ev.x) || 0, y: Number(ev.y) || 0, w: Number(ev.w) || 4, h: Number(ev.h) || 4 };
         var t = (ev.title || "").trim();
@@ -244,15 +496,121 @@
     return out;
   }
 
-  function renderCrmChart(chartInstances, destroyChartKey, w, data, opts) {
+  function renderGroupedChart(chartInstances, destroyChartKey, w, data, opts) {
     opts = opts || {};
-    if (!data || data.status !== "ok" || data.kind !== "series") return;
     var canvasId = opts.canvasId || chartCanvasId(w, opts.viewIndex);
     var canvas = document.getElementById(canvasId);
     if (!canvas || typeof Chart === "undefined") return;
+    var cfg = normalizeWidgetConfig(w.config || {});
+    var existing = chartInstances[canvasId];
+    if (opts.animate !== false && existing && canAnimateChartUpdate(existing, w, data, opts)) {
+      if (applyGroupedChartData(existing, w, data)) {
+        var stacked = cfg.group_mode === "stacked" && w.widget_type !== "line";
+        if (existing.options.scales) {
+          if (existing.options.scales.x) existing.options.scales.x.stacked = stacked;
+          if (existing.options.scales.y) existing.options.scales.y.stacked = stacked;
+        }
+        existing.update("active");
+        return;
+      }
+    }
     destroyChartKey(canvasId);
 
-    var cfg = w.config || {};
+    var prefix = data.prefix || "";
+    var keys = data.keys || [];
+    var rows = data.data || [];
+    var labels = rows.map(function (r) { return r.label; });
+    var stacked = cfg.group_mode === "stacked" && w.widget_type !== "line";
+    var pal = widgetPalette(cfg);
+    var accent = pal[selectedShade(cfg)];
+
+    var datasets = keys.map(function (key, i) {
+      return {
+        label: key,
+        data: rows.map(function (r) { return r[key] || 0; }),
+        backgroundColor: pal[(i + 2) % pal.length],
+        borderColor: w.widget_type === "line" ? pal[(i + 2) % pal.length] : undefined,
+        borderRadius: w.widget_type === "bar" || w.widget_type === "horizontal_bar" ? 6 : undefined,
+        fill: w.widget_type === "line" ? false : undefined,
+        tension: w.widget_type === "line" ? 0.25 : undefined,
+        pointRadius: w.widget_type === "line" ? 2 : undefined,
+        borderWidth: w.widget_type === "line" ? 2 : undefined,
+        maxBarThickness: w.widget_type === "horizontal_bar" ? 28 : 44,
+        categoryPercentage: w.widget_type === "horizontal_bar" ? 0.58 : 0.62,
+        barPercentage: 0.55,
+      };
+    });
+
+    if (w.widget_type === "horizontal_bar") {
+      var scales = {
+        x: { beginAtZero: true, stacked: stacked, grid: { color: "#f2f3f5" }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
+        y: { stacked: stacked, grid: { display: false }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
+      };
+      applyAxisNames(scales, cfg, data, "horizontal_bar");
+      applyRange(scales, cfg, "horizontal_bar");
+      chartInstances[canvasId] = new Chart(canvas, {
+        type: "bar",
+        data: { labels: labels, datasets: datasets },
+        options: chartMotionOptions({
+          responsive: true, maintainAspectRatio: false, indexAxis: "y",
+          plugins: {
+            legend: { display: !!(cfg.display_legend || cfg.show_legend) },
+            datalabels: (cfg.display_data_label || cfg.data_labels) ? { display: true, anchor: "end", align: "end", color: "#98a2b3", font: { size: 10 }, formatter: dataLabel(prefix) } : { display: false },
+            tooltip: whiteTooltip(function (c) { return (c.dataset.label ? c.dataset.label + ": " : "") + prefix + fmtNum(c.parsed.x); }),
+          },
+          scales: scales,
+        }),
+      });
+      return;
+    }
+    if (w.widget_type === "line") {
+      chartInstances[canvasId] = new Chart(canvas, {
+        type: "line",
+        data: { labels: labels, datasets: datasets },
+        options: lineChartOptions(cfg, prefix, data, false),
+      });
+      return;
+    }
+    var barScales = cartesianScales({ display: false });
+    if (stacked) { barScales.x.stacked = true; barScales.y.stacked = true; }
+    applyAxisNames(barScales, cfg, data, "bar");
+    applyRange(barScales, cfg, "bar");
+    chartInstances[canvasId] = new Chart(canvas, {
+      type: "bar",
+      data: { labels: labels, datasets: datasets },
+      options: chartMotionOptions({
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: !!(cfg.display_legend || cfg.show_legend) },
+          datalabels: (cfg.display_data_label || cfg.data_labels) ? { display: true, anchor: "end", align: "end", clip: false, color: "#98a2b3", font: { size: 10, weight: "500" }, formatter: dataLabel(prefix) } : { display: false },
+          tooltip: whiteTooltip(function (c) { return (c.dataset.label ? c.dataset.label + ": " : "") + prefix + fmtNum(c.parsed.y); }),
+        },
+        scales: barScales,
+      }),
+    });
+  }
+
+  function renderCrmChart(chartInstances, destroyChartKey, w, data, opts) {
+    opts = opts || {};
+    if (!data || data.status !== "ok") return;
+    if (data.kind === "grouped_series") {
+      renderGroupedChart(chartInstances, destroyChartKey, w, data, opts);
+      return;
+    }
+    if (data.kind !== "series") return;
+    var canvasId = opts.canvasId || chartCanvasId(w, opts.viewIndex);
+    var canvas = document.getElementById(canvasId);
+    if (!canvas || typeof Chart === "undefined") return;
+    var existing = chartInstances[canvasId];
+    if (opts.animate !== false && existing && canAnimateChartUpdate(existing, w, data, opts)) {
+      if (applySeriesChartData(existing, w, data, opts)) {
+        existing.update("active");
+        return;
+      }
+    }
+    destroyChartKey(canvasId);
+
+    var cfg = normalizeWidgetConfig(w.config || {});
     var labels = data.labels || [];
     var values = data.values || [];
     var prefix = data.prefix || "";
@@ -270,20 +628,27 @@
     }
     if (render === "horizontal_bar" || (!render && w.widget_type === "horizontal_bar")) {
       var topN = opts.limit != null ? opts.limit : (cfg.limit != null ? cfg.limit : 6);
+      var hScales = {
+        x: { beginAtZero: true, grid: { color: "#f2f3f5" }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
+        y: { grid: { display: false }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
+      };
+      applyAxisNames(hScales, cfg, data, "horizontal_bar");
+      applyRange(hScales, cfg, "horizontal_bar");
       chartInstances[canvasId] = new Chart(canvas, {
         type: "bar",
         data: {
           labels: labels.slice(0, topN),
-          datasets: [{ data: values.slice(0, topN), backgroundColor: shadeRamp(cfg, topN), borderRadius: 6, barPercentage: 0.72 }],
+          datasets: [{ data: values.slice(0, topN), backgroundColor: shadeRamp(cfg, topN), borderRadius: 6, categoryPercentage: 0.58, barPercentage: 0.55, maxBarThickness: 28 }],
         },
-        options: {
+        options: chartMotionOptions({
           responsive: true, maintainAspectRatio: false, indexAxis: "y",
-          plugins: { legend: { display: false }, datalabels: { display: false }, tooltip: whiteTooltip(function (c) { return prefix + fmtNum(c.parsed.x); }) },
-          scales: {
-            x: { beginAtZero: true, grid: { color: "#f2f3f5" }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
-            y: { grid: { display: false }, border: { display: false }, ticks: { color: "#8f949b", font: { size: 10 } } },
+          plugins: {
+            legend: { display: !!(cfg.display_legend || cfg.show_legend) },
+            datalabels: (cfg.display_data_label || cfg.data_labels) ? { display: true, anchor: "end", align: "end", color: "#98a2b3", font: { size: 10 }, formatter: dataLabel(prefix) } : { display: false },
+            tooltip: whiteTooltip(function (c) { return prefix + fmtNum(c.parsed.x); }),
           },
-        },
+          scales: hScales,
+        }),
       });
       return;
     }
@@ -292,9 +657,9 @@
         type: "bar",
         data: {
           labels: labels,
-          datasets: [{ label: w.title, data: values, backgroundColor: shadeRamp(cfg, values.length), hoverBackgroundColor: shadeHover(cfg), borderRadius: 6, categoryPercentage: 0.65, barPercentage: 0.85 }],
+          datasets: [{ label: w.title, data: values, backgroundColor: shadeRamp(cfg, values.length), hoverBackgroundColor: shadeHover(cfg), borderRadius: 6, categoryPercentage: 0.62, barPercentage: 0.55, maxBarThickness: 44 }],
         },
-        options: barChartOptions(cfg, prefix),
+        options: barChartOptions(cfg, prefix, data, "bar"),
       });
       return;
     }
@@ -305,9 +670,22 @@
           labels: labels,
           datasets: [{ label: w.title, data: values, borderColor: accent, backgroundColor: hexA(pal[0], 0.12), fill: true, tension: 0.25, pointRadius: 0, pointBackgroundColor: accent, borderWidth: 2 }],
         },
-        options: lineChartOptions(cfg, prefix),
+        options: lineChartOptions(cfg, prefix, data, false),
       });
     }
+  }
+
+  function tagPillStyle(label) {
+    var s = String(label || "");
+    var hash = 0;
+    for (var i = 0; i < s.length; i++) {
+      hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
+    }
+    var row = TWENTY_COLOR_ROWS[Math.abs(hash) % TWENTY_COLOR_ROWS.length];
+    return {
+      backgroundColor: mixHex(row.shades[2], "#ffffff", 0.84),
+      color: row.shades[4],
+    };
   }
 
   global.DashboardWidgetKit = {
@@ -318,6 +696,7 @@
     TYPE_LABELS: TYPE_LABELS,
     TYPE_ICONS: TYPE_ICONS,
     TWENTY_COLOR_ROWS: TWENTY_COLOR_ROWS,
+    tagPillStyle: tagPillStyle,
     colorRowOf: colorRowOf,
     selectedShade: selectedShade,
     widgetPalette: widgetPalette,
@@ -327,6 +706,7 @@
     fmtNum: fmtNum,
     chartCanvasId: chartCanvasId,
     blankWidget: blankWidget,
+    normalizeWidgetConfig: normalizeWidgetConfig,
     buildConfig: buildConfig,
     renderCrmChart: renderCrmChart,
     installChartPlugins: installChartPlugins,

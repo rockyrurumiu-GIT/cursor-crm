@@ -47,6 +47,9 @@
   var widgetAutosaveTimer = null;
   var widgetPersistInFlight = false;
   var widgetPersistQueued = false;
+  var skipWidgetWatchPersist = 0;
+  var chartRenderBatchTimer = null;
+  var widgetRefreshTimers = {};
 
   KIT.installChartPlugins(typeof Chart !== "undefined" ? Chart : undefined, typeof ChartDataLabels !== "undefined" ? ChartDataLabels : undefined);
 
@@ -242,6 +245,20 @@
         var colorPickerOpen = ref(false);
         var colorSearch = ref("");
         var rosterScope = ref("all");
+        var panelView = ref("main");
+        var activePicker = ref(null);
+        var manualOrderItems = ref([]);
+        var manualOrderLoading = ref(false);
+        var manualDragIndex = ref(null);
+        var manualDragOverIndex = ref(null);
+        var manualDragGhostLabel = ref("");
+        var manualDragGhostPillStyle = ref({});
+        var manualDragRowHeight = ref(36);
+        var manualDragGhostPos = reactive({ x: 0, y: 0 });
+        var manualDragState = null;
+        var chatbotWasVisible = ref(false);
+        var dragWidgetId = ref(null);
+        var dragState = null;
         var widgetForm = ref(blankWidget());
 
         var clientOptions = ref([]);
@@ -261,12 +278,12 @@
         });
 
         function blankWidget() {
-          var w = KIT.blankWidget({ widget_type: "number" });
-          if (!w.config) w.config = {};
+          var w = KIT.blankWidget({ widget_type: "bar" });
+          w.config = KIT.normalizeWidgetConfig(w.config || {});
           if (!w.config.block) w.config.block = "kpi_jobs";
           if (!Array.isArray(w.config.filters)) w.config.filters = [];
           if (!Array.isArray(w.config.extra_views)) w.config.extra_views = [];
-          if (!w.source_key) w.source_key = "clients";
+          if (!w.source_key) w.source_key = "rms_applications";
           return w;
         }
 
@@ -362,6 +379,15 @@
           });
         });
 
+        var isDataWidget = computed(function () {
+          return KIT.DATA_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
+        });
+        var chartTypePills = computed(function () {
+          return ["bar", "horizontal_bar", "line", "pie", "number"];
+        });
+        var supportsSecondary = computed(function () {
+          return ["bar", "horizontal_bar", "line"].indexOf(widgetForm.value.widget_type) >= 0;
+        });
         var needsDataSource = computed(function () {
           return KIT.DATA_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
         });
@@ -389,12 +415,106 @@
         var numericFields = computed(function () {
           return sourceFields.value.filter(function (f) { return f.kind === "numeric"; });
         });
+        var primaryAxisFields = computed(function () {
+          return sourceFields.value.filter(function (f) {
+            return f.role === "dimension" || f.role === "datetime" || f.kind === "text" || f.kind === "datetime";
+          });
+        });
+        var secondaryAxisFields = computed(function () {
+          return sourceFields.value.filter(function (f) {
+            return f.role === "dimension" || f.kind === "text";
+          });
+        });
         var groupByFields = computed(function () {
-          return sourceFields.value.filter(function (f) { return f.kind === "text" || f.kind === "datetime"; });
+          return primaryAxisFields.value;
         });
         var isDateGroup = computed(function () {
-          var f = sourceFields.value.find(function (x) { return x.key === (widgetForm.value.config && widgetForm.value.config.group_by); });
-          return needsGroupBy.value && f && f.kind === "datetime";
+          var key = widgetForm.value.config && (widgetForm.value.config.primary_axis_field || widgetForm.value.config.group_by);
+          var f = sourceFields.value.find(function (x) { return x.key === key; });
+          return needsGroupBy.value && f && (f.kind === "datetime" || f.role === "datetime");
+        });
+
+        var PRIMARY_AXIS_SORT_ORDER = [
+          "position_asc", "position_desc",
+          "label_asc", "label_desc",
+          "sum_asc", "sum_desc",
+          "manual",
+        ];
+        var PRIMARY_SORT_LABELS = {
+          position_asc: "位置升序", position_desc: "位置降序",
+          label_asc: "字母升序", label_desc: "字母降序",
+          sum_asc: "金额升序", sum_desc: "金额降序",
+          manual: "手动",
+        };
+        var AXIS_NAME_LABELS = { none: "不显示", x: "X 轴", y: "Y 轴", both: "两者" };
+
+        var pickerTitle = computed(function () {
+          var titles = {
+            source: "来源", primary_axis: "X 轴字段", secondary_axis: "分组依据",
+            metric: "聚合方式", aggregate_field: "数值字段", date_group: "时间粒度",
+            primary_sort: "X 轴排序", secondary_sort: "分组排序",
+            axis_name_display: "轴名称",
+          };
+          return titles[activePicker.value] || "选择";
+        });
+
+        var pickerOptions = computed(function () {
+          var kind = activePicker.value;
+          var cfg = widgetForm.value.config || {};
+          if (kind === "source") {
+            return (metadata.value.sources || []).map(function (s) {
+              return { key: s.key, label: s.label, active: widgetForm.value.source_key === s.key };
+            });
+          }
+          if (kind === "primary_axis") {
+            return primaryAxisFields.value.map(function (f) {
+              return { key: f.key, label: f.label, active: cfg.primary_axis_field === f.key };
+            });
+          }
+          if (kind === "secondary_axis") {
+            var opts = [{ key: "", label: "无", active: !cfg.secondary_axis_field }];
+            secondaryAxisFields.value.forEach(function (f) {
+              opts.push({ key: f.key, label: f.label, active: cfg.secondary_axis_field === f.key });
+            });
+            return opts;
+          }
+          if (kind === "metric") {
+            return (metadata.value.metrics || []).map(function (m) {
+              return { key: m, label: metricLabel(m), active: cfg.metric === m };
+            });
+          }
+          if (kind === "aggregate_field") {
+            return numericFields.value.map(function (f) {
+              return { key: f.key, label: f.label, active: cfg.aggregate_field === f.key };
+            });
+          }
+          if (kind === "date_group") {
+            return (metadata.value.date_groups || ["day", "week", "month", "year"]).map(function (g) {
+              return { key: g, label: g, active: cfg.date_group === g };
+            });
+          }
+          if (kind === "primary_sort") {
+            var sorts = metadata.value.primary_axis_sorts || PRIMARY_AXIS_SORT_ORDER;
+            return sorts.map(function (s) {
+              return {
+                key: s,
+                label: PRIMARY_SORT_LABELS[s] || s,
+                active: cfg.primary_axis_sort === s,
+                hasSubview: s === "manual",
+              };
+            });
+          }
+          if (kind === "secondary_sort") {
+            return (metadata.value.secondary_axis_sorts || ["label_asc", "label_desc"]).map(function (s) {
+              return { key: s, label: s === "label_desc" ? "标签降序" : "标签升序", active: cfg.secondary_axis_sort === s };
+            });
+          }
+          if (kind === "axis_name_display") {
+            return (metadata.value.axis_name_displays || ["none", "x", "y", "both"]).map(function (v) {
+              return { key: v, label: AXIS_NAME_LABELS[v] || v, active: cfg.axis_name_display === v };
+            });
+          }
+          return [];
         });
 
         var filteredColorRows = computed(function () {
@@ -433,6 +553,103 @@
           };
         }
 
+        function suggestNextLayout(tab) {
+          var widgets = (tab && tab.widgets) || [];
+          var maxBottom = 0;
+          widgets.forEach(function (w) {
+            var bottom = (Number(w.y) || 0) + (Number(w.h) || 3);
+            if (bottom > maxBottom) maxBottom = bottom;
+          });
+          return { x: 0, y: maxBottom, w: 6, h: 5 };
+        }
+
+        function gridMetrics(grid) {
+          var rect = grid.getBoundingClientRect();
+          var gap = 12;
+          var rowH = 52;
+          var colW = (rect.width - gap * 11) / 12;
+          return { rect: rect, gap: gap, rowH: rowH, colW: colW };
+        }
+
+        function pointerToGrid(grid, clientX, clientY, spanW) {
+          var m = gridMetrics(grid);
+          var cellW = m.colW + m.gap;
+          var cellH = m.rowH + m.gap;
+          var relX = clientX - m.rect.left;
+          var relY = clientY - m.rect.top;
+          var x = Math.floor(relX / cellW);
+          var y = Math.floor(relY / cellH);
+          x = Math.max(0, Math.min(11, x));
+          x = Math.min(x, 12 - Math.max(1, spanW || 1));
+          y = Math.max(0, y);
+          return { x: x, y: y };
+        }
+
+        function findWidgetById(id) {
+          var tab = activeTab.value;
+          if (!tab || !tab.widgets || id == null) return null;
+          for (var i = 0; i < tab.widgets.length; i++) {
+            if (tab.widgets[i].id === id) return tab.widgets[i];
+          }
+          return null;
+        }
+
+        function onCardDragMove(evt) {
+          if (!dragState || evt.pointerId !== dragState.pointerId) return;
+          var widget = findWidgetById(dragState.widgetId);
+          if (!widget) return;
+          var pos = pointerToGrid(dragState.grid, evt.clientX, evt.clientY, dragState.w);
+          widget.x = pos.x;
+          widget.y = pos.y;
+        }
+
+        function onCardDragEnd(evt) {
+          if (!dragState || evt.pointerId !== dragState.pointerId) return;
+          document.removeEventListener("pointermove", onCardDragMove);
+          document.removeEventListener("pointerup", onCardDragEnd);
+          document.removeEventListener("pointercancel", onCardDragEnd);
+          var widget = findWidgetById(dragState.widgetId);
+          var wid = dragState.widgetId;
+          dragState = null;
+          dragWidgetId.value = null;
+          if (!widget || wid == null) return;
+          api("PUT", "/api/rms/dashboard-widgets/" + wid, {
+            title: widget.title,
+            widget_type: widget.widget_type,
+            source_key: widget.source_key || "",
+            config: widget.config,
+            x: widget.x,
+            y: widget.y,
+            w: widget.w,
+            h: widget.h,
+          }).then(function () {
+            return loadBoards();
+          }).catch(function (e) {
+            error.value = e.message || String(e);
+          });
+        }
+
+        function onCardHeadPointerDown(item, evt) {
+          if (!editMode.value || !canWrite.value || item.isExtra) return;
+          if (evt.button !== 0) return;
+          if (evt.target.closest(".card-actions")) return;
+          var w = item.widget;
+          if (!w || w.id == null) return;
+          var grid = evt.currentTarget.closest(".dash-grid");
+          if (!grid) return;
+          evt.preventDefault();
+          dragState = {
+            widgetId: w.id,
+            w: w.w || 6,
+            grid: grid,
+            pointerId: evt.pointerId,
+          };
+          dragWidgetId.value = w.id;
+          document.addEventListener("pointermove", onCardDragMove);
+          document.addEventListener("pointerup", onCardDragEnd);
+          document.addEventListener("pointercancel", onCardDragEnd);
+        }
+
         function typeLabel(t) { return KIT.TYPE_LABELS[t] || t; }
         function typeIcon(t) { return KIT.TYPE_ICONS[t] || "▢"; }
         function sourceLabel(key) {
@@ -440,12 +657,29 @@
           return s ? s.label : "";
         }
         function metricLabel(m) { return KIT.METRIC_LABELS[m] || m; }
+        function fieldLabel(key) {
+          if (!key) return "";
+          var f = sourceFields.value.find(function (x) { return x.key === key; });
+          return f ? f.label : key;
+        }
+        function primarySortLabel(s) { return PRIMARY_SORT_LABELS[s] || s; }
+        function secondarySortLabel(s) { return s === "label_desc" ? "标签降序" : "标签升序"; }
+        function axisNameDisplayLabel(v) { return AXIS_NAME_LABELS[v] || v; }
+        function widgetPalette(cfg) { return KIT.widgetPalette(cfg); }
+        function selectedShade(cfg) { return KIT.selectedShade(cfg); }
         function extraRenderLabel(render) { return KIT.extraRenderLabel(render); }
         function themeColor(w) { return KIT.themeOf((w && w.config) || {}).base; }
         function showLegend(w) { return (w.config || {}).show_legend !== false; }
         function legendOf(w) {
           var d = widgetData.value[w.id];
-          if (!d || d.kind !== "series") return [];
+          if (!d) return [];
+          if (d.kind === "grouped_series") {
+            var keys = d.keys || [];
+            return keys.map(function (k, i) {
+              return { label: k, value: "", color: KIT.shadeRamp(w.config || {}, keys.length)[i] };
+            });
+          }
+          if (d.kind !== "series") return [];
           var colors = KIT.shadeRamp(w.config || {}, (d.labels || []).length);
           return (d.labels || []).map(function (lab, i) {
             return { label: lab, value: (d.values || [])[i], color: colors[i] };
@@ -554,42 +788,140 @@
           });
         }
 
-        function renderVisibleCharts() {
+        function renderSingleWidget(w, opts) {
+          opts = opts || {};
+          if (!chartsAvailable() || !w) return;
+          var block = widgetBlock(w);
+          var rmsId = chartCanvasId(w);
+
+          if (block === "chart_pipeline") {
+            renderPipelineChart(rmsId);
+            return;
+          }
+          if (block === "chart_history_pass") {
+            renderHistoryChart(rmsId);
+            return;
+          }
+          if (block === "chart_recruiter") {
+            renderRecruiterChart(rmsId);
+            return;
+          }
+
+          if (KIT.CHART_WIDGET_TYPES.indexOf(w.widget_type) >= 0) {
+            var wd = widgetData.value[w.id];
+            if (!wd) return;
+            var animate = opts.animate !== false;
+            KIT.renderCrmChart(chartInstances, destroyChartKey, w, wd, { viewIndex: null, animate: animate });
+            var views = (w.config && w.config.extra_views) || [];
+            views.forEach(function (ev, idx) {
+              KIT.renderCrmChart(chartInstances, destroyChartKey, w, wd, {
+                render: ev.render,
+                viewIndex: idx,
+                canvasId: KIT.chartCanvasId(w, idx),
+                limit: ev.limit != null ? ev.limit : 6,
+                animate: animate,
+              });
+            });
+          }
+        }
+
+        function renderVisibleCharts(opts) {
+          opts = opts || {};
           if (!chartsAvailable()) return;
           var tab = activeTab.value;
           if (!tab || !tab.widgets) return;
 
           tab.widgets.forEach(function (w) {
-            var block = widgetBlock(w);
-            var rmsId = chartCanvasId(w);
+            renderSingleWidget(w, opts);
+          });
+        }
 
-            if (block === "chart_pipeline") {
-              renderPipelineChart(rmsId);
-              return;
-            }
-            if (block === "chart_history_pass") {
-              renderHistoryChart(rmsId);
-              return;
-            }
-            if (block === "chart_recruiter") {
-              renderRecruiterChart(rmsId);
-              return;
-            }
+        function scheduleChartRenderBatch() {
+          if (chartRenderBatchTimer) clearTimeout(chartRenderBatchTimer);
+          chartRenderBatchTimer = setTimeout(function () {
+            chartRenderBatchTimer = null;
+            nextTick(function () { renderVisibleCharts({ animate: false }); });
+          }, 48);
+        }
 
-            if (KIT.CHART_WIDGET_TYPES.indexOf(w.widget_type) >= 0) {
-              var wd = widgetData.value[w.id];
-              if (!wd) return;
-              KIT.renderCrmChart(chartInstances, destroyChartKey, w, wd, { viewIndex: null });
-              var views = (w.config && w.config.extra_views) || [];
-              views.forEach(function (ev, idx) {
-                KIT.renderCrmChart(chartInstances, destroyChartKey, w, wd, {
-                  render: ev.render,
-                  viewIndex: idx,
-                  canvasId: KIT.chartCanvasId(w, idx),
-                  limit: ev.limit != null ? ev.limit : 6,
-                });
-              });
-            }
+        function syncActiveWidgetFromForm(res) {
+          var f = widgetForm.value;
+          var tab = activeTab.value;
+          if (!tab) return;
+          if (!tab.widgets) tab.widgets = [];
+          var payload = {
+            id: f.id || (res && res.id),
+            title: f.title,
+            widget_type: f.widget_type,
+            source_key: f.source_key || "",
+            config: buildConfig(),
+            x: f.x,
+            y: f.y,
+            w: f.w,
+            h: f.h,
+          };
+          if (res && typeof res === "object") {
+            Object.assign(payload, {
+              id: res.id != null ? res.id : payload.id,
+              title: res.title != null ? res.title : payload.title,
+              widget_type: res.widget_type != null ? res.widget_type : payload.widget_type,
+              source_key: res.source_key != null ? res.source_key : payload.source_key,
+              config: res.config != null ? res.config : payload.config,
+              x: res.x != null ? res.x : payload.x,
+              y: res.y != null ? res.y : payload.y,
+              w: res.w != null ? res.w : payload.w,
+              h: res.h != null ? res.h : payload.h,
+            });
+          }
+          var idx = tab.widgets.findIndex(function (x) { return x.id === payload.id; });
+          if (idx >= 0) {
+            Object.assign(tab.widgets[idx], payload);
+          } else if (payload.id) {
+            tab.widgets.push(payload);
+          }
+        }
+
+        function suppressWidgetWatchPersist() {
+          skipWidgetWatchPersist += 1;
+          nextTick(function () {
+            skipWidgetWatchPersist -= 1;
+          });
+        }
+
+        function refreshWidgetChart(widgetId, opts) {
+          opts = opts || {};
+          var tab = activeTab.value;
+          if (!tab || !tab.widgets || !widgetId) return Promise.resolve();
+          var w = tab.widgets.find(function (x) { return x.id === widgetId; });
+          if (!w) return Promise.resolve();
+
+          if (widgetRefreshTimers[widgetId]) {
+            clearTimeout(widgetRefreshTimers[widgetId]);
+          }
+
+          return new Promise(function (resolve) {
+            widgetRefreshTimers[widgetId] = setTimeout(function () {
+              delete widgetRefreshTimers[widgetId];
+              var run = function () {
+                if (widgetBlock(w)) {
+                  return loadDashboard().then(function () {
+                    return nextTick();
+                  }).then(function () {
+                    renderSingleWidget(w, { animate: opts.animate !== false });
+                  });
+                }
+                if (KIT.CHART_WIDGET_TYPES.indexOf(w.widget_type) < 0) return Promise.resolve();
+                return api("GET", "/api/rms/dashboard-widgets/" + widgetId + "/data")
+                  .then(function (d) {
+                    widgetData.value[widgetId] = d;
+                    return nextTick();
+                  })
+                  .then(function () {
+                    renderSingleWidget(w, { animate: opts.animate !== false });
+                  });
+              };
+              run().then(resolve).catch(resolve);
+            }, 32);
           });
         }
 
@@ -600,7 +932,7 @@
             api("GET", "/api/rms/dashboard-widgets/" + w.id + "/data")
               .then(function (d) {
                 widgetData.value[w.id] = d;
-                nextTick(function () { renderVisibleCharts(); });
+                scheduleChartRenderBatch();
               })
               .catch(function () {
                 widgetData.value[w.id] = { status: "error" };
@@ -661,7 +993,7 @@
               return nextTick();
             })
             .then(function () {
-              renderVisibleCharts();
+              renderVisibleCharts({ animate: false });
             })
             .catch(function (e) {
               error.value = e.message || String(e);
@@ -818,6 +1150,7 @@
 
         function flushPersistWidget() {
           clearWidgetAutosaveTimer();
+          suppressWidgetWatchPersist();
           if (!canAutosaveWidget()) return Promise.resolve();
           if (widgetPersistInFlight) {
             widgetPersistQueued = true;
@@ -841,11 +1174,17 @@
             : api("PUT", "/api/rms/dashboard-widgets/" + f.id, payload);
           return req
             .then(function (res) {
-              if (isNew && res && res.id) widgetForm.value.id = res.id;
-              return loadBoards();
-            })
-            .then(function () {
-              reloadActiveTabData();
+              if (isNew && res && res.id) {
+                skipWidgetWatchPersist += 1;
+                widgetForm.value.id = res.id;
+                skipWidgetWatchPersist -= 1;
+              }
+              syncActiveWidgetFromForm(res);
+              var wid = widgetForm.value.id;
+              if (!wid) return nextTick();
+              return nextTick().then(function () {
+                return refreshWidgetChart(wid, { animate: !isNew });
+              });
             })
             .catch(function (e) {
               error.value = e.message || String(e);
@@ -859,21 +1198,29 @@
             });
         }
 
+        function syncChatbotForPanel(open) {
+          var chatShell = document.getElementById("handbook-assistant");
+          if (!chatShell) return;
+          if (open) {
+            chatbotWasVisible.value = !chatShell.classList.contains("hidden");
+            if (window.crmHideHandbookAssistant) window.crmHideHandbookAssistant();
+            return;
+          }
+          if (chatbotWasVisible.value) {
+            chatShell.classList.remove("hidden");
+            chatbotWasVisible.value = false;
+          }
+        }
+
         function openWidgetPanel(w) {
+          panelView.value = "main";
+          activePicker.value = null;
           if (w) {
-            var base = blankWidget();
-            var mergedCfg = Object.assign(
-              {},
-              base.config || {},
-              w.config || {},
-              {
-                filters: (w.config && w.config.filters) ? w.config.filters.map(function (f) { return Object.assign({}, f); }) : [],
-                extra_views: (w.config && w.config.extra_views) ? w.config.extra_views.map(function (ev) { return Object.assign({}, ev); }) : [],
-              }
-            );
+            var mergedCfg = KIT.normalizeWidgetConfig(Object.assign({}, w.config || {}, {
+              filters: (w.config && w.config.filters) ? w.config.filters.map(function (f) { return Object.assign({}, f); }) : [],
+              extra_views: (w.config && w.config.extra_views) ? w.config.extra_views.map(function (ev) { return Object.assign({}, ev); }) : [],
+            }));
             if (!mergedCfg.block) mergedCfg.block = "kpi_jobs";
-            if (!mergedCfg.color) mergedCfg.color = "green";
-            if (mergedCfg.color_shade == null) mergedCfg.color_shade = 2;
             widgetForm.value = {
               id: w.id,
               title: w.title,
@@ -887,7 +1234,12 @@
             };
             rosterScope.value = mergedCfg.client_id != null ? "client" : "all";
           } else {
+            var next = suggestNextLayout(activeTab.value);
             widgetForm.value = blankWidget();
+            widgetForm.value.x = next.x;
+            widgetForm.value.y = next.y;
+            widgetForm.value.w = next.w;
+            widgetForm.value.h = next.h;
             rosterScope.value = "all";
           }
           colorSearch.value = "";
@@ -895,14 +1247,257 @@
           panelUserEdited.value = !!w;
           panelAutosaveReady.value = false;
           panelOpen.value = true;
+          syncChatbotForPanel(true);
           nextTick(function () { panelAutosaveReady.value = true; });
         }
         function closePanel() {
           panelAutosaveReady.value = false;
           panelUserEdited.value = false;
+          panelView.value = "main";
+          activePicker.value = null;
           clearWidgetAutosaveTimer();
           panelOpen.value = false;
           colorPickerOpen.value = false;
+          syncChatbotForPanel(false);
+        }
+        function openPicker(kind) {
+          activePicker.value = kind;
+          panelView.value = "picker";
+        }
+        function openPrimarySort() {
+          if (widgetForm.value.config && widgetForm.value.config.primary_axis_sort === "manual") {
+            openManualOrder();
+            return;
+          }
+          openPicker("primary_sort");
+        }
+        function onPickerSelect(opt) {
+          if (activePicker.value === "primary_sort" && opt.key === "manual") {
+            openManualOrder();
+            return;
+          }
+          applyPicker(opt.key);
+        }
+        var manualOrderEntrySeq = 0;
+        function manualOrderEntry(label) {
+          manualOrderEntrySeq += 1;
+          return { id: "mo-" + manualOrderEntrySeq, label: String(label) };
+        }
+        function manualOrderLabelsFromEntries(entries) {
+          return (entries || []).map(function (e) { return e.label; });
+        }
+        function manualOrderEntriesFromLabels(labels) {
+          return (labels || []).map(function (label) { return manualOrderEntry(label); });
+        }
+        function mergeManualOrderLabels(saved, dataLabels) {
+          var seen = {};
+          var merged = [];
+          (saved || []).forEach(function (label) {
+            var s = String(label || "").trim();
+            if (!s || seen[s]) return;
+            seen[s] = true;
+            merged.push(s);
+          });
+          (dataLabels || []).forEach(function (label) {
+            var s = String(label || "").trim();
+            if (!s || seen[s]) return;
+            seen[s] = true;
+            merged.push(s);
+          });
+          return merged;
+        }
+        function loadManualOrderItems() {
+          manualOrderLoading.value = true;
+          var cfg = widgetForm.value.config || {};
+          var saved = Array.isArray(cfg.primary_axis_order) ? cfg.primary_axis_order.slice() : [];
+          var dataLabels = [];
+          var wid = widgetForm.value.id;
+          if (wid) {
+            var cached = widgetData.value[wid];
+            if (cached && Array.isArray(cached.labels)) {
+              dataLabels = cached.labels.slice();
+            }
+            return api("GET", "/api/rms/dashboard-widgets/" + wid + "/data")
+              .then(function (data) {
+                if (data && Array.isArray(data.labels)) dataLabels = data.labels.slice();
+              })
+              .catch(function () {})
+              .finally(function () {
+                var merged = mergeManualOrderLabels(saved, dataLabels);
+                manualOrderItems.value = manualOrderEntriesFromLabels(merged);
+                if (!widgetForm.value.config) widgetForm.value.config = {};
+                widgetForm.value.config.primary_axis_order = merged.slice();
+                manualOrderLoading.value = false;
+              });
+          }
+          var merged = mergeManualOrderLabels(saved, dataLabels);
+          manualOrderItems.value = manualOrderEntriesFromLabels(merged);
+          if (!widgetForm.value.config) widgetForm.value.config = {};
+          widgetForm.value.config.primary_axis_order = merged.slice();
+          manualOrderLoading.value = false;
+          return Promise.resolve();
+        }
+        function openManualOrder() {
+          if (!widgetForm.value.config) widgetForm.value.config = {};
+          widgetForm.value.config.primary_axis_sort = "manual";
+          widgetForm.value.config.sort = "label_asc";
+          activePicker.value = "primary_sort";
+          panelView.value = "manual_order";
+          loadManualOrderItems();
+        }
+        function backFromManualOrder() {
+          resetManualDrag();
+          activePicker.value = "primary_sort";
+          panelView.value = "picker";
+        }
+        function manualOrderPillStyle(label) {
+          return KIT.tagPillStyle(label);
+        }
+        function manualDragGhostStyle() {
+          return {
+            left: manualDragGhostPos.x + "px",
+            top: manualDragGhostPos.y + "px",
+          };
+        }
+        function manualOrderRowStyle(idx) {
+          if (manualDragIndex.value == null) return {};
+          var from = manualDragIndex.value;
+          var to = manualDragOverIndex.value;
+          var h = manualDragRowHeight.value || 36;
+          if (idx === from) return {};
+          var ty = 0;
+          if (from < to && idx > from && idx <= to) ty = -h;
+          else if (from > to && idx >= to && idx < from) ty = h;
+          if (!ty) return {};
+          return { transform: "translateY(" + ty + "px)" };
+        }
+        function resetManualDrag() {
+          manualDragState = null;
+          manualDragIndex.value = null;
+          manualDragOverIndex.value = null;
+          manualDragGhostLabel.value = "";
+          manualDragGhostPillStyle.value = {};
+        }
+        function commitManualReorder(fromIdx, toIdx) {
+          if (fromIdx === toIdx) return;
+          var items = manualOrderItems.value.slice();
+          var moved = items.splice(fromIdx, 1)[0];
+          items.splice(toIdx, 0, moved);
+          manualOrderItems.value = items;
+          var labels = manualOrderLabelsFromEntries(items);
+          if (!widgetForm.value.config) widgetForm.value.config = {};
+          widgetForm.value.config.primary_axis_order = labels;
+          widgetForm.value.config.primary_axis_sort = "manual";
+          widgetForm.value.config.sort = "label_asc";
+        }
+        function manualDropIndex(clientY) {
+          var list = document.querySelector(".manual-order-list");
+          if (!list) return manualDragIndex.value != null ? manualDragIndex.value : 0;
+          var rows = list.querySelectorAll(".manual-order-row");
+          if (!rows.length) return 0;
+          for (var i = 0; i < rows.length; i++) {
+            var rect = rows[i].getBoundingClientRect();
+            if (clientY < rect.top + rect.height / 2) return i;
+          }
+          return rows.length - 1;
+        }
+        function onManualPointerMove(evt) {
+          if (!manualDragState || evt.pointerId !== manualDragState.pointerId) return;
+          manualDragGhostPos.x = evt.clientX - manualDragState.offsetX;
+          manualDragGhostPos.y = evt.clientY - manualDragState.offsetY;
+          var toIdx = manualDropIndex(evt.clientY);
+          if (toIdx !== manualDragOverIndex.value) manualDragOverIndex.value = toIdx;
+        }
+        function onManualPointerEnd(evt) {
+          if (!manualDragState || evt.pointerId !== manualDragState.pointerId) return;
+          document.removeEventListener("pointermove", onManualPointerMove);
+          document.removeEventListener("pointerup", onManualPointerEnd);
+          document.removeEventListener("pointercancel", onManualPointerEnd);
+          var fromIdx = manualDragState.fromIdx;
+          var toIdx = manualDragOverIndex.value != null ? manualDragOverIndex.value : fromIdx;
+          commitManualReorder(fromIdx, toIdx);
+          resetManualDrag();
+          flushPersistWidget();
+        }
+        function onManualHandlePointerDown(idx, ev) {
+          if (ev.button !== 0) return;
+          ev.preventDefault();
+          var row = ev.target.closest(".manual-order-row");
+          if (!row) return;
+          var pill = row.querySelector(".manual-order-pill");
+          if (!pill) return;
+          var rowRect = row.getBoundingClientRect();
+          var pillRect = pill.getBoundingClientRect();
+          var list = row.closest(".manual-order-list");
+          var gap = 0;
+          if (list) gap = parseFloat(getComputedStyle(list).rowGap || getComputedStyle(list).gap || "0") || 0;
+          manualDragRowHeight.value = rowRect.height + gap;
+          manualDragState = {
+            fromIdx: idx,
+            pointerId: ev.pointerId,
+            offsetX: ev.clientX - pillRect.left,
+            offsetY: ev.clientY - pillRect.top,
+          };
+          manualDragIndex.value = idx;
+          manualDragOverIndex.value = idx;
+          manualDragGhostLabel.value = manualOrderItems.value[idx].label || "";
+          manualDragGhostPillStyle.value = manualOrderPillStyle(manualDragGhostLabel.value);
+          manualDragGhostPos.x = pillRect.left;
+          manualDragGhostPos.y = pillRect.top;
+          document.addEventListener("pointermove", onManualPointerMove);
+          document.addEventListener("pointerup", onManualPointerEnd);
+          document.addEventListener("pointercancel", onManualPointerEnd);
+          if (ev.target.setPointerCapture) {
+            try { ev.target.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+          }
+        }
+        function applyPicker(key) {
+          if (!widgetForm.value.config) widgetForm.value.config = {};
+          var cfg = widgetForm.value.config;
+          var kind = activePicker.value;
+          if (kind === "source") {
+            if (key !== widgetForm.value.source_key) {
+              widgetForm.value.source_key = key;
+              cfg.primary_axis_field = "";
+              cfg.group_by = "";
+              cfg.secondary_axis_field = "";
+              cfg.date_group = "";
+              cfg.filters = [];
+            }
+          } else if (kind === "primary_axis") {
+            cfg.primary_axis_field = key;
+            cfg.group_by = key;
+            var f = sourceFields.value.find(function (x) { return x.key === key; });
+            if (f && (f.kind === "datetime" || f.role === "datetime") && !cfg.date_group) {
+              cfg.date_group = "month";
+            } else if (!f || (f.kind !== "datetime" && f.role !== "datetime")) {
+              cfg.date_group = "";
+            }
+          } else if (kind === "secondary_axis") {
+            cfg.secondary_axis_field = key;
+          } else if (kind === "metric") {
+            cfg.metric = key;
+          } else if (kind === "aggregate_field") {
+            cfg.aggregate_field = key;
+            cfg.field = key;
+          } else if (kind === "date_group") {
+            cfg.date_group = key;
+          } else if (kind === "primary_sort") {
+            cfg.primary_axis_sort = key;
+            cfg.sort = KIT.normalizeWidgetConfig(cfg).sort;
+          } else if (kind === "secondary_sort") {
+            cfg.secondary_axis_sort = key;
+          } else if (kind === "axis_name_display") {
+            cfg.axis_name_display = key;
+          }
+          panelView.value = "main";
+          activePicker.value = null;
+          flushPersistWidget();
+        }
+        function toggleGroupMode(ev) {
+          if (!widgetForm.value.config) widgetForm.value.config = {};
+          widgetForm.value.config.group_mode = ev.target.checked ? "stacked" : "grouped";
+          flushPersistWidget();
         }
         function selectWidgetType(t) {
           if (widgetForm.value.widget_type === t) return;
@@ -914,6 +1509,10 @@
           }
           if (t === "roster_summary") {
             widgetForm.value.source_key = "roster_entries";
+          }
+          if (t === "pie" || t === "number") {
+            widgetForm.value.config.secondary_axis_field = "";
+            widgetForm.value.config.group_mode = "stacked";
           }
           flushPersistWidget();
         }
@@ -990,11 +1589,7 @@
           api("PUT", "/api/rms/dashboard-widgets/" + w.id, payload)
             .then(function () {
               w.config = payload.config;
-              return api("GET", "/api/rms/dashboard-widgets/" + w.id + "/data");
-            })
-            .then(function (d) {
-              widgetData.value[w.id] = d;
-              nextTick(function () { renderVisibleCharts(); });
+              return refreshWidgetChart(w.id, { animate: true });
             })
             .catch(function (e) {
               error.value = e.message || String(e);
@@ -1011,7 +1606,7 @@
         });
         watch(editMode, function () {
           destroyAllCharts();
-          nextTick(function () { renderVisibleCharts(); });
+          nextTick(function () { renderVisibleCharts({ animate: false }); });
         });
         watch(rosterScope, function () {
           if (!panelAutosaveReady.value) return;
@@ -1020,10 +1615,13 @@
         });
         watch(widgetForm, function () {
           if (!panelAutosaveReady.value) return;
+          if (skipWidgetWatchPersist > 0) return;
           panelUserEdited.value = true;
           schedulePersistWidget(420);
         }, { deep: true });
-        watch(function () { return [widgetForm.value.widget_type, widgetForm.value.config && widgetForm.value.config.group_by]; }, function () {
+        watch(function () {
+          return widgetForm.value.config && (widgetForm.value.config.primary_axis_field || widgetForm.value.config.group_by);
+        }, function () {
           if (isDateGroup.value && !(widgetForm.value.config && widgetForm.value.config.date_group)) {
             widgetForm.value.config.date_group = "month";
           }
@@ -1095,9 +1693,15 @@
           displayItems,
           editMode,
           canWrite,
+          dragWidgetId,
+          onCardHeadPointerDown,
           showDashboardModal,
           showTabModal,
           panelOpen,
+          panelView,
+          activePicker,
+          manualOrderItems,
+          manualOrderLoading,
           widgetForm,
           dashboardForm,
           tabForm,
@@ -1159,6 +1763,9 @@
           richTitle,
           richBody,
           needsDataSource,
+          isDataWidget,
+          chartTypePills,
+          supportsSecondary,
           needsField,
           needsGroupBy,
           isChart,
@@ -1167,12 +1774,35 @@
           sourceFields,
           numericFields,
           groupByFields,
+          primaryAxisFields,
           isDateGroup,
+          pickerTitle,
+          pickerOptions,
           filteredColorRows,
           selectedColorRowLabel,
           isColorSwatchActive,
           pickColor,
           closeColorPicker,
+          fieldLabel,
+          primarySortLabel,
+          secondarySortLabel,
+          axisNameDisplayLabel,
+          widgetPalette,
+          selectedShade,
+          openPicker,
+          openPrimarySort,
+          onPickerSelect,
+          openManualOrder,
+          backFromManualOrder,
+          onManualHandlePointerDown,
+          manualOrderPillStyle,
+          manualOrderRowStyle,
+          manualDragGhostStyle,
+          manualDragIndex,
+          manualDragGhostLabel,
+          manualDragGhostPillStyle,
+          applyPicker,
+          toggleGroupMode,
           widgetPalette: KIT.widgetPalette,
           selectedShade: KIT.selectedShade,
         };

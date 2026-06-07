@@ -89,6 +89,27 @@ DEFAULT_COLOR_SHADE = 2
 SORT_MODES: FrozenSet[str] = frozenset({"label_asc", "label_desc", "value_asc", "value_desc"})
 DEFAULT_SORT = "value_desc"
 
+AXIS_SORT_MODES: FrozenSet[str] = frozenset({
+    "position_asc", "position_desc",
+    "label_asc", "label_desc",
+    "sum_asc", "sum_desc",
+    "manual",
+})
+PRIMARY_AXIS_SORT_ORDER: Tuple[str, ...] = (
+    "position_asc", "position_desc",
+    "label_asc", "label_desc",
+    "sum_asc", "sum_desc",
+    "manual",
+)
+SECONDARY_AXIS_SORT_MODES: FrozenSet[str] = frozenset({"label_asc", "label_desc"})
+GROUP_MODES: FrozenSet[str] = frozenset({"stacked", "grouped"})
+AXIS_NAME_DISPLAY: FrozenSet[str] = frozenset({"none", "x", "y", "both"})
+DEFAULT_PRIMARY_AXIS_SORT = "position_asc"
+DEFAULT_SECONDARY_AXIS_SORT = "label_asc"
+DEFAULT_GROUP_MODE = "stacked"
+DEFAULT_AXIS_NAME_DISPLAY = "none"
+DEFAULT_DATE_GROUP = "month"
+
 
 @dataclass(frozen=True)
 class SourceFieldDef:
@@ -320,11 +341,35 @@ def get_field(source_key: str, field_key: str) -> Optional[SourceFieldDef]:
     return None
 
 
+def _field_metadata(f: SourceFieldDef) -> dict:
+    if f.kind == "datetime":
+        role = "datetime"
+        metricable = False
+        sortable = True
+    elif f.kind == "numeric":
+        role = "numeric"
+        metricable = True
+        sortable = False
+    else:
+        role = "dimension"
+        metricable = False
+        sortable = True
+    return {
+        "key": f.key,
+        "label": f.label,
+        "kind": f.kind,
+        "role": role,
+        "filterable": True,
+        "metricable": metricable,
+        "sortable": sortable,
+    }
+
+
 def _source_to_metadata(src: DataSourceDef) -> dict:
     return {
         "key": src.key,
         "label": src.label,
-        "fields": [{"key": f.key, "label": f.label, "kind": f.kind} for f in src.fields],
+        "fields": [_field_metadata(f) for f in src.fields],
     }
 
 
@@ -349,7 +394,7 @@ def build_metadata() -> dict:
         sources.append({
             "key": src.key,
             "label": src.label,
-            "fields": [{"key": f.key, "label": f.label, "kind": f.kind} for f in src.fields],
+            "fields": [_field_metadata(f) for f in src.fields],
         })
     return {
         "sources": sources,
@@ -361,5 +406,9 @@ def build_metadata() -> dict:
         "colors": list(CHART_COLOR_ORDER),
         "color_shades": sorted(COLOR_SHADES),
         "sorts": sorted(SORT_MODES),
+        "primary_axis_sorts": list(PRIMARY_AXIS_SORT_ORDER),
+        "secondary_axis_sorts": sorted(SECONDARY_AXIS_SORT_MODES),
+        "group_modes": sorted(GROUP_MODES),
+        "axis_name_displays": sorted(AXIS_NAME_DISPLAY),
         "chart_extra_renders": sorted(CHART_EXTRA_RENDERS),
     }

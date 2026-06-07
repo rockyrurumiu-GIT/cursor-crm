@@ -93,11 +93,14 @@
 .modal-panel { background: #fff; border-radius: 14px; padding: 1.25rem; width: 90%; max-width: 420px; }
 .dash-card.editing { border-style: dashed; border-color: #d5d9de; }
 .dash-card.editing:hover { border-color: #9aa9bd; box-shadow: 0 2px 10px rgba(16,24,40,0.06); }
+.dash-card.editing.is-dragging { opacity: 0.92; z-index: 5; box-shadow: 0 8px 24px rgba(16,24,40,0.12); }
+.card-head-draggable { cursor: grab; touch-action: none; user-select: none; }
+.card-head-draggable:active { cursor: grabbing; }
 .card-actions { display: flex; gap: 0.25rem; }
 .icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: #6b7280; cursor: pointer; font-size: 0.85rem; }
 .icon-btn:hover { background: #f2f3f5; color: #1f2328; }
 .icon-btn.danger:hover { background: #fdf0f0; color: #cf222e; }
-.panel-scrim { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; justify-content: flex-end; }
+.panel-scrim { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 170; display: flex; justify-content: flex-end; }
 .config-panel { width: min(420px, 92vw); background: #fff; height: 100%; display: flex; flex-direction: column; box-shadow: -4px 0 24px rgba(16,24,40,0.12); }
 .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.1rem; border-bottom: 1px solid #eceef1; }
 .panel-head h3 { font-weight: 600; font-size: 0.95rem; }
@@ -148,6 +151,76 @@
 .dash-card-extra-view { border-color: #c5d9f0; }
 .extra-view-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 0.35rem; margin-bottom: 0.5rem; align-items: end; }
 .empty-canvas { text-align: center; color: #98a2b3; padding: 4rem 0; }
+.inspector-header { display: flex; align-items: flex-start; gap: 0.65rem; padding-bottom: 0.75rem; border-bottom: 1px solid #eceef1; margin-bottom: 0.75rem; }
+.inspector-header-icon { width: 32px; height: 32px; border-radius: 8px; background: #f2f3f5; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+.inspector-header-main { flex: 1; min-width: 0; }
+.inspector-header-main input { width: 100%; border: none; font-weight: 600; font-size: 0.95rem; padding: 0; color: #1f2328; background: transparent; }
+.inspector-header-main input:focus { outline: none; }
+.inspector-type-label { font-size: 0.72rem; color: #98a2b3; margin-top: 0.15rem; }
+.inspector-type-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.85rem; }
+.inspector-pill { padding: 0.35rem 0.55rem; border: 1px solid #e0e2e6; border-radius: 999px; font-size: 0.72rem; color: #5b6370; cursor: pointer; background: #fff; }
+.inspector-pill.active { border-color: #2563eb; background: #eff4ff; color: #1d4ed8; font-weight: 500; }
+.inspector-section { margin-bottom: 0.85rem; }
+.inspector-section-title { font-size: 0.72rem; font-weight: 600; color: #98a2b3; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.35rem; }
+.inspector-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.45rem 0; border-bottom: 1px solid #f2f3f5; font-size: 0.83rem; color: #374151; cursor: pointer; }
+.inspector-row:last-child { border-bottom: none; }
+.inspector-row-label { color: #6b7280; flex-shrink: 0; }
+.inspector-row-value { text-align: right; color: #1f2328; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inspector-row-value.muted { color: #98a2b3; }
+.inspector-range-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.35rem 0; border-bottom: 1px solid #f2f3f5; font-size: 0.83rem; }
+.inspector-range-row:last-child { border-bottom: none; }
+.inspector-range-input {
+  width: 5.5rem; text-align: right; border: 1px solid #e0e2e6; border-radius: 8px;
+  padding: 0.3rem 0.45rem; font-size: 0.82rem; color: #1f2328; background: #fff;
+}
+.inspector-range-input:focus { outline: none; border-color: #9aa9bd; }
+.inspector-range-input::placeholder { color: #98a2b3; }
+.inspector-subview { display: flex; flex-direction: column; height: 100%; }
+.inspector-subview-head { display: flex; align-items: center; gap: 0.5rem; padding-bottom: 0.65rem; border-bottom: 1px solid #eceef1; margin-bottom: 0.65rem; font-weight: 600; font-size: 0.88rem; }
+.inspector-subview-back { cursor: pointer; color: #6b7280; font-size: 0.85rem; }
+.inspector-picker-list { display: flex; flex-direction: column; gap: 0; }
+.inspector-picker-item { display: flex; align-items: center; gap: 0.45rem; padding: 0.55rem 0.4rem; border-bottom: 1px solid #f2f3f5; cursor: pointer; font-size: 0.85rem; color: #374151; }
+.inspector-picker-item:hover { background: #f8f9fa; }
+.inspector-picker-item.active { color: #1d4ed8; font-weight: 500; }
+.inspector-picker-item-main { flex: 1; min-width: 0; }
+.inspector-picker-check { color: #1d4ed8; font-size: 0.82rem; flex-shrink: 0; }
+.inspector-picker-chevron { color: #98a2b3; font-size: 1rem; line-height: 1; flex-shrink: 0; }
+.manual-order-list { display: flex; flex-direction: column; gap: 0.15rem; padding-top: 0.15rem; position: relative; }
+.manual-order-list.is-dragging .manual-order-row { transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1); }
+.manual-order-row {
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.42rem 0.35rem; border-radius: 8px;
+  cursor: default; user-select: none;
+}
+.manual-order-row:hover { background: #f7f8fa; }
+.manual-order-list.is-dragging .manual-order-row:hover { background: transparent; }
+.manual-order-row.is-source { opacity: 0.55; }
+.manual-order-handle {
+  width: 12px; height: 16px; flex-shrink: 0; cursor: grab;
+  background-image: radial-gradient(circle, #c5ccd6 1.4px, transparent 1.5px);
+  background-size: 6px 5px; background-repeat: repeat;
+  touch-action: none;
+}
+.manual-order-handle:active { cursor: grabbing; }
+.manual-order-pill {
+  display: inline-block; width: auto; max-width: none;
+  padding: 0.2rem 0.5rem; border-radius: 6px;
+  font-size: 0.78rem; font-weight: 500; line-height: 1.35;
+  white-space: nowrap;
+}
+.manual-order-pill.is-source-pill { opacity: 0; }
+.manual-order-ghost {
+  position: fixed; z-index: 220; pointer-events: none;
+  display: inline-flex; align-items: center; width: auto;
+}
+.manual-order-ghost .manual-order-pill {
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.16);
+  transform: scale(1.03);
+  max-width: none;
+  overflow: visible;
+}
+.inspector-collapsible { margin-top: 0.5rem; border-top: 1px solid #eceef1; padding-top: 0.65rem; }
+.inspector-collapsible summary { font-size: 0.72rem; font-weight: 600; color: #98a2b3; cursor: pointer; margin-bottom: 0.45rem; }
 </style>
 {% endblock %}
 {% block content %}
@@ -194,9 +267,11 @@
         <div v-if="activeTab && displayItems.length" class="dash-grid">
             <div v-for="item in displayItems" :key="item.key"
                  class="dash-card"
-                 :class="{ editing: editMode, 'dash-card-extra-view': item.isExtra }"
+                 :class="{ editing: editMode, 'dash-card-extra-view': item.isExtra, 'is-dragging': dragWidgetId === item.widget.id }"
                  :style="item.style">
-                <div class="card-head">
+                <div class="card-head"
+                     :class="{ 'card-head-draggable': editMode && canWrite && !item.isExtra }"
+                     @pointerdown="onCardHeadPointerDown(item, $event)">
                     <span v-if="item.isExtra" class="extra-view-tag">附加 · {{ extraRenderLabel(item.extraView.render) }}</span>
                     <span class="card-title">{{ item.title }}</span>
                     <div v-if="editMode && canWrite && !item.isExtra" class="card-actions">
@@ -476,119 +551,192 @@
 
     <div v-if="panelOpen" class="panel-scrim" @click.self="closePanel()">
         <aside class="config-panel">
-            <div class="panel-head">
-                <h3>{{ widgetForm.id ? '编辑组件' : '新建组件' }}</h3>
-                <span class="icon-btn" @click="closePanel()">✕</span>
-            </div>
             <div class="panel-body">
-                <div class="panel-section">
-                    <h4>类型</h4>
-                    <div class="type-grid">
-                        <div v-for="t in metadata.widget_types" :key="t"
-                             :class="['type-cell', widgetForm.widget_type === t ? 'active' : '']"
-                             @click="selectWidgetType(t)">
-                            <span style="font-size:1rem">{{ typeIcon(t) }}</span>
-                            <span>{{ typeLabel(t) }}</span>
-                        </div>
+                <!-- Filters subview -->
+                <div v-if="panelView === 'filters'" class="inspector-subview">
+                    <div class="inspector-subview-head">
+                        <span class="inspector-subview-back" @click="panelView = 'main'">← 返回</span>
+                        <span>过滤</span>
                     </div>
-                </div>
-                <div class="panel-section">
-                    <h4>基础</h4>
-                    <div class="field"><label>标题</label><input v-model="widgetForm.title" /></div>
-                </div>
-                <div v-if="widgetForm.widget_type === 'rms_block'" class="panel-section">
-                    <h4>招聘预设</h4>
-                    <div class="field"><label>内容</label>
-                        <select v-model="widgetForm.config.block">
-                            <option v-for="b in metadata.rms_blocks" :key="b.key" :value="b.key">{{ b.label }}</option>
+                    <div v-for="(f, idx) in widgetForm.config.filters" :key="idx" class="filter-row">
+                        <select v-model="f.field">
+                            <option value="">字段</option>
+                            <option v-for="fld in sourceFields" :key="fld.key" :value="fld.key">{{ fld.label }}</option>
                         </select>
+                        <select v-model="f.op">
+                            <option value="eq">=</option>
+                            <option value="in">包含于</option>
+                            <option value="contains">包含</option>
+                        </select>
+                        <input v-model="f.value" :placeholder="f.op === 'in' ? '逗号分隔' : '值'" />
+                        <span class="filter-del" @click="removeFilter(idx)">✕</span>
+                    </div>
+                    <span class="add-filter" @click="addFilter()">+ 添加筛选</span>
+                </div>
+
+                <!-- Picker subview -->
+                <div v-else-if="panelView === 'picker'" class="inspector-subview">
+                    <div class="inspector-subview-head">
+                        <span class="inspector-subview-back" @click="panelView = 'main'; activePicker = null">← 返回</span>
+                        <span>{{ pickerTitle }}</span>
+                    </div>
+                    <div class="inspector-picker-list">
+                        <div v-for="opt in pickerOptions" :key="opt.key === '' ? '__empty__' : opt.key"
+                             :class="['inspector-picker-item', opt.active ? 'active' : '']"
+                             @click="onPickerSelect(opt)">
+                            <span class="inspector-picker-item-main">{{ opt.label }}</span>
+                            <span v-if="opt.active" class="inspector-picker-check">✓</span>
+                            <span v-if="opt.hasSubview" class="inspector-picker-chevron">›</span>
+                        </div>
                     </div>
                 </div>
 
-                <template v-if="isRosterSummary">
-                    <div class="panel-section">
-                        <h4>花名册概览</h4>
-                        <div class="field"><label>范围</label>
-                            <select v-model="rosterScope">
-                                <option value="all">全公司</option>
-                                <option value="client">指定客户</option>
-                            </select>
-                        </div>
-                        <div v-if="rosterScope === 'client'" class="field"><label>客户</label>
-                            <select v-model.number="widgetForm.config.client_id">
-                                <option :value="null">—</option>
-                                <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
-                            </select>
-                        </div>
-                        <div class="toggle-row"><span>包含离职</span><input type="checkbox" v-model="widgetForm.config.include_left" /></div>
+                <!-- Manual axis order subview -->
+                <div v-else-if="panelView === 'manual_order'" class="inspector-subview">
+                    <div class="inspector-subview-head">
+                        <span class="inspector-subview-back" @click="backFromManualOrder()">← 返回</span>
+                        <span>调整选项顺序</span>
                     </div>
-                </template>
+                    <div v-if="manualOrderLoading" class="state-msg">加载中…</div>
+                    <div v-else-if="!manualOrderItems.length" class="state-msg muted">暂无选项，请先配置 X 轴字段。</div>
+                    <div v-else :class="['manual-order-list', manualDragIndex != null ? 'is-dragging' : '']">
+                        <div v-for="(entry, idx) in manualOrderItems" :key="entry.id"
+                             :class="['manual-order-row', manualDragIndex === idx ? 'is-source' : '']"
+                             :style="manualOrderRowStyle(idx)">
+                            <span class="manual-order-handle"
+                                  @pointerdown="onManualHandlePointerDown(idx, $event)"></span>
+                            <span :class="['manual-order-pill', manualDragIndex === idx ? 'is-source-pill' : '']"
+                                  :style="manualOrderPillStyle(entry.label)">{{ entry.label }}</span>
+                        </div>
+                        <div v-if="manualDragIndex != null" class="manual-order-ghost" :style="manualDragGhostStyle()">
+                            <span class="manual-order-pill" :style="manualDragGhostPillStyle">{{ manualDragGhostLabel }}</span>
+                        </div>
+                    </div>
+                </div>
 
-                <template v-if="needsDataSource">
-                    <div class="panel-section">
-                        <h4>数据</h4>
-                        <div class="field"><label>数据源</label>
-                            <select v-model="widgetForm.source_key">
-                                <option value="">—</option>
-                                <option v-for="s in metadata.sources" :key="s.key" :value="s.key">{{ s.label }}</option>
-                            </select>
+                <!-- Main inspector -->
+                <template v-else>
+                    <div class="inspector-header">
+                        <span class="icon-btn" @click="closePanel()">✕</span>
+                        <div class="inspector-header-icon">{{ typeIcon(widgetForm.widget_type) }}</div>
+                        <div class="inspector-header-main">
+                            <input v-model="widgetForm.title" placeholder="组件标题" />
+                            <div class="inspector-type-label">{{ typeLabel(widgetForm.widget_type) }}</div>
                         </div>
-                        <div class="field"><label>聚合</label>
-                            <select v-model="widgetForm.config.metric">
-                                <option v-for="m in metadata.metrics" :key="m" :value="m">{{ metricLabel(m) }}</option>
-                            </select>
-                        </div>
-                        <div v-if="needsField" class="field"><label>字段</label>
-                            <select v-model="widgetForm.config.field">
-                                <option value="">—</option>
-                                <option v-for="f in numericFields" :key="f.key" :value="f.key">{{ f.label }}</option>
-                            </select>
-                        </div>
-                        <div v-if="needsGroupBy" class="field"><label>分组</label>
-                            <select v-model="widgetForm.config.group_by">
-                                <option value="">—</option>
-                                <option v-for="f in groupByFields" :key="f.key" :value="f.key">{{ f.label }}</option>
-                            </select>
-                        </div>
-                        <div v-if="isDateGroup" class="field"><label>时间粒度</label>
-                            <select v-model="widgetForm.config.date_group">
-                                <option v-for="g in metadata.date_groups" :key="g" :value="g">{{ g }}</option>
-                            </select>
-                        </div>
-                        <label style="font-size:.78rem;color:#5b6370;">筛选</label>
-                        <div v-for="(f, idx) in widgetForm.config.filters" :key="idx" class="filter-row">
-                            <select v-model="f.field">
-                                <option value="">字段</option>
-                                <option v-for="fld in sourceFields" :key="fld.key" :value="fld.key">{{ fld.label }}</option>
-                            </select>
-                            <select v-model="f.op">
-                                <option value="eq">=</option>
-                                <option value="in">包含于</option>
-                                <option value="contains">包含</option>
-                            </select>
-                            <input v-model="f.value" :placeholder="f.op === 'in' ? '逗号分隔' : '值'" />
-                            <span class="filter-del" @click="removeFilter(idx)">✕</span>
-                        </div>
-                        <span class="add-filter" @click="addFilter()">+ 添加筛选</span>
                     </div>
-                </template>
 
-                <template v-if="widgetForm.widget_type === 'iframe'">
-                    <div class="panel-section">
-                        <h4>内容</h4>
-                        <div class="field"><label>URL（仅 https）</label><input v-model="widgetForm.config.url" placeholder="https://" /></div>
+                    <div v-if="isDataWidget" class="inspector-type-pills">
+                        <span v-for="t in chartTypePills" :key="t"
+                              :class="['inspector-pill', widgetForm.widget_type === t ? 'active' : '']"
+                              @click="selectWidgetType(t)">{{ typeLabel(t) }}</span>
                     </div>
-                </template>
-                <template v-if="widgetForm.widget_type === 'rich_text'">
-                    <div class="panel-section">
-                        <h4>内容</h4>
-                        <div class="field"><textarea v-model="widgetForm.config.content" rows="5"></textarea></div>
-                    </div>
-                </template>
 
-                <template v-if="isChart">
-                    <div class="panel-section">
-                        <h4>样式</h4>
+                    <div v-if="widgetForm.widget_type === 'rms_block'" class="inspector-section">
+                        <div class="inspector-section-title">招聘预设</div>
+                        <div class="field"><select v-model="widgetForm.config.block">
+                            <option v-for="b in metadata.rms_blocks" :key="b.key" :value="b.key">{{ b.label }}</option>
+                        </select></div>
+                    </div>
+
+                    <template v-if="isRosterSummary">
+                        <div class="inspector-section">
+                            <div class="inspector-section-title">花名册概览</div>
+                            <div class="field"><label>范围</label>
+                                <select v-model="rosterScope">
+                                    <option value="all">全公司</option>
+                                    <option value="client">指定客户</option>
+                                </select>
+                            </div>
+                            <div v-if="rosterScope === 'client'" class="field"><label>客户</label>
+                                <select v-model.number="widgetForm.config.client_id">
+                                    <option :value="null">—</option>
+                                    <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                </select>
+                            </div>
+                            <div class="toggle-row"><span>包含离职</span><input type="checkbox" v-model="widgetForm.config.include_left" /></div>
+                        </div>
+                    </template>
+
+                    <template v-if="needsDataSource">
+                        <div class="inspector-section">
+                            <div class="inspector-section-title">数据</div>
+                            <div class="inspector-row" @click="openPicker('source')">
+                                <span class="inspector-row-label">来源</span>
+                                <span :class="['inspector-row-value', !widgetForm.source_key ? 'muted' : '']">{{ sourceLabel(widgetForm.source_key) || '选择来源' }}</span>
+                            </div>
+                            <div class="inspector-row" @click="panelView = 'filters'">
+                                <span class="inspector-row-label">过滤</span>
+                                <span class="inspector-row-value">{{ (widgetForm.config.filters || []).filter(function(f){return f.field;}).length || 0 }} 条</span>
+                            </div>
+                        </div>
+
+                        <div v-if="isChart" class="inspector-section">
+                            <div class="inspector-section-title">X 轴</div>
+                            <div class="inspector-row" @click="openPicker('primary_axis')">
+                                <span class="inspector-row-label">显示的数据</span>
+                                <span :class="['inspector-row-value', !widgetForm.config.primary_axis_field ? 'muted' : '']">{{ fieldLabel(widgetForm.config.primary_axis_field) || '选择字段' }}</span>
+                            </div>
+                            <div v-if="isDateGroup" class="inspector-row" @click="openPicker('date_group')">
+                                <span class="inspector-row-label">时间粒度</span>
+                                <span class="inspector-row-value">{{ widgetForm.config.date_group || 'month' }}</span>
+                            </div>
+                            <div class="inspector-row" @click="openPrimarySort()">
+                                <span class="inspector-row-label">排序</span>
+                                <span class="inspector-row-value">{{ primarySortLabel(widgetForm.config.primary_axis_sort) }}</span>
+                            </div>
+                            <div class="toggle-row"><span>忽略零值</span><input type="checkbox" v-model="widgetForm.config.omit_null_values" /></div>
+                        </div>
+
+                        <div v-if="isChart" class="inspector-section">
+                            <div class="inspector-section-title">Y 轴</div>
+                            <div class="inspector-row" @click="openPicker('metric')">
+                                <span class="inspector-row-label">显示的数据</span>
+                                <span class="inspector-row-value">{{ metricLabel(widgetForm.config.metric) }}{{ needsField ? ' · ' + fieldLabel(widgetForm.config.aggregate_field) : '' }}</span>
+                            </div>
+                            <div v-if="supportsSecondary" class="inspector-row" @click="openPicker('secondary_axis')">
+                                <span class="inspector-row-label">分组依据</span>
+                                <span :class="['inspector-row-value', !widgetForm.config.secondary_axis_field ? 'muted' : '']">{{ fieldLabel(widgetForm.config.secondary_axis_field) || '无' }}</span>
+                            </div>
+                            <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="inspector-row" @click="openPicker('secondary_sort')">
+                                <span class="inspector-row-label">分组排序</span>
+                                <span class="inspector-row-value">{{ secondarySortLabel(widgetForm.config.secondary_axis_sort) }}</span>
+                            </div>
+                            <div class="inspector-range-row">
+                                <span class="inspector-row-label">最小范围</span>
+                                <input type="text" class="inspector-range-input" v-model="widgetForm.config.range_min" placeholder="自动" inputmode="decimal" />
+                            </div>
+                            <div class="inspector-range-row">
+                                <span class="inspector-row-label">最大范围</span>
+                                <input type="text" class="inspector-range-input" v-model="widgetForm.config.range_max" placeholder="自动" inputmode="decimal" />
+                            </div>
+                        </div>
+
+                        <div v-if="!isChart && needsField" class="inspector-section">
+                            <div class="inspector-section-title">Y 轴</div>
+                            <div class="inspector-row" @click="openPicker('metric')">
+                                <span class="inspector-row-label">显示的数据</span>
+                                <span class="inspector-row-value">{{ metricLabel(widgetForm.config.metric) }}</span>
+                            </div>
+                            <div class="inspector-row" @click="openPicker('aggregate_field')">
+                                <span class="inspector-row-label">字段</span>
+                                <span class="inspector-row-value">{{ fieldLabel(widgetForm.config.aggregate_field) || '选择' }}</span>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template v-if="widgetForm.widget_type === 'iframe'">
+                        <div class="inspector-section">
+                            <div class="field"><label>URL（仅 https）</label><input v-model="widgetForm.config.url" placeholder="https://" /></div>
+                        </div>
+                    </template>
+                    <template v-if="widgetForm.widget_type === 'rich_text'">
+                        <div class="inspector-section">
+                            <div class="field"><textarea v-model="widgetForm.config.content" rows="5"></textarea></div>
+                        </div>
+                    </template>
+
+                    <div v-if="isChart" class="inspector-section">
+                        <div class="inspector-section-title">Style</div>
                         <div class="field color-picker-wrap" v-click-outside="closeColorPicker">
                             <label>颜色</label>
                             <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
@@ -611,63 +759,37 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="field"><label>排序</label>
-                            <select v-model="widgetForm.config.sort">
-                                <option value="value_desc">数值降序</option>
-                                <option value="value_asc">数值升序</option>
-                                <option value="label_asc">标签升序</option>
-                                <option value="label_desc">标签降序</option>
-                            </select>
+                        <div class="inspector-row" @click="openPicker('axis_name_display')">
+                            <span class="inspector-row-label">轴名称</span>
+                            <span class="inspector-row-value">{{ axisNameDisplayLabel(widgetForm.config.axis_name_display) }}</span>
                         </div>
+                        <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.widget_type !== 'line'" class="toggle-row">
+                            <span>堆叠条形图</span>
+                            <input type="checkbox" :checked="widgetForm.config.group_mode === 'stacked'" @change="toggleGroupMode" />
+                        </div>
+                        <div class="toggle-row"><span>数据标签</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></div>
+                        <div class="toggle-row"><span>Legend</span><input type="checkbox" v-model="widgetForm.config.display_legend" /></div>
+                        <div v-if="widgetForm.widget_type === 'pie'" class="toggle-row"><span>中心显示总计</span><input type="checkbox" v-model="widgetForm.config.show_value_center" /></div>
                         <div v-if="widgetForm.widget_type === 'horizontal_bar'" class="field">
                             <label>显示条数</label>
                             <input type="number" min="1" max="100" v-model.number="widgetForm.config.limit" />
                         </div>
-                        <div class="toggle-row"><span>显示图例</span><input type="checkbox" v-model="widgetForm.config.show_legend" /></div>
-                        <div v-if="widgetForm.widget_type === 'pie'" class="toggle-row"><span>中心显示总计</span><input type="checkbox" v-model="widgetForm.config.show_value_center" /></div>
-                        <div v-if="widgetForm.widget_type !== 'pie'" class="toggle-row"><span>显示数值标签</span><input type="checkbox" v-model="widgetForm.config.data_labels" /></div>
-                        <div class="toggle-row"><span>隐藏空值</span><input type="checkbox" v-model="widgetForm.config.hide_empty" /></div>
                     </div>
-                    <div class="panel-section">
-                        <h4>附加展示（同源数据）</h4>
-                        <p style="font-size:0.76rem;color:#98a2b3;margin:0 0 0.5rem">在同一组件数据上，于其它栅格位置再渲染环形图或横向排名。</p>
+
+                    <details v-if="isChart" class="inspector-collapsible">
+                        <summary>附加展示</summary>
                         <div v-for="(ev, evIdx) in widgetForm.config.extra_views" :key="'ev-' + evIdx" class="extra-view-row">
                             <div class="field">
-                                <label>形态</label>
                                 <select v-model="ev.render">
                                     <option v-for="r in (metadata.chart_extra_renders || [])" :key="r" :value="r">{{ extraRenderLabel(r) }}</option>
                                 </select>
                             </div>
-                            <div class="field">
-                                <label>标题（可选）</label>
-                                <input v-model="ev.title" placeholder="默认用组件标题" />
-                            </div>
-                            <div class="field" v-if="ev.render === 'horizontal_bar'">
-                                <label>条数</label>
-                                <input type="number" min="1" max="100" v-model.number="ev.limit" />
-                            </div>
-                            <span v-else class="field"></span>
-                            <span class="icon-btn danger" style="margin-bottom:0.35rem" @click="removeExtraView(evIdx)" title="删除">✕</span>
-                        </div>
-                        <div v-for="(ev, evIdx) in widgetForm.config.extra_views" :key="'evl-' + evIdx" class="type-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:0.5rem">
-                            <div class="field" style="margin:0"><label>x</label><input type="number" min="0" max="11" v-model.number="ev.x" /></div>
-                            <div class="field" style="margin:0"><label>y</label><input type="number" min="0" v-model.number="ev.y" /></div>
-                            <div class="field" style="margin:0"><label>宽</label><input type="number" min="1" max="12" v-model.number="ev.w" /></div>
-                            <div class="field" style="margin:0"><label>高</label><input type="number" min="1" v-model.number="ev.h" /></div>
+                            <div class="field"><input v-model="ev.title" placeholder="标题" /></div>
+                            <span class="icon-btn danger" @click="removeExtraView(evIdx)">✕</span>
                         </div>
                         <span class="panel-add-link" @click="addExtraView()">+ 添加附加展示</span>
-                    </div>
+                    </details>
                 </template>
-
-                <div class="panel-section">
-                    <h4>布局（栅格 12 列）</h4>
-                    <div class="layout-grid">
-                        <div class="field"><label>x</label><input v-model.number="widgetForm.x" type="number" min="0" max="11" /></div>
-                        <div class="field"><label>y</label><input v-model.number="widgetForm.y" type="number" min="0" /></div>
-                        <div class="field"><label>宽</label><input v-model.number="widgetForm.w" type="number" min="1" max="12" /></div>
-                        <div class="field"><label>高</label><input v-model.number="widgetForm.h" type="number" min="1" /></div>
-                    </div>
-                </div>
             </div>
             <div class="panel-foot">
                 <span class="panel-autosave-hint">修改后自动保存</span>
@@ -712,6 +834,6 @@
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/shared/dashboard-widget-kit.js"></script>
-<script src="/static/js/pages/rms-dashboard.js?v=rms-dashboard-twenty-5"></script>
+<script src="/static/js/shared/dashboard-widget-kit.js?v=dashboard-widget-kit-twenty-12"></script>
+<script src="/static/js/pages/rms-dashboard.js?v=rms-dashboard-twenty-12"></script>
 {% endblock %}
