@@ -15,7 +15,7 @@
     /** 大表按内容测宽时抽样行数，避免上千行卡顿 */
     const CONTENT_SAMPLE_ROWS = 48;
     const STORAGE_VERSION = 'v5';
-    const RMS_JOBS_STORAGE_VERSION = 'v10';
+    const RMS_JOBS_STORAGE_VERSION = 'v11';
     /** 候选人表列顺序重建后须 bump，避免 localStorage 列宽错位 */
     const RMS_CANDIDATES_STORAGE_VERSION = 'v2';
 
@@ -38,6 +38,19 @@
             || th.classList.contains('crm-op-col-xl');
     }
 
+    function rmsJobsOpColumnWidthPx(th) {
+        const table = th && th.closest ? th.closest('.rms-jobs-table') : null;
+        if (!table) return null;
+        const raw = getComputedStyle(table).getPropertyValue('--rms-jobs-op-col-width').trim();
+        const num = parseFloat(raw);
+        if (!Number.isFinite(num) || num <= 0) return null;
+        if (raw.includes('rem')) {
+            const remPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            return Math.round(num * remPx);
+        }
+        return Math.round(num);
+    }
+
     function opColumnWidthPx(th) {
         const narrow = readCssLengthPx('--crm-op-col-width', OP_COL_WIDTH);
         const wide = readCssLengthPx('--crm-op-col-width-wide', OP_COL_WIDTH_WIDE);
@@ -49,6 +62,10 @@
         }
         if (th && th.closest('table[data-table-id="system-users"]')) {
             return Math.round(xl * (2 / 3));
+        }
+        if (th && th.closest('.rms-jobs-table') && th.classList.contains('crm-op-col-xl')) {
+            const w = rmsJobsOpColumnWidthPx(th);
+            if (w) return w;
         }
         if (th.classList.contains('crm-op-col-xl')) return xl;
         if (th.classList.contains('crm-op-col-wide')) return wide;
@@ -182,8 +199,10 @@
     function tagOpColElement(col, th) {
         if (!col) return;
         const w = opColumnWidthPx(th);
-        col.classList.remove('crm-col-op', 'crm-col-op-wide', 'crm-col-op-xl');
-        if (th && th.classList.contains('crm-op-col-xl')) col.classList.add('crm-col-op-xl');
+        col.classList.remove('crm-col-op', 'crm-col-op-wide', 'crm-col-op-xl', 'crm-col-rms-jobs-op');
+        if (th && th.closest('.rms-jobs-table') && th.classList.contains('crm-op-col-xl')) {
+            col.classList.add('crm-col-rms-jobs-op');
+        } else if (th && th.classList.contains('crm-op-col-xl')) col.classList.add('crm-col-op-xl');
         else if (th && th.classList.contains('crm-op-col-wide')) col.classList.add('crm-col-op-wide');
         else col.classList.add('crm-col-op');
         col.style.width = `${w}px`;
@@ -574,6 +593,10 @@
         let cols = [...table.querySelectorAll('colgroup col')];
         if (cols.length !== ths.length) cols = ensureColgroup(table, ths.length);
         const { setColWidth, syncTableWidth, readColWidth } = buildColumnHelpers(table, ths, cols, {});
+        const opIdx = opColumnIndex(ths);
+        if (opIdx >= 0) {
+            setColWidth(opIdx, opColumnWidthPx(ths[opIdx]));
+        }
         const def = rmsJdDefaultWidthPx(ths[rmsJdIdx]) + COL_CONTENT_PAD;
         const current = readColWidth(rmsJdIdx);
         if (!Number.isFinite(current) || current < 120 || current > def * 2) {

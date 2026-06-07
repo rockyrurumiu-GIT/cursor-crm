@@ -357,7 +357,7 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "openApplicationDetailModal" in apps_region
     assert "openStatusHistoryModal" in apps_region
 
-    assert "Plan 34" in html
+    assert "Plan 34" not in html
     assert "占位" not in html
     assert "正在建设" not in html
     assert "Phase 2：API MVP 已接入" not in html

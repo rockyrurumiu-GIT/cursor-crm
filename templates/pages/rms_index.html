@@ -139,7 +139,12 @@
         border-collapse: separate;
         border-spacing: 0;
         --rms-jobs-jd-width: 35em;
-        --rms-jobs-op-col-width: 10.5rem;
+        --rms-jobs-op-col-width: 11rem;
+    }
+    .crm-table.rms-jobs-table col.crm-col-rms-jobs-op {
+        width: var(--rms-jobs-op-col-width) !important;
+        min-width: var(--rms-jobs-op-col-width) !important;
+        max-width: var(--rms-jobs-op-col-width) !important;
     }
     .crm-table.rms-jobs-table th.crm-sticky-right-op.crm-op-col-xl,
     .crm-table.rms-jobs-table td.crm-sticky-right-op.crm-op-col-xl {
@@ -288,8 +293,7 @@
 {% block content %}
 {% raw %}
 <div id="rms-app" class="container mx-auto max-w-[1280px] py-6 px-4 sm:px-6" v-cloak>
-    <h1 class="text-2xl font-semibold text-[#1f2328] mb-2">招聘（RMS）</h1>
-    <p class="text-[#57606a] text-sm mb-6">Plan 34：推荐流程、候选人报告、交付内审已接入；保护期完整规则与 OCR 自动填充将在后续阶段开放。</p>
+    <h1 class="text-2xl font-semibold text-[#1f2328] mb-6">招聘（RMS）</h1>
 
     <div v-if="viewMode === 'candidateReport'" class="fixed inset-0 z-[60] bg-white overflow-y-auto p-4 sm:p-6">
         <div class="max-w-6xl mx-auto">
@@ -456,10 +460,10 @@
 
     <!-- Jobs -->
     <section v-show="activeTab === 'jobs' && viewMode !== 'candidateReport'" class="rms-jobs-panel bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 flex flex-col gap-2 min-h-0 overflow-hidden">
-        <div class="rounded-lg border border-gray-200 bg-gray-50 shrink-0">
+        <div class="shrink-0">
             <div
                 v-if="!jobFilterPanelExpanded"
-                class="flex flex-wrap items-center justify-between gap-2 px-2 py-2 sm:px-3 sm:py-2.5"
+                class="flex flex-wrap items-center justify-between gap-2"
             >
                 <p class="text-sm font-semibold text-gray-700 min-w-0">
                     合计（符合筛选条件）：<span class="text-blue-700">{{ filteredJobs.length }}</span> 条
@@ -480,60 +484,42 @@
                     </button>
                 </div>
             </div>
-            <div v-else class="p-2 sm:p-3 space-y-2">
-                <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
-                    <div class="flex flex-wrap items-end gap-3 min-w-0">
-                        <label class="flex flex-col gap-0.5 text-xs">
-                            <span class="text-gray-600">岗位名称（模糊）</span>
-                            <input v-model.trim="jobFilter.title" type="text" placeholder="输入岗位名称关键词" class="crm-filter-control w-[12rem]" />
-                        </label>
-                        <p class="text-sm font-semibold text-gray-700 pb-0.5">
-                            合计（符合筛选条件）：<span class="text-blue-700">{{ filteredJobs.length }}</span> 条
-                        </p>
-                    </div>
-                    <div class="flex flex-wrap justify-end gap-1.5 lg:shrink-0">
-                        <button v-if="canWriteJobs" type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" @click="openJobModal">新建岗位</button>
-                        <button
-                            type="button"
-                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                            title="收起筛选区"
-                            @click="jobFilterPanelExpanded = false"
-                        >
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                            title="回到顶部"
-                            @click="scrollJobsToTop"
-                        >
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
-                        </button>
-                    </div>
-                </div>
-                <div class="crm-filter-row">
-                    <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">客户</span>
-                        <select v-model="jobFilter.client_id" class="crm-filter-control w-[10rem]">
-                            <option value="">全部</option>
-                            <option v-for="c in clientOptions" :key="'fc'+c.id" :value="String(c.id)">{{ c.name }}</option>
-                        </select>
-                    </label>
-                    <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">优先级</span>
-                        <select v-model="jobFilter.priority" class="crm-filter-control w-[6rem]">
-                            <option value="">全部</option>
-                            <option v-for="p in priorityOptions" :key="'fp'+p.value" :value="p.value">{{ p.label }}</option>
-                        </select>
-                    </label>
-                    <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">状态</span>
-                        <select v-model="jobFilter.status" class="crm-filter-control w-[7rem]">
-                            <option value="">全部</option>
-                            <option v-for="s in statusOptions" :key="'fs'+s.value" :value="s.value">{{ s.label }}</option>
-                        </select>
-                    </label>
-                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetJobFilter">清除筛选</button>
+            <div v-else class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <input v-model.trim="jobFilter.title" type="text" placeholder="输入岗位名称关键词" class="crm-filter-item crm-filter-control w-[12rem]" title="岗位名称（模糊）" />
+                <select v-model="jobFilter.client_id" class="crm-filter-item crm-filter-control w-[10rem]" title="客户">
+                    <option value="">客户</option>
+                    <option v-for="c in clientOptions" :key="'fc'+c.id" :value="String(c.id)">{{ c.name }}</option>
+                </select>
+                <select v-model="jobFilter.priority" class="crm-filter-item crm-filter-control w-[6rem]" title="优先级">
+                    <option value="">优先级</option>
+                    <option v-for="p in priorityOptions" :key="'fp'+p.value" :value="p.value">{{ p.label }}</option>
+                </select>
+                <select v-model="jobFilter.status" class="crm-filter-item crm-filter-control w-[7rem]" title="状态">
+                    <option value="">状态</option>
+                    <option v-for="s in statusOptions" :key="'fs'+s.value" :value="s.value">{{ s.label }}</option>
+                </select>
+                <button type="button" class="crm-filter-item crm-filter-reset" @click="resetJobFilter">清除筛选</button>
+                <p class="text-sm font-semibold text-gray-700 crm-filter-item">
+                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredJobs.length }}</span> 条
+                </p>
+                <div class="flex flex-wrap items-center gap-1.5 ml-auto shrink-0">
+                    <button v-if="canWriteJobs" type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" @click="openJobModal">新建岗位</button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="收起筛选区"
+                        @click="jobFilterPanelExpanded = false"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                    </button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="回到顶部"
+                        @click="scrollJobsToTop"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                    </button>
                 </div>
             </div>
         </div>
