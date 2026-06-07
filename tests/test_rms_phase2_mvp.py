@@ -335,6 +335,26 @@ def test_first_job_blocked_without_delivery_owner_body(client_rbac, admin_auth, 
     assert "delivery_owner_user_id" in r.json().get("detail", "")
 
 
+def test_job_salary_cap_validation(client_rbac, admin_auth, rms_engine, uniq):
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"cap_{uniq}")
+
+    ok = client_rbac.patch(
+        f"/api/rms/jobs/{job_id}",
+        cookies=login_del.cookies,
+        json={"salary_cap": "25,000"},
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["salary_cap"] == "25000"
+
+    for bad in ("999", "100000", "30K"):
+        r = client_rbac.patch(
+            f"/api/rms/jobs/{job_id}",
+            cookies=login_del.cookies,
+            json={"salary_cap": bad},
+        )
+        assert r.status_code == 400, r.text
+
+
 def test_create_job_forbidden_without_rms_jobs_write(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
     viewer = f"rms2_viewer_{suffix}"

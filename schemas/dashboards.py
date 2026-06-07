@@ -14,6 +14,9 @@ from auth.data_scope_catalog import (
     RESOURCE_DELIVERY_PIPELINE,
     RESOURCE_DELIVERY_ROSTER,
     RESOURCE_DELIVERY_SETTLEMENT,
+    RESOURCE_RMS_APPLICATION,
+    RESOURCE_RMS_CANDIDATE,
+    RESOURCE_RMS_JOB,
 )
 
 FieldKind = Literal["text", "numeric", "datetime"]
@@ -228,11 +231,83 @@ DATA_SOURCES: Dict[str, DataSourceDef] = {
     ),
 }
 
-SOURCE_KEYS: FrozenSet[str] = frozenset(DATA_SOURCES.keys())
+RMS_DATA_SOURCES: Dict[str, DataSourceDef] = {
+    "rms_jobs": DataSourceDef(
+        key="rms_jobs",
+        label="岗位",
+        permission="rms.jobs.read",
+        resource_code=RESOURCE_RMS_JOB,
+        model_attr="RmsJob",
+        has_client_id=True,
+        fields=(
+            SourceFieldDef("client_id", "客户", "text"),
+            SourceFieldDef("title", "岗位名称", "text"),
+            SourceFieldDef("department", "部门", "text"),
+            SourceFieldDef("location", "地点", "text"),
+            SourceFieldDef("headcount", "HC", "numeric"),
+            SourceFieldDef("status", "状态", "text"),
+            SourceFieldDef("priority", "优先级", "text"),
+            SourceFieldDef("years_required", "年限要求", "text"),
+            SourceFieldDef("education", "学历", "text"),
+            SourceFieldDef("owner_user_id", "负责人", "text"),
+            SourceFieldDef("created_at", "创建时间", "datetime"),
+            SourceFieldDef("updated_at", "更新时间", "datetime"),
+        ),
+    ),
+    "rms_candidates": DataSourceDef(
+        key="rms_candidates",
+        label="人选",
+        permission="rms.candidates.read",
+        resource_code=RESOURCE_RMS_CANDIDATE,
+        model_attr="RmsCandidate",
+        has_client_id=False,
+        fields=(
+            SourceFieldDef("name", "姓名", "text"),
+            SourceFieldDef("city", "城市", "text"),
+            SourceFieldDef("source", "来源", "text"),
+            SourceFieldDef("education_level", "学历", "text"),
+            SourceFieldDef("school", "学校", "text"),
+            SourceFieldDef("major", "专业", "text"),
+            SourceFieldDef("gender", "性别", "text"),
+            SourceFieldDef("marital_status", "婚姻状况", "text"),
+            SourceFieldDef("current_company", "当前公司", "text"),
+            SourceFieldDef("current_title", "当前职位", "text"),
+            SourceFieldDef("created_at", "创建时间", "datetime"),
+            SourceFieldDef("updated_at", "更新时间", "datetime"),
+        ),
+    ),
+    "rms_applications": DataSourceDef(
+        key="rms_applications",
+        label="推荐记录",
+        permission="rms.applications.read",
+        resource_code=RESOURCE_RMS_APPLICATION,
+        model_attr="RmsApplication",
+        has_client_id=True,
+        fields=(
+            SourceFieldDef("client_id", "客户", "text"),
+            SourceFieldDef("job_id", "岗位", "text"),
+            SourceFieldDef("candidate_id", "人选", "text"),
+            SourceFieldDef("status", "状态", "text"),
+            SourceFieldDef("receive_status", "接收状态", "text"),
+            SourceFieldDef("delivery_review_status", "交付审核", "text"),
+            SourceFieldDef("current_stage", "当前阶段", "text"),
+            SourceFieldDef("recommended_by", "推荐人", "text"),
+            SourceFieldDef("recommended_at", "推荐时间", "datetime"),
+            SourceFieldDef("hired_at", "入职时间", "datetime"),
+            SourceFieldDef("created_at", "创建时间", "datetime"),
+            SourceFieldDef("updated_at", "更新时间", "datetime"),
+        ),
+    ),
+}
+
+CRM_SOURCE_KEYS: FrozenSet[str] = frozenset(DATA_SOURCES.keys())
+RMS_SOURCE_KEYS: FrozenSet[str] = frozenset(RMS_DATA_SOURCES.keys())
+RMS_ALLOWED_SOURCE_KEYS: FrozenSet[str] = CRM_SOURCE_KEYS | RMS_SOURCE_KEYS
+SOURCE_KEYS: FrozenSet[str] = CRM_SOURCE_KEYS | RMS_SOURCE_KEYS
 
 
 def get_source(key: str) -> Optional[DataSourceDef]:
-    return DATA_SOURCES.get(key)
+    return DATA_SOURCES.get(key) or RMS_DATA_SOURCES.get(key)
 
 
 def get_field(source_key: str, field_key: str) -> Optional[SourceFieldDef]:
@@ -245,9 +320,20 @@ def get_field(source_key: str, field_key: str) -> Optional[SourceFieldDef]:
     return None
 
 
+def _source_to_metadata(src: DataSourceDef) -> dict:
+    return {
+        "key": src.key,
+        "label": src.label,
+        "fields": [{"key": f.key, "label": f.label, "kind": f.kind} for f in src.fields],
+    }
+
+
 def build_rms_metadata() -> dict:
     """Whitelists for RMS dashboard widget config panel (CRM builder + recruitment presets)."""
     meta = build_metadata()
+    meta["sources"] = meta["sources"] + [
+        _source_to_metadata(src) for src in RMS_DATA_SOURCES.values()
+    ]
     meta["widget_types"] = list(WIDGET_TYPE_DISPLAY_ORDER) + ["rms_block"]
     meta["rms_blocks"] = [
         {"key": k, "label": RMS_BLOCK_LABELS.get(k, k)}

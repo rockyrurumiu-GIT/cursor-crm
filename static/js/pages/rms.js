@@ -28,6 +28,9 @@
   const SOURCE_OPTIONS = ["平台", "Boss", "linkedin", "猎聘", "内推", "挂靠", "外协", "其他"];
   const MARITAL_OPTIONS = ["未婚", "已婚"];
   const PHONE_RE = /^1\d{10}$/;
+  const JOB_SALARY_CAP_MIN = 1000;
+  const JOB_SALARY_CAP_MAX = 99999;
+  const REPORT_LOCAL_TEXT_PREVIEW_MAX = 2000;
 
   function stripSalaryCommas(s) {
     return String(s == null ? "" : s).replace(/,/g, "").trim();
@@ -41,6 +44,22 @@
     const n = Number(raw);
     if (!Number.isFinite(n)) return raw;
     return n.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  }
+
+  function stripJobSalaryCapInput(s) {
+    return String(s == null ? "" : s).replace(/\D/g, "");
+  }
+
+  function jobSalaryCapInRange(n) {
+    return Number.isInteger(n) && n >= JOB_SALARY_CAP_MIN && n <= JOB_SALARY_CAP_MAX;
+  }
+
+  function formatJobSalaryCapDisplay(value) {
+    const digits = stripJobSalaryCapInput(value);
+    if (!digits) return "";
+    const n = Number(digits);
+    if (!Number.isFinite(n) || !jobSalaryCapInRange(n)) return digits;
+    return n.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
   }
 
   function fuzzyMatch(haystack, needle) {
@@ -164,8 +183,19 @@
       const reportResumeInput = ref(null);
       const reportResumeDraftStatus = ref("idle");
       const reportResumeDraftError = ref("");
+      const reportResumePdfPreviewUrl = ref("");
+      const reportResumeTextPreview = ref("");
+      const reportResumeTextPreviewTruncated = ref(false);
       const reportResumePreviewText = ref("");
       const reportResumePreviewError = ref("");
+      const reportResumePreviewWarning = ref("");
+      const reportResumePreviewRawText = ref("");
+      const reportResumePreviewLength = ref(0);
+      const reportResumePreviewRawLength = ref(0);
+      const reportShowRawExtractDebug = ref(
+        typeof window !== "undefined" &&
+          /(?:^|[?&])rms_debug=1(?:&|$)/.test(window.location.search || "")
+      );
       const reportResumeDragging = ref(false);
       const reportAutoFilledFields = reactive({});
       const reportForm = reactive(CandidateReport.emptyReportForm ? CandidateReport.emptyReportForm() : {});
@@ -481,6 +511,27 @@
         candidateForm[field] = formatSalaryThousands(candidateForm[field]);
       }
 
+      function onJobSalaryCapInput() {
+        jobForm.salary_cap = stripJobSalaryCapInput(jobForm.salary_cap).slice(0, 5);
+      }
+
+      function formatJobSalaryCapField() {
+        jobForm.salary_cap = formatJobSalaryCapDisplay(jobForm.salary_cap);
+      }
+
+      function displayJobSalaryCap(value) {
+        const formatted = formatJobSalaryCapDisplay(value);
+        return formatted || "—";
+      }
+
+      function validateJobSalaryCap() {
+        const digits = stripJobSalaryCapInput(jobForm.salary_cap);
+        if (!digits) return "";
+        const n = Number(digits);
+        if (!jobSalaryCapInRange(n)) return null;
+        return String(n);
+      }
+
       function resumeViewUrl(c) {
         if (!c || c.resume_id == null || c.resume_id === "") return "#";
         return "/api/rms/resumes/" + c.resume_id + "/view";
@@ -576,6 +627,12 @@
 
       function progressTransitionsFor(status) {
         return Labels.progressTransitionsFor ? Labels.progressTransitionsFor(status) : [];
+      }
+
+      function progressActionBtnClass(status) {
+        return Labels.progressActionBtnClass
+          ? Labels.progressActionBtnClass(status)
+          : "crm-op-btn-edit";
       }
 
       function progressOptionsForCorrection(currentStatus) {
@@ -770,7 +827,7 @@
         jobForm.status = j.status || "open";
         jobForm.job_description = j.job_description || "";
         jobForm.headcount = j.headcount != null ? j.headcount : 1;
-        jobForm.salary_cap = j.salary_cap || "";
+        jobForm.salary_cap = formatJobSalaryCapDisplay(j.salary_cap || "");
         jobForm.years_required = j.years_required || "";
         jobForm.location = j.location || "";
         jobForm.education = j.education || "";
@@ -794,7 +851,7 @@
           status: jobForm.status || "open",
           job_description: jobForm.job_description || "",
           headcount: Number(jobForm.headcount) || 1,
-          salary_cap: jobForm.salary_cap || "",
+          salary_cap: validateJobSalaryCap() || "",
           years_required: jobForm.years_required || "",
           location: jobForm.location || "",
           education: jobForm.education || "",
@@ -904,7 +961,6 @@
         jobModalMode.value = "create";
         editingJobId.value = null;
         modal.value = "job";
-        resetJobForm();
         await loadJobFormOptions();
       }
 
@@ -1031,16 +1087,63 @@
         await loadCandidates();
       }
 
-      function clearReportResumePreview() {
+      function reportResumeFileExt(file) {
+        const name = (file && file.name) || "";
+        const dot = name.lastIndexOf(".");
+        return dot >= 0 ? name.slice(dot).toLowerCase() : "";
+      }
+
+      function revokeReportResumePdfPreview() {
+        if (reportResumePdfPreviewUrl.value) {
+          URL.revokeObjectURL(reportResumePdfPreviewUrl.value);
+          reportResumePdfPreviewUrl.value = "";
+        }
+      }
+
+      function clearReportFileMainPreview() {
+        revokeReportResumePdfPreview();
+        reportResumeTextPreview.value = "";
+        reportResumeTextPreviewTruncated.value = false;
+      }
+
+      function clearReportRecognizedText() {
         reportResumePreviewText.value = "";
         reportResumePreviewError.value = "";
+        reportResumePreviewWarning.value = "";
+        reportResumePreviewRawText.value = "";
+        reportResumePreviewLength.value = 0;
+        reportResumePreviewRawLength.value = 0;
+      }
+
+      function setupReportFileMainPreview(file) {
+        clearReportFileMainPreview();
+        if (!file) return;
+        const ext = reportResumeFileExt(file);
+        if (ext === ".pdf") {
+          reportResumePdfPreviewUrl.value = URL.createObjectURL(file);
+          return;
+        }
+        if (ext === ".txt" || ext === ".rtf") {
+          const reader = new FileReader();
+          reader.onload = function () {
+            const full = String(reader.result || "");
+            reportResumeTextPreviewTruncated.value = full.length > REPORT_LOCAL_TEXT_PREVIEW_MAX;
+            reportResumeTextPreview.value = full.slice(0, REPORT_LOCAL_TEXT_PREVIEW_MAX);
+          };
+          reader.onerror = function () {
+            reportResumeTextPreview.value = "";
+            reportResumeTextPreviewTruncated.value = false;
+          };
+          reader.readAsText(file);
+        }
       }
 
       function resetReportDraftUi() {
         reportResumeDraftStatus.value = "idle";
         reportResumeDraftError.value = "";
         reportResumeDragging.value = false;
-        clearReportResumePreview();
+        clearReportFileMainPreview();
+        clearReportRecognizedText();
         Object.keys(reportAutoFilledFields).forEach(function (k) {
           delete reportAutoFilledFields[k];
         });
@@ -1083,7 +1186,8 @@
         reportResumeDraftStatus.value = "idle";
         reportResumeDraftError.value = "";
         reportResumeDragging.value = false;
-        clearReportResumePreview();
+        clearReportFileMainPreview();
+        clearReportRecognizedText();
         if (reportResumeInput.value) reportResumeInput.value.value = "";
       }
 
@@ -1091,7 +1195,7 @@
         if (!file || !CandidateReport.parseCandidateReportDraft) return;
         reportResumeDraftStatus.value = "parsing";
         reportResumeDraftError.value = "";
-        clearReportResumePreview();
+        clearReportRecognizedText();
         if (CandidateReport.clearAutoFilledFields) {
           CandidateReport.clearAutoFilledFields(reportForm, reportAutoFilledFields);
         }
@@ -1106,7 +1210,6 @@
         if (!r.ok) {
           reportResumeDraftStatus.value = "error";
           reportResumeDraftError.value = r.message;
-          reportResumePreviewText.value = "";
           reportResumePreviewError.value = r.message;
           return;
         }
@@ -1124,7 +1227,11 @@
           reportResumeDraftStatus.value = "empty";
         }
         if (data.message) reportResumeDraftError.value = data.message;
+        reportResumePreviewLength.value = Number(data.parsed_text_length) || 0;
+        reportResumePreviewRawLength.value = Number(data.parsed_text_raw_length) || 0;
+        reportResumePreviewWarning.value = String(data.extract_warning || "").trim();
         const preview = String(data.parsed_text || "").trim();
+        const rawPreview = String(data.parsed_text_raw || "").trim();
         if (preview) {
           reportResumePreviewText.value = preview;
           reportResumePreviewError.value = "";
@@ -1135,11 +1242,14 @@
           reportResumePreviewText.value = "";
           reportResumePreviewError.value = "";
         }
+        reportResumePreviewRawText.value = rawPreview;
       }
 
       function onReportFilePicked(file) {
         if (!file) return;
+        revokeReportResumePdfPreview();
         reportResumeFile.value = file;
+        setupReportFileMainPreview(file);
         parseReportResumeDraft(file);
       }
 
@@ -1261,6 +1371,18 @@
         modalError.value = "";
         let r;
         if (modal.value === "job") {
+          formatJobSalaryCapField();
+          const salaryCap = validateJobSalaryCap();
+          if (salaryCap === null) {
+            modalError.value =
+              "薪资帽须为 " +
+              JOB_SALARY_CAP_MIN.toLocaleString("zh-CN") +
+              "–" +
+              JOB_SALARY_CAP_MAX.toLocaleString("zh-CN") +
+              " 的整数";
+            modalSaving.value = false;
+            return;
+          }
           const body = buildJobBody();
           if (jobModalMode.value === "create") {
             if (jobForm.sales_owner_user_id !== "" && jobForm.sales_owner_user_id != null) {
@@ -1339,6 +1461,9 @@
           return;
         }
         toast("保存成功", false);
+        if (modal.value === "job" && jobModalMode.value === "create") {
+          resetJobForm();
+        }
         closeModal();
       }
 
@@ -1522,8 +1647,16 @@
         reportResumeInput,
         reportResumeDraftStatus,
         reportResumeDraftError,
+        reportResumePdfPreviewUrl,
+        reportResumeTextPreview,
+        reportResumeTextPreviewTruncated,
         reportResumePreviewText,
         reportResumePreviewError,
+        reportResumePreviewWarning,
+        reportResumePreviewRawText,
+        reportResumePreviewLength,
+        reportResumePreviewRawLength,
+        reportShowRawExtractDebug,
         reportResumeDragging,
         formatReportFileSize,
         canWriteJobs,
@@ -1577,7 +1710,10 @@
         displayTargetJob,
         displayTargetClient,
         displaySalary,
+        displayJobSalaryCap,
         formatCandidateSalaryField,
+        onJobSalaryCapInput,
+        formatJobSalaryCapField,
         resumeViewUrl,
         resumeDownloadUrl,
         resumeCanView,
@@ -1590,6 +1726,7 @@
         deliveryReviewLabel,
         protectionLabel,
         progressTransitionsFor,
+        progressActionBtnClass,
         hiredAtFor,
         setHiredAtFor,
         appCandidateName,

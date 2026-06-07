@@ -1543,6 +1543,7 @@ register_rms_dashboard_routes(
     DeliverySettlementEntry=DeliverySettlementEntry,
     DeliveryInterviewEntry=DeliveryInterviewEntry,
     RmsJob=RMS_MODELS["RmsJob"],
+    RmsCandidate=RMS_MODELS["RmsCandidate"],
     RmsApplication=RMS_MODELS["RmsApplication"],
     RmsApplicationStatusHistory=RMS_MODELS["RmsApplicationStatusHistory"],
     DashboardDashboard=DashboardDashboard,

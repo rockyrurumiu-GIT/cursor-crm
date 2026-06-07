@@ -8,11 +8,16 @@ import pytest
 from starlette.testclient import TestClient
 
 from auth.permissions import ROLE_DELIVERY
+from tests.helpers import auth_header
 from tests.test_rms_phase2_mvp import (
+    _candidate_json,
+    _create_client_admin,
     _create_user,
+    _delivery_open_job,
     _enable_delivery_rms_mvp,
     _enable_sales_rms_jobs_write,
     _login,
+    _set_client_owner,
 )
 
 
@@ -143,6 +148,37 @@ def test_rms_dashboard_widget_crud(client_rbac, admin_auth, rms_engine, uniq):
     assert deleted.status_code == 200, deleted.text
 
 
+def _admin_login(client, admin_auth):
+    user, pwd = admin_auth
+    login = _login(client, user, pwd)
+    assert login.status_code == 200
+    return login
+
+
+def _rms_overview_tab(client, cookies):
+    boards = client.get("/api/rms/dashboard-boards", cookies=cookies).json()
+    return next(t for t in boards[0]["tabs"] if t["name"] == "总览")
+
+
+def _create_rms_widget(client, cookies, tab_id: int, **payload):
+    body = {
+        "title": "Test Widget",
+        "widget_type": "number",
+        "source_key": "rms_jobs",
+        "config": {"metric": "count"},
+        "x": 0,
+        "y": 99,
+        "w": 4,
+        "h": 3,
+    }
+    body.update(payload)
+    return client.post(
+        f"/api/rms/dashboard-tabs/{tab_id}/widgets",
+        json=body,
+        cookies=cookies,
+    )
+
+
 def test_rms_dashboard_metadata(client_rbac, admin_auth, rms_engine, uniq):
     login = _delivery_login(client_rbac, admin_auth, uniq)
     r = client_rbac.get("/api/rms/dashboard-metadata", cookies=login.cookies)
@@ -150,5 +186,299 @@ def test_rms_dashboard_metadata(client_rbac, admin_auth, rms_engine, uniq):
     body = r.json()
     assert "rms_block" in body["widget_types"]
     assert "number" in body["widget_types"]
-    assert len(body.get("sources") or []) > 0
+    source_keys = {s["key"] for s in body.get("sources") or []}
+    assert {"rms_jobs", "rms_candidates", "rms_applications"}.issubset(source_keys)
+    for key in ("rms_jobs", "rms_candidates", "rms_applications"):
+        src = next(s for s in body["sources"] if s["key"] == key)
+        assert len(src.get("fields") or []) > 0
     assert any(b["key"] == "kpi_jobs" for b in body["rms_blocks"])
+
+
+def test_crm_dashboard_metadata_excludes_rms_sources(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    r = client_rbac.get("/api/dashboard-metadata", headers=auth_header(user, pwd))
+    assert r.status_code == 200, r.text
+    source_keys = {s["key"] for s in r.json().get("sources") or []}
+    assert "clients" in source_keys
+    assert "rms_jobs" not in source_keys
+    assert "rms_candidates" not in source_keys
+    assert "rms_applications" not in source_keys
+
+
+def test_global_dashboard_rejects_rms_source(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    headers = {**auth_header(user, pwd), "Content-Type": "application/json"}
+    dash = client_rbac.post("/api/dashboards", headers=headers, json={"name": f"Iso {uniq}"})
+    assert dash.status_code == 200, dash.text
+    dash_id = dash.json()["id"]
+    tab = client_rbac.post(
+        f"/api/dashboards/{dash_id}/tabs", headers=headers, json={"name": "T"}
+    )
+    assert tab.status_code == 200, tab.text
+    tab_id = tab.json()["id"]
+    bad = client_rbac.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Bad RMS",
+            "widget_type": "number",
+            "source_key": "rms_jobs",
+            "config": {"metric": "count"},
+        },
+    )
+    assert bad.status_code == 400
+    assert "rms_jobs" in bad.json().get("detail", "")
+    client_rbac.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_rms_widget_data_jobs_sum(client_rbac, admin_auth, rms_engine, uniq):
+    login = _admin_login(client_rbac, admin_auth)
+    suffix = uniq
+    sales = f"rms_dash_s_{suffix}"
+    delivery = f"rms_dash_d_{suffix}"
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_DELIVERY])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    cid = _create_client_admin(client_rbac, admin_auth, f"Dash Job {suffix}")
+    _set_client_owner(rms_engine, cid, sales_uid, delivery_owner_user_id=delivery_uid)
+    admin_user, admin_pwd = admin_auth
+    job = client_rbac.post(
+        "/api/rms/jobs",
+        headers=auth_header(admin_user, admin_pwd),
+        json={
+            "client_id": cid,
+            "title": f"HC Job {suffix}",
+            "owner_user_id": sales_uid,
+            "delivery_owner_user_id": delivery_uid,
+            "headcount": 5,
+        },
+    )
+    assert job.status_code == 200, job.text
+
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        title="HC 汇总",
+        widget_type="number",
+        source_key="rms_jobs",
+        config={"metric": "sum", "field": "headcount"},
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["status"] == "ok"
+    assert body["kind"] == "scalar"
+    assert float(body["value"]) >= 5.0
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_group_label_resolver():
+    from schemas.rms import application_progress_label, resolve_rms_group_label
+
+    assert application_progress_label("first_interview_passed") == "一面通过"
+    assert application_progress_label("hired") == "已入职"
+    assert application_progress_label("pending_internal_screen") == "待内筛"
+    assert resolve_rms_group_label("rms_applications", "current_stage", "hired") == "已入职"
+    assert resolve_rms_group_label("rms_jobs", "priority", "high") == "高"
+
+
+def test_rms_widget_data_applications_group_labels(client_rbac, admin_auth, rms_engine, uniq):
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"stage_{uniq}")
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id),
+    )
+    assert cand.status_code == 200, cand.text
+    app = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+    )
+    assert app.status_code == 200, app.text
+
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        title="阶段分布",
+        widget_type="pie",
+        source_key="rms_applications",
+        config={"metric": "count", "group_by": "current_stage"},
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["status"] == "ok"
+    assert "待内筛" in body.get("labels", [])
+    assert "pending_internal_screen" not in body.get("labels", [])
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_widget_data_candidates_group(client_rbac, admin_auth, rms_engine, uniq):
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"cand_{uniq}")
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id, source="内推"),
+    )
+    assert cand.status_code == 200, cand.text
+
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        title="来源分布",
+        widget_type="bar",
+        source_key="rms_candidates",
+        config={"metric": "count", "group_by": "source"},
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["status"] == "ok"
+    assert body["kind"] == "series"
+    assert "内推" in body.get("labels", [])
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_widget_data_forbidden_without_jobs_read(client_rbac, admin_auth, rms_engine, uniq, monkeypatch):
+    import main as crm_main
+    from auth import policy
+    from auth import service as auth_svc
+    from auth.permissions import ALL_PERMISSION_CODES
+    from auth.service import AuthContext
+
+    suffix = uniq
+    monkeypatch.setattr(policy, "generate_custom_role_code", lambda: f"CUSTOM_{suffix}_jobs")
+    db = crm_main.SessionLocal()
+    try:
+        admin_user, _ = admin_auth
+        super_ctx = AuthContext(
+            username=admin_user,
+            user_id=1,
+            roles=["SUPER_ADMIN"],
+            permissions=sorted(ALL_PERMISSION_CODES),
+            dept_ids=[],
+            role_data_scopes={},
+            is_super=True,
+        )
+        role = auth_svc.create_custom_role(
+            db, name=f"RMS Analytics Only {suffix}", description="test", actor=admin_user
+        )
+        perms = [
+            p for p in ALL_PERMISSION_CODES
+            if p not in ("rms.jobs.read", "rms.jobs.write")
+        ]
+        auth_svc.set_role_permissions(
+            db, role["id"], perms, actor=admin_user, actor_ctx=super_ctx
+        )
+        username = f"rms_analytics_{suffix}"
+        auth_svc.create_user(
+            db,
+            username=username,
+            password="analytics1",
+            display_name="Analytics Only",
+            role_codes=[role["code"]],
+            actor=admin_user,
+            actor_ctx=super_ctx,
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    login = _login(client_rbac, username, "analytics1")
+    assert login.status_code == 200
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        title="Forbidden jobs",
+        source_key="rms_jobs",
+        config={"metric": "count"},
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    assert data.json()["status"] == "forbidden"
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_candidates_empty_visible_returns_zero(client_rbac, admin_auth, rms_engine, uniq, monkeypatch):
+    import main as crm_main
+    from auth import policy
+    from auth import service as auth_svc
+    from auth.permissions import ALL_PERMISSION_CODES
+    from auth.service import AuthContext
+
+    suffix = uniq
+    monkeypatch.setattr(policy, "generate_custom_role_code", lambda: f"CUSTOM_{suffix}_cand")
+    db = crm_main.SessionLocal()
+    try:
+        admin_user, _ = admin_auth
+        super_ctx = AuthContext(
+            username=admin_user,
+            user_id=1,
+            roles=["SUPER_ADMIN"],
+            permissions=sorted(ALL_PERMISSION_CODES),
+            dept_ids=[],
+            role_data_scopes={},
+            is_super=True,
+        )
+        role = auth_svc.create_custom_role(
+            db, name=f"RMS Cand Read {suffix}", description="test", actor=admin_user
+        )
+        auth_svc.set_role_permissions(
+            db,
+            role["id"],
+            ["dashboard.read", "dashboard.write", "rms.analytics.read", "rms.candidates.read"],
+            actor=admin_user,
+            actor_ctx=super_ctx,
+        )
+        username = f"rms_cand_empty_{suffix}"
+        auth_svc.create_user(
+            db,
+            username=username,
+            password="candempty1",
+            display_name="Cand Empty",
+            role_codes=[role["code"]],
+            actor=admin_user,
+            actor_ctx=super_ctx,
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    login = _login(client_rbac, username, "candempty1")
+    assert login.status_code == 200
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        title="Empty candidates",
+        source_key="rms_candidates",
+        config={"metric": "count"},
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["status"] == "ok"
+    assert body["kind"] == "scalar"
+    assert float(body["value"]) == 0.0
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)

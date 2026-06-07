@@ -10,10 +10,17 @@
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 0.75rem 1rem;
-        padding: 3px 4px;
     }
     @media (max-width: 1024px) { .rms-candidate-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 640px) { .rms-candidate-form-grid { grid-template-columns: 1fr; } }
+    /* 滚动区内留边距，避免 focus 高亮在左右被 overflow 裁切 */
+    .rms-job-form-grid,
+    .rms-candidate-form-grid {
+        padding: 3px 4px;
+    }
+    .rms-job-form-grid input:focus,
+    .rms-job-form-grid select:focus,
+    .rms-job-form-grid textarea:focus,
     .rms-candidate-form-grid input:focus,
     .rms-candidate-form-grid select:focus,
     .rms-candidate-form-grid textarea:focus {
@@ -65,8 +72,16 @@
         cursor: pointer;
     }
     .rms-report-file-remove:hover { color: #cf222e; }
+    .rms-report-pdf-preview {
+        width: 100%;
+        min-height: 28rem;
+        height: 28rem;
+        border: 1px solid #d0d7de;
+        border-radius: 0.375rem;
+        background: #fff;
+    }
     .rms-report-preview-body {
-        max-height: 28rem;
+        max-height: 16rem;
         overflow-y: auto;
         white-space: pre-wrap;
         word-break: break-word;
@@ -78,6 +93,13 @@
         background: #fff;
         border: 1px solid #d0d7de;
         border-radius: 0.375rem;
+    }
+    .rms-report-recognized-details { margin-top: 0.75rem; }
+    .rms-report-recognized-details > summary {
+        cursor: pointer;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #1f2328;
     }
     .rms-required-mark { color: #dc2626; font-weight: 700; }
     /* 滚动区勿加左右 padding，否则横向滚动后冻结列与圆角边框之间会露白缝 */
@@ -310,11 +332,34 @@
                     <p v-else-if="reportResumeDraftStatus === 'empty'" class="text-xs text-[#656d76] mt-2">未识别到可自动填充字段</p>
                     <p v-else-if="reportResumeDraftStatus === 'error'" class="text-xs text-red-700 mt-2">{{ reportResumeDraftError }}</p>
                     <p v-else-if="reportResumeDraftError" class="text-xs text-amber-800 mt-1">{{ reportResumeDraftError }}</p>
-                    <div data-rms-report-preview class="mt-3">
-                        <p class="text-sm font-medium text-[#1f2328]">简历内容</p>
-                        <pre v-if="reportResumePreviewText" class="rms-report-preview-body">{{ reportResumePreviewText }}</pre>
+                    <div id="rms-report-file-preview" data-rms-report-preview class="mt-3">
+                        <template v-if="reportResumePdfPreviewUrl">
+                            <iframe :src="reportResumePdfPreviewUrl" class="rms-report-pdf-preview" title="简历 PDF 预览"></iframe>
+                        </template>
+                        <template v-else-if="reportResumeTextPreview">
+                            <pre class="rms-report-preview-body">{{ reportResumeTextPreview }}</pre>
+                            <p v-if="reportResumeTextPreviewTruncated" class="text-xs text-[#656d76] mt-1">仅预览前 2000 字</p>
+                        </template>
                         <p v-else-if="reportResumePreviewError" class="text-xs text-amber-800 mt-2">{{ reportResumePreviewError }}</p>
-                        <p v-else class="text-xs text-[#656d76] mt-2">上传 PDF/TXT/RTF 后将在这里显示可提取文本</p>
+                        <p v-else-if="reportResumeFile && reportResumeDraftError" class="text-xs text-amber-800 mt-2">{{ reportResumeDraftError }}</p>
+                        <p v-else class="text-xs text-[#656d76] mt-2">上传 PDF 后将显示原件预览；TXT/RTF 显示文本预览</p>
+                        <details v-if="reportResumePreviewText || reportResumePreviewWarning" class="rms-report-recognized-details" open>
+                            <summary>识别文本</summary>
+                            <p class="text-xs text-[#656d76] mt-2">识别文本由 PDF 文本层自动抽取，可能与原简历排版不一致</p>
+                            <p v-if="reportResumePreviewLength > 2000" class="text-xs text-[#656d76] mt-1">
+                                共 {{ reportResumePreviewLength }} 字（预览仅显示前 2000 字）
+                            </p>
+                            <p v-else-if="reportResumePreviewLength" class="text-xs text-[#656d76] mt-1">共 {{ reportResumePreviewLength }} 字</p>
+                            <p v-if="reportResumePreviewWarning" class="text-xs text-amber-800 mt-1">{{ reportResumePreviewWarning }}</p>
+                            <pre v-if="reportResumePreviewText" class="rms-report-preview-body">{{ reportResumePreviewText }}</pre>
+                        </details>
+                        <details v-if="reportShowRawExtractDebug && reportResumePreviewRawText" class="rms-report-recognized-details mt-2">
+                            <summary>原始抽取（调试）</summary>
+                            <p v-if="reportResumePreviewRawLength > 2000" class="text-xs text-[#656d76] mt-2">
+                                共 {{ reportResumePreviewRawLength }} 字（预览仅显示前 2000 字）
+                            </p>
+                            <pre class="rms-report-preview-body">{{ reportResumePreviewRawText }}</pre>
+                        </details>
                     </div>
                 </div>
                 <div class="space-y-3 text-sm">
@@ -529,7 +574,7 @@
                         <td class="crm-td">{{ statusLabel(j.status) }}</td>
                         <td class="crm-td rms-col-jd"><div class="crm-cell-clip">{{ j.job_description || '—' }}</div></td>
                         <td class="crm-td">{{ j.headcount }}</td>
-                        <td class="crm-td">{{ j.salary_cap || '—' }}</td>
+                        <td class="crm-td tabular-nums">{{ displayJobSalaryCap(j.salary_cap) }}</td>
                         <td class="crm-td">{{ j.years_required || '—' }}</td>
                         <td class="crm-td">{{ j.location || '—' }}</td>
                         <td class="crm-td">{{ j.education || '—' }}</td>
@@ -749,7 +794,13 @@
                 <p class="text-sm font-semibold text-[#1f2328]">
                     合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredPipelineApplications.length }}</span> 条
                 </p>
-                <button type="button" class="text-xs border border-[#d0d7de] px-2 py-1 rounded-md bg-white" @click="resetPipelineFilter">清除筛选</button>
+                <div class="flex flex-wrap items-center gap-2">
+                    <label class="crm-filter-item crm-filter-reset inline-flex items-center gap-1.5 cursor-pointer">
+                        <input v-model="pipelineFilter.activeOnly" type="checkbox" class="rounded border-[#d0d7de]" />
+                        <span>只看活动状态</span>
+                    </label>
+                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetPipelineFilter">清除筛选</button>
+                </div>
             </div>
             <div class="crm-filter-row">
                 <label class="crm-filter-item flex flex-col gap-1 text-xs">
@@ -793,10 +844,6 @@
                     <span class="text-[#57606a]">推荐日止</span>
                     <input v-model="pipelineFilter.date_to" type="date" class="crm-filter-control w-[9rem]" />
                 </label>
-                <label class="crm-filter-item flex items-center gap-1.5 text-xs pb-1">
-                    <input v-model="pipelineFilter.activeOnly" type="checkbox" class="rounded border-[#d0d7de]" />
-                    <span class="text-[#57606a]">只看活动状态</span>
-                </label>
             </div>
         </div>
         <div v-if="applicationsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ applicationsState.error }}</div>
@@ -817,7 +864,7 @@
                         <th class="crm-th">推荐时间</th>
                         <th class="crm-th">最近更新时间</th>
                         <th class="crm-th crm-op-col-wide">下一步操作</th>
-                        <th class="crm-th crm-sticky-right-op">备注 / 历史</th>
+                        <th class="crm-th crm-sticky-right-op">修改状态/历史更改</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -834,7 +881,7 @@
                         <td class="crm-td whitespace-nowrap">
                             <div v-if="canWriteApplications" class="crm-op-actions flex flex-wrap items-center gap-1">
                                 <template v-for="next in progressTransitionsFor(a.status)" :key="'pt'+a.id+'-'+next">
-                                    <button type="button" class="crm-op-btn-edit" data-rms-action="progress-confirm-open"
+                                    <button type="button" :class="progressActionBtnClass(next)" data-rms-action="progress-confirm-open"
                                         @click="openProgressConfirmModal(a, next, 'transition')">{{ progressLabel(next) }}</button>
                                 </template>
                                 <span v-if="!progressTransitionsFor(a.status).length" class="text-[#57606a] text-xs">—</span>
@@ -843,11 +890,11 @@
                         </td>
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div v-if="canWriteApplications" class="crm-op-actions flex flex-wrap items-center gap-1">
-                                <button type="button" class="crm-op-btn-edit" data-rms-action="correction-picker-open"
-                                    @click="openCorrectionPickerModal(a)">修改状态</button>
-                                <button type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)">状态历史</button>
+                                <button type="button" class="crm-op-btn-handoff" data-rms-action="correction-picker-open"
+                                    @click="openCorrectionPickerModal(a)">修改</button>
+                                <button type="button" class="crm-op-btn-detail" @click="openStatusHistoryModal(a)">历史</button>
                             </div>
-                            <button v-else type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)">状态历史</button>
+                            <button v-else type="button" class="crm-op-btn-detail" @click="openStatusHistoryModal(a)">历史</button>
                         </td>
                     </tr>
                 </tbody>
@@ -967,8 +1014,10 @@
                         <input v-model.number="jobForm.headcount" :disabled="jobModalReadonly" type="number" min="1"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50" /></label>
                     <label class="block"><span class="text-[#57606a]">薪资帽</span>
-                        <input v-model="jobForm.salary_cap" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50"
-                            placeholder="如 30K" /></label>
+                        <input v-model="jobForm.salary_cap" :disabled="jobModalReadonly" inputmode="numeric"
+                            class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 tabular-nums disabled:bg-gray-50"
+                            placeholder="1,000–99,999"
+                            @input="onJobSalaryCapInput" @blur="formatJobSalaryCapField" /></label>
                     <label class="block"><span class="text-[#57606a]">年限</span>
                         <input v-model="jobForm.years_required" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50"
                             placeholder="如 3-5年" /></label>

@@ -11,6 +11,8 @@ from starlette.testclient import TestClient
 
 from auth.permissions import ROLE_DELIVERY
 from services.rms_applications import (
+    _build_extract_warning,
+    _clean_resume_text_for_parse,
     _extract_draft_fields_from_text,
     _extract_explicit_work_years,
     _parse_work_years_from_periods,
@@ -355,6 +357,56 @@ def test_parse_draft_pdf_extracts_fields_and_parsed_text(client_rbac, admin_auth
     assert body.get("parsed_text")
 
 
+def test_clean_resume_text_removes_tracking_line_keeps_contact_line():
+    tracking = "711f7a020cbe32a51X1609-7E1ZRwIi2UfiaWOKqmfDXMhNq"
+    raw = (
+        f"姓名：王智超\n"
+        f"手机 15029496938\n"
+        f"{tracking}\n"
+        "试用水印\n"
+        f"{tracking}\n"
+        "软通动力有限公司 结构工程师"
+    )
+    cleaned = _clean_resume_text_for_parse(raw)
+    assert tracking not in cleaned
+    assert "试用水印" not in cleaned
+    assert "15029496938" in cleaned
+    assert "王智超" in cleaned
+    assert "软通动力" in cleaned
+
+
+def test_build_extract_warning_flags_low_contact():
+    warning = _build_extract_warning("noise only", "", {}, is_pdf=True)
+    assert "未能识别" in warning or "中文" in warning or "扫描" in warning
+
+
+def test_parse_draft_response_includes_length_and_warning_fields(client_rbac, admin_auth, rms_engine, uniq):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    txt = (
+        "姓名：张三\n"
+        "手机 13800138077\n"
+        "email: draft@example.com\n"
+        "711f7a020cbe32a51X1609-7E1ZRwIi2UfiaWOKqmfDXMhNq\n"
+    )
+    r = client_rbac.post(
+        PARSE_DRAFT_URL,
+        cookies=login.cookies,
+        files={"file": ("resume.txt", txt.encode("utf-8"), "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "parsed_text_length" in body
+    assert "parsed_text_raw_length" in body
+    assert "parsed_text_raw" in body
+    assert "extract_warning" in body
+    assert body["parsed_text_length"] > 0
+    assert body["parsed_text_raw_length"] >= body["parsed_text_length"]
+    assert "711f7a020cbe32a51X1609" not in (body.get("parsed_text") or "")
+    draft = body.get("draft_fields") or {}
+    assert draft.get("phone") == "13800138077"
+    assert draft.get("name") == "张三"
+
+
 def test_parse_draft_docx_returns_friendly_message(client_rbac, admin_auth, rms_engine, uniq):
     login = _delivery_login(client_rbac, admin_auth, uniq)
     r = client_rbac.post(
@@ -366,6 +418,9 @@ def test_parse_draft_docx_returns_friendly_message(client_rbac, admin_auth, rms_
     body = r.json()
     assert body.get("draft_fields") == {}
     assert "Word" in (body.get("message") or "")
+    assert body.get("parsed_text_length") == 0
+    assert body.get("parsed_text_raw_length") == 0
+    assert body.get("extract_warning") == ""
 
 
 def test_parse_draft_unknown_extension_returns_400(client_rbac, admin_auth, rms_engine, uniq):

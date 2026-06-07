@@ -9,6 +9,107 @@ from pydantic import BaseModel, ConfigDict
 RECEIVE_STATUSES = frozenset({"pending", "accepted", "rejected"})
 DELIVERY_REVIEW_STATUSES = frozenset({"pending", "passed", "failed"})
 
+# Display labels — keep in sync with static/js/pages/rms-application-labels.js
+APPLICATION_PROGRESS_LABELS: dict[str, str] = {
+    "pending_internal_screen": "待内筛",
+    "internal_screen_failed": "内筛fail",
+    "pending_client_screen": "待客筛",
+    "client_screen_failed": "客筛fail",
+    "scheduling_interview": "约面中",
+    "interview_scheduling_failed": "约面fail",
+    "pending_first_interview": "待一面",
+    "first_interview_passed": "一面通过",
+    "first_interview_failed": "一面fail",
+    "second_interview_passed": "二面通过",
+    "second_interview_failed": "二面fail",
+    "second_interview_abandoned": "二面弃面",
+    "final_interview_failed": "终面fail",
+    "final_interview_abandoned": "终面弃面",
+    "pending_offer": "待offer",
+    "offer_dropped": "drop offer",
+    "onboarding": "在途",
+    "onboarding_lost": "在途流失",
+    "hired": "已入职",
+}
+
+LEGACY_APPLICATION_STATUS_LABELS: dict[str, str] = {
+    "recommended": "待内筛",
+    "screening": "待客筛",
+    "interview": "待一面",
+    "offer": "待offer",
+    "rejected": "已拒收",
+    "withdrawn": "已撤回",
+}
+
+RECEIVE_STATUS_LABELS: dict[str, str] = {
+    "pending": "未接收",
+    "accepted": "已接收",
+    "rejected": "已拒收",
+}
+
+DELIVERY_REVIEW_STATUS_LABELS: dict[str, str] = {
+    "pending": "待内审",
+    "passed": "内审通过",
+    "failed": "内审失败",
+}
+
+JOB_PRIORITY_LABELS: dict[str, str] = {
+    "high": "高",
+    "medium": "中",
+    "low": "低",
+}
+
+JOB_STATUS_LABELS: dict[str, str] = {
+    "open": "open",
+    "closed": "closed",
+    "freeze": "freeze",
+}
+
+RMS_ENUM_GROUP_FIELDS = frozenset({
+    ("rms_applications", "current_stage"),
+    ("rms_applications", "status"),
+    ("rms_applications", "receive_status"),
+    ("rms_applications", "delivery_review_status"),
+    ("rms_jobs", "status"),
+    ("rms_jobs", "priority"),
+})
+
+RMS_FK_GROUP_FIELDS = frozenset({
+    ("rms_jobs", "client_id"),
+    ("rms_jobs", "owner_user_id"),
+    ("rms_applications", "client_id"),
+    ("rms_applications", "job_id"),
+    ("rms_applications", "candidate_id"),
+    ("rms_applications", "recommended_by"),
+})
+
+
+def application_progress_label(status: str) -> str:
+    s = (status or "").strip()
+    if not s:
+        return "(空)"
+    return APPLICATION_PROGRESS_LABELS.get(s) or LEGACY_APPLICATION_STATUS_LABELS.get(s) or s
+
+
+def resolve_rms_group_label(source_key: str, field_key: str, raw: Any) -> str:
+    """Map RMS enum/code field values to display labels for dashboard group_by."""
+    s = "" if raw is None else str(raw).strip()
+    if not s or s == "(空)":
+        return "(空)"
+    if source_key == "rms_applications":
+        if field_key in ("current_stage", "status"):
+            return application_progress_label(s)
+        if field_key == "receive_status":
+            return RECEIVE_STATUS_LABELS.get(s, s)
+        if field_key == "delivery_review_status":
+            return DELIVERY_REVIEW_STATUS_LABELS.get(s, s)
+    if source_key == "rms_jobs":
+        if field_key == "priority":
+            return JOB_PRIORITY_LABELS.get(s, s)
+        if field_key == "status":
+            return JOB_STATUS_LABELS.get(s, s)
+    return s
+
 LEGACY_STATUS_NORMALIZE: dict[str, str] = {
     "screening": "pending_client_screen",
     "interview": "pending_first_interview",
@@ -97,6 +198,8 @@ FORBIDDEN_APPLICATION_BODY_KEYS = frozenset({
 
 JOB_PRIORITIES = frozenset({"high", "medium", "low"})
 JOB_STATUSES = frozenset({"open", "closed", "freeze"})
+JOB_SALARY_CAP_MIN = 1000
+JOB_SALARY_CAP_MAX = 99999
 
 JOB_WRITABLE_STR_FIELDS = (
     "title",

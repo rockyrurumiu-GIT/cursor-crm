@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from auth.deps import get_current_context, require_permission
 from auth.service import AuthContext
-from schemas.dashboards import build_rms_metadata
+from schemas.dashboards import RMS_ALLOWED_SOURCE_KEYS, build_rms_metadata
 from services import dashboards as board_svc
 from services import rms_dashboard as dash_svc
 
@@ -53,6 +53,7 @@ def register_rms_dashboard_routes(
     DeliverySettlementEntry: Type[Any],
     DeliveryInterviewEntry: Type[Any],
     RmsJob: Type[Any],
+    RmsCandidate: Type[Any],
     RmsApplication: Type[Any],
     RmsApplicationStatusHistory: Type[Any],
     DashboardDashboard: Type[Any],
@@ -69,6 +70,9 @@ def register_rms_dashboard_routes(
         "RosterEntry": RosterEntry,
         "DeliverySettlementEntry": DeliverySettlementEntry,
         "DeliveryInterviewEntry": DeliveryInterviewEntry,
+        "RmsJob": RmsJob,
+        "RmsCandidate": RmsCandidate,
+        "RmsApplication": RmsApplication,
     }
     def _assert_rms_tab(db: Session, tab_id: int) -> Any:
         tab = db.query(DashboardTab).filter(DashboardTab.id == tab_id).first()
@@ -237,7 +241,8 @@ def register_rms_dashboard_routes(
     ):
         _assert_rms_tab(db, tab_id)
         return board_svc.create_widget(
-            db, tab_id, body.model_dump(), DashboardTab, DashboardWidget
+            db, tab_id, body.model_dump(), DashboardTab, DashboardWidget,
+            allowed_source_keys=RMS_ALLOWED_SOURCE_KEYS,
         )
 
     @app.put("/api/rms/dashboard-widgets/{widget_id}")
@@ -248,7 +253,10 @@ def register_rms_dashboard_routes(
         _user: str = Depends(require_permission("dashboard.write")),
     ):
         _assert_rms_widget(db, widget_id)
-        return board_svc.update_widget(db, widget_id, body.model_dump(), DashboardWidget)
+        return board_svc.update_widget(
+            db, widget_id, body.model_dump(), DashboardWidget,
+            allowed_source_keys=RMS_ALLOWED_SOURCE_KEYS,
+        )
 
     @app.delete("/api/rms/dashboard-widgets/{widget_id}")
     async def api_delete_rms_widget(

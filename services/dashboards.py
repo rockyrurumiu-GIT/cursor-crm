@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple, Type
 from urllib.parse import urlparse
 
 from fastapi import HTTPException
@@ -35,7 +35,9 @@ from schemas.dashboards import (
     get_source,
 )
 from services.clients import scoped_client_query
+from services import rms_scope as rms_ds
 from services.delivery_roster import sql_roster_employment_active_pool
+from schemas.rms import RMS_ENUM_GROUP_FIELDS, RMS_FK_GROUP_FIELDS, resolve_rms_group_label
 
 _DEFAULT_SEED_NAME = "经营总览"
 _ROSTER_SEED_NAME = "交付毛利总览"
@@ -55,6 +57,9 @@ MODEL_MAP_KEYS = {
     "RosterEntry": "RosterEntry",
     "DeliverySettlementEntry": "DeliverySettlementEntry",
     "DeliveryInterviewEntry": "DeliveryInterviewEntry",
+    "RmsJob": "RmsJob",
+    "RmsCandidate": "RmsCandidate",
+    "RmsApplication": "RmsApplication",
 }
 
 
@@ -172,6 +177,7 @@ def validate_widget_config(
     widget_type: str,
     source_key: str,
     config: dict,
+    allowed_source_keys: Optional[FrozenSet[str]] = None,
 ) -> dict:
     if widget_type not in WIDGET_TYPES:
         raise HTTPException(status_code=400, detail=f"未知 widget 类型: {widget_type}")
@@ -208,8 +214,10 @@ def validate_widget_config(
     if widget_type not in DATA_WIDGET_TYPES:
         raise HTTPException(status_code=400, detail=f"widget 类型不支持数据配置: {widget_type}")
 
-    if not source_key or source_key not in DATA_SOURCES:
+    if not source_key or not get_source(source_key):
         raise HTTPException(status_code=400, detail=f"未知数据源: {source_key}")
+    if allowed_source_keys is not None and source_key not in allowed_source_keys:
+        raise HTTPException(status_code=400, detail=f"数据源不可用: {source_key}")
 
     metric = (config.get("metric") or "count").strip()
     if metric not in METRICS:
@@ -336,6 +344,28 @@ def _scoped_query(
     q = db.query(Model)
     if source_key == "clients":
         return scoped_client_query(db, ctx, models["Client"], action="read")
+    if source_key == "rms_jobs":
+        return rms_ds.scoped_jobs_query(
+            db, ctx, models["RmsJob"], models["Client"], action="read"
+        )
+    if source_key == "rms_applications":
+        return rms_ds.scoped_applications_query(
+            db, ctx, models["RmsApplication"], models["Client"], action="read"
+        )
+    if source_key == "rms_candidates":
+        RmsCandidate = models["RmsCandidate"]
+        visible = rms_ds.visible_candidate_ids(
+            db,
+            ctx,
+            RmsCandidate,
+            models["RmsApplication"],
+            models["Client"],
+        )
+        if visible is None:
+            return q
+        if not visible:
+            return q.filter(RmsCandidate.id == -1)
+        return q.filter(RmsCandidate.id.in_(visible))
     if src.has_client_id:
         return ds.filter_query_by_client_scope(
             q,
@@ -424,6 +454,83 @@ def _aggregate_rows(rows: list, metric: str, field_key: str) -> float:
     if metric == "max":
         return max(nums)
     return 0.0
+
+
+def _rms_fk_label_map(
+    db: Session,
+    source_key: str,
+    field_key: str,
+    raw_labels: list,
+    models: dict,
+) -> dict[str, str]:
+    ids: list[int] = []
+    for lb in raw_labels:
+        s = str(lb).strip()
+        if not s or s == "(空)":
+            continue
+        try:
+            ids.append(int(s))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return {}
+
+    key = (source_key, field_key)
+    if key in {("rms_jobs", "client_id"), ("rms_applications", "client_id")}:
+        Client = models.get("Client")
+        if not Client:
+            return {}
+        return {
+            str(r.id): (r.name or f"#{r.id}")
+            for r in db.query(Client).filter(Client.id.in_(ids)).all()
+        }
+    if key == ("rms_applications", "job_id"):
+        RmsJob = models.get("RmsJob")
+        if not RmsJob:
+            return {}
+        return {
+            str(r.id): (r.title or f"#{r.id}")
+            for r in db.query(RmsJob).filter(RmsJob.id.in_(ids)).all()
+        }
+    if key == ("rms_applications", "candidate_id"):
+        RmsCandidate = models.get("RmsCandidate")
+        if not RmsCandidate:
+            return {}
+        return {
+            str(r.id): (r.name or f"#{r.id}")
+            for r in db.query(RmsCandidate).filter(RmsCandidate.id.in_(ids)).all()
+        }
+    if key in {("rms_jobs", "owner_user_id"), ("rms_applications", "recommended_by")}:
+        id_list = ",".join(str(i) for i in ids)
+        rows = db.execute(
+            text(
+                f"SELECT id, COALESCE(NULLIF(display_name, ''), username) AS label "
+                f"FROM sys_user WHERE id IN ({id_list})"
+            ),
+        ).fetchall()
+        return {str(r[0]): (str(r[1]).strip() or f"#{r[0]}") for r in rows}
+    return {}
+
+
+def _display_group_labels(
+    labels: list,
+    source_key: str,
+    group_by: str,
+    db: Session,
+    models: dict,
+) -> list:
+    if not group_by or group_by == "client":
+        return labels
+    if (source_key, group_by) in RMS_ENUM_GROUP_FIELDS:
+        return [resolve_rms_group_label(source_key, group_by, lb) for lb in labels]
+    if (source_key, group_by) in RMS_FK_GROUP_FIELDS:
+        fk_map = _rms_fk_label_map(db, source_key, group_by, labels, models)
+        if fk_map:
+            return [
+                fk_map.get(str(lb), str(lb)) if str(lb) != "(空)" else "(空)"
+                for lb in labels
+            ]
+    return labels
 
 
 def _finalize_series(
@@ -538,6 +645,7 @@ def query_widget_data(
             )
             labels = [str(r.label or "(空)") for r in rows]
             values = [float(r.cnt) for r in rows]
+            labels = _display_group_labels(labels, source_key, group_by, db, models)
             return _finalize_series(
                 labels, values, sort_mode, hide_empty, limit, prefix, suffix,
             )
@@ -553,6 +661,7 @@ def query_widget_data(
         for label, bucket_rows in buckets.items():
             labels.append(label)
             values.append(_aggregate_rows(bucket_rows, metric, field_key))
+        labels = _display_group_labels(labels, source_key, group_by, db, models)
         return _finalize_series(
             labels, values, sort_mode, hide_empty, limit, prefix, suffix,
         )
@@ -789,7 +898,14 @@ def delete_tab(db: Session, tab_id: int, DashboardTab, DashboardWidget) -> dict:
     return {"status": "ok"}
 
 
-def create_widget(db: Session, tab_id: int, body: dict, DashboardTab, DashboardWidget) -> dict:
+def create_widget(
+    db: Session,
+    tab_id: int,
+    body: dict,
+    DashboardTab,
+    DashboardWidget,
+    allowed_source_keys: Optional[FrozenSet[str]] = None,
+) -> dict:
     t = db.query(DashboardTab).filter(DashboardTab.id == tab_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Tab 不存在")
@@ -801,7 +917,9 @@ def create_widget(db: Session, tab_id: int, body: dict, DashboardTab, DashboardW
     config = body.get("config") or {}
     if not isinstance(config, dict):
         raise HTTPException(status_code=400, detail="config 必须是对象")
-    clean_config = validate_widget_config(widget_type, source_key, config)
+    clean_config = validate_widget_config(
+        widget_type, source_key, config, allowed_source_keys=allowed_source_keys
+    )
     now = _now()
     w = DashboardWidget(
         tab_id=tab_id,
@@ -823,7 +941,13 @@ def create_widget(db: Session, tab_id: int, body: dict, DashboardTab, DashboardW
     return widget_to_dict(w)
 
 
-def update_widget(db: Session, widget_id: int, body: dict, DashboardWidget) -> dict:
+def update_widget(
+    db: Session,
+    widget_id: int,
+    body: dict,
+    DashboardWidget,
+    allowed_source_keys: Optional[FrozenSet[str]] = None,
+) -> dict:
     w = db.query(DashboardWidget).filter(DashboardWidget.id == widget_id).first()
     if not w:
         raise HTTPException(status_code=404, detail="Widget 不存在")
@@ -842,7 +966,12 @@ def update_widget(db: Session, widget_id: int, body: dict, DashboardWidget) -> d
         config = body.get("config") or {}
         if not isinstance(config, dict):
             raise HTTPException(status_code=400, detail="config 必须是对象")
-        clean = validate_widget_config(widget_type, w.source_key or source_key, config)
+        clean = validate_widget_config(
+            widget_type,
+            w.source_key or source_key,
+            config,
+            allowed_source_keys=allowed_source_keys,
+        )
         w.config_json = _dump_json(clean)
     for attr in ("x", "y", "w", "h", "sort_order"):
         if attr in body:

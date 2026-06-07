@@ -139,6 +139,18 @@
     return ALLOWED_PROGRESS_TRANSITIONS[normalizeProgressStatus(status)] || [];
   }
 
+  function progressActionBtnClass(targetStatus) {
+    var s = targetStatus == null ? "" : String(targetStatus).trim();
+    if (!s) return "crm-op-btn-detail";
+    if (/_failed$/.test(s) || s === "offer_dropped" || s === "onboarding_lost") {
+      return "crm-op-btn-delete";
+    }
+    if (/_abandoned$/.test(s)) {
+      return "crm-op-btn-handoff";
+    }
+    return "crm-op-btn-edit";
+  }
+
   function progressOptionsForCorrection(currentStatus) {
     var cur = normalizeProgressStatus(currentStatus);
     return APPLICATION_PROGRESS_STATUSES.filter(function (s) { return s !== cur; }).map(function (s) {
@@ -345,6 +357,7 @@
     deliveryReviewLabel: deliveryReviewLabel,
     deriveProtectionStatus: deriveProtectionStatus,
     progressTransitionsFor: progressTransitionsFor,
+    progressActionBtnClass: progressActionBtnClass,
     progressOptionsForCorrection: progressOptionsForCorrection,
     normalizeProgressStatus: normalizeProgressStatus,
     parseDateOnly: parseDateOnly,

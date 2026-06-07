@@ -9,7 +9,15 @@ from sqlalchemy.orm import Session
 
 from auth import service as auth_svc
 from auth.service import AuthContext
-from schemas.rms import JOB_PRIORITIES, JOB_STATUSES, JOB_WRITABLE_STR_FIELDS, normalize_rms_date, utc_date_str
+from schemas.rms import (
+    JOB_PRIORITIES,
+    JOB_SALARY_CAP_MAX,
+    JOB_SALARY_CAP_MIN,
+    JOB_STATUSES,
+    JOB_WRITABLE_STR_FIELDS,
+    normalize_rms_date,
+    utc_date_str,
+)
 from services import rms_scope as rms_ds
 
 def _ensure_user_exists(db: Session, user_id: int) -> None:
@@ -45,6 +53,24 @@ def _validate_job_enums(data: Dict[str, Any]) -> None:
         priority = str(priority).strip()
         if priority and priority not in JOB_PRIORITIES:
             raise HTTPException(status_code=400, detail=f"无效优先级: {priority}")
+
+
+def _validate_salary_cap(data: Dict[str, Any]) -> None:
+    if "salary_cap" not in data:
+        return
+    raw = str(data.get("salary_cap") or "").replace(",", "").strip()
+    if not raw:
+        data["salary_cap"] = ""
+        return
+    if not raw.isdigit():
+        raise HTTPException(status_code=400, detail="薪资帽须为整数，不支持字母或特殊符号")
+    value = int(raw)
+    if value < JOB_SALARY_CAP_MIN or value > JOB_SALARY_CAP_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"薪资帽须在 {JOB_SALARY_CAP_MIN:,}–{JOB_SALARY_CAP_MAX:,} 之间",
+        )
+    data["salary_cap"] = str(value)
 
 
 def _job_core_dict(job: Any) -> Dict[str, Any]:
@@ -166,6 +192,7 @@ def create_job(
     Client: Type[Any],
 ) -> Dict[str, Any]:
     _validate_job_enums(data)
+    _validate_salary_cap(data)
     client_id = int(data["client_id"])
     owner_user_id = int(data["owner_user_id"])
     _ensure_user_exists(db, owner_user_id)
@@ -237,6 +264,7 @@ def update_job(
     Client: Type[Any],
 ) -> Dict[str, Any]:
     _validate_job_enums(data)
+    _validate_salary_cap(data)
     job = rms_ds.assert_job_writable(db, ctx, job_id, RmsJob, Client)
     new_client_id = data.get("client_id")
     if new_client_id is not None:

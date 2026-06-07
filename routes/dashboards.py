@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from auth.deps import get_current_context, require_permission
 from auth.service import AuthContext
-from schemas.dashboards import build_metadata
+from schemas.dashboards import CRM_SOURCE_KEYS, build_metadata
 from services import dashboards as dash_svc
 
 
@@ -157,7 +157,10 @@ def register_dashboard_routes(
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("dashboard.write")),
     ):
-        return dash_svc.create_widget(db, tab_id, body.model_dump(), DashboardTab, DashboardWidget)
+        return dash_svc.create_widget(
+            db, tab_id, body.model_dump(), DashboardTab, DashboardWidget,
+            allowed_source_keys=CRM_SOURCE_KEYS,
+        )
 
     @app.put("/api/dashboard-widgets/{widget_id}")
     async def api_update_widget(
@@ -167,7 +170,10 @@ def register_dashboard_routes(
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("dashboard.write")),
     ):
-        return dash_svc.update_widget(db, widget_id, body.model_dump(), DashboardWidget)
+        return dash_svc.update_widget(
+            db, widget_id, body.model_dump(), DashboardWidget,
+            allowed_source_keys=CRM_SOURCE_KEYS,
+        )
 
     @app.delete("/api/dashboard-widgets/{widget_id}")
     async def api_delete_widget(

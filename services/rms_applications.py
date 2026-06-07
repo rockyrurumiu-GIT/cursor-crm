@@ -96,6 +96,10 @@ _FIELD_LABEL_SPLIT = re.compile(
 )
 _FIELD_BOUNDARY = "\uE000"
 
+_RE_CJK = re.compile(r"[\u4e00-\u9fff]")
+_RE_TRACKING_LINE = re.compile(r"^[A-Za-z0-9\-]{20,}$")
+_RE_WATERMARK_LINE = re.compile(r"^(?:试用水印|水印)\s*$")
+
 
 def _collapse_chinese_spaces(text: str) -> str:
     src = text or ""
@@ -465,6 +469,62 @@ def submit_delivery_review(
     return application_to_dict(row)
 
 
+def _pdf_blocks_to_text(page: Any) -> str:
+    try:
+        blocks = page.get_text("blocks", sort=True) or []
+    except Exception:
+        return ""
+    parts: List[str] = []
+    for block in blocks:
+        if len(block) < 5:
+            continue
+        text = (block[4] or "").strip()
+        if not text:
+            continue
+        if len(block) > 6 and block[6] == 1:
+            continue
+        parts.append(text)
+    return "\n".join(parts).strip()
+
+
+def _pdf_words_to_text(page: Any) -> str:
+    try:
+        words = page.get_text("words", sort=True) or []
+    except Exception:
+        return ""
+    if not words:
+        return ""
+    lines_by_block: Dict[int, Dict[int, List[str]]] = {}
+    for word_entry in words:
+        if len(word_entry) < 8:
+            continue
+        word = str(word_entry[4]).strip()
+        if not word:
+            continue
+        block_no = int(word_entry[5])
+        line_no = int(word_entry[6])
+        lines_by_block.setdefault(block_no, {}).setdefault(line_no, []).append(word)
+    parts: List[str] = []
+    for block_no in sorted(lines_by_block.keys()):
+        block_lines = lines_by_block[block_no]
+        for line_no in sorted(block_lines.keys()):
+            parts.append(" ".join(block_lines[line_no]))
+    return "\n".join(parts).strip()
+
+
+def _extract_pdf_page_text(page: Any) -> str:
+    text = _pdf_blocks_to_text(page)
+    if text:
+        return text
+    text = _pdf_words_to_text(page)
+    if text:
+        return text
+    try:
+        return (page.get_text("text", sort=True) or "").strip()
+    except Exception:
+        return ""
+
+
 def _extract_pdf_text(content: bytes) -> str:
     text = ""
     try:
@@ -478,7 +538,7 @@ def _extract_pdf_text(content: bytes) -> str:
                 parts: List[str] = []
                 for i in range(len(doc)):
                     try:
-                        parts.append(doc.load_page(i).get_text("text", sort=True) or "")
+                        parts.append(_extract_pdf_page_text(doc.load_page(i)))
                     except Exception:
                         parts.append("")
                 text = "\n".join(parts).strip()
@@ -504,6 +564,88 @@ def _extract_pdf_text(content: bytes) -> str:
         return "\n".join(parts).strip()
     except Exception:
         return ""
+
+
+def _count_cjk_chars(text: str) -> int:
+    return len(_RE_CJK.findall(text or ""))
+
+
+def _is_noise_line(line: str) -> bool:
+    stripped = (line or "").strip()
+    if not stripped:
+        return False
+    if _RE_WATERMARK_LINE.match(stripped):
+        return True
+    if _RE_TRACKING_LINE.match(stripped):
+        return True
+    if len(stripped) >= 20 and re.fullmatch(r"[A-Za-z0-9\-]+", stripped):
+        return True
+    if _count_cjk_chars(stripped) == 0 and len(stripped) > 40:
+        alnum = sum(1 for ch in stripped if ch.isalnum())
+        if alnum / len(stripped) > 0.85:
+            return True
+    return False
+
+
+def _clean_resume_text_for_parse(raw_text: str) -> str:
+    lines = (raw_text or "").splitlines()
+    result: List[str] = []
+    prev_nonempty = ""
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if result and result[-1] != "":
+                result.append("")
+            continue
+        if _is_noise_line(stripped):
+            continue
+        if stripped == prev_nonempty:
+            continue
+        result.append(stripped)
+        prev_nonempty = stripped
+    while result and result[-1] == "":
+        result.pop()
+    return "\n".join(result).strip()
+
+
+def _build_extract_warning(
+    raw_text: str,
+    cleaned_text: str,
+    draft_fields: Dict[str, str],
+    *,
+    is_pdf: bool = False,
+) -> str:
+    warnings: List[str] = []
+    raw = raw_text or ""
+    cleaned = cleaned_text or ""
+    if raw and len(cleaned) < len(raw) * 0.5:
+        warnings.append("检测到较多噪声文本已过滤")
+    if raw and _count_cjk_chars(cleaned) < 50:
+        warnings.append("识别到的中文内容较少")
+    if raw and not any(
+        (draft_fields.get(k) or "").strip()
+        for k in ("phone", "name", "email_wechat")
+    ):
+        warnings.append("未能识别姓名、手机或邮箱")
+    if is_pdf and not raw.strip():
+        warnings.append("未能从 PDF 提取文本，可能是扫描件图片")
+    deduped: List[str] = []
+    for item in warnings:
+        if item not in deduped:
+            deduped.append(item)
+    return "；".join(deduped)
+
+
+def _empty_parse_draft_response(message: str = "") -> Dict[str, Any]:
+    return {
+        "draft_fields": {},
+        "parsed_text": "",
+        "parsed_text_raw": "",
+        "parsed_text_length": 0,
+        "parsed_text_raw_length": 0,
+        "extract_warning": "",
+        "message": message,
+    }
 
 
 def _extract_resume_text(file_name: str, content: bytes) -> Tuple[str, Optional[str]]:
@@ -1009,10 +1151,25 @@ def parse_resume_draft(file_name: str, content: bytes) -> Dict[str, Any]:
     if len(content) > MAX_RESUME_BYTES:
         raise HTTPException(status_code=400, detail="简历文件不能超过 10MB")
 
-    text, word_msg = _extract_resume_text(file_name, content)
+    ext = os.path.splitext(file_name or "")[1].lower()
+    raw_text, word_msg = _extract_resume_text(file_name, content)
     if word_msg:
-        return {"draft_fields": {}, "parsed_text": "", "message": word_msg}
+        return _empty_parse_draft_response(word_msg)
 
-    parsed_text = text[:PARSE_DRAFT_TEXT_MAX] if text else ""
-    draft_fields = _extract_draft_fields_from_text(text)
-    return {"draft_fields": draft_fields, "parsed_text": parsed_text, "message": ""}
+    cleaned_text = _clean_resume_text_for_parse(raw_text)
+    draft_fields = _extract_draft_fields_from_text(cleaned_text)
+    extract_warning = _build_extract_warning(
+        raw_text,
+        cleaned_text,
+        draft_fields,
+        is_pdf=ext == ".pdf",
+    )
+    return {
+        "draft_fields": draft_fields,
+        "parsed_text": cleaned_text[:PARSE_DRAFT_TEXT_MAX] if cleaned_text else "",
+        "parsed_text_raw": raw_text[:PARSE_DRAFT_TEXT_MAX] if raw_text else "",
+        "parsed_text_length": len(cleaned_text),
+        "parsed_text_raw_length": len(raw_text),
+        "extract_warning": extract_warning,
+        "message": "",
+    }

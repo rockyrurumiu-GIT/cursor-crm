@@ -262,6 +262,18 @@ if (legacyOpts.some(o => o.value === "pending_client_screen")) {{
   console.error("correction options should exclude normalized current status");
   process.exit(1);
 }}
+if (L.progressActionBtnClass("second_interview_failed") !== "crm-op-btn-delete") {{
+  console.error("fail action should use delete style");
+  process.exit(1);
+}}
+if (L.progressActionBtnClass("second_interview_passed") !== "crm-op-btn-edit") {{
+  console.error("pass action should use edit style");
+  process.exit(1);
+}}
+if (L.progressActionBtnClass("second_interview_abandoned") !== "crm-op-btn-handoff") {{
+  console.error("abandon action should use handoff style");
+  process.exit(1);
+}}
 """
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr or result.stdout
@@ -330,6 +342,10 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert 'data-rms-action="progress-confirm-open"' in pipe_region
     assert 'data-rms-action="correction-picker-open"' in pipe_region
     assert "openCorrectionPickerModal" in pipe_region
+    assert "修改状态/历史更改" in pipe_region
+    assert ">修改</button>" in pipe_region
+    assert ">历史</button>" in pipe_region
+    assert "只看活动状态" in pipe_region
     rms_src = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
     assert "openProgressConfirmModal" in rms_src
     assert "progressOptionsForCorrection" in rms_src
@@ -383,6 +399,7 @@ def test_rms_dashboard_twenty_shell():
         "/static/js/pages/rms-dashboard.js",
         "rms-dashboard-twenty-5",
         "dashboard-widget-kit.js",
+        "layout-grid",
         "数据源",
         "附加展示",
         "新建看板",
@@ -412,17 +429,24 @@ def test_rms_dashboard_twenty_shell():
         "openWidgetPanel",
         "DashboardWidgetKit",
         "reloadActiveTabData",
+        "gridColumn",
     ):
         assert js_required in js, f"missing {js_required!r} in rms-dashboard.js"
 
     for js_forbidden in (
         "entered - passed - failed",
         "entered-passed-failed",
+        "rmsBarDatasetOptions",
     ):
         assert js_forbidden not in js, f"forbidden {js_forbidden!r} in rms-dashboard.js"
 
     subprocess.run(
         ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard.js")],
+        check=True,
+        cwd=REPO_ROOT,
+    )
+    subprocess.run(
+        ["node", "--check", str(REPO_ROOT / "static/js/shared/dashboard-widget-kit.js")],
         check=True,
         cwd=REPO_ROOT,
     )
