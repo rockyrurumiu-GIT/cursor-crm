@@ -1507,6 +1507,149 @@
                 document.body.appendChild(overlay);
             });
         };
+        window.crmConfirmActionDialog = function (opts) {
+            var options = opts || {};
+            var title = String(options.title || '确认操作');
+            var lines = Array.isArray(options.lines) ? options.lines : [];
+            var hint = String(options.hint || '').trim();
+            var fields = Array.isArray(options.fields) ? options.fields : [];
+            var zIndex = Number(options.zIndex || 120);
+            var confirmText = String(options.confirmText || '确认');
+            var cancelText = String(options.cancelText || '取消');
+            var confirmClass = String(
+                options.confirmClass
+                || 'flex-1 py-2 rounded-md bg-[#0969da] text-white text-sm font-medium hover:bg-[#0550ae]'
+            );
+            return new Promise(function (resolve) {
+                var done = false;
+                var overlay = null;
+                function collectValues() {
+                    var values = {};
+                    fields.forEach(function (field) {
+                        if (!field || !field.name) { return; }
+                        var el = overlay.querySelector('[data-crm-field="' + field.name + '"]');
+                        if (el) { values[field.name] = el.value; }
+                    });
+                    return values;
+                }
+                function finish(ok) {
+                    if (done) { return; }
+                    done = true;
+                    document.removeEventListener('keydown', onKeyDown, true);
+                    var values = ok ? collectValues() : {};
+                    if (overlay && overlay.parentNode) {
+                        overlay.parentNode.removeChild(overlay);
+                    }
+                    resolve({ ok: !!ok, values: values });
+                }
+                function onKeyDown(e) {
+                    if (e.key !== 'Escape') { return; }
+                    e.preventDefault();
+                    e.stopPropagation();
+                    finish(false);
+                }
+
+                overlay = document.createElement('div');
+                overlay.className = 'crm-esc-modal fixed inset-0 bg-black/40 flex items-center justify-center p-4';
+                overlay.style.zIndex = String(zIndex);
+                overlay.setAttribute('data-rms-action', 'progress-confirm-modal');
+                var panel = document.createElement('div');
+                panel.className = 'bg-white rounded-lg shadow-xl w-full max-w-md p-4 sm:p-5';
+                var h3 = document.createElement('h3');
+                h3.className = 'font-semibold text-lg text-gray-800 mb-3';
+                h3.textContent = title;
+                panel.appendChild(h3);
+
+                lines.forEach(function (line) {
+                    if (!line) { return; }
+                    var row = document.createElement('div');
+                    row.className = 'flex gap-2 text-sm text-gray-600 mb-1';
+                    var dt = document.createElement('span');
+                    dt.className = 'text-gray-500 shrink-0';
+                    dt.textContent = String(line.label || '') + '：';
+                    var dd = document.createElement('span');
+                    dd.textContent = String(line.value == null ? '' : line.value) || '—';
+                    row.appendChild(dt);
+                    row.appendChild(dd);
+                    panel.appendChild(row);
+                });
+
+                fields.forEach(function (field) {
+                    if (!field || !field.name) { return; }
+                    var wrap = document.createElement('div');
+                    wrap.className = 'mt-3';
+                    if (field.label) {
+                        var lbl = document.createElement('label');
+                        lbl.className = 'block text-sm text-gray-600 mb-1';
+                        lbl.textContent = String(field.label);
+                        wrap.appendChild(lbl);
+                    }
+                    if (field.type === 'textarea') {
+                        var ta = document.createElement('textarea');
+                        ta.className = 'w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm min-h-[4rem]';
+                        ta.setAttribute('data-crm-field', field.name);
+                        if (field.placeholder) { ta.placeholder = String(field.placeholder); }
+                        if (field.value) { ta.value = String(field.value); }
+                        wrap.appendChild(ta);
+                    } else if (field.type === 'date') {
+                        var inp = document.createElement('input');
+                        inp.type = 'date';
+                        inp.className = 'w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm';
+                        inp.setAttribute('data-crm-field', field.name);
+                        if (field.value) { inp.value = String(field.value); }
+                        wrap.appendChild(inp);
+                    } else if (field.type === 'select') {
+                        var sel = document.createElement('select');
+                        sel.className = 'w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm';
+                        sel.setAttribute('data-crm-field', field.name);
+                        var emptyOpt = document.createElement('option');
+                        emptyOpt.value = '';
+                        emptyOpt.textContent = String(field.placeholder || '请选择');
+                        sel.appendChild(emptyOpt);
+                        (Array.isArray(field.options) ? field.options : []).forEach(function (opt) {
+                            if (!opt) { return; }
+                            var o = document.createElement('option');
+                            o.value = String(opt.value == null ? '' : opt.value);
+                            o.textContent = String(opt.label == null ? opt.value : opt.label);
+                            sel.appendChild(o);
+                        });
+                        if (field.value) { sel.value = String(field.value); }
+                        wrap.appendChild(sel);
+                    }
+                    panel.appendChild(wrap);
+                });
+
+                if (hint) {
+                    var pHint = document.createElement('p');
+                    pHint.className = 'text-xs text-gray-400 mt-3 mb-4';
+                    pHint.textContent = hint;
+                    panel.appendChild(pHint);
+                }
+
+                var actions = document.createElement('div');
+                actions.className = 'flex gap-2 mt-4';
+                var cancelBtn = document.createElement('button');
+                cancelBtn.type = 'button';
+                cancelBtn.className = 'flex-1 py-2 rounded-md bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200';
+                cancelBtn.textContent = cancelText;
+                cancelBtn.setAttribute('data-crm-esc-close', '1');
+                var confirmBtn = document.createElement('button');
+                confirmBtn.type = 'button';
+                confirmBtn.className = confirmClass;
+                confirmBtn.textContent = confirmText;
+                actions.appendChild(cancelBtn);
+                actions.appendChild(confirmBtn);
+                panel.appendChild(actions);
+                overlay.appendChild(panel);
+                overlay.addEventListener('click', function (e) {
+                    if (e.target === overlay) { finish(false); }
+                });
+                cancelBtn.addEventListener('click', function () { finish(false); });
+                confirmBtn.addEventListener('click', function () { finish(true); });
+                document.addEventListener('keydown', onKeyDown, true);
+                document.body.appendChild(overlay);
+            });
+        };
 
         /** 除客户列表删除客户外，所有 .crm-op-btn-delete（文案为「删除」）统一二次确认 */
         window.crmIsDeleteConfirmExempt = function (btn) {

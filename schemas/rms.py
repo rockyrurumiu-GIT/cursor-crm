@@ -1,21 +1,92 @@
-"""RMS request/response schemas and status transition constants (Phase 2)."""
+"""RMS request/response schemas and status transition constants."""
 from __future__ import annotations
 
-from typing import Literal, Optional
+import re
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
-APPLICATION_TERMINAL = frozenset({"hired", "rejected", "withdrawn"})
+RECEIVE_STATUSES = frozenset({"pending", "accepted", "rejected"})
+DELIVERY_REVIEW_STATUSES = frozenset({"pending", "passed", "failed"})
+
+LEGACY_STATUS_NORMALIZE: dict[str, str] = {
+    "screening": "pending_client_screen",
+    "interview": "pending_first_interview",
+    "offer": "pending_offer",
+}
+
+APPLICATION_PROGRESS_TERMINAL = frozenset({
+    "internal_screen_failed",
+    "client_screen_failed",
+    "interview_scheduling_failed",
+    "first_interview_failed",
+    "second_interview_failed",
+    "second_interview_abandoned",
+    "final_interview_failed",
+    "final_interview_abandoned",
+    "offer_dropped",
+    "onboarding_lost",
+    "hired",
+    "rejected",
+    "withdrawn",
+})
+
+APPLICATION_TERMINAL = APPLICATION_PROGRESS_TERMINAL
+
+ACTIVE_PIPELINE_STATUSES = frozenset({
+    "pending_internal_screen",
+    "pending_client_screen",
+    "scheduling_interview",
+    "pending_first_interview",
+    "first_interview_passed",
+    "second_interview_passed",
+    "pending_offer",
+    "onboarding",
+})
+
+APPLICATION_PROGRESS_STATUSES = frozenset({
+    "pending_internal_screen",
+    "internal_screen_failed",
+    "pending_client_screen",
+    "client_screen_failed",
+    "scheduling_interview",
+    "interview_scheduling_failed",
+    "pending_first_interview",
+    "first_interview_passed",
+    "first_interview_failed",
+    "second_interview_passed",
+    "second_interview_failed",
+    "second_interview_abandoned",
+    "final_interview_failed",
+    "final_interview_abandoned",
+    "pending_offer",
+    "offer_dropped",
+    "onboarding",
+    "onboarding_lost",
+    "hired",
+})
 
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
-    "recommended": {"screening", "rejected", "withdrawn"},
-    "screening": {"interview", "rejected", "withdrawn"},
-    "interview": {"offer", "rejected", "withdrawn"},
-    "offer": {"hired", "rejected", "withdrawn"},
-    "hired": set(),
-    "rejected": set(),
-    "withdrawn": set(),
+    "pending_internal_screen": {"internal_screen_failed", "pending_client_screen"},
+    "pending_client_screen": {"client_screen_failed", "scheduling_interview"},
+    "scheduling_interview": {"interview_scheduling_failed", "pending_first_interview"},
+    "pending_first_interview": {"first_interview_failed", "first_interview_passed"},
+    "first_interview_passed": {
+        "second_interview_failed",
+        "second_interview_passed",
+        "second_interview_abandoned",
+    },
+    "second_interview_passed": {
+        "final_interview_failed",
+        "pending_offer",
+        "final_interview_abandoned",
+    },
+    "pending_offer": {"offer_dropped", "onboarding"},
+    "onboarding": {"onboarding_lost", "hired"},
 }
+
+_HIRED_AT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_RMS_DATE_RE = _HIRED_AT_RE
 
 FORBIDDEN_APPLICATION_BODY_KEYS = frozenset({
     "status",
@@ -42,6 +113,58 @@ JOB_WRITABLE_STR_FIELDS = (
     "interviewer",
     "note",
 )
+
+
+def normalize_application_status(status: str) -> str:
+    s = (status or "").strip()
+    if not s:
+        return "recommended"
+    return LEGACY_STATUS_NORMALIZE.get(s, s)
+
+
+def utc_date_str() -> str:
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def normalize_rms_date(value: Any) -> str:
+    """Normalize RMS date fields to YYYY-MM-DD for storage/API output."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if not s:
+        return ""
+    head = s[:10]
+    if _RMS_DATE_RE.match(head):
+        return head
+    return s
+
+
+def validate_hired_at(value: str) -> str:
+    from fastapi import HTTPException
+
+    v = (value or "").strip()
+    if not v:
+        raise HTTPException(status_code=400, detail="已入职状态必须填写入职时间 hired_at")
+    if not _HIRED_AT_RE.match(v):
+        raise HTTPException(status_code=400, detail="hired_at 格式须为 YYYY-MM-DD")
+    return v
+
+
+def is_pipeline_eligible_application(row: Any) -> bool:
+    recv = (getattr(row, "receive_status", None) or "pending").strip()
+    dr = (getattr(row, "delivery_review_status", None) or "pending").strip()
+    return recv == "accepted" and dr == "passed"
+
+
+def validate_status_correction_note(note: str) -> str:
+    from fastapi import HTTPException
+
+    v = (note or "").strip()
+    if len(v) < 2:
+        raise HTTPException(status_code=400, detail="状态修正备注至少 2 个字")
+    return v
 
 
 def reject_forbidden_application_keys(body: dict) -> None:
@@ -74,6 +197,8 @@ class ApplicationStatusBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     to_status: str
+    mode: Literal["transition", "correction"] = "transition"
+    hired_at: str = ""
     reason: str = ""
     note: str = ""
 

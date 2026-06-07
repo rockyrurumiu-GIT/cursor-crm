@@ -1,0 +1,717 @@
+{% extends "base.html" %}
+{% block title %}招聘Dashboard · ITO CRM{% endblock %}
+{% block head_extra %}
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+.dash-root { display: flex; flex-direction: column; min-height: calc(100vh - 110px); background: #fafafa; }
+.dash-top-bar {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
+  padding: 0 1.25rem; background: #fff; border-bottom: 1px solid #e6e8eb;
+}
+.dash-toolbar-right { display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.45rem; flex-shrink: 0; }
+.dash-tw-tabs {
+  display: flex; align-items: flex-end; flex-wrap: wrap; gap: 0;
+  min-height: 42px; flex: 1; min-width: 0;
+}
+.dash-tw-tab {
+  position: relative; padding: 0.7rem 1rem 0.55rem; font-size: 0.875rem; font-weight: 500;
+  line-height: 1.25; color: #6b7280; background: transparent; border: none; cursor: pointer;
+  margin-bottom: -1px; white-space: nowrap;
+}
+.dash-tw-tab:hover { color: #1f2328; }
+.dash-tw-tab.active { color: #1f2328; font-weight: 600; }
+.dash-tw-tab.active::after {
+  content: ""; position: absolute; left: 0.65rem; right: 0.65rem; bottom: 0;
+  height: 2px; background: #1f2328; border-radius: 1px 1px 0 0;
+}
+.dash-page-tabs-row {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
+  padding: 0 1.25rem; background: #fff; border-bottom: 1px solid #e6e8eb;
+}
+.tbtn {
+  display: inline-flex; align-items: center; justify-content: center; height: 32px; min-width: 32px;
+  padding: 0 0.65rem; border-radius: 8px; border: 1px solid #e0e2e6; background: #fff;
+  color: #374151; font-size: 0.85rem; cursor: pointer;
+}
+.tbtn:hover { background: #f2f3f5; }
+.tbtn:disabled { opacity: 0.4; cursor: default; }
+.tbtn-primary { background: #1f2328; color: #fff; border-color: #1f2328; }
+.tbtn-primary:hover { background: #000; }
+.dash-canvas { flex: 1; padding: 1rem 1.25rem; overflow: auto; }
+.dash-grid {
+  display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 52px;
+  gap: 12px; max-width: 1280px; margin: 0 auto;
+}
+.dash-card {
+  background: #fff; border: 1px solid #eceef1; border-radius: 10px; padding: 0.75rem 0.9rem;
+  display: flex; flex-direction: column; min-height: 0; max-height: 100%; overflow: hidden;
+}
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; flex-shrink: 0; }
+.card-title { font-weight: 500; font-size: 0.875rem; color: #374151; }
+.card-body { flex: 1; display: flex; min-height: 0; position: relative; overflow: auto; }
+.num-wrap { display: flex; flex-direction: column; justify-content: center; gap: 0.35rem; width: 100%; }
+.num-value { font-size: 2rem; line-height: 1.1; font-weight: 600; color: #1f2328; }
+.num-sub { font-size: 0.78rem; color: #98a2b3; }
+.chart-area { display: flex; flex-direction: column; width: 100%; min-height: 0; gap: 0.6rem; }
+.chart-canvas-wrap { position: relative; flex: 1; min-width: 0; min-height: 0; }
+.chart-canvas-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+.state-msg { width: 100%; text-align: center; align-self: center; font-size: 0.85rem; color: #98a2b3; }
+.state-forbidden { color: #cf222e; }
+.field { margin-bottom: 0; }
+.field label { display: block; font-size: 0.78rem; color: #5b6370; margin-bottom: 0.25rem; }
+.field input, .field select { width: 100%; border: 1px solid #d8dce0; border-radius: 8px; padding: 0.4rem 0.55rem; font-size: 0.85rem; }
+.field input:focus, .field select:focus { outline: none; border-color: #9aa9bd; }
+.rms-dash-filter-row {
+  display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: flex-end; width: 100%;
+}
+.rms-dash-filter-row .field { flex: 0 1 auto; min-width: 7rem; }
+.rms-stage-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.rms-stage-table thead th {
+  text-align: left; font-weight: 500; color: #98a2b3; padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #f2f3f5; background: transparent;
+}
+.rms-stage-table tbody td {
+  padding: 0.4rem 0.5rem; color: #374151; border-bottom: 1px solid #f2f3f5;
+}
+.rms-stage-table tbody tr:last-child td { border-bottom: none; }
+.rms-filter-summary { font-size: 0.78rem; color: #6b7280; line-height: 1.6; }
+.rms-filter-summary dt { color: #98a2b3; display: inline; }
+.rms-filter-summary dd { display: inline; margin: 0 0.75rem 0 0.25rem; color: #374151; }
+.dash-tw-tab-add {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.7rem 1rem 0.55rem; margin-bottom: -1px; font-size: 0.875rem; font-weight: 500;
+  color: #6b7280; background: transparent; border: none; cursor: pointer; white-space: nowrap;
+}
+.dash-tw-tab-add:hover { color: #1f2328; }
+.dash-tw-tab-add-icon { font-size: 1rem; line-height: 1; font-weight: 400; }
+.dash-page-tabs-actions { display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.45rem; flex-shrink: 0; }
+.tbtn-danger { color: #cf222e; border-color: #f0c4c4; }
+.tbtn-danger:hover { background: #fdf0f0; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; align-items: center; justify-content: center; }
+.modal-panel { background: #fff; border-radius: 14px; padding: 1.25rem; width: 90%; max-width: 420px; }
+.dash-card.editing { border-style: dashed; border-color: #d5d9de; }
+.dash-card.editing:hover { border-color: #9aa9bd; box-shadow: 0 2px 10px rgba(16,24,40,0.06); }
+.card-actions { display: flex; gap: 0.25rem; }
+.icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: #6b7280; cursor: pointer; font-size: 0.85rem; }
+.icon-btn:hover { background: #f2f3f5; color: #1f2328; }
+.icon-btn.danger:hover { background: #fdf0f0; color: #cf222e; }
+.panel-scrim { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; justify-content: flex-end; }
+.config-panel { width: min(420px, 92vw); background: #fff; height: 100%; display: flex; flex-direction: column; box-shadow: -4px 0 24px rgba(16,24,40,0.12); }
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.1rem; border-bottom: 1px solid #eceef1; }
+.panel-head h3 { font-weight: 600; font-size: 0.95rem; }
+.panel-body { flex: 1; overflow: auto; padding: 0.85rem 1.1rem 1.25rem; }
+.panel-section { margin-bottom: 1rem; }
+.panel-section h4 { font-size: 0.72rem; font-weight: 600; color: #98a2b3; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.45rem; }
+.type-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
+.rich-text { font-size: 0.85rem; color: #374151; line-height: 1.55; white-space: pre-wrap; }
+.rich-title { font-weight: 600; margin-bottom: 0.35rem; }
+.layout-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.45rem; }
+.layout-grid .field { min-width: 0; }
+.type-cell { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.5rem 0; border: 1px solid #e0e2e6; border-radius: 8px; font-size: 0.72rem; color: #5b6370; cursor: pointer; }
+.type-cell.active { border-color: #2563eb; background: #eff4ff; color: #1d4ed8; }
+.num-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.roster-card { display: flex; flex-direction: column; width: 100%; min-height: 0; gap: 0.7rem; }
+.roster-meta { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.roster-client-select { border: 1px solid #d8dce0; border-radius: 8px; padding: 0.3rem 0.5rem; font-size: 0.82rem; max-width: 60%; }
+.roster-scope, .roster-headcount { font-size: 0.76rem; color: #98a2b3; }
+.roster-tiles { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; align-content: center; }
+.roster-tile { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.45rem 0.55rem; background: #fcfcfd; border: 1px solid #f2f3f5; border-radius: 8px; }
+.roster-tile-val { font-size: 1.1rem; font-weight: 600; line-height: 1.1; }
+.roster-tile-label { font-size: 0.68rem; color: #a8b0bd; }
+.dash-iframe { width: 100%; height: 100%; min-height: 220px; border: 0; border-radius: 8px; }
+.chart-legend { flex-shrink: 0; }
+.legend-items { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; justify-content: center; }
+.legend-row { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.74rem; color: #7a828c; }
+.legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+.legend-label { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.legend-val { color: #b8bec6; }
+.config-panel { width: 380px; max-width: 92vw; }
+.panel-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.9rem 1.1rem; border-top: 1px solid #eef0f2; }
+.panel-autosave-hint { font-size: 0.76rem; color: #98a2b3; }
+.color-picker-wrap { position: relative; }
+.color-picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; width: 100%; padding: 0.45rem 0.55rem; border: 1px solid #d8dce0; border-radius: 8px; background: #fff; font-size: 0.85rem; cursor: pointer; }
+.color-picker-preview { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.08); }
+.color-popover { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 80; background: #fff; border: 1px solid #e6e8eb; border-radius: 10px; box-shadow: 0 10px 28px rgba(16,24,40,0.12); padding: 0.55rem; max-height: 280px; overflow: auto; }
+.color-popover-search { width: 100%; border: 1px solid #e0e2e6; border-radius: 8px; padding: 0.4rem 0.55rem; font-size: 0.82rem; margin-bottom: 0.45rem; }
+.color-popover-row { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 0.35rem; padding: 0.35rem 0.4rem; border-radius: 8px; }
+.color-popover-swatches { display: flex; gap: 0.35rem; justify-content: flex-end; }
+.color-popover-swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
+.color-popover-swatch.active { border-color: #1f2328; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0; font-size: 0.83rem; color: #374151; }
+.filter-row { display: grid; grid-template-columns: 1fr 70px 1fr 24px; gap: 0.35rem; margin-bottom: 0.4rem; align-items: center; }
+.filter-row select, .filter-row input { padding: 0.3rem 0.4rem; font-size: 0.78rem; border: 1px solid #d8dce0; border-radius: 6px; }
+.filter-del { color: #cf222e; cursor: pointer; text-align: center; }
+.add-filter, .panel-add-link { font-size: 0.78rem; color: #2563eb; cursor: pointer; }
+.extra-view-tag { font-size: 0.65rem; font-weight: 600; color: #3f6b9e; background: #eef4ff; border: 1px solid #d6e4f7; border-radius: 4px; padding: 0.1rem 0.4rem; margin-right: 0.35rem; }
+.dash-card-extra-view { border-color: #c5d9f0; }
+.extra-view-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 0.35rem; margin-bottom: 0.5rem; align-items: end; }
+.empty-canvas { text-align: center; color: #98a2b3; padding: 4rem 0; }
+</style>
+{% endblock %}
+{% block content %}
+{% raw %}
+<div id="rms-dashboard-app" class="dash-root">
+    <div class="dash-top-bar">
+        <nav class="dash-tw-tabs" aria-label="看板">
+            <button v-for="d in dashboards" :key="d.id" type="button"
+                :class="['dash-tw-tab', activeDashboardId === d.id ? 'active' : '']"
+                @click="selectDashboard(d.id)">{{ d.name }}</button>
+            <button v-if="canWrite" type="button" class="dash-tw-tab-add" @click="openDashboardModal()">
+                <span class="dash-tw-tab-add-icon" aria-hidden="true">+</span> 新建看板
+            </button>
+        </nav>
+        <div class="dash-toolbar-right">
+            <button type="button" class="tbtn" :disabled="loading" @click="loadDashboard">刷新</button>
+            <button type="button" class="tbtn" @click="goRosterTab">核对已入职与花名册</button>
+            <template v-if="canWrite">
+                <button v-if="!editMode" type="button" class="tbtn tbtn-primary" @click="editMode = true">编辑</button>
+                <button v-else type="button" class="tbtn tbtn-primary" @click="editMode = false">完成</button>
+            </template>
+        </div>
+    </div>
+
+    <div class="dash-page-tabs-row" v-if="activeDashboard">
+        <nav class="dash-tw-tabs" aria-label="标签页">
+            <button v-for="t in activeDashboard.tabs" :key="t.id" type="button"
+                :class="['dash-tw-tab', activeTabId === t.id ? 'active' : '']"
+                @click="selectTab(t.id)">{{ t.name }}</button>
+            <button v-if="editMode && canWrite" type="button" class="dash-tw-tab-add" @click="openTabModal()">
+                <span class="dash-tw-tab-add-icon" aria-hidden="true">+</span> 新建标签页
+            </button>
+        </nav>
+        <div v-if="editMode && canWrite" class="dash-page-tabs-actions">
+            <button type="button" class="tbtn" :disabled="!activeTabId" @click="openWidgetPanel()">+ 组件</button>
+            <button type="button" class="tbtn tbtn-danger" :disabled="!activeDashboardId" @click="deleteActiveDashboard">删除看板</button>
+        </div>
+    </div>
+
+    <div class="dash-canvas">
+        <p v-if="error" class="state-msg state-forbidden" style="margin-bottom:0.75rem;">{{ error }}</p>
+        <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
+
+        <div v-if="activeTab && displayItems.length" class="dash-grid">
+            <div v-for="item in displayItems" :key="item.key"
+                 class="dash-card"
+                 :class="{ editing: editMode, 'dash-card-extra-view': item.isExtra }"
+                 :style="item.style">
+                <div class="card-head">
+                    <span v-if="item.isExtra" class="extra-view-tag">附加 · {{ extraRenderLabel(item.extraView.render) }}</span>
+                    <span class="card-title">{{ item.title }}</span>
+                    <div v-if="editMode && canWrite && !item.isExtra" class="card-actions">
+                        <span class="icon-btn" @click="openDisplayItemPanel(item)" title="编辑">✎</span>
+                        <span class="icon-btn" @click="duplicateWidget(item.widget)" title="复制">⧉</span>
+                        <span class="icon-btn danger" @click="deleteWidget(item.widget.id)" title="删除">✕</span>
+                    </div>
+                    <div v-else-if="editMode && canWrite && item.isExtra" class="card-actions">
+                        <span class="icon-btn" @click="openDisplayItemPanel(item)" title="编辑数据源组件">✎</span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <template v-if="item.widget.widget_type === 'rms_block'">
+                    <template v-if="item.block === 'filter'">
+                        <div class="rms-dash-filter-row">
+                            <div class="field">
+                                <label>{{ clientFieldLabel }}</label>
+                                <select v-if="clientOptions.length" v-model="filters.client_id">
+                                    <option value="">全部</option>
+                                    <option v-for="c in clientOptions" :key="c.id" :value="String(c.id)">{{ c.name }}</option>
+                                </select>
+                                <input v-else v-model="filters.client_id" type="number" placeholder="ID" />
+                            </div>
+                            <div class="field">
+                                <label>{{ jobFieldLabel }}</label>
+                                <select v-if="jobOptions.length" v-model="filters.job_id">
+                                    <option value="">全部</option>
+                                    <option v-for="j in jobOptions" :key="j.id" :value="String(j.id)">{{ j.title || ('岗位#' + j.id) }}</option>
+                                </select>
+                                <input v-else v-model="filters.job_id" type="number" placeholder="ID" />
+                            </div>
+                            <div class="field">
+                                <label>优先级</label>
+                                <select v-model="filters.priority">
+                                    <option value="">全部</option>
+                                    <option value="high">高</option>
+                                    <option value="medium">中</option>
+                                    <option value="low">低</option>
+                                </select>
+                            </div>
+                            <div class="field"><label>城市</label><input v-model="filters.city" /></div>
+                            <div class="field">
+                                <label>{{ salesFieldLabel }}</label>
+                                <select v-if="userOptions.length" v-model="filters.sales_user_id">
+                                    <option value="">全部</option>
+                                    <option v-for="u in userOptions" :key="'s'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                                </select>
+                                <input v-else v-model="filters.sales_user_id" type="number" placeholder="ID" />
+                            </div>
+                            <div class="field">
+                                <label>{{ deliveryFieldLabel }}</label>
+                                <select v-if="userOptions.length" v-model="filters.delivery_user_id">
+                                    <option value="">全部</option>
+                                    <option v-for="u in userOptions" :key="'d'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                                </select>
+                                <input v-else v-model="filters.delivery_user_id" type="number" placeholder="ID" />
+                            </div>
+                            <div class="field">
+                                <label>{{ recruiterFieldLabel }}</label>
+                                <select v-if="userOptions.length" v-model="filters.recruiter_user_id">
+                                    <option value="">全部</option>
+                                    <option v-for="u in userOptions" :key="'r'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                                </select>
+                                <input v-else v-model="filters.recruiter_user_id" type="number" placeholder="ID" />
+                            </div>
+                            <div class="field"><label>推荐日起</label><input v-model="filters.date_from" type="date" /></div>
+                            <div class="field"><label>推荐日止</label><input v-model="filters.date_to" type="date" /></div>
+                            <button type="button" class="tbtn tbtn-primary" @click="loadDashboard">应用</button>
+                        </div>
+                    </template>
+
+                    <!-- KPI -->
+                    <template v-else-if="item.block === 'kpi_clients' && data">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ data.demand_overview.open_client_count }}</span>
+                            <span class="num-sub">有需求客户数</span>
+                        </div>
+                    </template>
+                    <template v-else-if="item.block === 'kpi_jobs' && data">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ data.demand_overview.open_job_count }}</span>
+                            <span class="num-sub">需求总数</span>
+                        </div>
+                    </template>
+                    <template v-else-if="item.block === 'kpi_hc' && data">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ data.demand_overview.open_hc_total }}</span>
+                            <span class="num-sub">HC 总数</span>
+                        </div>
+                    </template>
+
+                    <!-- 图表 -->
+                    <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter'">
+                        <div class="chart-area">
+                            <div class="chart-canvas-wrap">
+                                <canvas :id="chartCanvasId(item.widget)"></canvas>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- 筛选摘要 -->
+                    <template v-else-if="item.block === 'filter_summary'">
+                        <dl class="rms-filter-summary">
+                            <template v-for="f in activeFilterSummary" :key="f.key">
+                                <dt>{{ f.label }}：</dt><dd>{{ f.value }}</dd>
+                            </template>
+                            <template v-if="!activeFilterSummary.length">
+                                <dd>未设置筛选（全量）</dd>
+                            </template>
+                        </dl>
+                    </template>
+
+                    <!-- 历史明细 -->
+                    <template v-else-if="item.block === 'table_history'">
+                        <table class="rms-stage-table" v-if="historicalStages.length">
+                            <thead><tr>
+                                <th>阶段</th><th>进入</th><th>通过</th><th>fail</th>
+                                <th>待处理</th><th>分母</th><th>通过率</th>
+                            </tr></thead>
+                            <tbody>
+                                <tr v-for="s in historicalStages" :key="s.stage">
+                                    <td>{{ s.label }}</td>
+                                    <td>{{ s.entered }}</td>
+                                    <td>{{ s.passed }}</td>
+                                    <td>{{ s.failed }}</td>
+                                    <td>{{ s.pending_count }}</td>
+                                    <td>{{ s.denominator }}</td>
+                                    <td>{{ s.pass_rate }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p v-else class="state-msg">暂无数据</p>
+                    </template>
+
+                    <!-- 人效明细 -->
+                    <template v-else-if="item.block === 'table_recruiter'">
+                        <table class="rms-stage-table" v-if="data && data.recruiter_performance.length">
+                            <thead><tr>
+                                <th>推荐人ID</th><th>客户数</th><th>岗位数</th><th>HC</th>
+                                <th>当月入职</th><th>客筛率</th><th>入职率</th>
+                            </tr></thead>
+                            <tbody>
+                                <tr v-for="r in data.recruiter_performance" :key="r.recruiter_user_id">
+                                    <td>{{ r.recruiter_user_id || '—' }}</td>
+                                    <td>{{ r.client_count }}</td>
+                                    <td>{{ r.job_count }}</td>
+                                    <td>{{ r.hc_total }}</td>
+                                    <td>{{ r.hired_this_month }}</td>
+                                    <td>{{ r.client_screen_rate }}</td>
+                                    <td>{{ r.onboarding_rate }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p v-else class="state-msg">暂无数据</p>
+                    </template>
+
+                    <!-- 花名册 -->
+                    <template v-else-if="item.block === 'roster_header'">
+                        <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+                            <span>点击右侧按钮执行核对</span>
+                            <button type="button" class="tbtn tbtn-primary" :disabled="rosterLoading" @click="loadRosterCheck">执行核对</button>
+                        </div>
+                    </template>
+                    <template v-else-if="item.block === 'roster_kpi_matched' && rosterCheck">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ rosterCheck.summary.matched }}</span>
+                            <span class="num-sub">一致</span>
+                        </div>
+                    </template>
+                    <template v-else-if="item.block === 'roster_kpi_missing' && rosterCheck">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ rosterCheck.summary.missing }}</span>
+                            <span class="num-sub">缺失</span>
+                        </div>
+                    </template>
+                    <template v-else-if="item.block === 'roster_kpi_mismatch' && rosterCheck">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ rosterCheck.summary.date_mismatch }}</span>
+                            <span class="num-sub">不一致</span>
+                        </div>
+                    </template>
+                    <template v-else-if="item.block === 'roster_kpi_ambiguous' && rosterCheck">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ rosterCheck.summary.ambiguous }}</span>
+                            <span class="num-sub">多匹配</span>
+                        </div>
+                    </template>
+                    <template v-else-if="item.block === 'table_roster'">
+                        <table class="rms-stage-table" v-if="rosterCheck && rosterCheck.items.length">
+                            <thead><tr>
+                                <th>候选人</th><th>客户</th><th>入职日</th><th>核对结果</th><th>说明</th>
+                            </tr></thead>
+                            <tbody>
+                                <tr v-for="row in rosterCheck.items" :key="row.application_id">
+                                    <td>{{ row.candidate_name }}</td>
+                                    <td>{{ row.client_name }}</td>
+                                    <td>{{ formatRmsDate(row.hired_at) }}</td>
+                                    <td>{{ row.roster_status }}</td>
+                                    <td>{{ row.message }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p v-else-if="rosterLoading" class="state-msg">核对中…</p>
+                        <p v-else class="state-msg">点击「执行核对」加载花名册比对结果</p>
+                    </template>
+
+                    <template v-else>
+                        <span class="state-msg">{{ loading ? '加载中…' : '暂无数据' }}</span>
+                    </template>
+                    </template>
+
+                    <template v-else-if="widgetData[item.widget.id] && widgetData[item.widget.id].status === 'forbidden'">
+                        <p class="state-msg state-forbidden">无权限查看</p>
+                    </template>
+                    <template v-else-if="widgetData[item.widget.id] && widgetData[item.widget.id].status === 'error'">
+                        <p class="state-msg">加载失败</p>
+                    </template>
+                    <template v-else-if="item.widget.widget_type === 'number'">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ widgetData[item.widget.id] ? widgetData[item.widget.id].display : '—' }}</span>
+                            <span class="num-sub"><span class="num-dot" :style="{background: themeColor(item.widget)}"></span>{{ sourceLabel(item.widget.source_key) }}</span>
+                        </div>
+                    </template>
+                    <template v-else-if="item.widget.widget_type === 'rich_text'">
+                        <div class="rich-text">
+                            <div v-if="richTitle(widgetData[item.widget.id] && widgetData[item.widget.id].content)" class="rich-title">{{ richTitle(widgetData[item.widget.id] && widgetData[item.widget.id].content) }}</div>
+                            <div class="rich-body">{{ richBody(widgetData[item.widget.id] && widgetData[item.widget.id].content) }}</div>
+                        </div>
+                    </template>
+                    <template v-else-if="item.widget.widget_type === 'iframe'">
+                        <iframe v-if="widgetData[item.widget.id] && widgetData[item.widget.id].url" class="dash-iframe" :src="widgetData[item.widget.id].url" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+                    </template>
+                    <template v-else-if="item.widget.widget_type === 'roster_summary'">
+                        <div class="roster-card">
+                            <div class="roster-meta">
+                                <select v-if="isRosterClientCard(item.widget) && canWrite" class="roster-client-select" :value="(item.widget.config && item.widget.config.client_id) || ''" @change="changeRosterClient(item.widget, $event.target.value)">
+                                    <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                                </select>
+                                <span v-else class="roster-scope">{{ rosterScopeLabel(item.widget) }}</span>
+                                <span v-if="isRosterClientCard(item.widget) && canWrite" class="roster-headcount">{{ rosterHeadcount(item.widget) }}</span>
+                            </div>
+                            <div class="roster-tiles">
+                                <div v-for="t in rosterTiles(item.widget)" :key="t.label" class="roster-tile">
+                                    <span class="roster-tile-val" :style="{color: t.color}">{{ t.display }}</span>
+                                    <span class="roster-tile-label">{{ t.label }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <template v-else-if="['bar','horizontal_bar','pie','line'].includes(item.widget.widget_type)">
+                        <div class="chart-area">
+                            <div class="chart-canvas-wrap">
+                                <canvas :id="cardCanvasId(item)"></canvas>
+                            </div>
+                            <div v-if="!item.isExtra && item.widget.widget_type === 'pie' && showLegend(item.widget) && legendOf(item.widget).length" class="chart-legend">
+                                <div class="legend-items">
+                                    <span v-for="leg in legendOf(item.widget)" :key="leg.label" class="legend-row">
+                                        <span class="legend-dot" :style="{background: leg.color}"></span>
+                                        <span class="legend-label" :title="leg.label">{{ leg.label }}</span>
+                                        <span class="legend-val">{{ leg.value }}</span>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                    <template v-else>
+                        <span class="state-msg">加载中…</span>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <div v-else-if="activeDashboard && !activeTab" class="empty-canvas">暂无标签页{{ editMode ? '，点击上方「+ 标签页」新建。' : '。' }}</div>
+        <div v-else-if="activeTab" class="empty-canvas">暂无组件{{ editMode ? '，点击上方「+ 组件」添加。' : '。' }}</div>
+        <div v-else class="empty-canvas">暂无仪表盘。</div>
+    </div>
+
+    <div v-if="panelOpen" class="panel-scrim" @click.self="closePanel()">
+        <aside class="config-panel">
+            <div class="panel-head">
+                <h3>{{ widgetForm.id ? '编辑组件' : '新建组件' }}</h3>
+                <span class="icon-btn" @click="closePanel()">✕</span>
+            </div>
+            <div class="panel-body">
+                <div class="panel-section">
+                    <h4>类型</h4>
+                    <div class="type-grid">
+                        <div v-for="t in metadata.widget_types" :key="t"
+                             :class="['type-cell', widgetForm.widget_type === t ? 'active' : '']"
+                             @click="selectWidgetType(t)">
+                            <span style="font-size:1rem">{{ typeIcon(t) }}</span>
+                            <span>{{ typeLabel(t) }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="panel-section">
+                    <h4>基础</h4>
+                    <div class="field"><label>标题</label><input v-model="widgetForm.title" /></div>
+                </div>
+                <div v-if="widgetForm.widget_type === 'rms_block'" class="panel-section">
+                    <h4>招聘预设</h4>
+                    <div class="field"><label>内容</label>
+                        <select v-model="widgetForm.config.block">
+                            <option v-for="b in metadata.rms_blocks" :key="b.key" :value="b.key">{{ b.label }}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <template v-if="isRosterSummary">
+                    <div class="panel-section">
+                        <h4>花名册概览</h4>
+                        <div class="field"><label>范围</label>
+                            <select v-model="rosterScope">
+                                <option value="all">全公司</option>
+                                <option value="client">指定客户</option>
+                            </select>
+                        </div>
+                        <div v-if="rosterScope === 'client'" class="field"><label>客户</label>
+                            <select v-model.number="widgetForm.config.client_id">
+                                <option :value="null">—</option>
+                                <option v-for="c in rosterClients" :key="c.id" :value="c.id">{{ c.name }}</option>
+                            </select>
+                        </div>
+                        <div class="toggle-row"><span>包含离职</span><input type="checkbox" v-model="widgetForm.config.include_left" /></div>
+                    </div>
+                </template>
+
+                <template v-if="needsDataSource">
+                    <div class="panel-section">
+                        <h4>数据</h4>
+                        <div class="field"><label>数据源</label>
+                            <select v-model="widgetForm.source_key">
+                                <option value="">—</option>
+                                <option v-for="s in metadata.sources" :key="s.key" :value="s.key">{{ s.label }}</option>
+                            </select>
+                        </div>
+                        <div class="field"><label>聚合</label>
+                            <select v-model="widgetForm.config.metric">
+                                <option v-for="m in metadata.metrics" :key="m" :value="m">{{ metricLabel(m) }}</option>
+                            </select>
+                        </div>
+                        <div v-if="needsField" class="field"><label>字段</label>
+                            <select v-model="widgetForm.config.field">
+                                <option value="">—</option>
+                                <option v-for="f in numericFields" :key="f.key" :value="f.key">{{ f.label }}</option>
+                            </select>
+                        </div>
+                        <div v-if="needsGroupBy" class="field"><label>分组</label>
+                            <select v-model="widgetForm.config.group_by">
+                                <option value="">—</option>
+                                <option v-for="f in groupByFields" :key="f.key" :value="f.key">{{ f.label }}</option>
+                            </select>
+                        </div>
+                        <div v-if="isDateGroup" class="field"><label>时间粒度</label>
+                            <select v-model="widgetForm.config.date_group">
+                                <option v-for="g in metadata.date_groups" :key="g" :value="g">{{ g }}</option>
+                            </select>
+                        </div>
+                        <label style="font-size:.78rem;color:#5b6370;">筛选</label>
+                        <div v-for="(f, idx) in widgetForm.config.filters" :key="idx" class="filter-row">
+                            <select v-model="f.field">
+                                <option value="">字段</option>
+                                <option v-for="fld in sourceFields" :key="fld.key" :value="fld.key">{{ fld.label }}</option>
+                            </select>
+                            <select v-model="f.op">
+                                <option value="eq">=</option>
+                                <option value="in">包含于</option>
+                                <option value="contains">包含</option>
+                            </select>
+                            <input v-model="f.value" :placeholder="f.op === 'in' ? '逗号分隔' : '值'" />
+                            <span class="filter-del" @click="removeFilter(idx)">✕</span>
+                        </div>
+                        <span class="add-filter" @click="addFilter()">+ 添加筛选</span>
+                    </div>
+                </template>
+
+                <template v-if="widgetForm.widget_type === 'iframe'">
+                    <div class="panel-section">
+                        <h4>内容</h4>
+                        <div class="field"><label>URL（仅 https）</label><input v-model="widgetForm.config.url" placeholder="https://" /></div>
+                    </div>
+                </template>
+                <template v-if="widgetForm.widget_type === 'rich_text'">
+                    <div class="panel-section">
+                        <h4>内容</h4>
+                        <div class="field"><textarea v-model="widgetForm.config.content" rows="5"></textarea></div>
+                    </div>
+                </template>
+
+                <template v-if="isChart">
+                    <div class="panel-section">
+                        <h4>样式</h4>
+                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker">
+                            <label>颜色</label>
+                            <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
+                                <span class="color-picker-value">
+                                    <span class="color-picker-preview" :style="{background: widgetPalette(widgetForm.config)[selectedShade(widgetForm.config)]}"></span>
+                                    {{ selectedColorRowLabel }}
+                                </span>
+                                <span style="font-size:.7rem;color:#9aa0a6">▾</span>
+                            </button>
+                            <div v-if="colorPickerOpen" class="color-popover">
+                                <input class="color-popover-search" v-model="colorSearch" placeholder="搜索颜色" />
+                                <div v-for="row in filteredColorRows" :key="row.key" class="color-popover-row">
+                                    <span class="color-popover-label">{{ row.label }}</span>
+                                    <div class="color-popover-swatches">
+                                        <span v-for="(shade, si) in row.shades" :key="si"
+                                              :class="['color-popover-swatch', isColorSwatchActive(row, si) ? 'active' : '']"
+                                              :style="{background: shade}"
+                                              @click="pickColor(row.key, si)"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field"><label>排序</label>
+                            <select v-model="widgetForm.config.sort">
+                                <option value="value_desc">数值降序</option>
+                                <option value="value_asc">数值升序</option>
+                                <option value="label_asc">标签升序</option>
+                                <option value="label_desc">标签降序</option>
+                            </select>
+                        </div>
+                        <div v-if="widgetForm.widget_type === 'horizontal_bar'" class="field">
+                            <label>显示条数</label>
+                            <input type="number" min="1" max="100" v-model.number="widgetForm.config.limit" />
+                        </div>
+                        <div class="toggle-row"><span>显示图例</span><input type="checkbox" v-model="widgetForm.config.show_legend" /></div>
+                        <div v-if="widgetForm.widget_type === 'pie'" class="toggle-row"><span>中心显示总计</span><input type="checkbox" v-model="widgetForm.config.show_value_center" /></div>
+                        <div v-if="widgetForm.widget_type !== 'pie'" class="toggle-row"><span>显示数值标签</span><input type="checkbox" v-model="widgetForm.config.data_labels" /></div>
+                        <div class="toggle-row"><span>隐藏空值</span><input type="checkbox" v-model="widgetForm.config.hide_empty" /></div>
+                    </div>
+                    <div class="panel-section">
+                        <h4>附加展示（同源数据）</h4>
+                        <p style="font-size:0.76rem;color:#98a2b3;margin:0 0 0.5rem">在同一组件数据上，于其它栅格位置再渲染环形图或横向排名。</p>
+                        <div v-for="(ev, evIdx) in widgetForm.config.extra_views" :key="'ev-' + evIdx" class="extra-view-row">
+                            <div class="field">
+                                <label>形态</label>
+                                <select v-model="ev.render">
+                                    <option v-for="r in (metadata.chart_extra_renders || [])" :key="r" :value="r">{{ extraRenderLabel(r) }}</option>
+                                </select>
+                            </div>
+                            <div class="field">
+                                <label>标题（可选）</label>
+                                <input v-model="ev.title" placeholder="默认用组件标题" />
+                            </div>
+                            <div class="field" v-if="ev.render === 'horizontal_bar'">
+                                <label>条数</label>
+                                <input type="number" min="1" max="100" v-model.number="ev.limit" />
+                            </div>
+                            <span v-else class="field"></span>
+                            <span class="icon-btn danger" style="margin-bottom:0.35rem" @click="removeExtraView(evIdx)" title="删除">✕</span>
+                        </div>
+                        <div v-for="(ev, evIdx) in widgetForm.config.extra_views" :key="'evl-' + evIdx" class="type-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:0.5rem">
+                            <div class="field" style="margin:0"><label>x</label><input type="number" min="0" max="11" v-model.number="ev.x" /></div>
+                            <div class="field" style="margin:0"><label>y</label><input type="number" min="0" v-model.number="ev.y" /></div>
+                            <div class="field" style="margin:0"><label>宽</label><input type="number" min="1" max="12" v-model.number="ev.w" /></div>
+                            <div class="field" style="margin:0"><label>高</label><input type="number" min="1" v-model.number="ev.h" /></div>
+                        </div>
+                        <span class="panel-add-link" @click="addExtraView()">+ 添加附加展示</span>
+                    </div>
+                </template>
+
+                <div class="panel-section">
+                    <h4>布局（栅格 12 列）</h4>
+                    <div class="layout-grid">
+                        <div class="field"><label>x</label><input v-model.number="widgetForm.x" type="number" min="0" max="11" /></div>
+                        <div class="field"><label>y</label><input v-model.number="widgetForm.y" type="number" min="0" /></div>
+                        <div class="field"><label>宽</label><input v-model.number="widgetForm.w" type="number" min="1" max="12" /></div>
+                        <div class="field"><label>高</label><input v-model.number="widgetForm.h" type="number" min="1" /></div>
+                    </div>
+                </div>
+            </div>
+            <div class="panel-foot">
+                <span class="panel-autosave-hint">修改后自动保存</span>
+                <button type="button" class="tbtn" @click="closePanel()">关闭</button>
+            </div>
+        </aside>
+    </div>
+
+    <div v-if="showDashboardModal" class="modal-overlay" @click.self="showDashboardModal = false">
+        <div class="modal-panel">
+            <h3 class="font-bold mb-3">新建看板</h3>
+            <div class="field"><label>名称</label><input v-model="dashboardForm.name" /></div>
+            <div class="field"><label>描述</label><textarea v-model="dashboardForm.description" rows="2"></textarea></div>
+            <p class="text-xs text-[#98a2b3] mt-1">将自动创建总览 / 历史转化 / 招聘人效 / 花名册核对四个标签页。</p>
+            <div class="flex justify-end gap-2 mt-3">
+                <button type="button" class="tbtn" @click="showDashboardModal = false">取消</button>
+                <button type="button" class="tbtn tbtn-primary" @click="saveDashboard">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showTabModal" class="modal-overlay" @click.self="showTabModal = false">
+        <div class="modal-panel">
+            <h3 class="font-bold mb-3">新建标签页</h3>
+            <div class="field"><label>名称</label><input v-model="tabForm.name" /></div>
+            <div class="field"><label>内容类型</label>
+                <select v-model="tabForm.rms_template">
+                    <option value="overview">总览</option>
+                    <option value="history">历史转化</option>
+                    <option value="recruiter">招聘人效</option>
+                    <option value="roster">花名册核对</option>
+                    <option value="empty">空白</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2 mt-3">
+                <button type="button" class="tbtn" @click="showTabModal = false">取消</button>
+                <button type="button" class="tbtn tbtn-primary" @click="saveTab">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endraw %}
+{% endblock %}
+{% block page_scripts %}
+<script src="/static/js/shared/dashboard-widget-kit.js"></script>
+<script src="/static/js/pages/rms-dashboard.js?v=rms-dashboard-twenty-5"></script>
+{% endblock %}

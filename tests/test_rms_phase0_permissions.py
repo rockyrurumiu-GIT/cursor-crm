@@ -107,7 +107,11 @@ def test_rms_job_anchor_inherits_client():
 def test_role_default_permissions():
     assert RMS_PERMISSION_CODES <= ROLE_DEFAULT_PERMISSIONS[ROLE_SUPER_ADMIN]
     delivery_rms = ROLE_DEFAULT_PERMISSIONS[ROLE_DELIVERY] & RMS_PERMISSION_CODES
-    assert delivery_rms == frozenset({"rms.jobs.read", "rms.applications.read"})
+    assert delivery_rms == frozenset({
+        "rms.jobs.read",
+        "rms.applications.read",
+        "rms.analytics.read",
+    })
     assert not (ROLE_DEFAULT_PERMISSIONS[ROLE_SALES] & RMS_PERMISSION_CODES)
     assert not (ROLE_DEFAULT_PERMISSIONS[ROLE_VIEWER] & RMS_PERMISSION_CODES)
 

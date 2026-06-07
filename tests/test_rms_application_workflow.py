@@ -28,6 +28,13 @@ DELIVERY_REVIEW_LIST_URL = "/api/rms/applications/delivery-review"
 _FIXED_TODAY = date(2026, 6, 5)
 
 
+def _pipeline_eligible(app: dict) -> bool:
+    return (
+        app.get("receive_status") == "accepted"
+        and app.get("delivery_review_status") == "passed"
+    )
+
+
 @pytest.fixture
 def client_rbac(_test_env, monkeypatch):
     monkeypatch.setenv("CRM_AUTH_MODE", "rbac")
@@ -102,18 +109,33 @@ def _assert_contact_and_education_draft(draft: dict) -> None:
     assert "2015" not in school
 
 
-def _assert_contact_and_education_draft(draft: dict) -> None:
-    assert draft.get("phone") == "15988192434"
-    assert draft.get("email_wechat") == "15988192434@163.com"
-    assert draft.get("school") == "西安工业大学"
-    assert draft.get("major") == "仪器仪表工程"
-    assert draft.get("education_level") == "硕士"
-    major = draft.get("major") or ""
-    school = draft.get("school") or ""
-    assert "毕业论文" not in major
-    assert "DLP" not in major
-    assert "杭州" not in school
-    assert "2015" not in school
+def _resume_with_hyphen_phone_and_split_education() -> str:
+    return (
+        "姓名：李四\n"
+        "181-6174-9101\n"
+        "2020-2024  安康学院  计算机科学与\n"
+        "技术 | 本科\n"
+    )
+
+
+def _resume_with_spaced_school_name() -> str:
+    return (
+        "姓名：李四\n"
+        "181-6174-9101\n"
+        "2020-2024  安 康 学 院  计算机科学与\n"
+        "技术 | 本科\n"
+    )
+
+
+def _resume_with_vertical_education() -> str:
+    return (
+        "姓名：李四\n"
+        "181-6174-9101\n"
+        "2020-2024\n"
+        "安康学院\n"
+        "计算机科学与技术\n"
+        "本科\n"
+    )
 
 
 def _resume_with_work_periods() -> str:
@@ -162,6 +184,50 @@ def test_explicit_work_years_does_not_match_date_tokens():
     text = "项目经历\n2020年10月 - 2021年9月  某公司  工程师\n"
     assert _extract_explicit_work_years(text) == ""
     assert _extract_draft_fields_from_text(text).get("work_years") == "1年"
+
+
+def test_extract_draft_fields_hyphenated_phone_and_split_education():
+    draft = _extract_draft_fields_from_text(_resume_with_hyphen_phone_and_split_education())
+    assert draft.get("phone") == "18161749101"
+    assert draft.get("name") == "李四"
+    assert draft.get("school") == "安康学院"
+    assert draft.get("major") == "计算机科学与技术"
+    assert draft.get("education_level") == "统本"
+
+
+def test_extract_draft_fields_labeled_hyphenated_phone():
+    text = "姓名：王五\n电话：181-6174-9101\n"
+    draft = _extract_draft_fields_from_text(text)
+    assert draft.get("phone") == "18161749101"
+    assert draft.get("name") == "王五"
+
+
+def test_extract_draft_fields_spaced_school_name():
+    draft = _extract_draft_fields_from_text(_resume_with_spaced_school_name())
+    assert draft.get("school") == "安康学院"
+    assert draft.get("major") == "计算机科学与技术"
+    assert draft.get("education_level") == "统本"
+
+
+def test_extract_draft_fields_vertical_education_lines():
+    draft = _extract_draft_fields_from_text(_resume_with_vertical_education())
+    assert draft.get("school") == "安康学院"
+    assert draft.get("major") == "计算机科学与技术"
+    assert draft.get("education_level") == "统本"
+
+
+def test_extract_draft_fields_name_stops_before_phone_label():
+    text = "姓名：田帅 电话：181-6174-9101\n"
+    draft = _extract_draft_fields_from_text(text)
+    assert draft.get("name") == "田帅"
+    assert draft.get("phone") == "18161749101"
+
+
+def test_extract_draft_fields_name_not_merged_with_phone_label():
+    text = "姓名：田帅电话：181-6174-9101\n"
+    draft = _extract_draft_fields_from_text(text)
+    assert draft.get("name") == "田帅"
+    assert draft.get("phone") == "18161749101"
 
 
 def test_parse_draft_route_not_captured_by_application_id(client_rbac, admin_auth, rms_engine, uniq):
@@ -225,6 +291,53 @@ def test_parse_draft_pdf_contact_and_education(client_rbac, admin_auth, rms_engi
     body = r.json()
     _assert_contact_and_education_draft(body.get("draft_fields") or {})
     assert body.get("parsed_text")
+
+
+def test_parse_draft_txt_hyphen_phone_and_split_education(client_rbac, admin_auth, rms_engine, uniq):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    txt = _resume_with_hyphen_phone_and_split_education()
+    r = client_rbac.post(
+        PARSE_DRAFT_URL,
+        cookies=login.cookies,
+        files={"file": ("resume.txt", txt.encode("utf-8"), "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    draft = (r.json().get("draft_fields") or {})
+    assert draft.get("phone") == "18161749101"
+    assert draft.get("school") == "安康学院"
+    assert draft.get("major") == "计算机科学与技术"
+    assert draft.get("education_level") == "统本"
+
+
+def test_parse_draft_pdf_hyphen_phone_and_split_education(client_rbac, admin_auth, rms_engine, uniq):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    pdf_bytes = _make_text_pdf(_resume_with_hyphen_phone_and_split_education())
+    r = client_rbac.post(
+        PARSE_DRAFT_URL,
+        cookies=login.cookies,
+        files={"file": ("resume.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert r.status_code == 200, r.text
+    draft = (r.json().get("draft_fields") or {})
+    assert draft.get("phone") == "18161749101"
+    assert draft.get("school") == "安康学院"
+    assert draft.get("major") == "计算机科学与技术"
+    assert draft.get("education_level") == "统本"
+
+
+def test_parse_draft_pdf_spaced_school_name(client_rbac, admin_auth, rms_engine, uniq):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    pdf_bytes = _make_text_pdf(_resume_with_spaced_school_name())
+    r = client_rbac.post(
+        PARSE_DRAFT_URL,
+        cookies=login.cookies,
+        files={"file": ("resume.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert r.status_code == 200, r.text
+    draft = (r.json().get("draft_fields") or {})
+    assert draft.get("school") == "安康学院"
+    assert draft.get("major") == "计算机科学与技术"
+    assert draft.get("education_level") == "统本"
 
 
 def test_parse_draft_pdf_extracts_fields_and_parsed_text(client_rbac, admin_auth, rms_engine, uniq):
@@ -335,6 +448,12 @@ def test_delivery_review_list_returns_recommended(client_rbac, admin_auth, rms_e
     ids = [item["id"] for item in r.json()]
     assert app_id in ids
 
+    all_apps = client_rbac.get("/api/rms/applications", cookies=login.cookies)
+    assert all_apps.status_code == 200
+    found = next((a for a in all_apps.json() if a["id"] == app_id), None)
+    assert found is not None
+    assert _pipeline_eligible(found) is False
+
 
 def _create_recommended_application(client, admin_auth, rms_engine, suffix: str) -> tuple:
     login, job_id, cand_id, _ = _trial_job_and_candidate(client, rms_engine, admin_auth, suffix)
@@ -347,7 +466,7 @@ def _create_recommended_application(client, admin_auth, rms_engine, suffix: str)
     return login, int(created.json()["id"])
 
 
-def test_delivery_review_submit_passed_without_columns(client_rbac, admin_auth, rms_engine, uniq):
+def test_delivery_review_submit_passed_enters_pipeline(client_rbac, admin_auth, rms_engine, uniq):
     login, app_id = _create_recommended_application(
         client_rbac, admin_auth, rms_engine, f"dr_pass_{uniq}"
     )
@@ -358,10 +477,25 @@ def test_delivery_review_submit_passed_without_columns(client_rbac, admin_auth, 
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert "未持久化" in (body.get("message") or "")
+    assert body["delivery_review_status"] == "passed"
+    assert body["receive_status"] == "accepted"
+    assert body["status"] == "pending_client_screen"
+
+    listed = client_rbac.get(DELIVERY_REVIEW_LIST_URL, cookies=login.cookies)
+    assert listed.status_code == 200
+    assert app_id not in [item["id"] for item in listed.json()]
+
+    all_apps = client_rbac.get("/api/rms/applications", cookies=login.cookies)
+    assert all_apps.status_code == 200
+    found = next((a for a in all_apps.json() if a["id"] == app_id), None)
+    assert found is not None
+    assert found["status"] == "pending_client_screen"
+    assert _pipeline_eligible(found) is True
 
 
-def test_delivery_review_submit_failed_without_columns(client_rbac, admin_auth, rms_engine, uniq):
+def test_delivery_review_submit_failed_leaves_recommended_visible(
+    client_rbac, admin_auth, rms_engine, uniq
+):
     login, app_id = _create_recommended_application(
         client_rbac, admin_auth, rms_engine, f"dr_fail_{uniq}"
     )
@@ -372,7 +506,68 @@ def test_delivery_review_submit_failed_without_columns(client_rbac, admin_auth, 
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert "未持久化" in (body.get("message") or "")
+    assert body["delivery_review_status"] == "failed"
+    assert body["receive_status"] == "pending"
+    assert body["status"] == "recommended"
+
+    listed = client_rbac.get(DELIVERY_REVIEW_LIST_URL, cookies=login.cookies)
+    assert listed.status_code == 200
+    assert app_id not in [item["id"] for item in listed.json()]
+
+    all_apps = client_rbac.get("/api/rms/applications", cookies=login.cookies)
+    assert all_apps.status_code == 200
+    found = next((a for a in all_apps.json() if a["id"] == app_id), None)
+    assert found is not None
+    assert found["delivery_review_status"] == "failed"
+    assert _pipeline_eligible(found) is False
+
+
+def test_hired_requires_hired_at(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _create_recommended_application(
+        client_rbac, admin_auth, rms_engine, f"hire_{uniq}"
+    )
+    client_rbac.post(
+        f"/api/rms/applications/{app_id}/delivery-review",
+        cookies=login.cookies,
+        json={"result": "passed"},
+    )
+    for st in ("scheduling_interview", "pending_first_interview", "first_interview_passed",
+               "second_interview_passed", "pending_offer", "onboarding"):
+        prev = client_rbac.get(f"/api/rms/applications/{app_id}", cookies=login.cookies).json()
+        nxt = {
+            "pending_client_screen": "scheduling_interview",
+            "scheduling_interview": "pending_first_interview",
+            "pending_first_interview": "first_interview_passed",
+            "first_interview_passed": "second_interview_passed",
+            "second_interview_passed": "pending_offer",
+            "pending_offer": "onboarding",
+        }[prev["status"]]
+        client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": nxt},
+        )
+    bad = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "hired"},
+    )
+    assert bad.status_code == 400
+    ok = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "hired", "hired_at": "2026-06-15"},
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["hired_at"] == "2026-06-15"
+    assert ok.json()["status"] == "hired"
+
+
+def test_hired_roster_check_route_not_422(client_rbac, admin_auth, rms_engine, uniq):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    r = client_rbac.get("/api/rms/applications/hired-roster-check", cookies=login.cookies)
+    assert r.status_code != 422, r.text
+    assert r.status_code == 200, r.text
 
 
 def test_delivery_review_submit_invalid_result(client_rbac, admin_auth, rms_engine, uniq):
@@ -387,20 +582,3 @@ def test_delivery_review_submit_invalid_result(client_rbac, admin_auth, rms_engi
     assert r.status_code == 422, r.text
 
 
-def test_delivery_review_submit_does_not_remove_without_columns(
-    client_rbac, admin_auth, rms_engine, uniq
-):
-    login, app_id = _create_recommended_application(
-        client_rbac, admin_auth, rms_engine, f"dr_stay_{uniq}"
-    )
-    submit = client_rbac.post(
-        f"/api/rms/applications/{app_id}/delivery-review",
-        cookies=login.cookies,
-        json={"result": "passed", "note": ""},
-    )
-    assert submit.status_code == 200, submit.text
-
-    listed = client_rbac.get(DELIVERY_REVIEW_LIST_URL, cookies=login.cookies)
-    assert listed.status_code == 200, listed.text
-    ids = [item["id"] for item in listed.json()]
-    assert app_id in ids

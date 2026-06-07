@@ -771,7 +771,14 @@ def _app_for_status(client, engine, admin_auth, suffix: str):
         json={"job_id": job_id, "candidate_id": cand_id},
     )
     assert created.status_code == 200
-    return login, created.json()["id"]
+    app_id = created.json()["id"]
+    review = client.post(
+        f"/api/rms/applications/{app_id}/delivery-review",
+        cookies=login.cookies,
+        json={"result": "passed"},
+    )
+    assert review.status_code == 200, review.text
+    return login, app_id
 
 
 def test_status_transition_writes_current_stage_and_activity(client_rbac, admin_auth, rms_engine, uniq):
@@ -780,13 +787,16 @@ def test_status_transition_writes_current_stage_and_activity(client_rbac, admin_
     r = client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,
-        json={"to_status": "screening", "reason": "ok", "note": "n1"},
+        json={"to_status": "scheduling_interview", "reason": "ok", "note": "n1"},
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["status"] == "screening"
-    assert body["current_stage"] == "screening"
+    assert body["status"] == "scheduling_interview"
+    assert body["current_stage"] == "scheduling_interview"
     assert body["last_activity_at"]
+    assert len(body["last_activity_at"]) == 10
+    assert body["last_activity_at"][4] == "-" and body["last_activity_at"][7] == "-"
+    assert "T" not in body["last_activity_at"]
 
     hist = client_rbac.get(
         f"/api/rms/applications/{app_id}/status-history",
@@ -794,24 +804,19 @@ def test_status_transition_writes_current_stage_and_activity(client_rbac, admin_
     )
     assert hist.status_code == 200
     assert len(hist.json()) >= 1
-    assert hist.json()[0]["to_status"] == "screening"
+    assert hist.json()[0]["to_status"] == "scheduling_interview"
 
 
-def test_status_reject_from_screening(client_rbac, admin_auth, rms_engine, uniq):
+def test_status_fail_from_client_screen(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
     login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, suffix)
-    client_rbac.post(
-        f"/api/rms/applications/{app_id}/status",
-        cookies=login.cookies,
-        json={"to_status": "screening"},
-    )
     r = client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,
-        json={"to_status": "rejected", "reason": "no fit"},
+        json={"to_status": "client_screen_failed", "reason": "no fit"},
     )
     assert r.status_code == 200
-    assert r.json()["status"] == "rejected"
+    assert r.json()["status"] == "client_screen_failed"
 
 
 def test_status_terminal_no_transition(client_rbac, admin_auth, rms_engine, uniq):
@@ -820,22 +825,216 @@ def test_status_terminal_no_transition(client_rbac, admin_auth, rms_engine, uniq
     client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,
-        json={"to_status": "rejected"},
+        json={"to_status": "client_screen_failed"},
     )
     r = client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,
-        json={"to_status": "screening"},
+        json={"to_status": "scheduling_interview"},
     )
     assert r.status_code == 400
 
 
-def test_status_illegal_jump_returns_400(client_rbac, admin_auth, rms_engine, uniq):
+def test_status_recommended_requires_delivery_review(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
-    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, suffix)
+    login, job_id, cand_id, _ = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    created = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert created.status_code == 200
+    app_id = created.json()["id"]
     r = client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,
-        json={"to_status": "hired"},
+        json={"to_status": "hired", "hired_at": "2026-06-01"},
     )
     assert r.status_code == 400
+
+
+def test_legacy_screening_normalizes_to_pipeline(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id, cand_id, _ = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    created = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    app_id = created.json()["id"]
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'screening', receive_status = 'accepted', "
+                "delivery_review_status = 'passed' WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "scheduling_interview"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "scheduling_interview"
+
+
+def _set_application_status(engine, app_id: int, status: str, *, hired_at: str = ""):
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = :status, current_stage = :status, "
+                "hired_at = :hired_at WHERE id = :id"
+            ),
+            {"id": app_id, "status": status, "hired_at": hired_at},
+        )
+
+
+def _advance_to_onboarding(client, login, app_id):
+    steps = [
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_passed",
+        "second_interview_passed",
+        "pending_offer",
+        "onboarding",
+    ]
+    for st in steps:
+        r = client.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": st},
+        )
+        assert r.status_code == 200, r.text
+
+
+def test_status_transition_mode_blocks_skip(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "first_interview_passed", "mode": "transition"},
+    )
+    assert r.status_code == 400
+
+
+def test_status_default_mode_unchanged(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "scheduling_interview"},
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_status_correction_allows_backward(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "scheduling_interview"},
+    )
+    client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "pending_first_interview"},
+    )
+    client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "first_interview_passed"},
+    )
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={
+            "to_status": "pending_client_screen",
+            "mode": "correction",
+            "note": "退回修正",
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "pending_client_screen"
+    hist = client_rbac.get(
+        f"/api/rms/applications/{app_id}/status-history",
+        cookies=login.cookies,
+    )
+    assert hist.status_code == 200
+    assert hist.json()[0]["reason"] == "status_correction"
+    assert hist.json()[0]["note"] == "退回修正"
+
+
+def test_status_correction_rejects_short_note(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "scheduling_interview", "mode": "correction", "note": "x"},
+    )
+    assert r.status_code == 400
+
+
+def test_status_correction_rejects_rejected_target(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "rejected", "mode": "correction", "note": "不应允许"},
+    )
+    assert r.status_code == 400
+
+
+def test_status_correction_requires_pipeline_eligible(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id, cand_id, _ = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    created = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    app_id = created.json()["id"]
+    _set_application_status(rms_engine, app_id, "pending_client_screen")
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "scheduling_interview", "mode": "correction", "note": "未内审"},
+    )
+    assert r.status_code == 400
+
+
+def test_status_correction_from_hired_clears_hired_at(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    _advance_to_onboarding(client_rbac, login, app_id)
+    hired = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "hired", "hired_at": "2026-06-15"},
+    )
+    assert hired.status_code == 200, hired.text
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "onboarding", "mode": "correction", "note": "修正离入职"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "onboarding"
+    assert r.json()["hired_at"] == ""
+
+
+def test_status_invalid_mode(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "scheduling_interview", "mode": "foo"},
+    )
+    assert r.status_code == 422

@@ -1,7 +1,6 @@
 """RMS jobs business logic (Phase 2)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Type
 
 from fastapi import HTTPException
@@ -10,13 +9,8 @@ from sqlalchemy.orm import Session
 
 from auth import service as auth_svc
 from auth.service import AuthContext
-from schemas.rms import JOB_PRIORITIES, JOB_STATUSES, JOB_WRITABLE_STR_FIELDS
+from schemas.rms import JOB_PRIORITIES, JOB_STATUSES, JOB_WRITABLE_STR_FIELDS, normalize_rms_date, utc_date_str
 from services import rms_scope as rms_ds
-
-
-def _utc_now_str() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
 
 def _ensure_user_exists(db: Session, user_id: int) -> None:
     row = db.execute(text("SELECT 1 FROM sys_user WHERE id = :uid LIMIT 1"), {"uid": user_id}).fetchone()
@@ -72,8 +66,8 @@ def _job_core_dict(job: Any) -> Dict[str, Any]:
         "interviewer": getattr(job, "interviewer", None) or "",
         "note": getattr(job, "note", None) or "",
         "owner_user_id": job.owner_user_id,
-        "created_at": job.created_at or "",
-        "updated_at": job.updated_at or "",
+        "created_at": normalize_rms_date(job.created_at),
+        "updated_at": normalize_rms_date(job.updated_at),
     }
 
 
@@ -198,7 +192,7 @@ def create_job(
 
     _apply_client_owners_from_job_data(db, client, data)
 
-    now = _utc_now_str()
+    now = utc_date_str()
     job_kwargs: Dict[str, Any] = {
         "client_id": client_id,
         "owner_user_id": owner_user_id,
@@ -263,7 +257,7 @@ def update_job(
     if data.get("headcount") is not None:
         job.headcount = int(data["headcount"])
 
-    job.updated_at = _utc_now_str()
+    job.updated_at = utc_date_str()
     db.commit()
     db.refresh(job)
     client = db.query(Client).filter(Client.id == job.client_id).first()

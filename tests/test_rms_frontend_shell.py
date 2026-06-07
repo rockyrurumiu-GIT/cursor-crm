@@ -15,6 +15,33 @@ from tests.test_rms_phase0_permissions import _create_user, _login
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _extract_rms_region(html: str, region: str) -> str:
+    """Return inner HTML of first element with data-rms-region=region (best-effort)."""
+    marker = f'data-rms-region="{region}"'
+    start = html.find(marker)
+    if start < 0:
+        return ""
+    tag_end = html.find(">", start)
+    if tag_end < 0:
+        return ""
+    depth = 1
+    pos = tag_end + 1
+    while pos < len(html) and depth > 0:
+        next_open = html.find("<section", pos)
+        next_close = html.find("</section>", pos)
+        if next_close < 0:
+            break
+        if 0 <= next_open < next_close:
+            depth += 1
+            pos = next_open + 8
+        else:
+            depth -= 1
+            if depth == 0:
+                return html[tag_end + 1 : next_close]
+            pos = next_close + 10
+    return html[start : start + 4000]
+
+
 @pytest.fixture
 def client_rbac(_test_env, monkeypatch):
     monkeypatch.setenv("CRM_AUTH_MODE", "rbac")
@@ -62,6 +89,20 @@ def test_rms_frontend_js_assets_exist():
         assert helper in labels_src, f"missing helper: {helper}"
     for fn in ("candidateById", "jobById", "userLabelById"):
         assert fn in labels_src, f"missing lookup fn in createAppDisplayHelpers: {fn}"
+    for sym in (
+        "isPipelineEligible",
+        "isApplicationTerminal",
+        "filterPipelineApplications",
+        "progressOptionsForCorrection",
+        "APPLICATION_PROGRESS_STATUSES",
+    ):
+        assert sym in labels_src, f"missing pipeline helper: {sym}"
+    assert "progressOptions" in rms_src
+    assert "filteredPipelineApplications" in rms_src
+    assert "userOptions.value" in rms_src
+    assert "jobFormOptions.users" not in rms_src
+    assert '"interview_scheduling"' not in labels_src
+    assert "scheduling_interview" in labels_src
 
 
 def test_create_app_display_helpers_behavior():
@@ -154,6 +195,78 @@ if (noDelivery !== "—") {{
     assert result.returncode == 0, result.stderr or result.stdout
 
 
+def test_pipeline_label_helpers():
+    labels = REPO_ROOT / "static/js/pages/rms-application-labels.js"
+    script = f"""
+const fs = require("fs");
+eval(fs.readFileSync({str(labels)!r}, "utf8"));
+const L = globalThis.RmsApplicationLabels;
+const ok = {{ receive_status: "accepted", delivery_review_status: "passed", status: "pending_client_screen", job_id: 1, client_id: 10, recommended_at: "2026-06-01" }};
+const fail = {{ receive_status: "pending", delivery_review_status: "failed", status: "recommended" }};
+if (!L.isPipelineEligible(ok)) {{ console.error("eligible failed"); process.exit(1); }}
+if (L.isPipelineEligible(fail)) {{ console.error("ineligible passed"); process.exit(1); }}
+if (!L.isApplicationTerminal("rejected")) {{ console.error("rejected not terminal"); process.exit(1); }}
+if (!L.isApplicationTerminal("withdrawn")) {{ console.error("withdrawn not terminal"); process.exit(1); }}
+if (L.isProgressTerminal("rejected")) {{ console.error("isProgressTerminal must not include rejected"); process.exit(1); }}
+const h = L.createAppDisplayHelpers({{
+  getJobs: () => [{{ id: 1, location: "上海", client_id: 10 }}],
+  getCandidates: () => [{{ id: 2, name: "张三" }}],
+  getUsers: () => [],
+  clientNameById: () => "ACME",
+}});
+const rows = L.filterPipelineApplications([
+  ok,
+  fail,
+  {{ receive_status: "accepted", delivery_review_status: "passed", status: "hired", job_id: 1, client_id: 10, recommended_at: "2026-06-02" }},
+  {{ receive_status: "accepted", delivery_review_status: "passed", status: "rejected", job_id: 1, client_id: 10, recommended_at: "2026-06-03" }},
+], {{
+  filters: {{ activeOnly: true }},
+  getJobs: () => [{{ id: 1, location: "上海", client_id: 10 }}],
+  getCandidates: () => [],
+  getUsers: () => [],
+  clientNameById: () => "ACME",
+}});
+if (rows.length !== 1 || rows[0].status !== "pending_client_screen") {{
+  console.error("activeOnly filter: got " + JSON.stringify(rows.map(r => r.status)));
+  process.exit(1);
+}}
+const withTerminal = L.filterPipelineApplications([
+  ok,
+  {{ receive_status: "accepted", delivery_review_status: "passed", status: "hired", job_id: 1, client_id: 10, recommended_at: "2026-06-02" }},
+], {{
+  filters: {{ activeOnly: false }},
+  getJobs: () => [{{ id: 1, location: "上海", client_id: 10 }}],
+  getCandidates: () => [],
+  getUsers: () => [],
+  clientNameById: () => "ACME",
+}});
+if (withTerminal.length !== 2) {{
+  console.error("include terminal: got " + withTerminal.length);
+  process.exit(1);
+}}
+const opts = L.progressOptionsForCorrection("first_interview_passed");
+if (opts.some(o => o.value === "rejected" || o.value === "withdrawn")) {{
+  console.error("correction options must not include rejected/withdrawn");
+  process.exit(1);
+}}
+if (!opts.some(o => o.value === "pending_client_screen")) {{
+  console.error("correction options should allow backward target");
+  process.exit(1);
+}}
+if (L.normalizeProgressStatus("screening") !== "pending_client_screen") {{
+  console.error("legacy screening normalize failed");
+  process.exit(1);
+}}
+var legacyOpts = L.progressOptionsForCorrection("screening");
+if (legacyOpts.some(o => o.value === "pending_client_screen")) {{
+  console.error("correction options should exclude normalized current status");
+  process.exit(1);
+}}
+"""
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
 def test_rms_page_shell_markers(client_rbac, admin_auth):
     suffix = os.getpid()
     delivery_user = f"rms_fe_delivery_{suffix}"
@@ -172,6 +285,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert 'data-rms-tab="candidates"' in html
     assert 'data-rms-tab="applications"' in html
     assert 'data-rms-tab="deliveryReview"' in html
+    assert 'data-rms-tab="pipeline"' in html
+    assert "招聘pipeline-候选人状态（交付）" in html
     assert ">岗位</" in html or ">岗位<" in html
     assert ">候选人</" in html or ">候选人<" in html
     assert ">推荐</" in html or ">推荐<" in html
@@ -201,11 +316,113 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "/static/js/pages/rms-candidate-report.js" in html
     assert "/static/js/pages/rms.js" in html
     assert "接收状态" in html
+    assert "内审状态" in html
     assert "招聘进展" in html
     assert "保护期状态" in html
+    assert "deliveryReviewLabel" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+
+    apps_region = _extract_rms_region(html, "applications")
+    pipe_region = _extract_rms_region(html, "pipeline")
+    assert apps_region, "applications region not found"
+    assert pipe_region, "pipeline region not found"
+    assert 'data-rms-action="progress-transition"' not in apps_region
+    assert "transitionProgress" not in apps_region
+    assert 'data-rms-action="progress-confirm-open"' in pipe_region
+    assert 'data-rms-action="correction-picker-open"' in pipe_region
+    assert "openCorrectionPickerModal" in pipe_region
+    rms_src = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    assert "openProgressConfirmModal" in rms_src
+    assert "progressOptionsForCorrection" in rms_src
+    assert 'data-rms-action="progress-transition"' not in pipe_region
+    assert "transitionProgress" not in pipe_region
+    assert "progressOptions" in pipe_region
+    base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
+    assert "crmConfirmActionDialog" in base_html
+    assert "openApplicationDetailModal" in apps_region
+    assert "openStatusHistoryModal" in apps_region
 
     assert "Plan 34" in html
     assert "占位" not in html
     assert "正在建设" not in html
     assert "Phase 2：API MVP 已接入" not in html
     assert "Phase 0" not in html
+
+
+def test_rms_dashboard_assets_and_nav():
+    dash_js = REPO_ROOT / "static/js/pages/rms-dashboard.js"
+    dash_html = REPO_ROOT / "templates/pages/rms_dashboard.html"
+    nav = REPO_ROOT / "templates/partials/nav.html"
+    assert dash_js.is_file()
+    assert dash_html.is_file()
+    assert "/rms/dashboard" in nav.read_text(encoding="utf-8")
+    assert "rms.analytics.read" in nav.read_text(encoding="utf-8")
+
+
+def test_rms_dashboard_twenty_shell():
+    html = (REPO_ROOT / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
+    js = (REPO_ROOT / "static/js/pages/rms-dashboard.js").read_text(encoding="utf-8")
+
+    for required in (
+        "dash-root",
+        "dash-top-bar",
+        "dash-tw-tabs",
+        "dash-page-tabs-row",
+        "dash-canvas",
+        "dash-grid",
+        "dash-card",
+        "num-value",
+        "chart-canvas-wrap",
+        "chartjs-plugin-datalabels",
+        "需求总数",
+        "有需求客户数",
+        "HC 总数",
+        "总览",
+        "历史转化",
+        "招聘人效",
+        "花名册核对",
+        "/static/js/pages/rms-dashboard.js",
+        "rms-dashboard-twenty-5",
+        "dashboard-widget-kit.js",
+        "数据源",
+        "附加展示",
+        "新建看板",
+        "编辑",
+        "+ 组件",
+        "card-actions",
+        "icon-btn",
+    ):
+        assert required in html, f"missing {required!r} in rms_dashboard.html"
+
+    for forbidden in (
+        "rms-dash-card",
+        "rms-dash-kpi",
+        "container mx-auto",
+        "crm-table",
+        "crm-th",
+        "open 岗位",
+    ):
+        assert forbidden not in html, f"forbidden {forbidden!r} in rms_dashboard.html"
+
+    for js_required in (
+        "chartInstances",
+        "destroyAllCharts",
+        "loadDashboard",
+        "showMountError",
+        "displayItems",
+        "openWidgetPanel",
+        "DashboardWidgetKit",
+        "reloadActiveTabData",
+    ):
+        assert js_required in js, f"missing {js_required!r} in rms-dashboard.js"
+
+    for js_forbidden in (
+        "entered - passed - failed",
+        "entered-passed-failed",
+    ):
+        assert js_forbidden not in js, f"forbidden {js_forbidden!r} in rms-dashboard.js"
+
+    subprocess.run(
+        ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard.js")],
+        check=True,
+        cwd=REPO_ROOT,
+    )

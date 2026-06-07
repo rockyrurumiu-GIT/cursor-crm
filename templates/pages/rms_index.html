@@ -404,6 +404,9 @@
         <button type="button" data-rms-tab="deliveryReview" @click="activeTab = 'deliveryReview'"
             :class="activeTab === 'deliveryReview' ? 'rms-tab-active' : ''"
             class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">交付内审</button>
+        <button type="button" data-rms-tab="pipeline" @click="activeTab = 'pipeline'"
+            :class="activeTab === 'pipeline' ? 'rms-tab-active' : ''"
+            class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">招聘pipeline-候选人状态（交付）</button>
     </div>
 
     <!-- Jobs -->
@@ -601,7 +604,7 @@
                         <td class="crm-td">{{ c.city || '—' }}</td>
                         <td class="crm-td tabular-nums">{{ displaySalary(c.current_salary) }}</td>
                         <td class="crm-td tabular-nums">{{ displaySalary(c.expected_salary) }}</td>
-                        <td class="crm-td">{{ c.available_date || '—' }}</td>
+                        <td class="crm-td">{{ formatRmsDate(c.available_date) }}</td>
                         <td class="crm-td">{{ c.education_level || '—' }}</td>
                         <td class="crm-td">{{ c.school || '—' }}</td>
                         <td class="crm-td">{{ c.major || '—' }}</td>
@@ -635,7 +638,7 @@
     </section>
 
     <!-- Applications -->
-    <section v-show="activeTab === 'applications' && viewMode !== 'candidateReport'">
+    <section v-show="activeTab === 'applications' && viewMode !== 'candidateReport'" data-rms-region="applications">
         <div class="flex justify-between items-center mb-3">
             <h2 class="text-lg font-medium text-[#1f2328]">推荐记录</h2>
         </div>
@@ -653,6 +656,7 @@
                         <th class="crm-th">职位地点</th>
                         <th class="crm-th">推荐时间</th>
                         <th class="crm-th">接收状态</th>
+                        <th class="crm-th">内审状态</th>
                         <th class="crm-th">招聘进展</th>
                         <th class="crm-th">保护期状态</th>
                         <th class="crm-th">交付</th>
@@ -666,19 +670,19 @@
                         <td class="crm-td">{{ appClientName(a) }}</td>
                         <td class="crm-td">{{ appJobTitle(a) }}</td>
                         <td class="crm-td">{{ appJobLocation(a) }}</td>
-                        <td class="crm-td">{{ a.recommended_at || '—' }}</td>
+                        <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
                         <td class="crm-td">{{ receiveLabel(a.receive_status) }}</td>
+                        <td class="crm-td">{{ deliveryReviewLabel(a.delivery_review_status) }}</td>
                         <td class="crm-td">{{ progressLabel(a.status) }}</td>
                         <td class="crm-td" :title="'保护期规则后续单独实现'">{{ protectionLabel(a.status) }}</td>
                         <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
                         <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
                         <td class="crm-td crm-sticky-right-op crm-op-col-wide whitespace-nowrap">
-                            <div v-if="canWriteApplications && a.receive_status === 'accepted'" class="crm-op-actions">
-                                <button v-for="next in progressTransitionsFor(a.status)" :key="next" type="button"
-                                    class="crm-op-btn-edit"
-                                    @click="transitionProgress(a.id, next)">{{ progressLabel(next) }}</button>
+                            <div class="crm-op-actions flex flex-wrap items-center gap-1">
+                                <button type="button" class="crm-op-btn-detail" @click="openApplicationDetailModal(a)">查看详情</button>
+                                <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
+                                <button type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)">状态历史</button>
                             </div>
-                            <span v-else class="text-[#57606a]">—</span>
                         </td>
                     </tr>
                 </tbody>
@@ -717,7 +721,7 @@
                         <td class="crm-td">{{ appJobTitle(a) }}</td>
                         <td class="crm-td">{{ appJobLocation(a) }}</td>
                         <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
-                        <td class="crm-td">{{ a.recommended_at || '—' }}</td>
+                        <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
                         <td class="crm-td whitespace-nowrap">
                             <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
                             <span v-else class="text-[#57606a]">—</span>
@@ -727,6 +731,123 @@
                                 <button type="button" class="crm-op-btn-edit" @click="openDeliveryReviewModal(a)">内审</button>
                             </div>
                             <span v-else class="text-[#57606a]">—</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pipeline (delivery progress) -->
+    <section v-show="activeTab === 'pipeline' && viewMode !== 'candidateReport'" data-rms-region="pipeline">
+        <div class="flex justify-between items-center mb-3">
+            <h2 class="text-lg font-medium text-[#1f2328]">招聘pipeline-候选人状态（交付）</h2>
+        </div>
+        <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3">
+            <div class="flex flex-wrap items-end justify-between gap-2 mb-2">
+                <p class="text-sm font-semibold text-[#1f2328]">
+                    合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredPipelineApplications.length }}</span> 条
+                </p>
+                <button type="button" class="text-xs border border-[#d0d7de] px-2 py-1 rounded-md bg-white" @click="resetPipelineFilter">清除筛选</button>
+            </div>
+            <div class="crm-filter-row">
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">客户</span>
+                    <select v-model="pipelineFilter.client_id" class="crm-filter-control w-[10rem]">
+                        <option value="">全部</option>
+                        <option v-for="c in clientOptions" :key="'pc'+c.id" :value="String(c.id)">{{ c.name }}</option>
+                    </select>
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">岗位</span>
+                    <select v-model="pipelineFilter.job_id" class="crm-filter-control w-[10rem]">
+                        <option value="">全部</option>
+                        <option v-for="j in jobsState.items" :key="'pj'+j.id" :value="String(j.id)">{{ j.title || ('#'+j.id) }}</option>
+                    </select>
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">城市</span>
+                    <input v-model.trim="pipelineFilter.city" type="text" class="crm-filter-control w-[8rem]" placeholder="模糊" />
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">交付</span>
+                    <input v-model.trim="pipelineFilter.delivery" type="text" class="crm-filter-control w-[8rem]" placeholder="模糊" />
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">实际推荐人</span>
+                    <input v-model.trim="pipelineFilter.recommender" type="text" class="crm-filter-control w-[8rem]" placeholder="模糊" />
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">当前招聘进展</span>
+                    <select v-model="pipelineFilter.status" class="crm-filter-control w-[9rem]">
+                        <option value="">全部</option>
+                        <option v-for="p in progressOptions" :key="'pp'+p.value" :value="p.value">{{ p.label }}</option>
+                    </select>
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">推荐日起</span>
+                    <input v-model="pipelineFilter.date_from" type="date" class="crm-filter-control w-[9rem]" />
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">推荐日止</span>
+                    <input v-model="pipelineFilter.date_to" type="date" class="crm-filter-control w-[9rem]" />
+                </label>
+                <label class="crm-filter-item flex items-center gap-1.5 text-xs pb-1">
+                    <input v-model="pipelineFilter.activeOnly" type="checkbox" class="rounded border-[#d0d7de]" />
+                    <span class="text-[#57606a]">只看活动状态</span>
+                </label>
+            </div>
+        </div>
+        <div v-if="applicationsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ applicationsState.error }}</div>
+        <div v-else-if="applicationsState.loading" class="text-sm text-[#57606a]">加载中…</div>
+        <div v-else-if="!filteredPipelineApplications.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无符合条件的 pipeline 记录</div>
+        <div v-else class="rms-candidates-frame border border-[#d0d7de]">
+            <div class="rms-candidates-scroll crm-table-scroll">
+            <table class="crm-table rms-candidates-table" data-table-id="rms-pipeline">
+                <thead>
+                    <tr>
+                        <th class="crm-th rms-candidate-sticky-name">候选人</th>
+                        <th class="crm-th">客户</th>
+                        <th class="crm-th">岗位</th>
+                        <th class="crm-th">城市</th>
+                        <th class="crm-th">实际推荐人</th>
+                        <th class="crm-th">交付负责人</th>
+                        <th class="crm-th">当前招聘进展</th>
+                        <th class="crm-th">推荐时间</th>
+                        <th class="crm-th">最近更新时间</th>
+                        <th class="crm-th crm-op-col-wide">下一步操作</th>
+                        <th class="crm-th crm-sticky-right-op">备注 / 历史</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="a in filteredPipelineApplications" :key="'pl'+a.id">
+                        <td class="crm-td crm-name-cell rms-candidate-sticky-name">{{ appCandidateName(a) }}</td>
+                        <td class="crm-td">{{ appClientName(a) }}</td>
+                        <td class="crm-td">{{ appJobTitle(a) }}</td>
+                        <td class="crm-td">{{ appJobLocation(a) }}</td>
+                        <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
+                        <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
+                        <td class="crm-td">{{ progressLabel(a.status) }}</td>
+                        <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
+                        <td class="crm-td">{{ formatRmsDate(a.updated_at) }}</td>
+                        <td class="crm-td whitespace-nowrap">
+                            <div v-if="canWriteApplications" class="crm-op-actions flex flex-wrap items-center gap-1">
+                                <template v-for="next in progressTransitionsFor(a.status)" :key="'pt'+a.id+'-'+next">
+                                    <button type="button" class="crm-op-btn-edit" data-rms-action="progress-confirm-open"
+                                        @click="openProgressConfirmModal(a, next, 'transition')">{{ progressLabel(next) }}</button>
+                                </template>
+                                <span v-if="!progressTransitionsFor(a.status).length" class="text-[#57606a] text-xs">—</span>
+                            </div>
+                            <span v-else class="text-[#57606a]">—</span>
+                        </td>
+                        <td class="crm-td crm-sticky-right-op whitespace-nowrap">
+                            <div v-if="canWriteApplications" class="crm-op-actions flex flex-wrap items-center gap-1">
+                                <button type="button" class="crm-op-btn-edit" data-rms-action="correction-picker-open"
+                                    @click="openCorrectionPickerModal(a)">修改状态</button>
+                                <button type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)">状态历史</button>
+                            </div>
+                            <button v-else type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)">状态历史</button>
                         </td>
                     </tr>
                 </tbody>
@@ -750,6 +871,61 @@
                     :disabled="reviewModalSaving" @click="submitDeliveryReview('failed')">内审失败</button>
                 <button type="button" class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50"
                     :disabled="reviewModalSaving" @click="submitDeliveryReview('passed')">内审通过</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application detail modal (read-only) -->
+    <div v-if="applicationDetailModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="closeApplicationDetailModal">
+        <div class="bg-white rounded-lg border border-[#d0d7de] shadow-lg w-full max-w-lg p-5" @click.stop>
+            <h3 class="text-lg font-medium mb-3">推荐详情 — {{ appCandidateName(applicationDetailModal) }}</h3>
+            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div><dt class="text-[#57606a]">客户</dt><dd>{{ appClientName(applicationDetailModal) }}</dd></div>
+                <div><dt class="text-[#57606a]">岗位</dt><dd>{{ appJobTitle(applicationDetailModal) }}</dd></div>
+                <div><dt class="text-[#57606a]">地点</dt><dd>{{ appJobLocation(applicationDetailModal) }}</dd></div>
+                <div><dt class="text-[#57606a]">推荐时间</dt><dd>{{ formatRmsDate(applicationDetailModal.recommended_at) }}</dd></div>
+                <div><dt class="text-[#57606a]">接收状态</dt><dd>{{ receiveLabel(applicationDetailModal.receive_status) }}</dd></div>
+                <div><dt class="text-[#57606a]">内审状态</dt><dd>{{ deliveryReviewLabel(applicationDetailModal.delivery_review_status) }}</dd></div>
+                <div><dt class="text-[#57606a]">招聘进展</dt><dd>{{ progressLabel(applicationDetailModal.status) }}</dd></div>
+                <div><dt class="text-[#57606a]">保护期</dt><dd>{{ protectionLabel(applicationDetailModal.status) }}</dd></div>
+                <div><dt class="text-[#57606a]">交付</dt><dd>{{ appDeliveryLabel(applicationDetailModal) }}</dd></div>
+                <div><dt class="text-[#57606a]">推荐人</dt><dd>{{ appRecommenderLabel(applicationDetailModal) }}</dd></div>
+            </dl>
+            <div class="flex justify-end mt-4">
+                <button type="button" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md" @click="closeApplicationDetailModal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status history modal -->
+    <div v-if="statusHistoryModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="closeStatusHistoryModal">
+        <div class="bg-white rounded-lg border border-[#d0d7de] shadow-lg w-full max-w-3xl max-h-[90vh] flex flex-col p-5" @click.stop>
+            <h3 class="text-lg font-medium mb-2">状态历史 — {{ appCandidateName(statusHistoryModal) }}</h3>
+            <p v-if="statusHistoryError" class="mb-2 text-sm text-red-700">{{ statusHistoryError }}</p>
+            <p v-else-if="statusHistoryLoading" class="mb-2 text-sm text-[#57606a]">加载中…</p>
+            <div v-else class="flex-1 min-h-0 overflow-auto border border-[#d0d7de] rounded mb-4">
+                <table v-if="statusHistoryItems.length" class="crm-table w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th class="crm-th">原状态</th>
+                            <th class="crm-th">新状态</th>
+                            <th class="crm-th">变更时间</th>
+                            <th class="crm-th">备注</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="h in statusHistoryItems" :key="h.id">
+                            <td class="crm-td">{{ progressLabel(h.from_status) }}</td>
+                            <td class="crm-td">{{ progressLabel(h.to_status) }}</td>
+                            <td class="crm-td">{{ formatRmsDate(h.changed_at) }}</td>
+                            <td class="crm-td">{{ h.note || h.reason || '—' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p v-else class="p-4 text-sm text-[#57606a] text-center">暂无状态历史</p>
+            </div>
+            <div class="flex justify-end">
+                <button type="button" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md" @click="closeStatusHistoryModal">关闭</button>
             </div>
         </div>
     </div>

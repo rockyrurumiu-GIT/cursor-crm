@@ -19,6 +19,7 @@ from schemas.rms import (
 from services import rms_applications as app_svc
 from services import rms_candidates as cand_svc
 from services import rms_resumes as resume_svc
+from services import rms_roster_check as roster_chk
 
 
 def register_rms_applications_routes(
@@ -32,6 +33,7 @@ def register_rms_applications_routes(
     RmsApplication: Type[Any],
     RmsApplicationStatusHistory: Type[Any],
     RmsResume: Type[Any],
+    RosterEntry: Type[Any],
 ):
     @app.get("/api/rms/applications")
     async def api_list_applications(
@@ -145,6 +147,32 @@ def register_rms_applications_routes(
     ):
         return app_svc.list_delivery_review_applications(db, ctx, RmsApplication, Client)
 
+    @app.get("/api/rms/applications/hired-roster-check")
+    async def api_hired_roster_check(
+        client_id: Optional[int] = None,
+        job_id: Optional[int] = None,
+        recruiter_user_id: Optional[int] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.applications.read")),
+    ):
+        return roster_chk.list_hired_roster_checks(
+            db,
+            ctx,
+            RmsApplication,
+            RmsCandidate,
+            RmsJob,
+            RosterEntry,
+            Client,
+            client_id=client_id,
+            job_id=job_id,
+            recruiter_user_id=recruiter_user_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+
     @app.get("/api/rms/applications/{application_id}")
     async def api_get_application(
         application_id: int,
@@ -213,6 +241,7 @@ def register_rms_applications_routes(
             application_id,
             body.model_dump(),
             RmsApplication,
+            RmsApplicationStatusHistory,
             Client,
         )
 
@@ -232,6 +261,8 @@ def register_rms_applications_routes(
             RmsApplication,
             RmsApplicationStatusHistory,
             Client,
+            RmsCandidate=RmsCandidate,
+            RosterEntry=RosterEntry,
         )
 
     @app.get("/api/rms/applications/{application_id}/status-history")

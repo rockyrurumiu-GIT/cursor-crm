@@ -537,6 +537,7 @@ class DashboardDashboard(Base):
     name = Column(String, nullable=False)
     description = Column(Text, default="")
     layout_json = Column(Text, default="{}")
+    scope = Column(String, nullable=False, default="crm", index=True)
     created_by = Column(String, default="")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
@@ -548,6 +549,7 @@ class DashboardTab(Base):
     dashboard_id = Column(Integer, ForeignKey("dashboard_dashboards.id"), index=True, nullable=False)
     name = Column(String, nullable=False)
     sort_order = Column(Integer, default=0)
+    layout_json = Column(Text, default="{}")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -1497,6 +1499,7 @@ from routes.rms_shell import register_rms_shell_routes
 from routes.rms_jobs import register_rms_jobs_routes
 from routes.rms_candidates import register_rms_candidates_routes
 from routes.rms_applications import register_rms_applications_routes
+from routes.rms_dashboard import register_rms_dashboard_routes
 
 register_rms_jobs_routes(
     app,
@@ -1525,6 +1528,26 @@ register_rms_applications_routes(
     RmsApplication=RMS_MODELS["RmsApplication"],
     RmsApplicationStatusHistory=RMS_MODELS["RmsApplicationStatusHistory"],
     RmsResume=RMS_MODELS["RmsResume"],
+    RosterEntry=RosterEntry,
+)
+register_rms_dashboard_routes(
+    app,
+    get_db=get_db,
+    Client=Client,
+    Contact=Contact,
+    Opportunity=Opportunity,
+    VisitRecord=VisitRecord,
+    HandoffRequest=HandoffRequest,
+    DeliveryPipelineEntry=DeliveryPipelineEntry,
+    RosterEntry=RosterEntry,
+    DeliverySettlementEntry=DeliverySettlementEntry,
+    DeliveryInterviewEntry=DeliveryInterviewEntry,
+    RmsJob=RMS_MODELS["RmsJob"],
+    RmsApplication=RMS_MODELS["RmsApplication"],
+    RmsApplicationStatusHistory=RMS_MODELS["RmsApplicationStatusHistory"],
+    DashboardDashboard=DashboardDashboard,
+    DashboardTab=DashboardTab,
+    DashboardWidget=DashboardWidget,
 )
 
 register_rms_shell_routes(app, page_renderer=_page)

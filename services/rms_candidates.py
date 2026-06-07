@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Type
 
 from fastapi import HTTPException
@@ -14,16 +13,13 @@ from schemas.rms import (
     CANDIDATE_GENDERS,
     CANDIDATE_MARITAL_STATUSES,
     CANDIDATE_SOURCES,
+    normalize_rms_date,
+    utc_date_str,
 )
 from services import rms_jobs as jobs_svc
 from services import rms_scope as rms_ds
 
 PHONE_RE = re.compile(r"^1\d{10}$")
-
-
-def _utc_now_str() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
 
 def _mask_phone(value: str) -> str:
     s = (value or "").strip()
@@ -188,7 +184,7 @@ def candidate_to_dict(
         "target_client_name": client_name,
         "current_salary": getattr(row, "current_salary", None) or "",
         "expected_salary": getattr(row, "expected_salary", None) or "",
-        "available_date": getattr(row, "available_date", None) or "",
+        "available_date": normalize_rms_date(getattr(row, "available_date", None)),
         "education_level": getattr(row, "education_level", None) or "",
         "school": getattr(row, "school", None) or "",
         "major": getattr(row, "major", None) or "",
@@ -202,8 +198,8 @@ def candidate_to_dict(
         "resume_id": resume_row.id if resume_row else None,
         "resume_file_name": (resume_row.file_name or "") if resume_row else "",
         "created_by_user_id": row.created_by_user_id,
-        "created_at": row.created_at or "",
-        "updated_at": row.updated_at or "",
+        "created_at": normalize_rms_date(row.created_at),
+        "updated_at": normalize_rms_date(row.updated_at),
     }
 
 
@@ -317,7 +313,10 @@ def _apply_candidate_fields(row: Any, data: Dict[str, Any]) -> None:
     )
     for field in str_fields:
         if data.get(field) is not None:
-            setattr(row, field, str(data[field]).strip())
+            val = str(data[field]).strip()
+            if field == "available_date":
+                val = normalize_rms_date(val)
+            setattr(row, field, val)
     if "target_job_id" in data:
         row.target_job_id = data["target_job_id"]
     if "target_client_id" in data:
@@ -343,7 +342,7 @@ def create_candidate(
     )
     _validate_candidate_enums(data)
     _sync_email_wechat_fields(data)
-    now = _utc_now_str()
+    now = utc_date_str()
     row = RmsCandidate(
         created_by_user_id=ctx.user_id,
         created_at=now,
@@ -387,7 +386,7 @@ def update_candidate(
     _validate_candidate_enums(data)
     _sync_email_wechat_fields(data)
     _apply_candidate_fields(row, data)
-    row.updated_at = _utc_now_str()
+    row.updated_at = utc_date_str()
     db.commit()
     db.refresh(row)
     return get_candidate(

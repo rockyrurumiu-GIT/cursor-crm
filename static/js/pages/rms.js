@@ -221,6 +221,29 @@
         status: "",
       });
 
+      const pipelineFilter = reactive({
+        client_id: "",
+        job_id: "",
+        city: "",
+        delivery: "",
+        recommender: "",
+        status: "",
+        activeOnly: true,
+        date_from: "",
+        date_to: "",
+      });
+
+      const statusHistoryModal = ref(null);
+      const statusHistoryLoading = ref(false);
+      const statusHistoryError = ref("");
+      const statusHistoryItems = ref([]);
+
+      const applicationDetailModal = ref(null);
+
+      const progressOptions = (Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
+        return { value: s, label: Labels.progressLabel ? Labels.progressLabel(s) : s };
+      });
+
       const clientOptions = ref([]);
       const userOptions = ref([]);
       const jobFormOptionsError = ref("");
@@ -331,6 +354,17 @@
           });
         }
         return rows;
+      });
+
+      const filteredPipelineApplications = computed(function () {
+        if (!Labels.filterPipelineApplications) return [];
+        return Labels.filterPipelineApplications(applicationsState.items, {
+          filters: pipelineFilter,
+          getJobs: function () { return jobsState.items; },
+          getCandidates: function () { return candidatesState.items; },
+          getUsers: function () { return userOptions.value; },
+          clientNameById: clientNameById,
+        });
       });
 
       const jobTitleById = computed(function () {
@@ -515,9 +549,26 @@
         return Labels.progressLabel ? Labels.progressLabel(status) : status;
       }
 
+      function formatRmsDate(value) {
+        return Labels.formatRmsDate ? Labels.formatRmsDate(value) : (value || "—");
+      }
+
       function receiveLabel(status) {
         return Labels.receiveLabel ? Labels.receiveLabel(status) : status;
       }
+
+      function deliveryReviewLabel(status) {
+        return Labels.deliveryReviewLabel ? Labels.deliveryReviewLabel(status) : status;
+      }
+
+      function todayDateStr() {
+        const d = new Date();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return d.getFullYear() + "-" + m + "-" + day;
+      }
+
+      const hiredAtDates = reactive({});
 
       function protectionLabel(status) {
         return Labels.deriveProtectionStatus ? Labels.deriveProtectionStatus(status) : "—";
@@ -525,6 +576,18 @@
 
       function progressTransitionsFor(status) {
         return Labels.progressTransitionsFor ? Labels.progressTransitionsFor(status) : [];
+      }
+
+      function progressOptionsForCorrection(currentStatus) {
+        return Labels.progressOptionsForCorrection
+          ? Labels.progressOptionsForCorrection(currentStatus)
+          : [];
+      }
+
+      function normalizeProgressStatus(status) {
+        return Labels.normalizeProgressStatus
+          ? Labels.normalizeProgressStatus(status)
+          : String(status || "").trim();
       }
 
       const appDisplay = Labels.createAppDisplayHelpers
@@ -581,6 +644,7 @@
         candidates: "rms-candidates",
         applications: "rms-applications",
         deliveryReview: "rms-delivery-review",
+        pipeline: "rms-pipeline",
       };
 
       function scheduleCandidatesTableColumnFit() {
@@ -747,6 +811,48 @@
         jobFilter.client_id = "";
         jobFilter.priority = "";
         jobFilter.status = "";
+      }
+
+      function resetPipelineFilter() {
+        pipelineFilter.client_id = "";
+        pipelineFilter.job_id = "";
+        pipelineFilter.city = "";
+        pipelineFilter.delivery = "";
+        pipelineFilter.recommender = "";
+        pipelineFilter.status = "";
+        pipelineFilter.activeOnly = true;
+        pipelineFilter.date_from = "";
+        pipelineFilter.date_to = "";
+      }
+
+      function openApplicationDetailModal(app) {
+        applicationDetailModal.value = app;
+      }
+
+      function closeApplicationDetailModal() {
+        applicationDetailModal.value = null;
+      }
+
+      async function openStatusHistoryModal(app) {
+        if (!app || app.id == null) return;
+        statusHistoryModal.value = app;
+        statusHistoryLoading.value = true;
+        statusHistoryError.value = "";
+        statusHistoryItems.value = [];
+        const r = await rmsRequest("GET", "/api/rms/applications/" + app.id + "/status-history");
+        statusHistoryLoading.value = false;
+        if (!r.ok) {
+          statusHistoryError.value = r.message;
+          return;
+        }
+        statusHistoryItems.value = Array.isArray(r.data) ? r.data : [];
+      }
+
+      function closeStatusHistoryModal() {
+        statusHistoryModal.value = null;
+        statusHistoryLoading.value = false;
+        statusHistoryError.value = "";
+        statusHistoryItems.value = [];
       }
 
       function scrollJobsToTop() {
@@ -986,6 +1092,9 @@
         reportResumeDraftStatus.value = "parsing";
         reportResumeDraftError.value = "";
         clearReportResumePreview();
+        if (CandidateReport.clearAutoFilledFields) {
+          CandidateReport.clearAutoFilledFields(reportForm, reportAutoFilledFields);
+        }
         const r = await CandidateReport.parseCandidateReportDraft(
           file,
           reportForm.job_id,
@@ -1233,20 +1342,139 @@
         closeModal();
       }
 
-      async function transitionProgress(applicationId, toStatus) {
-        const r = await rmsRequest("POST", "/api/rms/applications/" + applicationId + "/progress", {
-          to_status: toStatus,
-        });
+      function hiredAtFor(appId) {
+        const id = String(appId);
+        if (!hiredAtDates[id]) hiredAtDates[id] = todayDateStr();
+        return hiredAtDates[id];
+      }
+
+      function setHiredAtFor(appId, value) {
+        hiredAtDates[String(appId)] = value;
+      }
+
+      async function submitProgressConfirm(applicationId, toStatus, mode, formValues) {
+        formValues = formValues || {};
+        const note = String(formValues.note || "").trim();
+        if (mode === "correction" && note.length < 2) {
+          toast("状态修正备注至少 2 个字", true);
+          return;
+        }
+        const body = { to_status: toStatus, mode: mode, note: note };
+        if (toStatus === "hired") {
+          const dateVal = String(formValues.hired_at || todayDateStr()).trim();
+          if (!dateVal) {
+            toast("请填写入职时间", true);
+            return;
+          }
+          body.hired_at = dateVal;
+        }
+        const r = await rmsRequest("POST", "/api/rms/applications/" + applicationId + "/status", body);
         if (!r.ok) {
           toast(r.message, true);
           return;
         }
-        toast("招聘进展已更新为 " + progressLabel(toStatus), false);
+        const data = r.data || {};
+        if (data.roster_check && data.roster_check.message) {
+          const st = data.roster_check.status;
+          const isWarn = st === "missing" || st === "date_mismatch" || st === "ambiguous";
+          toast(data.roster_check.message, isWarn);
+        } else {
+          toast("招聘进展已更新为 " + progressLabel(toStatus), false);
+        }
+        delete hiredAtDates[String(applicationId)];
         await loadApplications();
       }
 
+      async function openProgressConfirmModal(app, targetStatus, mode) {
+        if (!app || app.id == null || !targetStatus) return;
+        if (typeof window.crmConfirmActionDialog !== "function") {
+          toast("确认对话框不可用", true);
+          return;
+        }
+        const lines = [
+          { label: "候选人", value: appCandidateName(app) },
+          { label: "岗位", value: appJobTitle(app) },
+          { label: "当前状态", value: progressLabel(app.status) },
+          { label: "目标状态", value: progressLabel(targetStatus) },
+          { label: "操作类型", value: mode === "correction" ? "状态修正" : "正常推进" },
+        ];
+        let hint = "";
+        if (app.status === "hired" && targetStatus !== "hired") {
+          hint = "确认后将清空入职时间。";
+        }
+        const fields = [{
+          type: "textarea",
+          name: "note",
+          label: "备注/原因",
+          placeholder: mode === "correction" ? "必填，至少 2 个字" : "可选",
+        }];
+        if (targetStatus === "hired") {
+          fields.push({
+            type: "date",
+            name: "hired_at",
+            label: "入职时间",
+            value: hiredAtFor(app.id),
+          });
+        }
+        const result = await window.crmConfirmActionDialog({
+          title: "确认变更招聘进展",
+          lines: lines,
+          hint: hint,
+          fields: fields,
+          confirmText: "确认",
+          cancelText: "取消",
+          zIndex: 120,
+        });
+        if (!result || !result.ok) return;
+        await submitProgressConfirm(app.id, targetStatus, mode, result.values || {});
+      }
+
+      async function openCorrectionPickerModal(app) {
+        if (!app || app.id == null) return;
+        if (typeof window.crmConfirmActionDialog !== "function") {
+          toast("确认对话框不可用", true);
+          return;
+        }
+        const options = progressOptionsForCorrection(app.status);
+        if (!options.length) {
+          toast("暂无可选目标状态", true);
+          return;
+        }
+        let hint = "";
+        if (normalizeProgressStatus(app.status) === "hired") {
+          hint = "若目标不是已入职，确认后将清空入职时间。";
+        }
+        const result = await window.crmConfirmActionDialog({
+          title: "修改招聘进展",
+          lines: [
+            { label: "候选人", value: appCandidateName(app) },
+            { label: "岗位", value: appJobTitle(app) },
+            { label: "当前状态", value: progressLabel(app.status) },
+            { label: "操作类型", value: "状态修正" },
+          ],
+          fields: [{
+            type: "select",
+            name: "to_status",
+            label: "目标招聘进展",
+            placeholder: "请选择",
+            options: options,
+          }],
+          hint: hint,
+          confirmText: "下一步",
+          cancelText: "取消",
+          zIndex: 120,
+        });
+        if (!result || !result.ok) return;
+        const target = String((result.values && result.values.to_status) || "").trim();
+        if (!target) {
+          toast("请选择目标状态", true);
+          return;
+        }
+        await openProgressConfirmModal(app, target, "correction");
+      }
+
       watch(activeTab, function (tab) {
-        if (tab === "candidates" || tab === "applications" || tab === "deliveryReview") {
+        if (tab === "candidates" || tab === "applications" || tab === "deliveryReview" || tab === "pipeline") {
           scheduleCandidatesTableColumnFit();
         }
         if (tab === "deliveryReview") {
@@ -1278,6 +1506,15 @@
         reviewModal,
         reviewModalSaving,
         reviewModalError,
+        statusHistoryModal,
+        statusHistoryLoading,
+        statusHistoryError,
+        statusHistoryItems,
+        applicationDetailModal,
+        openApplicationDetailModal,
+        closeApplicationDetailModal,
+        openStatusHistoryModal,
+        closeStatusHistoryModal,
         reportForm,
         reportSaving,
         reportError,
@@ -1306,6 +1543,13 @@
         jobFilterPanelExpanded,
         jobFilter,
         filteredJobs,
+        pipelineFilter,
+        filteredPipelineApplications,
+        progressOptions,
+        progressOptionsForCorrection,
+        openCorrectionPickerModal,
+        openProgressConfirmModal,
+        submitProgressConfirm,
         jobsScrollWrap,
         candidatesScrollWrap,
         clientOptions,
@@ -1341,9 +1585,13 @@
         selectClientPicker,
         onCandidateResumeChange,
         progressLabel,
+        formatRmsDate,
         receiveLabel,
+        deliveryReviewLabel,
         protectionLabel,
         progressTransitionsFor,
+        hiredAtFor,
+        setHiredAtFor,
         appCandidateName,
         appClientName,
         appJobTitle,
@@ -1358,6 +1606,7 @@
         priorityLabel,
         statusLabel,
         resetJobFilter,
+        resetPipelineFilter,
         scrollJobsToTop,
         scheduleCandidatesTableColumnFit,
         labelJob,
@@ -1381,7 +1630,6 @@
         removeCandidate,
         closeModal,
         submitModal,
-        transitionProgress,
       };
     },
   }).mount("#rms-app");

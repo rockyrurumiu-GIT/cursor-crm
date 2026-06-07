@@ -90,6 +90,52 @@ def test_rms_applications_has_client_id(crm_main):
     assert "client_id" in cols
 
 
+def test_migration_009_applied_and_columns(crm_main):
+    with crm_main.engine.connect() as conn:
+        row = conn.execute(
+            text(
+                "SELECT migration_id FROM schema_migrations "
+                "WHERE migration_id = '009_rms_applications_pipeline.sql'"
+            )
+        ).fetchone()
+        assert row is not None
+        cols = _column_names(conn, "rms_applications")
+    for col in ("receive_status", "delivery_review_status", "hired_at"):
+        assert col in cols
+
+
+def test_migration_009_idempotent_second_run(crm_main):
+    run_schema_migrations(crm_main.engine)
+    run_schema_migrations(crm_main.engine)
+    with crm_main.engine.connect() as conn:
+        count = conn.execute(
+            text(
+                "SELECT COUNT(*) FROM schema_migrations "
+                "WHERE migration_id = '009_rms_applications_pipeline.sql'"
+            )
+        ).scalar()
+    assert int(count or 0) == 1
+
+
+def test_rms_application_orm_pipeline_fields(crm_main):
+    RmsApplication = crm_main.RMS_MODELS["RmsApplication"]
+    assert hasattr(RmsApplication, "receive_status")
+    assert hasattr(RmsApplication, "delivery_review_status")
+    assert hasattr(RmsApplication, "hired_at")
+
+
+def test_rms_date_helpers():
+    from schemas.rms import normalize_rms_date, utc_date_str
+
+    today = utc_date_str()
+    assert len(today) == 10
+    assert today[4] == "-" and today[7] == "-"
+    assert normalize_rms_date("2026-06-07T14:30:00Z") == "2026-06-07"
+    assert normalize_rms_date("2026-06-07 14:30:00") == "2026-06-07"
+    assert normalize_rms_date("2026-06-07") == "2026-06-07"
+    assert normalize_rms_date("") == ""
+
+
 def test_rms_applications_unique_job_candidate(crm_main):
     with crm_main.engine.connect() as conn:
         row = conn.execute(

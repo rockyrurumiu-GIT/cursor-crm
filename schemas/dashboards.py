@@ -22,7 +22,41 @@ FieldKind = Literal["text", "numeric", "datetime"]
 # but NOT a chart and does not use the generic metric/group path.
 WIDGET_TYPES: FrozenSet[str] = frozenset({
     "number", "bar", "horizontal_bar", "pie", "line", "rich_text", "iframe", "roster_summary",
+    "rms_block",
 })
+
+# Preset recruitment-dashboard blocks (stored as widget_type=rms_block, config.block=…).
+RMS_BLOCK_KEYS: FrozenSet[str] = frozenset({
+    "filter",
+    "kpi_clients", "kpi_jobs", "kpi_hc",
+    "chart_pipeline", "filter_summary",
+    "chart_history_pass", "table_history",
+    "chart_recruiter", "table_recruiter",
+    "roster_header",
+    "roster_kpi_matched", "roster_kpi_missing", "roster_kpi_mismatch", "roster_kpi_ambiguous",
+    "table_roster",
+})
+
+RMS_BLOCK_LABELS: Dict[str, str] = {
+    "filter": "筛选",
+    "kpi_clients": "KPI · 有需求客户数",
+    "kpi_jobs": "KPI · 需求总数",
+    "kpi_hc": "KPI · HC 总数",
+    "chart_pipeline": "图表 · 招聘管道",
+    "filter_summary": "当前筛选摘要",
+    "chart_history_pass": "图表 · 阶段通过率",
+    "table_history": "表格 · 阶段明细",
+    "chart_recruiter": "图表 · 当月入职排名",
+    "table_recruiter": "表格 · 人效明细",
+    "roster_header": "花名册核对操作",
+    "roster_kpi_matched": "KPI · 一致",
+    "roster_kpi_missing": "KPI · 缺失",
+    "roster_kpi_mismatch": "KPI · 不一致",
+    "roster_kpi_ambiguous": "KPI · 多匹配",
+    "table_roster": "表格 · 核对明细",
+}
+
+RMS_WIDGET_TYPE_DISPLAY_ORDER: Tuple[str, ...] = ("rms_block", "rich_text")
 CHART_WIDGET_TYPES: FrozenSet[str] = frozenset({"bar", "horizontal_bar", "pie", "line"})
 CHART_EXTRA_RENDERS: FrozenSet[str] = frozenset({"doughnut", "horizontal_bar"})
 DATA_WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "horizontal_bar", "pie", "line"})
@@ -209,6 +243,17 @@ def get_field(source_key: str, field_key: str) -> Optional[SourceFieldDef]:
         if f.key == field_key:
             return f
     return None
+
+
+def build_rms_metadata() -> dict:
+    """Whitelists for RMS dashboard widget config panel (CRM builder + recruitment presets)."""
+    meta = build_metadata()
+    meta["widget_types"] = list(WIDGET_TYPE_DISPLAY_ORDER) + ["rms_block"]
+    meta["rms_blocks"] = [
+        {"key": k, "label": RMS_BLOCK_LABELS.get(k, k)}
+        for k in sorted(RMS_BLOCK_KEYS)
+    ]
+    return meta
 
 
 def build_metadata() -> dict:

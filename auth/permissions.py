@@ -77,6 +77,7 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {
         "delivery.settlement.write",
         "rms.jobs.read",
         "rms.applications.read",
+        "rms.analytics.read",
         "dashboard.read",
     }),
     ROLE_VIEWER: frozenset({

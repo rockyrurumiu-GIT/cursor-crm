@@ -30,6 +30,7 @@ from schemas.dashboards import (
     NUMERIC_METRICS,
     SORT_MODES,
     WIDGET_TYPES,
+    RMS_BLOCK_KEYS,
     get_field,
     get_source,
 )
@@ -195,6 +196,13 @@ def validate_widget_config(
             except (TypeError, ValueError):
                 raise HTTPException(status_code=400, detail="client_id 必须是整数")
         out["include_left"] = bool(config.get("include_left", False))
+        return out
+
+    if widget_type == "rms_block":
+        block = (config.get("block") or "").strip()
+        if block not in RMS_BLOCK_KEYS:
+            raise HTTPException(status_code=400, detail=f"未知 RMS 组件: {block}")
+        out["block"] = block
         return out
 
     if widget_type not in DATA_WIDGET_TYPES:
@@ -577,6 +585,7 @@ def dashboard_to_dict(d: Any, tabs: Optional[list] = None) -> dict:
         "id": d.id,
         "name": d.name,
         "description": d.description or "",
+        "scope": getattr(d, "scope", None) or "crm",
         "layout_json": _parse_json(d.layout_json or "{}", {}),
         "created_by": d.created_by or "",
         "created_at": d.created_at.isoformat() if d.created_at else "",
@@ -591,6 +600,7 @@ def tab_to_dict(t: Any, widgets: Optional[list] = None) -> dict:
         "dashboard_id": t.dashboard_id,
         "name": t.name,
         "sort_order": t.sort_order or 0,
+        "layout_json": _parse_json(getattr(t, "layout_json", None) or "{}", {}),
         "created_at": t.created_at.isoformat() if t.created_at else "",
         "updated_at": t.updated_at.isoformat() if t.updated_at else "",
         "widgets": widgets if widgets is not None else [],
@@ -619,8 +629,18 @@ def widget_to_dict(w: Any) -> dict:
 # CRUD (explicit cascade — do not rely on SQLite FK cascade)
 # ---------------------------------------------------------------------------
 
-def list_dashboards(db: Session, DashboardDashboard, DashboardTab, DashboardWidget) -> list:
-    dashboards = db.query(DashboardDashboard).order_by(DashboardDashboard.id).all()
+def list_dashboards(
+    db: Session,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+    *,
+    scope: Optional[str] = None,
+) -> list:
+    q = db.query(DashboardDashboard).order_by(DashboardDashboard.id)
+    if scope:
+        q = q.filter(DashboardDashboard.scope == scope)
+    dashboards = q.all()
     out = []
     for d in dashboards:
         tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).order_by(
@@ -652,7 +672,16 @@ def get_dashboard(db: Session, dashboard_id: int, DashboardDashboard, DashboardT
     return dashboard_to_dict(d, tab_dicts)
 
 
-def create_dashboard(db: Session, body: dict, ctx: AuthContext, DashboardDashboard) -> dict:
+def create_dashboard(
+    db: Session,
+    body: dict,
+    ctx: AuthContext,
+    DashboardDashboard,
+    *,
+    scope: str = "crm",
+    seed_rms_tabs: bool = False,
+    DashboardTab=None,
+) -> dict:
     name = (body.get("name") or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="name 不能为空")
@@ -661,6 +690,7 @@ def create_dashboard(db: Session, body: dict, ctx: AuthContext, DashboardDashboa
         name=name,
         description=(body.get("description") or "").strip(),
         layout_json=_dump_json(body.get("layout_json") or {}),
+        scope=(body.get("scope") or scope or "crm").strip() or "crm",
         created_by=ctx.username,
         created_at=now,
         updated_at=now,
@@ -668,6 +698,11 @@ def create_dashboard(db: Session, body: dict, ctx: AuthContext, DashboardDashboa
     db.add(d)
     db.commit()
     db.refresh(d)
+    if seed_rms_tabs and DashboardTab is not None and d.scope == "rms":
+        _add_rms_default_tabs(db, d.id, DashboardTab, DashboardWidget, now)
+        db.commit()
+    if DashboardTab is not None and DashboardWidget is not None:
+        return get_dashboard(db, d.id, DashboardDashboard, DashboardTab, DashboardWidget)
     return dashboard_to_dict(d, [])
 
 
@@ -710,10 +745,12 @@ def create_tab(db: Session, dashboard_id: int, body: dict, DashboardDashboard, D
     if not name:
         raise HTTPException(status_code=400, detail="name 不能为空")
     now = _now()
+    layout = body.get("layout_json") if isinstance(body.get("layout_json"), dict) else {}
     t = DashboardTab(
         dashboard_id=dashboard_id,
         name=name,
         sort_order=int(body.get("sort_order") or 0),
+        layout_json=_dump_json(layout),
         created_at=now,
         updated_at=now,
     )
@@ -734,6 +771,8 @@ def update_tab(db: Session, tab_id: int, body: dict, DashboardTab) -> dict:
         t.name = name
     if "sort_order" in body:
         t.sort_order = int(body.get("sort_order") or 0)
+    if "layout_json" in body and isinstance(body.get("layout_json"), dict):
+        t.layout_json = _dump_json(body.get("layout_json"))
     t.updated_at = _now()
     db.commit()
     db.refresh(t)
@@ -935,6 +974,134 @@ def seed_default_dashboards(
     _seed_business_overview(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _seed_roster_margin(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_roster_margin_preset_layout(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _seed_rms_recruitment(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
+
+
+_RMS_DEFAULT_TABS = (
+    ("总览", "overview", 0),
+    ("历史转化", "history", 1),
+    ("招聘人效", "recruiter", 2),
+    ("花名册核对", "roster", 3),
+)
+_RMS_SEED_NAME = "招聘总览"
+
+
+def _add_rms_default_tabs(db: Session, dashboard_id: int, DashboardTab, DashboardWidget, now) -> None:
+    for name, template, sort_order in _RMS_DEFAULT_TABS:
+        tab = DashboardTab(
+            dashboard_id=dashboard_id,
+            name=name,
+            sort_order=sort_order,
+            layout_json=_dump_json({"rms_template": template}),
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(tab)
+        db.flush()
+        if DashboardWidget is not None and template != "empty":
+            _seed_rms_tab_widgets(db, tab.id, template, DashboardWidget, now)
+
+
+_RMS_TEMPLATE_WIDGETS = {
+    "overview": [
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
+        {"title": "有需求客户数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_clients"}, "x": 0, "y": 2, "w": 4, "h": 3},
+        {"title": "需求总数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_jobs"}, "x": 4, "y": 2, "w": 4, "h": 3},
+        {"title": "HC 总数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_hc"}, "x": 8, "y": 2, "w": 4, "h": 3},
+        {"title": "招聘管道（活动态）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_pipeline"}, "x": 0, "y": 5, "w": 8, "h": 6},
+        {"title": "当前筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter_summary"}, "x": 8, "y": 5, "w": 4, "h": 6},
+    ],
+    "history": [
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
+        {"title": "阶段通过率", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_history_pass"}, "x": 0, "y": 2, "w": 12, "h": 6},
+        {"title": "阶段明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_history"}, "x": 0, "y": 8, "w": 12, "h": 5},
+    ],
+    "recruiter": [
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
+        {"title": "当月入职排名", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_recruiter"}, "x": 0, "y": 2, "w": 12, "h": 6},
+        {"title": "人效明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_recruiter"}, "x": 0, "y": 8, "w": 12, "h": 6},
+    ],
+    "roster": [
+        {"title": "已入职与花名册一致性核对", "widget_type": "rms_block", "source_key": "", "config": {"block": "roster_header"}, "x": 0, "y": 0, "w": 12, "h": 2},
+        {"title": "一致", "widget_type": "rms_block", "source_key": "", "config": {"block": "roster_kpi_matched"}, "x": 0, "y": 2, "w": 3, "h": 3},
+        {"title": "缺失", "widget_type": "rms_block", "source_key": "", "config": {"block": "roster_kpi_missing"}, "x": 3, "y": 2, "w": 3, "h": 3},
+        {"title": "不一致", "widget_type": "rms_block", "source_key": "", "config": {"block": "roster_kpi_mismatch"}, "x": 6, "y": 2, "w": 3, "h": 3},
+        {"title": "多匹配", "widget_type": "rms_block", "source_key": "", "config": {"block": "roster_kpi_ambiguous"}, "x": 9, "y": 2, "w": 3, "h": 3},
+        {"title": "核对明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_roster"}, "x": 0, "y": 5, "w": 12, "h": 7},
+    ],
+}
+
+
+def _seed_rms_tab_widgets(db: Session, tab_id: int, template: str, DashboardWidget, now) -> None:
+    specs = _RMS_TEMPLATE_WIDGETS.get(template) or []
+    for i, spec in enumerate(specs):
+        db.add(DashboardWidget(
+            tab_id=tab_id,
+            title=spec["title"],
+            widget_type=spec["widget_type"],
+            source_key=spec.get("source_key") or "",
+            config_json=_dump_json(spec.get("config") or {}),
+            x=spec["x"], y=spec["y"], w=spec["w"], h=spec["h"],
+            sort_order=i,
+            created_at=now,
+            updated_at=now,
+        ))
+
+
+def seed_rms_tab_widgets(db: Session, tab_id: int, template: str, DashboardWidget) -> None:
+    """Public helper — seed preset widgets for an RMS tab (idempotent skip if widgets exist)."""
+    count = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab_id).count()
+    if count > 0 or template in ("", "empty"):
+        return
+    now = _now()
+    _seed_rms_tab_widgets(db, tab_id, template, DashboardWidget, now)
+    db.commit()
+
+
+def _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget) -> None:
+    """Backfill widgets for RMS tabs that only have rms_template layout (no widgets yet)."""
+    dashboards = db.query(DashboardDashboard).filter(DashboardDashboard.scope == "rms").all()
+    changed = False
+    now = _now()
+    for d in dashboards:
+        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
+        for t in tabs:
+            count = db.query(DashboardWidget).filter(DashboardWidget.tab_id == t.id).count()
+            if count > 0:
+                continue
+            layout = _parse_json(getattr(t, "layout_json", None) or "{}", {})
+            template = (layout.get("rms_template") or "").strip()
+            if not template or template == "empty":
+                continue
+            _seed_rms_tab_widgets(db, t.id, template, DashboardWidget, now)
+            changed = True
+    if changed:
+        db.commit()
+
+
+def _seed_rms_recruitment(db, DashboardDashboard, DashboardTab, DashboardWidget) -> None:
+    existing = (
+        db.query(DashboardDashboard)
+        .filter(DashboardDashboard.scope == "rms", DashboardDashboard.name == _RMS_SEED_NAME)
+        .first()
+    )
+    if existing:
+        return
+    now = _now()
+    d = DashboardDashboard(
+        name=_RMS_SEED_NAME,
+        description="系统预置招聘 Dashboard",
+        layout_json="{}",
+        scope="rms",
+        created_by="system",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(d)
+    db.flush()
+    _add_rms_default_tabs(db, d.id, DashboardTab, DashboardWidget, now)
+    db.commit()
 
 
 def _seed_widgets(db, DashboardTab, DashboardWidget, dashboard_id, tab_name, widgets_spec, now):

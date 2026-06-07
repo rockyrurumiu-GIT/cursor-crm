@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import datetime, timezone
 from typing import Any, Dict, Type
 
 from fastapi import HTTPException, UploadFile
@@ -12,6 +11,7 @@ from sqlalchemy.orm import Session
 
 import security_foundation as sec
 from auth.service import AuthContext
+from schemas.rms import normalize_rms_date, utc_date_str
 from services import rms_candidates as cand_svc
 
 RESUME_ALLOWED_SUFFIXES = frozenset({".pdf", ".doc", ".docx", ".txt", ".rtf"})
@@ -26,18 +26,13 @@ _MEDIA_TYPE_BY_EXT = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
 
-
-def _utc_now_str() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
 def resume_to_dict(row: Any) -> Dict[str, Any]:
     return {
         "id": row.id,
         "candidate_id": row.candidate_id,
         "file_name": row.file_name or "",
         "file_type": row.file_type or "",
-        "created_at": row.created_at or "",
+        "created_at": normalize_rms_date(row.created_at),
     }
 
 
@@ -78,7 +73,7 @@ async def upload_candidate_resume(
     with open(abs_target, "wb") as f:
         f.write(content)
 
-    now = _utc_now_str()
+    now = utc_date_str()
     row = RmsResume(
         candidate_id=candidate_id,
         file_name=raw_name or safe,

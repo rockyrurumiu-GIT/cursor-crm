@@ -77,7 +77,9 @@ def register_dashboard_routes(
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("dashboard.read")),
     ):
-        return dash_svc.list_dashboards(db, DashboardDashboard, DashboardTab, DashboardWidget)
+        return dash_svc.list_dashboards(
+            db, DashboardDashboard, DashboardTab, DashboardWidget, scope="crm"
+        )
 
     @app.get("/api/dashboards/{dashboard_id}")
     async def api_get_dashboard(
