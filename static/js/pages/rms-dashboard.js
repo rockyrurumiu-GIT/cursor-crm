@@ -111,6 +111,19 @@
     });
   }
 
+  function cloneFilters(src) {
+    src = src || {};
+    return {
+      client_id: src.client_id != null ? String(src.client_id) : "",
+      job_ids: Array.isArray(src.job_ids) ? src.job_ids.map(String) : [],
+      job_ids_text: src.job_ids_text != null ? String(src.job_ids_text) : "",
+      delivery_user_id: src.delivery_user_id != null ? String(src.delivery_user_id) : "",
+      recruiter_user_id: src.recruiter_user_id != null ? String(src.recruiter_user_id) : "",
+      date_from: src.date_from != null ? String(src.date_from) : "",
+      date_to: src.date_to != null ? String(src.date_to) : "",
+    };
+  }
+
   function buildQuery(filters) {
     var params = new URLSearchParams();
     Object.keys(filters).forEach(function (k) {
@@ -295,19 +308,12 @@
         var clientOptions = ref([]);
         var jobOptions = ref([]);
         var userOptions = ref([]);
+        var jobFilterDropdownOpen = ref(false);
+        var jobFilterRef = ref(null);
+        var jobIdsDraft = ref([]);
 
-        var filters = reactive({
-          client_id: "",
-          job_ids: [],
-          job_ids_text: "",
-          priority: "",
-          city: "",
-          sales_user_id: "",
-          delivery_user_id: "",
-          recruiter_user_id: "",
-          date_from: "",
-          date_to: "",
-        });
+        var filters = reactive(cloneFilters());
+        var appliedFilters = reactive(cloneFilters());
 
         function blankWidget() {
           var w = KIT.blankWidget({ widget_type: "bar" });
@@ -384,21 +390,154 @@
           return (summary && summary.period_label) || "全量";
         });
 
+        function jobStageMetricText(row, countKey, rateKey) {
+          if (!row) return "—";
+          var count = row[countKey];
+          if (count == null) count = 0;
+          var rate = row[rateKey];
+          if (!rate || rate === "—") return String(count);
+          return String(count) + " (" + rate + ")";
+        }
+
+        function jobStageMetricTitle(row, countKey, denomKey, label) {
+          if (!row) return label;
+          var count = row[countKey];
+          if (count == null) count = 0;
+          var denom = row[denomKey];
+          if (denom == null) denom = 0;
+          if (denom <= 0) return label + "：—";
+          return label + "：" + count + "/" + denom;
+        }
+
+        var filteredJobOptions = computed(function () {
+          var jobs = jobOptions.value || [];
+          var clientId = filters.client_id;
+          if (clientId === "" || clientId == null) return jobs;
+          var want = Number(clientId);
+          if (!Number.isFinite(want)) return jobs;
+          return jobs.filter(function (j) { return Number(j.client_id) === want; });
+        });
+
+        var jobFilterSummary = computed(function () {
+          var selected = jobFilterDropdownOpen.value
+            ? jobIdsDraft.value
+            : (Array.isArray(filters.job_ids) ? filters.job_ids : []);
+          if (!selected.length) return "全部";
+          if (selected.length === 1) {
+            var job = jobOptions.value.find(function (j) { return String(j.id) === String(selected[0]); });
+            return job ? (job.title || ("岗位#" + job.id)) : String(selected[0]);
+          }
+          return "已选 " + selected.length + " 个岗位";
+        });
+
+        function toggleJobFilterDropdown() {
+          if (!jobFilterDropdownOpen.value) {
+            jobIdsDraft.value = (filters.job_ids || []).slice();
+          }
+          jobFilterDropdownOpen.value = !jobFilterDropdownOpen.value;
+        }
+
+        function toggleJobFilterDraft(jobId) {
+          var list = jobIdsDraft.value;
+          var id = String(jobId);
+          var idx = list.indexOf(id);
+          if (idx >= 0) {
+            list.splice(idx, 1);
+          } else {
+            list.push(id);
+          }
+        }
+
+        function clearJobFilterDraft() {
+          jobIdsDraft.value = [];
+        }
+
+        function confirmJobFilter() {
+          filters.job_ids = jobIdsDraft.value.slice();
+          jobFilterDropdownOpen.value = false;
+        }
+
+        function jobFilterRootContains(target) {
+          var root = jobFilterRef.value;
+          if (!root || !target) return false;
+          var nodes = Array.isArray(root) ? root : [root];
+          return nodes.some(function (node) {
+            var el = node && node.$el ? node.$el : node;
+            return !!(el && typeof el.contains === "function" && el.contains(target));
+          });
+        }
+
+        function applyFilterValues(target, src) {
+          var next = cloneFilters(src);
+          target.client_id = next.client_id;
+          target.job_ids = next.job_ids.slice();
+          target.job_ids_text = next.job_ids_text;
+          target.delivery_user_id = next.delivery_user_id;
+          target.recruiter_user_id = next.recruiter_user_id;
+          target.date_from = next.date_from;
+          target.date_to = next.date_to;
+        }
+
+        function syncDraftFromApplied() {
+          applyFilterValues(filters, appliedFilters);
+          jobIdsDraft.value = filters.job_ids.slice();
+        }
+
+        function syncAppliedFromDraft() {
+          applyFilterValues(appliedFilters, filters);
+        }
+
+        function applyFilters() {
+          filters.job_ids = jobIdsDraft.value.slice();
+          jobFilterDropdownOpen.value = false;
+          syncAppliedFromDraft();
+          return loadDashboard();
+        }
+
+        function cancelFilters() {
+          jobFilterDropdownOpen.value = false;
+          var empty = cloneFilters();
+          applyFilterValues(filters, empty);
+          applyFilterValues(appliedFilters, empty);
+          jobIdsDraft.value = [];
+          return loadDashboard();
+        }
+
+        function rmsChartHasData(block) {
+          if (!data.value) return false;
+          if (block === "chart_pipeline") {
+            return Array.isArray(data.value.pipeline_overview);
+          }
+          if (block === "chart_history_pass") {
+            return historicalStages.value.length > 0;
+          }
+          if (block === "chart_recruiter") {
+            return (data.value.recruiter_performance || []).length > 0;
+          }
+          if (block === "chart_client_job_stage_funnel") {
+            return !!clientJobStageTotal.value;
+          }
+          if (
+            block === "chart_client_job_stage_grouped"
+            || block === "chart_client_job_stage_stacked"
+          ) {
+            return clientJobStageRows.value.length > 0;
+          }
+          return false;
+        }
+
         var activeFilterSummary = computed(function () {
           var labels = {
             client_id: "客户ID",
             job_ids: "岗位",
-            priority: "优先级",
-            city: "城市",
-            sales_user_id: "销售用户ID",
             delivery_user_id: "交付用户ID",
             recruiter_user_id: "推荐人用户ID",
-            date_from: "推荐日起",
-            date_to: "推荐日止",
+            date_from: "统计周期起",
+            date_to: "统计周期止",
           };
           var out = [];
           Object.keys(labels).forEach(function (k) {
-            var v = filters[k];
+            var v = appliedFilters[k];
             if (k === "job_ids") {
               if (!Array.isArray(v) || !v.length) return;
               var names = v.map(function (id) {
@@ -410,15 +549,14 @@
             }
             if (v !== "" && v != null) out.push({ key: k, label: labels[k], value: String(v) });
           });
-          if ((!filters.job_ids || !filters.job_ids.length) && filters.job_ids_text) {
-            out.push({ key: "job_ids_text", label: "岗位", value: String(filters.job_ids_text) });
+          if ((!appliedFilters.job_ids || !appliedFilters.job_ids.length) && appliedFilters.job_ids_text) {
+            out.push({ key: "job_ids_text", label: "岗位", value: String(appliedFilters.job_ids_text) });
           }
           return out;
         });
 
         var clientFieldLabel = computed(function () { return clientOptions.value.length ? "客户" : "客户ID"; });
-        var jobFieldLabel = computed(function () { return jobOptions.value.length ? "岗位" : "岗位ID"; });
-        var salesFieldLabel = computed(function () { return userOptions.value.length ? "销售" : "销售用户ID"; });
+        var jobFieldLabel = computed(function () { return filteredJobOptions.value.length ? "岗位" : "岗位ID"; });
         var deliveryFieldLabel = computed(function () { return userOptions.value.length ? "交付" : "交付用户ID"; });
         var recruiterFieldLabel = computed(function () { return userOptions.value.length ? "推荐人" : "推荐人用户ID"; });
 
@@ -739,7 +877,7 @@
           table_history: { w: 12, h: 5, title: "阶段明细" },
           chart_recruiter: { w: 12, h: 6, title: "当月入职排名" },
           table_recruiter: { w: 12, h: 6, title: "人效明细" },
-          table_client_job_stage: { w: 12, h: 7, title: "客户岗位阶段统计" },
+          table_client_job_stage: { w: 12, h: 7, title: "历史数据" },
           chart_client_job_stage_grouped: { w: 12, h: 7, title: "岗位阶段（分组柱）" },
           chart_client_job_stage_stacked: { w: 12, h: 7, title: "岗位阶段（堆叠柱）" },
           chart_client_job_stage_funnel: { w: 12, h: 6, title: "岗位阶段（漏斗）" },
@@ -764,14 +902,21 @@
           if (preset.title) widgetForm.value.title = preset.title;
         }
 
-        function onRmsBlockChange() {
-          var block = widgetForm.value.config && widgetForm.value.config.block;
-          if (!block) return;
+        function selectRmsBlock(block) {
+          if (!block || !widgetForm.value) return;
+          if (!widgetForm.value.config) widgetForm.value.config = {};
+          widgetForm.value.config.block = block;
           panelUserEdited.value = true;
           applyRmsBlockLayout(block);
           flushPersistWidget().then(function () {
             if (widgetForm.value.id) scrollToWidget(widgetForm.value.id);
           });
+        }
+
+        function onRmsBlockChange() {
+          var block = widgetForm.value.config && widgetForm.value.config.block;
+          if (!block) return;
+          selectRmsBlock(block);
         }
 
         function scrollToWidget(widgetId) {
@@ -1369,7 +1514,7 @@
         function loadDashboard() {
           loading.value = true;
           error.value = "";
-          return apiGet("/api/rms/dashboard" + buildQuery(filters))
+          return apiGet("/api/rms/dashboard" + buildQuery(appliedFilters))
             .then(function (res) {
               data.value = res;
               return nextTick();
@@ -1406,13 +1551,7 @@
         function loadRosterCheck() {
           rosterLoading.value = true;
           return apiGet(
-            "/api/rms/applications/hired-roster-check" + buildQuery({
-              client_id: filters.client_id,
-              job_id: filters.job_id,
-              recruiter_user_id: filters.recruiter_user_id,
-              date_from: filters.date_from,
-              date_to: filters.date_to,
-            })
+            "/api/rms/applications/hired-roster-check" + buildQuery(appliedFilters)
           ).then(function (res) {
             rosterCheck.value = res;
           }).catch(function (e) {
@@ -1510,8 +1649,19 @@
             widgetAutosaveTimer = null;
           }
         }
+        function widgetFormCanPersist() {
+          var f = widgetForm.value;
+          if (!f) return false;
+          if (f.widget_type === "rms_block") {
+            return !!(f.config && f.config.block);
+          }
+          return true;
+        }
+
         function canAutosaveWidget() {
-          return panelAutosaveReady.value && panelOpen.value && activeTabId.value && (widgetForm.value.id || panelUserEdited.value);
+          return panelAutosaveReady.value && panelOpen.value && activeTabId.value
+            && (widgetForm.value.id || panelUserEdited.value)
+            && widgetFormCanPersist();
         }
         function schedulePersistWidget(delayMs) {
           if (!canAutosaveWidget()) return;
@@ -1625,11 +1775,10 @@
             widgetForm.value = blankWidget();
             widgetForm.value.widget_type = "rms_block";
             widgetForm.value.source_key = "";
-            widgetForm.value.config.block = "table_client_job_stage";
-            widgetForm.value.title = "客户岗位阶段统计";
+            widgetForm.value.config.block = "";
+            widgetForm.value.title = "";
             widgetForm.value.x = next.x;
             widgetForm.value.y = next.y;
-            applyRmsBlockLayout("table_client_job_stage");
             rosterScope.value = "all";
           }
           colorSearch.value = "";
@@ -1638,7 +1787,9 @@
           panelAutosaveReady.value = false;
           panelOpen.value = true;
           syncChatbotForPanel(true);
-          nextTick(function () { panelAutosaveReady.value = true; });
+          nextTick(function () {
+            panelAutosaveReady.value = true;
+          });
         }
         function closePanel() {
           panelAutosaveReady.value = false;
@@ -1894,10 +2045,7 @@
           panelUserEdited.value = true;
           widgetForm.value.widget_type = t;
           if (!widgetForm.value.config) widgetForm.value.config = {};
-          if (t === "rms_block") {
-            if (!widgetForm.value.config.block) {
-              widgetForm.value.config.block = "table_client_job_stage";
-            }
+          if (t === "rms_block" && widgetForm.value.config.block) {
             applyRmsBlockLayout(widgetForm.value.config.block);
           }
           if (t === "roster_summary") {
@@ -2021,7 +2169,25 @@
           }
         });
 
+        watch(function () { return filters.client_id; }, function () {
+          var prune = function (ids) {
+            if (!Array.isArray(ids) || !ids.length) return [];
+            var allowed = {};
+            filteredJobOptions.value.forEach(function (j) { allowed[String(j.id)] = true; });
+            return ids.filter(function (id) { return allowed[String(id)]; });
+          };
+          filters.job_ids = prune(filters.job_ids);
+          jobIdsDraft.value = prune(jobIdsDraft.value);
+        });
+
         onMounted(function () {
+          document.addEventListener("click", function (evt) {
+            if (!jobFilterDropdownOpen.value) return;
+            if (!jobFilterRootContains(evt.target)) {
+              jobFilterDropdownOpen.value = false;
+            }
+          });
+
           fetch("/api/me", {
             headers: window.crmAuthHeader ? window.crmAuthHeader() : {},
             credentials: "same-origin",
@@ -2073,6 +2239,9 @@
           data,
           rosterCheck,
           filters,
+          appliedFilters,
+          applyFilters,
+          cancelFilters,
           dashboards,
           metadata,
           widgetData,
@@ -2093,6 +2262,7 @@
           onCardHeadPointerDown,
           onCardResizePointerDown,
           onRmsBlockChange,
+          selectRmsBlock,
           showDashboardModal,
           showTabModal,
           panelOpen,
@@ -2105,16 +2275,27 @@
           tabForm,
           clientOptions,
           jobOptions,
+          filteredJobOptions,
           userOptions,
+          jobFilterRef,
+          jobFilterDropdownOpen,
+          jobIdsDraft,
+          jobFilterSummary,
+          toggleJobFilterDropdown,
+          toggleJobFilterDraft,
+          clearJobFilterDraft,
+          confirmJobFilter,
+          rmsChartHasData,
           clientFieldLabel,
           jobFieldLabel,
-          salesFieldLabel,
           deliveryFieldLabel,
           recruiterFieldLabel,
           historicalStages,
           clientJobStageRows,
           clientJobStageTotal,
           clientJobStagePeriodLabel,
+          jobStageMetricText,
+          jobStageMetricTitle,
           activeFilterSummary,
           tabNeedsDashboardData,
           chartCanvasId,

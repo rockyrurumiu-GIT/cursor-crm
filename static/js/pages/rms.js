@@ -841,7 +841,7 @@
       function progressActionBtnClass(status) {
         return Labels.progressActionBtnClass
           ? Labels.progressActionBtnClass(status)
-          : "crm-op-btn-edit";
+          : "rms-progress-btn rms-progress-btn--blue";
       }
 
       function progressOptionsForCorrection(currentStatus) {
@@ -958,6 +958,18 @@
             if (!tableId) return;
             var table = document.querySelector('table[data-table-id="' + tableId + '"]');
             if (!table) return;
+            if (tableId === "rms-pipeline") {
+              if (typeof window.crmEnsureRmsPipelineTableColumns === "function") {
+                window.crmEnsureRmsPipelineTableColumns(table);
+                return;
+              }
+            }
+            if (table.dataset.colResizeReady === "1") {
+              if (typeof window.crmInitTableColumnResize === "function") {
+                window.crmInitTableColumnResize(table);
+                return;
+              }
+            }
             if (typeof window.crmFitTableColumnsToContent === "function") {
               window.crmFitTableColumnsToContent(table);
             } else if (typeof window.crmInitTableColumnResize === "function") {

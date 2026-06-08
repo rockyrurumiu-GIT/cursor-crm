@@ -61,7 +61,7 @@ RMS_BLOCK_LABELS: Dict[str, str] = {
     "roster_kpi_mismatch": "KPI · 不一致",
     "roster_kpi_ambiguous": "KPI · 多匹配",
     "table_roster": "表格 · 核对明细",
-    "table_client_job_stage": "表格 · 客户岗位阶段统计",
+    "table_client_job_stage": "表格 · 历史数据",
     "chart_client_job_stage_grouped": "图表 · 岗位阶段（分组柱）",
     "chart_client_job_stage_stacked": "图表 · 岗位阶段（堆叠柱）",
     "chart_client_job_stage_funnel": "图表 · 岗位阶段（漏斗）",

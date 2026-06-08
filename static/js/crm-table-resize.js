@@ -20,6 +20,8 @@
     const RMS_CANDIDATES_STORAGE_VERSION = 'v2';
     /** 交付内审操作列收窄后须 bump，避免 localStorage 沿用旧宽 */
     const RMS_DELIVERY_REVIEW_STORAGE_VERSION = 'v2';
+    /** 招聘管道「当前招聘进展」预设列宽后须 bump */
+    const RMS_PIPELINE_STORAGE_VERSION = 'v1';
 
     function readCssLengthPx(varName, fallbackPx) {
         const root = getComputedStyle(document.documentElement);
@@ -75,6 +77,30 @@
 
     function rmsJobsManageColumnWidthPx(th) {
         return rmsJobsStickyColWidthPx(th, '--rms-jobs-manage-col-width', OP_COL_WIDTH);
+    }
+
+    function isRmsPipelinePresetColumnTh(th) {
+        return th.classList.contains('rms-pipeline-progress')
+            || th.classList.contains('rms-pipeline-next-op');
+    }
+
+    function rmsPipelinePresetColumnWidthPx(th) {
+        if (!th || !isRmsPipelinePresetColumnTh(th)) return null;
+        const table = th.closest ? th.closest('table[data-table-id="rms-pipeline"]') : null;
+        if (!table) return null;
+        const fontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const varName = th.classList.contains('rms-pipeline-next-op')
+            ? '--rms-pipeline-next-op-width'
+            : '--rms-pipeline-progress-width';
+        const raw = getComputedStyle(table).getPropertyValue(varName).trim();
+        const num = parseFloat(raw);
+        if (Number.isFinite(num) && num > 0) {
+            if (raw.includes('rem')) return Math.round(num * fontPx);
+            return Math.round(num);
+        }
+        return th.classList.contains('rms-pipeline-next-op')
+            ? Math.round(15.75 * fontPx)
+            : Math.round(7 * fontPx);
     }
 
     function opColumnWidthPx(th) {
@@ -188,6 +214,7 @@
         if (id === 'rms-jobs') version = RMS_JOBS_STORAGE_VERSION;
         else if (id === 'rms-candidates') version = RMS_CANDIDATES_STORAGE_VERSION;
         else if (id === 'rms-delivery-review') version = RMS_DELIVERY_REVIEW_STORAGE_VERSION;
+        else if (id === 'rms-pipeline') version = RMS_PIPELINE_STORAGE_VERSION;
         return `crm-col-widths:${version}:${location.pathname}:${id}`;
     }
 
@@ -339,6 +366,8 @@
         table.style.width = 'max-content';
 
         const widths = ths.map((th, i) => {
+            const pipelinePreset = rmsPipelinePresetColumnWidthPx(th);
+            if (pipelinePreset != null) return pipelinePreset;
             if (isOpColumnTh(th)) return opColumnWidthPx(th);
             if (isCheckinColumnTh(th)) return CHECKIN_COL_WIDTH;
             if (isRmsJdColumnTh(th)) {
@@ -391,6 +420,7 @@
         const minW = options?.minWidth ?? MIN_WIDTH;
         const tableMin = Number(table.dataset.tableMinWidth) || 0;
         const readColWidth = (i) => {
+            const pipelinePreset = rmsPipelinePresetColumnWidthPx(ths[i]);
             if (isOpColumnTh(ths[i])) return opColumnWidthPx(ths[i]);
             if (isCheckinColumnTh(ths[i])) return CHECKIN_COL_WIDTH;
             if (isRmsJdColumnTh(ths[i])) {
@@ -400,6 +430,7 @@
             }
             const w = parseFloat(cols[i].style.width);
             if (Number.isFinite(w) && w > 0) return w;
+            if (pipelinePreset != null) return pipelinePreset;
             const th = table.querySelector(`thead th.crm-th-resizable[data-col="${i}"], thead th.visit-th-resizable[data-col="${i}"]`);
             return th ? th.offsetWidth : minW;
         };
@@ -408,6 +439,14 @@
                 tagOpColElement(cols[i], ths[i]);
             } else if (isCheckinColumnTh(ths[i])) {
                 tagCheckinColElement(cols[i]);
+            } else if (isRmsPipelinePresetColumnTh(ths[i])) {
+                const floor = minWidthForTh(ths[i], minW);
+                const preset = rmsPipelinePresetColumnWidthPx(ths[i]);
+                let nextW = Math.max(floor, Math.round(w));
+                if (preset != null && (!Number.isFinite(w) || w <= 0)) nextW = preset;
+                cols[i].style.width = `${nextW}px`;
+                cols[i].style.minWidth = `${nextW}px`;
+                cols[i].style.maxWidth = `${nextW}px`;
             } else if (isRmsJdColumnTh(ths[i])) {
                 const def = rmsJdDefaultWidthPx(ths[i]) + COL_CONTENT_PAD;
                 const floor = minWidthForTh(ths[i], minW);
@@ -684,7 +723,44 @@
         return true;
     }
 
+    function ensureRmsPipelineTableColumns(table) {
+        if (!table || table.dataset.tableId !== 'rms-pipeline') return false;
+        if (table.dataset.colResizeReady !== '1') {
+            return initCrmTableColumnResize(table);
+        }
+        if (!isTableLayoutVisible(table)) return false;
+        const ths = leafHeaderCells(table);
+        if (!ths.length) return false;
+        let cols = [...table.querySelectorAll('colgroup col')];
+        if (cols.length !== ths.length) cols = ensureColgroup(table, ths.length);
+        const storageKey = storageKeyFor(table);
+        const { readColWidth, setColWidth, syncTableWidth } = buildColumnHelpers(table, ths, cols, {});
+        let saved = null;
+        try {
+            saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        } catch {
+            saved = null;
+        }
+        const normalizeSaved = (widths) => {
+            const next = [...widths];
+            ths.forEach((th, i) => {
+                if (isOpColumnTh(th)) next[i] = opColumnWidthPx(th);
+            });
+            return next;
+        };
+        if (Array.isArray(saved) && saved.length === cols.length) {
+            saved.forEach((w, i) => setColWidth(i, w));
+            syncTableWidth();
+            table.dataset.colContentFit = '1';
+        } else {
+            applyAllOpColumnWidths(ths, setColWidth);
+            syncTableWidth();
+        }
+        return true;
+    }
+
     window.crmInitTableColumnResize = initCrmTableColumnResize;
+    window.crmEnsureRmsPipelineTableColumns = ensureRmsPipelineTableColumns;
     window.crmEnsureRmsJobsTableColumns = ensureRmsJobsTableColumns;
     window.crmInitAllTableColumnResize = initAll;
     window.crmScheduleTableColumnResize = schedule;

@@ -171,17 +171,14 @@
 
   function progressActionBtnClass(targetStatus) {
     var s = targetStatus == null ? "" : String(targetStatus).trim();
-    if (!s) return "crm-op-btn-detail";
+    if (!s) return "rms-progress-btn rms-progress-btn--black";
     if (/_failed$/.test(s) || s === "offer_dropped" || s === "onboarding_lost") {
-      return "crm-op-btn-delete";
+      return "rms-progress-btn rms-progress-btn--red";
     }
-    if (PIPELINE_NEXT_OP_COL3[s]) {
-      return "crm-op-btn-detail";
+    if (PIPELINE_NEXT_OP_COL3[s] || /_abandoned$/.test(s)) {
+      return "rms-progress-btn rms-progress-btn--black";
     }
-    if (/_abandoned$/.test(s)) {
-      return "crm-op-btn-handoff";
-    }
-    return "crm-op-btn-edit";
+    return "rms-progress-btn rms-progress-btn--blue";
   }
 
   function progressOptionsForCorrection(currentStatus) {

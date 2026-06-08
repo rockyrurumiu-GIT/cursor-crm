@@ -1746,6 +1746,7 @@ def seed_default_dashboards(
     _seed_rms_recruitment(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_test_tab(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _sync_rms_client_job_stage_title(db, DashboardWidget)
 
 
 _RMS_DEFAULT_TABS = (
@@ -1788,7 +1789,7 @@ _RMS_TEMPLATE_WIDGETS = {
         {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
         {"title": "阶段通过率", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_history_pass"}, "x": 0, "y": 2, "w": 12, "h": 6},
         {"title": "阶段明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_history"}, "x": 0, "y": 8, "w": 12, "h": 5},
-        {"title": "客户岗位阶段统计", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_client_job_stage"}, "x": 0, "y": 13, "w": 12, "h": 6},
+        {"title": "历史数据", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_client_job_stage"}, "x": 0, "y": 13, "w": 12, "h": 6},
     ],
     "recruiter": [
         {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
@@ -1855,6 +1856,23 @@ def _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidg
                 continue
             _seed_rms_tab_widgets(db, t.id, template, DashboardWidget, now)
             changed = True
+    if changed:
+        db.commit()
+
+
+def _sync_rms_client_job_stage_title(db, DashboardWidget) -> None:
+    """Rename legacy table_client_job_stage widget title to 历史数据."""
+    changed = False
+    now = _now()
+    for w in db.query(DashboardWidget).filter(DashboardWidget.widget_type == "rms_block").all():
+        if (w.title or "").strip() != "客户岗位阶段统计":
+            continue
+        cfg = _parse_json(w.config_json or "{}", {})
+        if (cfg.get("block") or "").strip() != "table_client_job_stage":
+            continue
+        w.title = "历史数据"
+        w.updated_at = now
+        changed = True
     if changed:
         db.commit()
 

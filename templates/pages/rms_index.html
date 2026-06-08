@@ -343,12 +343,67 @@
         cursor: pointer;
     }
     .rms-pipeline-status-filter-item:hover { background: #f6f8fa; }
-    /* Pipeline「下一步操作」：表头居中，单元格左对齐 */
+    /* Pipeline「下一步操作」：默认列宽容纳 3 个按钮单行展示 */
+    .crm-table[data-table-id="rms-pipeline"] {
+        --rms-pipeline-progress-width: 7rem;
+        --rms-pipeline-next-op-width: 15.75rem;
+    }
+    .crm-table[data-table-id="rms-pipeline"] th.rms-pipeline-progress,
+    .crm-table[data-table-id="rms-pipeline"] td.rms-pipeline-progress {
+        white-space: nowrap;
+        overflow: visible;
+        text-align: center;
+    }
+    .crm-table[data-table-id="rms-pipeline"] th.rms-pipeline-next-op,
+    .crm-table[data-table-id="rms-pipeline"] td.rms-pipeline-next-op {
+        width: var(--rms-pipeline-next-op-width) !important;
+        min-width: var(--rms-pipeline-next-op-width) !important;
+        max-width: var(--rms-pipeline-next-op-width) !important;
+        white-space: nowrap;
+        overflow: visible;
+    }
+    .crm-table[data-table-id="rms-pipeline"] th.rms-pipeline-next-op {
+        text-align: center;
+    }
     .crm-table[data-table-id="rms-pipeline"] td.rms-pipeline-next-op {
         text-align: left;
     }
     .crm-table[data-table-id="rms-pipeline"] td.rms-pipeline-next-op .crm-op-actions {
+        display: inline-flex;
+        flex-wrap: nowrap;
         justify-content: flex-start;
+        overflow: visible;
+    }
+    .rms-progress-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.22rem 0.55rem;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        font-size: 0.75rem;
+        font-weight: 500;
+        line-height: 1.35;
+        white-space: nowrap;
+        cursor: pointer;
+        text-decoration: none;
+        transition: filter 0.12s ease;
+    }
+    .rms-progress-btn:hover { text-decoration: none; filter: brightness(0.94); }
+    .rms-progress-btn--blue {
+        background: rgba(37, 99, 235, 0.75);
+        border-color: rgba(29, 78, 216, 0.75);
+        color: #fff;
+    }
+    .rms-progress-btn--red {
+        background: rgba(220, 38, 38, 0.75);
+        border-color: rgba(185, 28, 28, 0.75);
+        color: #fff;
+    }
+    .rms-progress-btn--black {
+        background: rgba(31, 41, 55, 0.75);
+        border-color: rgba(17, 24, 39, 0.75);
+        color: #fff;
     }
     /* 岗位列表：JD 默认 35 汉字 */
     .crm-table.rms-jobs-table .crm-td.rms-col-jd,
@@ -1077,10 +1132,10 @@
                         <th class="crm-th">城市</th>
                         <th class="crm-th">实际推荐人</th>
                         <th class="crm-th">交付负责人</th>
-                        <th class="crm-th">当前招聘进展</th>
+                        <th class="crm-th rms-pipeline-progress">当前招聘进展</th>
                         <th class="crm-th">推荐时间</th>
                         <th class="crm-th">最近更新时间</th>
-                        <th class="crm-th crm-op-col-wide">下一步操作</th>
+                        <th class="crm-th rms-pipeline-next-op">下一步操作</th>
                         <th class="crm-th crm-sticky-right-op">修改状态/历史更改</th>
                     </tr>
                 </thead>
@@ -1092,11 +1147,11 @@
                         <td class="crm-td">{{ appJobLocation(a) }}</td>
                         <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
                         <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
-                        <td class="crm-td">{{ progressLabel(a.status) }}</td>
+                        <td class="crm-td rms-pipeline-progress">{{ progressLabel(a.status) }}</td>
                         <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
                         <td class="crm-td">{{ formatRmsDate(a.updated_at) }}</td>
                         <td class="crm-td whitespace-nowrap rms-pipeline-next-op">
-                            <div v-if="canWriteApplications" class="crm-op-actions flex flex-wrap items-center gap-1">
+                            <div v-if="canWriteApplications" class="crm-op-actions flex flex-nowrap items-center gap-1">
                                 <template v-for="next in progressTransitionsFor(a.status)" :key="'pt'+a.id+'-'+next">
                                     <button type="button" :class="progressActionBtnClass(next)" data-rms-action="progress-confirm-open"
                                         @click="openProgressConfirmModal(a, next, 'transition')">{{ progressLabel(next) }}</button>

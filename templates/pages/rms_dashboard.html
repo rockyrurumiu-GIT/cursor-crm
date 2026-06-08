@@ -44,6 +44,9 @@
   display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 52px;
   gap: 12px; max-width: 1280px; margin: 0 auto;
 }
+.dash-card.dash-card--filter { overflow: visible; z-index: 6; }
+.dash-card.dash-card--filter.dash-card--filter-open { z-index: 30; }
+.dash-card.dash-card--filter .card-body { overflow: visible; }
 .dash-card {
   background: #fff; border: 1px solid #eceef1; border-radius: 10px; padding: 0.75rem 0.9rem;
   display: flex; flex-direction: column; min-height: 0; max-height: 100%; overflow: hidden;
@@ -61,13 +64,43 @@
 .state-msg { width: 100%; text-align: center; align-self: center; font-size: 0.85rem; color: #98a2b3; }
 .state-forbidden { color: #cf222e; }
 .field { margin-bottom: 0; }
-.field label { display: block; font-size: 0.78rem; color: #5b6370; margin-bottom: 0.25rem; }
-.field input, .field select { width: 100%; border: 1px solid #d8dce0; border-radius: 8px; padding: 0.4rem 0.55rem; font-size: 0.85rem; }
-.field input:focus, .field select:focus { outline: none; border-color: #9aa9bd; }
+.field > label { display: block; font-size: 0.78rem; color: #5b6370; margin-bottom: 0.25rem; }
+.rms-dash-filter-row .field input:not([type="checkbox"]),
+.rms-dash-filter-row .field select,
+.rms-dash-filter-row .rms-job-filter-control {
+  box-sizing: border-box;
+  width: 100%;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  border: 1px solid #a5b4fc;
+  border-radius: 0.5rem;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  background-color: #ffffff;
+  color: #1f2937;
+  vertical-align: middle;
+}
+.rms-dash-filter-row .field select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-repeat: no-repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 10'%3E%3Cpath d='M4 0.5 7.5 4.5H0.5Z' fill='%23374151'/%3E%3Cpath d='M4 9.5 0.5 5.5h7Z' fill='%23374151'/%3E%3C/svg%3E");
+  background-size: 0.5rem 0.625rem;
+  background-position: right 0.65rem center;
+  cursor: pointer;
+}
+.rms-dash-filter-row .field input:not([type="checkbox"]):focus,
+.rms-dash-filter-row .field select:focus,
+.rms-dash-filter-row .rms-job-filter-control:focus-within {
+  outline: none;
+  border-color: #818cf8;
+  box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.35);
+}
 .rms-dash-filter-row {
   display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: flex-end; width: 100%;
 }
-.rms-dash-filter-row .field { flex: 0 1 auto; min-width: 7rem; }
+.rms-dash-filter-row .field { flex: 0 1 9.5rem; min-width: 9.5rem; max-width: 9.5rem; }
 .rms-stage-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 .rms-stage-table thead th {
   text-align: left; font-weight: 500; color: #98a2b3; padding: 0.35rem 0.5rem;
@@ -87,8 +120,70 @@
   padding: 0.4rem 0.5rem; color: #374151; border-bottom: 1px solid #f2f3f5; white-space: nowrap;
 }
 .rms-job-stage-table tbody tr:last-child td { border-bottom: none; }
-.rms-job-stage-table tbody tr.total-row td { font-weight: 600; color: #1f2328; }
-.rms-dash-filter-row .field-job-multi select { min-width: 10rem; min-height: 4.5rem; }
+.rms-job-stage-table tbody tr.total-row td {
+  background: #d4e4f7;
+  color: #1e3a5f;
+  font-weight: 700;
+  border-top: 2px solid #1f5a94;
+  border-bottom: 1px solid #a8c4e8;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.rms-job-stage-table .metric-with-rate { cursor: help; }
+.rms-dash-filter-row .field-job-dropdown { position: relative; }
+.rms-job-filter-control {
+  position: relative; display: block; padding: 0; cursor: pointer;
+  background-repeat: no-repeat;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 10'%3E%3Cpath d='M4 0.5 7.5 4.5H0.5Z' fill='%23374151'/%3E%3Cpath d='M4 9.5 0.5 5.5h7Z' fill='%23374151'/%3E%3C/svg%3E");
+  background-size: 0.5rem 0.625rem;
+  background-position: right 0.65rem center;
+}
+.rms-job-filter-trigger {
+  width: 100%; height: 100%; min-height: 0; max-height: none;
+  border: none; padding: 0.5rem 2rem 0.5rem 0.75rem; background: transparent; color: inherit; margin: 0;
+  font-family: inherit; font-size: inherit; line-height: inherit; text-align: left;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+.rms-job-filter-panel {
+  position: absolute; left: 0; top: calc(100% + 4px); z-index: 50; min-width: 100%; width: max-content;
+  max-width: 18rem; max-height: 14rem; overflow-y: auto; border: 1px solid #d0d7de; border-radius: 0.375rem;
+  background: #fff; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); padding: 0.25rem 0;
+}
+.rms-job-filter-item {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.6rem;
+  font-size: 12px; color: #1f2328; cursor: pointer; margin-bottom: 0;
+}
+.rms-job-filter-item:hover { background: #f6f8fa; }
+.rms-job-filter-checkbox {
+  width: 0.875rem; height: 0.875rem; margin: 0; flex: 0 0 auto;
+  border-radius: 0.25rem; border: 1px solid #d0d7de; accent-color: #0969da; cursor: pointer;
+}
+.rms-job-filter-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rms-job-filter-empty { padding: 0.45rem 0.6rem; font-size: 12px; color: #98a2b3; }
+.rms-job-filter-footer {
+  display: flex; gap: 0.25rem; border-top: 1px solid #d0d7de; margin-top: 0.15rem; padding: 0.35rem 0.4rem 0.25rem;
+}
+.rms-job-filter-footer-btn {
+  flex: 1; padding: 0.3rem 0.35rem; font-size: 12px; border-radius: 0.25rem; border: none; cursor: pointer;
+}
+.rms-job-filter-footer-btn-muted {
+  color: #57606a; background: transparent;
+}
+.rms-job-filter-footer-btn-muted:hover { background: #f6f8fa; }
+.rms-job-filter-footer-btn-primary {
+  color: #fff; background: #0969da;
+}
+.rms-job-filter-footer-btn-primary:hover { background: #0860ca; }
+.rms-dash-filter-actions-spacer {
+  display: block; height: 1.03rem; margin-bottom: 0.25rem; visibility: hidden;
+}
+.rms-dash-filter-row .field.rms-dash-filter-actions { flex: 0 1 auto; min-width: 0; max-width: none; }
+.rms-dash-filter-actions { display: flex; flex-direction: column; align-items: flex-start; }
+.rms-dash-filter-actions-btns { display: flex; gap: 0.4rem; align-items: center; height: 2.5rem; }
+.rms-dash-filter-actions-btns .tbtn {
+  min-width: 4.5rem; height: 2.5rem; padding: 0 0.85rem; flex: 0 0 auto;
+}
 .rms-filter-summary { font-size: 0.78rem; color: #6b7280; line-height: 1.6; }
 .rms-filter-summary dt { color: #98a2b3; display: inline; }
 .rms-filter-summary dd { display: inline; margin: 0 0.75rem 0 0.25rem; color: #374151; }
@@ -110,6 +205,7 @@
 .dash-card.editing.is-dragging { opacity: 0.92; z-index: 20; box-shadow: 0 8px 24px rgba(16,24,40,0.12); }
 .dash-card.editing.is-resizing { z-index: 20; box-shadow: 0 8px 24px rgba(16,24,40,0.12); }
 .dash-card.editing .card-body { pointer-events: none; }
+.dash-card.editing.dash-card--filter .card-body { pointer-events: auto; }
 .dash-card.editing .card-resize-handle { pointer-events: auto; }
 .card-head-draggable { cursor: grab; touch-action: none; user-select: none; position: relative; z-index: 1; }
 .card-resize-handle {
@@ -290,7 +386,7 @@
         <div v-if="activeTab && displayItems.length" class="dash-grid">
             <div v-for="item in displayItems" :key="item.key"
                  class="dash-card"
-                 :class="{ editing: editMode, 'dash-card-extra-view': item.isExtra, 'is-active': editMode && activeWidgetId === item.widget.id, 'is-dragging': dragWidgetId === item.widget.id, 'is-resizing': resizeWidgetId === item.widget.id }"
+                 :class="{ editing: editMode, 'dash-card-extra-view': item.isExtra, 'dash-card--filter': item.block === 'filter', 'dash-card--filter-open': item.block === 'filter' && jobFilterDropdownOpen, 'is-active': editMode && activeWidgetId === item.widget.id, 'is-dragging': dragWidgetId === item.widget.id, 'is-resizing': resizeWidgetId === item.widget.id }"
                  :style="item.style"
                  :data-widget-id="item.widget.id">
                 <div class="card-head"
@@ -323,30 +419,36 @@
                                 </select>
                                 <input v-else v-model="filters.client_id" type="number" placeholder="ID" />
                             </div>
-                            <div class="field field-job-multi">
+                            <div class="field field-job-dropdown" ref="jobFilterRef">
                                 <label>{{ jobFieldLabel }}</label>
-                                <select v-if="jobOptions.length" v-model="filters.job_ids" multiple>
-                                    <option v-for="j in jobOptions" :key="j.id" :value="String(j.id)">{{ j.title || ('岗位#' + j.id) }}</option>
-                                </select>
+                                <template v-if="filteredJobOptions.length">
+                                    <div class="rms-job-filter-control">
+                                        <button type="button" class="rms-job-filter-trigger" @click.stop="toggleJobFilterDropdown">
+                                            <span class="truncate">{{ jobFilterSummary }}</span>
+                                        </button>
+                                    </div>
+                                    <div v-if="jobFilterDropdownOpen" class="rms-job-filter-panel" @click.stop>
+                                        <label
+                                            v-for="j in filteredJobOptions"
+                                            :key="j.id"
+                                            class="rms-job-filter-item"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                class="rms-job-filter-checkbox"
+                                                :checked="jobIdsDraft.includes(String(j.id))"
+                                                @change="toggleJobFilterDraft(String(j.id))"
+                                            />
+                                            <span class="rms-job-filter-label">{{ j.title || ('岗位#' + j.id) }}</span>
+                                        </label>
+                                        <div v-if="!filteredJobOptions.length" class="rms-job-filter-empty">暂无可选岗位</div>
+                                        <div class="rms-job-filter-footer">
+                                            <button type="button" class="rms-job-filter-footer-btn rms-job-filter-footer-btn-muted" @click.stop="clearJobFilterDraft">清空</button>
+                                            <button type="button" class="rms-job-filter-footer-btn rms-job-filter-footer-btn-primary" @click.stop="confirmJobFilter">确定</button>
+                                        </div>
+                                    </div>
+                                </template>
                                 <input v-else v-model="filters.job_ids_text" placeholder="岗位ID，逗号分隔" />
-                            </div>
-                            <div class="field">
-                                <label>优先级</label>
-                                <select v-model="filters.priority">
-                                    <option value="">全部</option>
-                                    <option value="high">高</option>
-                                    <option value="medium">中</option>
-                                    <option value="low">低</option>
-                                </select>
-                            </div>
-                            <div class="field"><label>城市</label><input v-model="filters.city" /></div>
-                            <div class="field">
-                                <label>{{ salesFieldLabel }}</label>
-                                <select v-if="userOptions.length" v-model="filters.sales_user_id">
-                                    <option value="">全部</option>
-                                    <option v-for="u in userOptions" :key="'s'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
-                                </select>
-                                <input v-else v-model="filters.sales_user_id" type="number" placeholder="ID" />
                             </div>
                             <div class="field">
                                 <label>{{ deliveryFieldLabel }}</label>
@@ -364,9 +466,15 @@
                                 </select>
                                 <input v-else v-model="filters.recruiter_user_id" type="number" placeholder="ID" />
                             </div>
-                            <div class="field"><label>推荐日起</label><input v-model="filters.date_from" type="date" /></div>
-                            <div class="field"><label>推荐日止</label><input v-model="filters.date_to" type="date" /></div>
-                            <button type="button" class="tbtn tbtn-primary" @click="loadDashboard">应用</button>
+                            <div class="field"><label>统计周期起</label><input v-model="filters.date_from" type="date" /></div>
+                            <div class="field"><label>统计周期止</label><input v-model="filters.date_to" type="date" /></div>
+                            <div class="field rms-dash-filter-actions">
+                                <span class="rms-dash-filter-actions-spacer" aria-hidden="true">占位</span>
+                                <div class="rms-dash-filter-actions-btns">
+                                    <button type="button" class="tbtn" :disabled="loading" @click.stop="cancelFilters">取消</button>
+                                    <button type="button" class="tbtn tbtn-primary" :disabled="loading" @click.stop="applyFilters">应用</button>
+                                </div>
+                            </div>
                         </div>
                     </template>
 
@@ -393,8 +501,7 @@
                     <!-- 图表 -->
                     <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter' || item.block === 'chart_client_job_stage_grouped' || item.block === 'chart_client_job_stage_stacked' || item.block === 'chart_client_job_stage_funnel'">
                         <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
-                        <p v-else-if="item.block === 'chart_client_job_stage_funnel' && !clientJobStageTotal" class="state-msg">暂无数据</p>
-                        <p v-else-if="item.block !== 'chart_client_job_stage_funnel' && !clientJobStageRows.length" class="state-msg">暂无数据</p>
+                        <p v-else-if="!rmsChartHasData(item.block)" class="state-msg">暂无数据</p>
                         <div v-else class="chart-area">
                             <p v-if="item.block === 'chart_client_job_stage_grouped'" class="chart-hint">按岗位对比推送、内筛、客筛、面试通过（竖向分组柱）</p>
                             <p v-else-if="item.block === 'chart_client_job_stage_stacked'" class="chart-hint">按岗位展示待客筛、待面试、面试通过、放弃面试（横向堆叠）</p>
@@ -461,7 +568,7 @@
                         <p v-else class="state-msg">暂无数据</p>
                     </template>
 
-                    <!-- 客户岗位阶段统计 -->
+                    <!-- 历史数据 -->
                     <template v-else-if="item.block === 'table_client_job_stage'">
                         <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
                         <div v-else class="rms-job-stage-scroll">
@@ -479,18 +586,18 @@
                                         <td>{{ row.headcount }}</td>
                                         <td>{{ row.location || '—' }}</td>
                                         <td>{{ row.pushed_resume_count }}</td>
-                                        <td>{{ row.internal_screen_passed }}</td>
-                                        <td>{{ row.duplicate_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'internal_screen_passed', 'pushed_resume_count', '内筛通过')">{{ jobStageMetricText(row, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(row, 'duplicate_count', 'duplicate_count_rate') }}</td>
                                         <td>{{ row.pending_client_screen }}</td>
-                                        <td>{{ row.client_screen_passed }}</td>
-                                        <td>{{ row.interview_abandoned }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(row, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(row, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
                                         <td>{{ row.pending_interview }}</td>
                                         <td>{{ row.interviewed }}</td>
-                                        <td>{{ row.interview_passed }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'interview_passed', 'interviewed', '面试通过')">{{ jobStageMetricText(row, 'interview_passed', 'interview_passed_rate') }}</td>
                                         <td>{{ row.pending_offer_count }}</td>
-                                        <td>{{ row.offer_dropped_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'offer_dropped_count', 'interview_passed', '弃offer')">{{ jobStageMetricText(row, 'offer_dropped_count', 'offer_dropped_count_rate') }}</td>
                                         <td>{{ row.onboarding_count }}</td>
-                                        <td>{{ row.onboarding_lost_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'onboarding_lost_count', 'onboarding_count', '在途流失')">{{ jobStageMetricText(row, 'onboarding_lost_count', 'onboarding_lost_count_rate') }}</td>
                                         <td>{{ row.hired_count }}</td>
                                     </tr>
                                     <tr v-if="clientJobStageTotal" class="total-row">
@@ -499,18 +606,18 @@
                                         <td>—</td>
                                         <td>—</td>
                                         <td>{{ clientJobStageTotal.pushed_resume_count }}</td>
-                                        <td>{{ clientJobStageTotal.internal_screen_passed }}</td>
-                                        <td>{{ clientJobStageTotal.duplicate_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'internal_screen_passed', 'pushed_resume_count', '内筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(clientJobStageTotal, 'duplicate_count', 'duplicate_count_rate') }}</td>
                                         <td>{{ clientJobStageTotal.pending_client_screen }}</td>
-                                        <td>{{ clientJobStageTotal.client_screen_passed }}</td>
-                                        <td>{{ clientJobStageTotal.interview_abandoned }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(clientJobStageTotal, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
                                         <td>{{ clientJobStageTotal.pending_interview }}</td>
                                         <td>{{ clientJobStageTotal.interviewed }}</td>
-                                        <td>{{ clientJobStageTotal.interview_passed }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'interview_passed', 'interviewed', '面试通过')">{{ jobStageMetricText(clientJobStageTotal, 'interview_passed', 'interview_passed_rate') }}</td>
                                         <td>{{ clientJobStageTotal.pending_offer_count }}</td>
-                                        <td>{{ clientJobStageTotal.offer_dropped_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'offer_dropped_count', 'interview_passed', '弃offer')">{{ jobStageMetricText(clientJobStageTotal, 'offer_dropped_count', 'offer_dropped_count_rate') }}</td>
                                         <td>{{ clientJobStageTotal.onboarding_count }}</td>
-                                        <td>{{ clientJobStageTotal.onboarding_lost_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'onboarding_lost_count', 'onboarding_count', '在途流失')">{{ jobStageMetricText(clientJobStageTotal, 'onboarding_lost_count', 'onboarding_lost_count_rate') }}</td>
                                         <td>{{ clientJobStageTotal.hired_count }}</td>
                                     </tr>
                                 </tbody>
@@ -726,9 +833,14 @@
 
                     <div v-if="widgetForm.widget_type === 'rms_block'" class="inspector-section">
                         <div class="inspector-section-title">招聘预设</div>
-                        <div class="field"><select v-model="widgetForm.config.block" @change="onRmsBlockChange">
-                            <option v-for="b in metadata.rms_blocks" :key="b.key" :value="b.key">{{ b.label }}</option>
-                        </select></div>
+                        <div class="inspector-picker-list">
+                            <div v-for="b in metadata.rms_blocks" :key="b.key"
+                                 :class="['inspector-picker-item', widgetForm.config.block === b.key ? 'active' : '']"
+                                 @click="selectRmsBlock(b.key)">
+                                <span class="inspector-picker-item-main">{{ b.label }}</span>
+                                <span v-if="widgetForm.config.block === b.key" class="inspector-picker-check">✓</span>
+                            </div>
+                        </div>
                     </div>
 
                     <template v-if="isRosterSummary">

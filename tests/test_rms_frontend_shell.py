@@ -322,20 +322,20 @@ if (legacyOpts.some(o => o.value === "pending_client_screen")) {{
   console.error("correction options should exclude normalized current status");
   process.exit(1);
 }}
-if (L.progressActionBtnClass("second_interview_failed") !== "crm-op-btn-delete") {{
-  console.error("fail action should use delete style");
+if (L.progressActionBtnClass("second_interview_failed") !== "rms-progress-btn rms-progress-btn--red") {{
+  console.error("fail action should use red filled style");
   process.exit(1);
 }}
-if (L.progressActionBtnClass("second_interview_passed") !== "crm-op-btn-edit") {{
-  console.error("pass action should use edit style");
+if (L.progressActionBtnClass("second_interview_passed") !== "rms-progress-btn rms-progress-btn--blue") {{
+  console.error("pass action should use blue filled style");
   process.exit(1);
 }}
-if (L.progressActionBtnClass("second_interview_abandoned") !== "crm-op-btn-detail") {{
-  console.error("third-column abandon action should use detail (black) style");
+if (L.progressActionBtnClass("second_interview_abandoned") !== "rms-progress-btn rms-progress-btn--black") {{
+  console.error("third-column abandon action should use black filled style");
   process.exit(1);
 }}
-if (L.progressActionBtnClass("final_interview_abandoned") !== "crm-op-btn-detail") {{
-  console.error("final abandon third column should use detail (black) style");
+if (L.progressActionBtnClass("final_interview_abandoned") !== "rms-progress-btn rms-progress-btn--black") {{
+  console.error("final abandon third column should use black filled style");
   process.exit(1);
 }}
 const clientNext = L.progressTransitionsFor("pending_client_screen");
@@ -347,8 +347,8 @@ if (L.progressLabel("client_screen_duplicate") !== "重复") {{
   console.error("client_screen_duplicate label");
   process.exit(1);
 }}
-if (L.progressActionBtnClass("client_screen_duplicate") !== "crm-op-btn-detail") {{
-  console.error("duplicate action should use detail (black) style");
+if (L.progressActionBtnClass("client_screen_duplicate") !== "rms-progress-btn rms-progress-btn--black") {{
+  console.error("duplicate action should use black filled style");
   process.exit(1);
 }}
 if (clientNext[clientNext.length - 1] !== "client_screen_duplicate") {{
@@ -556,6 +556,7 @@ def test_rms_dashboard_twenty_shell():
         "在途数",
         "在途流失",
         "入职数",
+        "metric-with-rate",
         "card-resize-handle",
         "chart_client_job_stage_grouped",
         "chart_client_job_stage_stacked",
@@ -596,10 +597,14 @@ def test_rms_dashboard_twenty_shell():
         "normalizeWidgetConfig",
         "job_ids",
         "clientJobStageRows",
+        "jobStageMetricText",
+        "jobStageMetricTitle",
         "rms_block",
         "onCardResizePointerDown",
         "resizeWidgetId",
         "onRmsBlockChange",
+        "selectRmsBlock",
+        "flushPersistWidget",
         "renderClientJobStageGroupedChart",
         "renderClientJobStageStackedChart",
         "renderClientJobStageFunnelChart",

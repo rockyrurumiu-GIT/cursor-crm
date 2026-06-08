@@ -347,6 +347,95 @@ def test_dashboard_client_job_stage_date_filter(client_rbac, admin_auth, rms_eng
     assert row["pushed_resume_count"] == 1
 
 
+def test_dashboard_period_event_pass_without_push_in_range(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """Push before period, first-interview pass inside period — pass counts, push does not."""
+    from sqlalchemy import text
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"pep_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": "2026-06-01", "id": app_id},
+        )
+    for to_status in (
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_passed",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": to_status, "reason": "ok"},
+        )
+        assert tr.status_code == 200, tr.text
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_application_status_history "
+                "SET changed_at = :d WHERE application_id = :id AND to_status = :st"
+            ),
+            {"d": "2026-06-09", "id": app_id, "st": "first_interview_passed"},
+        )
+    r = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from=2026-06-08&date_to=2026-06-10",
+        cookies=login.cookies,
+    )
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["pushed_resume_count"] == 0
+    assert row["interview_passed"] == 1
+
+
+def test_dashboard_period_push_and_pass_same_range(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    from sqlalchemy import text
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"ppr_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": "2026-06-08", "id": app_id},
+        )
+    for to_status in (
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_passed",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": to_status, "reason": "ok"},
+        )
+        assert tr.status_code == 200, tr.text
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_application_status_history "
+                "SET changed_at = :d WHERE application_id = :id AND to_status = :st"
+            ),
+            {"d": "2026-06-09", "id": app_id, "st": "first_interview_passed"},
+        )
+    r = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from=2026-06-08&date_to=2026-06-10",
+        cookies=login.cookies,
+    )
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["pushed_resume_count"] == 1
+    assert row["interview_passed"] == 1
+
+
 def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine, uniq):
     from tests.test_rms_phase2_mvp import _app_for_status
 
@@ -376,6 +465,10 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
     assert row["pending_interview"] == 0
     assert row["interviewed"] == 1
     assert row["interview_passed"] == 1
+    assert row["internal_screen_passed_rate"] == "100%"
+    assert row["client_screen_passed_rate"] == "100%"
+    assert row["interview_passed_rate"] == "100%"
+    assert row["interview_abandoned_rate"] == "0%"
 
     for to_status in ("second_interview_passed", "pending_offer"):
         tr = client_rbac.post(
@@ -423,7 +516,7 @@ def test_rms_dashboard_widget_create_client_job_stage_block(client_rbac, admin_a
     created = client_rbac.post(
         f"/api/rms/dashboard-tabs/{tab['id']}/widgets",
         json={
-            "title": "客户岗位阶段统计",
+            "title": "历史数据",
             "widget_type": "rms_block",
             "source_key": "",
             "config": {"block": "table_client_job_stage"},
