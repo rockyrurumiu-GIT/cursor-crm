@@ -109,6 +109,8 @@ def test_rms_frontend_js_assets_exist():
     assert "filteredPipelineApplications" in rms_src
     assert "candidateFilter" in rms_src
     assert "filteredCandidates" in rms_src
+    assert "crmEnsureRmsCandidatesTableColumns" in rms_src
+    assert "prevLen === 0" in rms_src
     assert "resetCandidateFilter" in rms_src
     rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
     assert 'data-rms-region="candidates"' in rms_html
@@ -405,6 +407,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     resize_js = (REPO_ROOT / "static/js/crm-table-resize.js").read_text(encoding="utf-8")
     assert "rms-delivery-review-op-col" in resize_js
     assert "RMS_DELIVERY_REVIEW_STORAGE_VERSION" in resize_js
+    assert "ensureRmsCandidatesTableColumns" in resize_js
+    assert "crmEnsureRmsCandidatesTableColumns" in resize_js
     assert "appCandidateAge" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
     assert "推荐候选人" in html
 
@@ -420,6 +424,7 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert ">应聘岗位</th>" in html
     assert html.index(">邮箱/微信</th>") < html.index(">应聘岗位</th>")
     assert "rms-candidates-scroll" in html
+    assert "rms-candidates-table-scroll" in html
     assert "rms-candidates-frame" in html
     assert ">阅读</a>" in html
     assert ">下载</a>" in html

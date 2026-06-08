@@ -115,9 +115,15 @@
         padding: 0;
         box-sizing: border-box;
         overflow-x: auto;
-        overflow-y: hidden;
-        max-height: none !important;
+        overflow-y: auto;
+        max-height: var(--rms-candidates-scroll-max-height, calc(100vh - 300px));
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
         scrollbar-gutter: auto;
+    }
+    /* 候选人表：默认显示表头 + 10 行（田帅为末行），第 11 行起需纵向滚动 */
+    .rms-candidates-scroll.rms-candidates-table-scroll {
+        max-height: calc(2.32rem * 11);
     }
     .rms-candidates-frame {
         border-radius: 0.5rem;
@@ -844,7 +850,7 @@
         <div v-else-if="!candidatesState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无候选人</div>
         <div v-else-if="!filteredCandidates.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无符合条件的候选人</div>
         <div v-else class="rms-candidates-frame border border-[#d0d7de]">
-            <div ref="candidatesScrollWrap" class="rms-candidates-scroll crm-table-scroll">
+            <div ref="candidatesScrollWrap" class="rms-candidates-scroll rms-candidates-table-scroll crm-table-scroll">
             <table class="crm-table rms-candidates-table" data-table-id="rms-candidates">
                 <thead>
                     <tr>

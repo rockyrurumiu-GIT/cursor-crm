@@ -723,6 +723,45 @@
         return true;
     }
 
+    function ensureRmsCandidatesTableColumns(table) {
+        if (!table || table.dataset.tableId !== 'rms-candidates') return false;
+        if (table.dataset.colResizeReady !== '1') {
+            return initCrmTableColumnResize(table);
+        }
+        if (!isTableLayoutVisible(table)) return false;
+        const ths = leafHeaderCells(table);
+        if (!ths.length) return false;
+        let cols = [...table.querySelectorAll('colgroup col')];
+        if (cols.length !== ths.length) cols = ensureColgroup(table, ths.length);
+        const storageKey = storageKeyFor(table);
+        const { readColWidth, setColWidth, syncTableWidth } = buildColumnHelpers(table, ths, cols, {});
+        let saved = null;
+        try {
+            saved = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        } catch {
+            saved = null;
+        }
+        const normalizeSaved = (widths) => {
+            const next = [...widths];
+            ths.forEach((th, i) => {
+                if (isOpColumnTh(th)) next[i] = opColumnWidthPx(th);
+            });
+            return next;
+        };
+        if (Array.isArray(saved) && saved.length === cols.length) {
+            const widths = clampWidthsToContent(table, ths, cols, normalizeSaved(saved));
+            widths.forEach((w, i) => setColWidth(i, w));
+            syncTableWidth();
+            table.dataset.colContentFit = '1';
+        } else if (tbodyDataRows(table).length > 0) {
+            fitTableColumnsToContent(table);
+        } else {
+            applyAllOpColumnWidths(ths, setColWidth);
+            syncTableWidth();
+        }
+        return true;
+    }
+
     function ensureRmsPipelineTableColumns(table) {
         if (!table || table.dataset.tableId !== 'rms-pipeline') return false;
         if (table.dataset.colResizeReady !== '1') {
@@ -760,6 +799,7 @@
     }
 
     window.crmInitTableColumnResize = initCrmTableColumnResize;
+    window.crmEnsureRmsCandidatesTableColumns = ensureRmsCandidatesTableColumns;
     window.crmEnsureRmsPipelineTableColumns = ensureRmsPipelineTableColumns;
     window.crmEnsureRmsJobsTableColumns = ensureRmsJobsTableColumns;
     window.crmInitAllTableColumnResize = initAll;

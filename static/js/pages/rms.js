@@ -958,6 +958,12 @@
             if (!tableId) return;
             var table = document.querySelector('table[data-table-id="' + tableId + '"]');
             if (!table) return;
+            if (tableId === "rms-candidates") {
+              if (typeof window.crmEnsureRmsCandidatesTableColumns === "function") {
+                window.crmEnsureRmsCandidatesTableColumns(table);
+                return;
+              }
+            }
             if (tableId === "rms-pipeline") {
               if (typeof window.crmEnsureRmsPipelineTableColumns === "function") {
                 window.crmEnsureRmsPipelineTableColumns(table);
@@ -2081,6 +2087,18 @@
           loadDeliveryReview();
         }
       });
+
+      watch(
+        function () {
+          return filteredCandidates.value.length;
+        },
+        function (len, prevLen) {
+          if (activeTab.value !== "candidates" || viewMode.value === "candidateReport") return;
+          if (len > 0 && prevLen === 0) {
+            scheduleCandidatesTableColumnFit();
+          }
+        }
+      );
 
       onMounted(async function () {
         await Promise.all([
