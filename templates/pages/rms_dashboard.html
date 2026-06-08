@@ -57,6 +57,7 @@
 .chart-area { display: flex; flex-direction: column; width: 100%; min-height: 0; gap: 0.6rem; }
 .chart-canvas-wrap { position: relative; flex: 1; min-width: 0; min-height: 0; }
 .chart-canvas-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+.chart-hint { margin: 0 0 0.35rem; font-size: 0.72rem; color: #98a2b3; flex-shrink: 0; }
 .state-msg { width: 100%; text-align: center; align-self: center; font-size: 0.85rem; color: #98a2b3; }
 .state-forbidden { color: #cf222e; }
 .field { margin-bottom: 0; }
@@ -76,6 +77,18 @@
   padding: 0.4rem 0.5rem; color: #374151; border-bottom: 1px solid #f2f3f5;
 }
 .rms-stage-table tbody tr:last-child td { border-bottom: none; }
+.rms-job-stage-scroll { overflow-x: auto; width: 100%; }
+.rms-job-stage-table { width: 100%; min-width: 56rem; border-collapse: collapse; font-size: 0.78rem; }
+.rms-job-stage-table thead th {
+  text-align: left; font-weight: 500; color: #98a2b3; padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #f2f3f5; background: transparent; white-space: nowrap;
+}
+.rms-job-stage-table tbody td {
+  padding: 0.4rem 0.5rem; color: #374151; border-bottom: 1px solid #f2f3f5; white-space: nowrap;
+}
+.rms-job-stage-table tbody tr:last-child td { border-bottom: none; }
+.rms-job-stage-table tbody tr.total-row td { font-weight: 600; color: #1f2328; }
+.rms-dash-filter-row .field-job-multi select { min-width: 10rem; min-height: 4.5rem; }
 .rms-filter-summary { font-size: 0.78rem; color: #6b7280; line-height: 1.6; }
 .rms-filter-summary dt { color: #98a2b3; display: inline; }
 .rms-filter-summary dd { display: inline; margin: 0 0.75rem 0 0.25rem; color: #374151; }
@@ -91,10 +104,20 @@
 .tbtn-danger:hover { background: #fdf0f0; }
 .modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; align-items: center; justify-content: center; }
 .modal-panel { background: #fff; border-radius: 14px; padding: 1.25rem; width: 90%; max-width: 420px; }
-.dash-card.editing { border-style: dashed; border-color: #d5d9de; }
+.dash-card.editing { border-style: dashed; border-color: #d5d9de; position: relative; }
 .dash-card.editing:hover { border-color: #9aa9bd; box-shadow: 0 2px 10px rgba(16,24,40,0.06); }
-.dash-card.editing.is-dragging { opacity: 0.92; z-index: 5; box-shadow: 0 8px 24px rgba(16,24,40,0.12); }
-.card-head-draggable { cursor: grab; touch-action: none; user-select: none; }
+.dash-card.editing.is-active { border-color: #7B96B8; box-shadow: 0 2px 12px rgba(16,24,40,0.08); }
+.dash-card.editing.is-dragging { opacity: 0.92; z-index: 20; box-shadow: 0 8px 24px rgba(16,24,40,0.12); }
+.dash-card.editing.is-resizing { z-index: 20; box-shadow: 0 8px 24px rgba(16,24,40,0.12); }
+.dash-card.editing .card-body { pointer-events: none; }
+.dash-card.editing .card-resize-handle { pointer-events: auto; }
+.card-head-draggable { cursor: grab; touch-action: none; user-select: none; position: relative; z-index: 1; }
+.card-resize-handle {
+  position: absolute; right: 6px; bottom: 6px; width: 14px; height: 14px;
+  border-right: 2px solid #c5cad1; border-bottom: 2px solid #c5cad1;
+  border-radius: 0 0 3px 0; cursor: nwse-resize; touch-action: none; z-index: 2;
+}
+.dash-card.editing .card-resize-handle:hover { border-color: #6b7280; }
 .card-head-draggable:active { cursor: grabbing; }
 .card-actions { display: flex; gap: 0.25rem; }
 .icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: #6b7280; cursor: pointer; font-size: 0.85rem; }
@@ -267,8 +290,9 @@
         <div v-if="activeTab && displayItems.length" class="dash-grid">
             <div v-for="item in displayItems" :key="item.key"
                  class="dash-card"
-                 :class="{ editing: editMode, 'dash-card-extra-view': item.isExtra, 'is-dragging': dragWidgetId === item.widget.id }"
-                 :style="item.style">
+                 :class="{ editing: editMode, 'dash-card-extra-view': item.isExtra, 'is-active': editMode && activeWidgetId === item.widget.id, 'is-dragging': dragWidgetId === item.widget.id, 'is-resizing': resizeWidgetId === item.widget.id }"
+                 :style="item.style"
+                 :data-widget-id="item.widget.id">
                 <div class="card-head"
                      :class="{ 'card-head-draggable': editMode && canWrite && !item.isExtra }"
                      @pointerdown="onCardHeadPointerDown(item, $event)">
@@ -284,6 +308,10 @@
                     </div>
                 </div>
                 <div class="card-body">
+                    <span v-if="editMode && canWrite && !item.isExtra"
+                          class="card-resize-handle"
+                          title="拖动调整大小"
+                          @pointerdown="onCardResizePointerDown(item, $event)"></span>
                     <template v-if="item.widget.widget_type === 'rms_block'">
                     <template v-if="item.block === 'filter'">
                         <div class="rms-dash-filter-row">
@@ -295,13 +323,12 @@
                                 </select>
                                 <input v-else v-model="filters.client_id" type="number" placeholder="ID" />
                             </div>
-                            <div class="field">
+                            <div class="field field-job-multi">
                                 <label>{{ jobFieldLabel }}</label>
-                                <select v-if="jobOptions.length" v-model="filters.job_id">
-                                    <option value="">全部</option>
+                                <select v-if="jobOptions.length" v-model="filters.job_ids" multiple>
                                     <option v-for="j in jobOptions" :key="j.id" :value="String(j.id)">{{ j.title || ('岗位#' + j.id) }}</option>
                                 </select>
-                                <input v-else v-model="filters.job_id" type="number" placeholder="ID" />
+                                <input v-else v-model="filters.job_ids_text" placeholder="岗位ID，逗号分隔" />
                             </div>
                             <div class="field">
                                 <label>优先级</label>
@@ -364,8 +391,14 @@
                     </template>
 
                     <!-- 图表 -->
-                    <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter'">
-                        <div class="chart-area">
+                    <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter' || item.block === 'chart_client_job_stage_grouped' || item.block === 'chart_client_job_stage_stacked' || item.block === 'chart_client_job_stage_funnel'">
+                        <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
+                        <p v-else-if="item.block === 'chart_client_job_stage_funnel' && !clientJobStageTotal" class="state-msg">暂无数据</p>
+                        <p v-else-if="item.block !== 'chart_client_job_stage_funnel' && !clientJobStageRows.length" class="state-msg">暂无数据</p>
+                        <div v-else class="chart-area">
+                            <p v-if="item.block === 'chart_client_job_stage_grouped'" class="chart-hint">按岗位对比推送、内筛、客筛、面试通过（竖向分组柱）</p>
+                            <p v-else-if="item.block === 'chart_client_job_stage_stacked'" class="chart-hint">按岗位展示待客筛、待面试、面试通过、放弃面试（横向堆叠）</p>
+                            <p v-else-if="item.block === 'chart_client_job_stage_funnel'" class="chart-hint">当前筛选合计：推送 → 内筛 → 客筛 → 已面试 → 面试通过</p>
                             <div class="chart-canvas-wrap">
                                 <canvas :id="chartCanvasId(item.widget)"></canvas>
                             </div>
@@ -426,6 +459,66 @@
                             </tbody>
                         </table>
                         <p v-else class="state-msg">暂无数据</p>
+                    </template>
+
+                    <!-- 客户岗位阶段统计 -->
+                    <template v-else-if="item.block === 'table_client_job_stage'">
+                        <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
+                        <div v-else class="rms-job-stage-scroll">
+                            <table class="rms-job-stage-table">
+                                <thead><tr>
+                                    <th>时间</th><th>岗位</th><th>需求数量</th><th>地点</th>
+                                    <th>推送简历量</th><th>内筛通过</th><th>重复</th><th>待客户筛选</th>
+                                    <th>客筛通过</th><th>放弃面试</th><th>待面试</th><th>已面试</th><th>面试通过</th>
+                                    <th>offer在谈</th><th>弃offer</th><th>在途数</th><th>在途流失</th><th>入职数</th>
+                                </tr></thead>
+                                <tbody v-if="clientJobStageRows.length">
+                                    <tr v-for="row in clientJobStageRows" :key="row.job_id">
+                                        <td>{{ clientJobStagePeriodLabel }}</td>
+                                        <td>{{ row.job_title }}</td>
+                                        <td>{{ row.headcount }}</td>
+                                        <td>{{ row.location || '—' }}</td>
+                                        <td>{{ row.pushed_resume_count }}</td>
+                                        <td>{{ row.internal_screen_passed }}</td>
+                                        <td>{{ row.duplicate_count }}</td>
+                                        <td>{{ row.pending_client_screen }}</td>
+                                        <td>{{ row.client_screen_passed }}</td>
+                                        <td>{{ row.interview_abandoned }}</td>
+                                        <td>{{ row.pending_interview }}</td>
+                                        <td>{{ row.interviewed }}</td>
+                                        <td>{{ row.interview_passed }}</td>
+                                        <td>{{ row.pending_offer_count }}</td>
+                                        <td>{{ row.offer_dropped_count }}</td>
+                                        <td>{{ row.onboarding_count }}</td>
+                                        <td>{{ row.onboarding_lost_count }}</td>
+                                        <td>{{ row.hired_count }}</td>
+                                    </tr>
+                                    <tr v-if="clientJobStageTotal" class="total-row">
+                                        <td>{{ clientJobStagePeriodLabel }}</td>
+                                        <td>合计</td>
+                                        <td>—</td>
+                                        <td>—</td>
+                                        <td>{{ clientJobStageTotal.pushed_resume_count }}</td>
+                                        <td>{{ clientJobStageTotal.internal_screen_passed }}</td>
+                                        <td>{{ clientJobStageTotal.duplicate_count }}</td>
+                                        <td>{{ clientJobStageTotal.pending_client_screen }}</td>
+                                        <td>{{ clientJobStageTotal.client_screen_passed }}</td>
+                                        <td>{{ clientJobStageTotal.interview_abandoned }}</td>
+                                        <td>{{ clientJobStageTotal.pending_interview }}</td>
+                                        <td>{{ clientJobStageTotal.interviewed }}</td>
+                                        <td>{{ clientJobStageTotal.interview_passed }}</td>
+                                        <td>{{ clientJobStageTotal.pending_offer_count }}</td>
+                                        <td>{{ clientJobStageTotal.offer_dropped_count }}</td>
+                                        <td>{{ clientJobStageTotal.onboarding_count }}</td>
+                                        <td>{{ clientJobStageTotal.onboarding_lost_count }}</td>
+                                        <td>{{ clientJobStageTotal.hired_count }}</td>
+                                    </tr>
+                                </tbody>
+                                <tbody v-else>
+                                    <tr><td colspan="18" class="state-msg">暂无数据</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </template>
 
                     <!-- 花名册 -->
@@ -625,7 +718,7 @@
                         </div>
                     </div>
 
-                    <div v-if="isDataWidget" class="inspector-type-pills">
+                    <div v-if="isDataWidget || widgetForm.widget_type === 'rms_block'" class="inspector-type-pills">
                         <span v-for="t in chartTypePills" :key="t"
                               :class="['inspector-pill', widgetForm.widget_type === t ? 'active' : '']"
                               @click="selectWidgetType(t)">{{ typeLabel(t) }}</span>
@@ -633,7 +726,7 @@
 
                     <div v-if="widgetForm.widget_type === 'rms_block'" class="inspector-section">
                         <div class="inspector-section-title">招聘预设</div>
-                        <div class="field"><select v-model="widgetForm.config.block">
+                        <div class="field"><select v-model="widgetForm.config.block" @change="onRmsBlockChange">
                             <option v-for="b in metadata.rms_blocks" :key="b.key" :value="b.key">{{ b.label }}</option>
                         </select></div>
                     </div>

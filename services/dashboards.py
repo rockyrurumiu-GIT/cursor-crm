@@ -1745,6 +1745,7 @@ def seed_default_dashboards(
     _sync_roster_margin_preset_layout(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _seed_rms_recruitment(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _sync_rms_test_tab(db, DashboardDashboard, DashboardTab, DashboardWidget)
 
 
 _RMS_DEFAULT_TABS = (
@@ -1752,7 +1753,9 @@ _RMS_DEFAULT_TABS = (
     ("历史转化", "history", 1),
     ("招聘人效", "recruiter", 2),
     ("花名册核对", "roster", 3),
+    ("Test", "test", 4),
 )
+_RMS_TEST_TAB_NAME = "Test"
 _RMS_SEED_NAME = "招聘总览"
 
 
@@ -1785,6 +1788,7 @@ _RMS_TEMPLATE_WIDGETS = {
         {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
         {"title": "阶段通过率", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_history_pass"}, "x": 0, "y": 2, "w": 12, "h": 6},
         {"title": "阶段明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_history"}, "x": 0, "y": 8, "w": 12, "h": 5},
+        {"title": "客户岗位阶段统计", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_client_job_stage"}, "x": 0, "y": 13, "w": 12, "h": 6},
     ],
     "recruiter": [
         {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
@@ -1798,6 +1802,12 @@ _RMS_TEMPLATE_WIDGETS = {
         {"title": "不一致", "widget_type": "rms_block", "source_key": "", "config": {"block": "roster_kpi_mismatch"}, "x": 6, "y": 2, "w": 3, "h": 3},
         {"title": "多匹配", "widget_type": "rms_block", "source_key": "", "config": {"block": "roster_kpi_ambiguous"}, "x": 9, "y": 2, "w": 3, "h": 3},
         {"title": "核对明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_roster"}, "x": 0, "y": 5, "w": 12, "h": 7},
+    ],
+    "test": [
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
+        {"title": "岗位阶段（分组柱）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_job_stage_grouped"}, "x": 0, "y": 2, "w": 12, "h": 7},
+        {"title": "岗位阶段（堆叠柱）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_job_stage_stacked"}, "x": 0, "y": 9, "w": 12, "h": 7},
+        {"title": "岗位阶段（漏斗）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_job_stage_funnel"}, "x": 0, "y": 16, "w": 12, "h": 6},
     ],
 }
 
@@ -1845,6 +1855,32 @@ def _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidg
                 continue
             _seed_rms_tab_widgets(db, t.id, template, DashboardWidget, now)
             changed = True
+    if changed:
+        db.commit()
+
+
+def _sync_rms_test_tab(db, DashboardDashboard, DashboardTab, DashboardWidget) -> None:
+    """Idempotently add Test tab (3 job-stage chart variants) to existing RMS dashboards."""
+    dashboards = db.query(DashboardDashboard).filter(DashboardDashboard.scope == "rms").all()
+    changed = False
+    now = _now()
+    for d in dashboards:
+        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
+        if any((t.name or "").strip() == _RMS_TEST_TAB_NAME for t in tabs):
+            continue
+        max_sort = max((int(t.sort_order or 0) for t in tabs), default=-1)
+        tab = DashboardTab(
+            dashboard_id=d.id,
+            name=_RMS_TEST_TAB_NAME,
+            sort_order=max_sort + 1,
+            layout_json=_dump_json({"rms_template": "test"}),
+            created_at=now,
+            updated_at=now,
+        )
+        db.add(tab)
+        db.flush()
+        _seed_rms_tab_widgets(db, tab.id, "test", DashboardWidget, now)
+        changed = True
     if changed:
         db.commit()
 

@@ -199,6 +199,51 @@ def _find_duplicate_candidate(
     )
 
 
+def detect_duplicate_candidate(
+    db: Session,
+    RmsCandidate: Type[Any],
+    *,
+    name: str,
+    phone: str,
+) -> bool:
+    """True when name+phone match an existing candidate (same rules as create)."""
+    name = str(name or "").strip()
+    if not name:
+        return False
+    try:
+        normalized_phone = _normalize_phone(phone, required=False)
+    except HTTPException:
+        return False
+    if not normalized_phone:
+        return False
+    return _find_duplicate_candidate(
+        db, RmsCandidate, name=name, phone=normalized_phone
+    ) is not None
+
+
+def detect_duplicate_candidate_for_parse(
+    db: Session,
+    RmsCandidate: Type[Any],
+    *,
+    name: str,
+    phone: str,
+) -> bool:
+    """Parse-time hint: name+phone match, or phone alone matches an existing row."""
+    if detect_duplicate_candidate(db, RmsCandidate, name=name, phone=phone):
+        return True
+    try:
+        normalized_phone = _normalize_phone(phone, required=False)
+    except HTTPException:
+        return False
+    if not normalized_phone:
+        return False
+    return (
+        db.query(RmsCandidate)
+        .filter(RmsCandidate.phone == normalized_phone)
+        .first()
+    ) is not None
+
+
 def _recommended_at_by_candidate(
     db: Session,
     RmsApplication: Type[Any],

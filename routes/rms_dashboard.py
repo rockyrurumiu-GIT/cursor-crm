@@ -104,6 +104,7 @@ def register_rms_dashboard_routes(
     async def api_rms_dashboard(
         client_id: Optional[int] = None,
         job_id: Optional[int] = None,
+        job_ids: Optional[str] = None,
         priority: Optional[str] = None,
         city: Optional[str] = None,
         sales_user_id: Optional[int] = None,
@@ -115,6 +116,12 @@ def register_rms_dashboard_routes(
         ctx: AuthContext = Depends(get_current_context),
         _user: str = Depends(require_permission("rms.analytics.read")),
     ):
+        parsed_job_ids = None
+        if job_ids is not None and str(job_ids).strip():
+            try:
+                parsed_job_ids = dash_svc.parse_job_ids(job_ids)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
         return dash_svc.compute_rms_dashboard(
             db,
             ctx,
@@ -124,6 +131,7 @@ def register_rms_dashboard_routes(
             Client,
             client_id=client_id,
             job_id=job_id,
+            job_ids=parsed_job_ids,
             priority=priority,
             city=city,
             sales_user_id=sales_user_id,

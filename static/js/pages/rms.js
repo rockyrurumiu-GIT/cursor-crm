@@ -134,6 +134,7 @@
   }
 
   const CANDIDATE_DUPLICATE_DETAIL = "人选已存在系统中";
+  const CANDIDATE_DUPLICATE_PARSE_HINT = "系统中已存在该人选";
 
   function isCandidateDuplicateError(r) {
     return !!(r && r.status === 409 && String(r.detail || "") === CANDIDATE_DUPLICATE_DETAIL);
@@ -165,7 +166,8 @@
     return msg;
   }
 
-  function showCandidateDuplicateDialog() {
+  function showCandidateDuplicateDialog(message) {
+    var text = String(message || "").trim() || CANDIDATE_DUPLICATE_DETAIL;
     return new Promise(function (resolve) {
       var done = false;
       function finish() {
@@ -185,15 +187,15 @@
       }
       var overlay = document.createElement("div");
       overlay.className = "crm-esc-modal fixed inset-0 bg-black/40 flex items-center justify-center p-4";
-      overlay.style.zIndex = "200";
+      overlay.style.zIndex = "10000";
       var panel = document.createElement("div");
       panel.className = "bg-white rounded-lg shadow-xl w-full max-w-md p-4 sm:p-5";
       var h3 = document.createElement("h3");
       h3.className = "font-semibold text-lg text-gray-800 mb-3";
-      h3.textContent = CANDIDATE_DUPLICATE_DETAIL;
+      h3.textContent = text;
       var pTarget = document.createElement("p");
       pTarget.className = "text-sm text-gray-600 mb-4";
-      pTarget.textContent = CANDIDATE_DUPLICATE_DETAIL;
+      pTarget.textContent = text;
       var actions = document.createElement("div");
       actions.className = "flex gap-2";
       var confirmBtn = document.createElement("button");
@@ -1575,6 +1577,17 @@
           reportResumePreviewError.value = "";
         }
         reportResumePreviewRawText.value = rawPreview;
+        let parseDuplicate = data.duplicate_detected === true;
+        if (!parseDuplicate && (reportForm.phone || "").trim()) {
+          const dupR = await rmsRequest("POST", "/api/rms/candidates/check-duplicate", {
+            name: (reportForm.name || "").trim(),
+            phone: (reportForm.phone || "").trim(),
+          });
+          parseDuplicate = !!(dupR.ok && dupR.data && dupR.data.duplicate_detected === true);
+        }
+        if (parseDuplicate) {
+          await showCandidateDuplicateDialog(CANDIDATE_DUPLICATE_PARSE_HINT);
+        }
       }
 
       function onReportFilePicked(file) {

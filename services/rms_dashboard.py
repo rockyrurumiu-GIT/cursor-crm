@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from auth.service import AuthContext
-from schemas.rms import ACTIVE_PIPELINE_STATUSES, normalize_rms_date
+from schemas.rms import ACTIVE_PIPELINE_STATUSES, APPLICATION_PROGRESS_ORDER, normalize_rms_date
 from services import rms_scope as rms_ds
 
 _PIPELINE_LABELS = {
@@ -47,7 +47,7 @@ _STAGE_PASS = {
 
 _STAGE_FAIL = {
     "internal_screen": "internal_screen_failed",
-    "client_screen": "client_screen_failed",
+    "client_screen": {"client_screen_failed", "client_screen_duplicate"},
     "scheduling": "interview_scheduling_failed",
     "first_interview": "first_interview_failed",
     "second_interview": {"second_interview_failed", "second_interview_abandoned"},
@@ -55,6 +55,65 @@ _STAGE_FAIL = {
     "offer": "offer_dropped",
     "onboarding": "onboarding_lost",
 }
+
+_INTERVIEW_PASSED_STATUSES = frozenset({
+    "first_interview_passed",
+    "second_interview_passed",
+    "pending_offer",
+    "onboarding",
+    "hired",
+})
+_ABANDONED_STATUSES = frozenset({"second_interview_abandoned", "final_interview_abandoned"})
+
+_OFFER_DROPPED_STATUSES = frozenset({"offer_dropped"})
+_ONBOARDING_LOST_STATUSES = frozenset({"onboarding_lost"})
+_HIRED_STATUSES = frozenset({"hired"})
+
+_SUMMARY_METRIC_KEYS = (
+    "pushed_resume_count",
+    "internal_screen_passed",
+    "duplicate_count",
+    "pending_client_screen",
+    "client_screen_passed",
+    "interview_abandoned",
+    "pending_interview",
+    "interviewed",
+    "interview_passed",
+    "pending_offer_count",
+    "offer_dropped_count",
+    "onboarding_count",
+    "onboarding_lost_count",
+    "hired_count",
+)
+
+
+def parse_job_ids(raw: Optional[str]) -> Optional[List[int]]:
+    if raw is None or not str(raw).strip():
+        return None
+    ids: List[int] = []
+    for part in str(raw).split(","):
+        token = part.strip()
+        if not token:
+            continue
+        if not token.isdigit():
+            raise ValueError("job_ids 仅支持逗号分隔的整数")
+        ids.append(int(token))
+    return ids or None
+
+
+def _statuses_from(anchor: str) -> Set[str]:
+    try:
+        idx = APPLICATION_PROGRESS_ORDER.index(anchor)
+    except ValueError:
+        return set()
+    return set(APPLICATION_PROGRESS_ORDER[idx:])
+
+
+_INTERNAL_SCREEN_PASSED_STATUSES = _statuses_from("pending_client_screen")
+_CLIENT_SCREEN_PASSED_STATUSES = _statuses_from("scheduling_interview")
+_INTERVIEWED_STATUSES = (
+    _statuses_from("first_interview_passed") | _statuses_from("first_interview_failed")
+)
 
 
 def _utc_today() -> date:
@@ -65,6 +124,15 @@ def _rate(numerator: int, denominator: int) -> str:
     if denominator <= 0:
         return "—"
     return f"{round(100 * numerator / denominator, 1)}%"
+
+
+def _effective_job_ids(filters: Dict[str, Any]) -> Optional[List[int]]:
+    job_ids = filters.get("job_ids")
+    if job_ids:
+        return [int(x) for x in job_ids]
+    if filters.get("job_id") is not None:
+        return [int(filters["job_id"])]
+    return None
 
 
 def _filter_applications_query(
@@ -78,8 +146,9 @@ def _filter_applications_query(
     q = rms_ds.scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
     if filters.get("client_id") is not None:
         q = q.filter(RmsApplication.client_id == int(filters["client_id"]))
-    if filters.get("job_id") is not None:
-        q = q.filter(RmsApplication.job_id == int(filters["job_id"]))
+    job_filter_ids = _effective_job_ids(filters)
+    if job_filter_ids is not None:
+        q = q.filter(RmsApplication.job_id.in_(job_filter_ids))
     if filters.get("recruiter_user_id") is not None:
         q = q.filter(RmsApplication.recommended_by == int(filters["recruiter_user_id"]))
 
@@ -129,12 +198,34 @@ def _demand_overview(
     Client: Type[Any],
     filters: Dict[str, Any],
 ) -> Dict[str, int]:
-    q = rms_ds.scoped_jobs_query(db, ctx, RmsJob, Client, action="read")
+    q = _scoped_jobs_query(db, ctx, RmsJob, Client, filters)
     q = q.filter(RmsJob.status == "open")
+    rows = q.all()
+    clients: Set[int] = set()
+    hc = 0
+    for j in rows:
+        clients.add(int(j.client_id))
+        hc += int(j.headcount or 0)
+    return {
+        "open_client_count": len(clients),
+        "open_job_count": len(rows),
+        "open_hc_total": hc,
+    }
+
+
+def _scoped_jobs_query(
+    db: Session,
+    ctx: AuthContext,
+    RmsJob: Type[Any],
+    Client: Type[Any],
+    filters: Dict[str, Any],
+):
+    q = rms_ds.scoped_jobs_query(db, ctx, RmsJob, Client, action="read")
     if filters.get("client_id") is not None:
         q = q.filter(RmsJob.client_id == int(filters["client_id"]))
-    if filters.get("job_id") is not None:
-        q = q.filter(RmsJob.id == int(filters["job_id"]))
+    job_filter_ids = _effective_job_ids(filters)
+    if job_filter_ids is not None:
+        q = q.filter(RmsJob.id.in_(job_filter_ids))
     if filters.get("priority"):
         q = q.filter(RmsJob.priority == filters["priority"])
     if filters.get("city"):
@@ -149,17 +240,7 @@ def _demand_overview(
             )
         allowed = {c.id for c in client_q.all()}
         q = q.filter(RmsJob.client_id.in_(allowed or [-1]))
-    rows = q.all()
-    clients: Set[int] = set()
-    hc = 0
-    for j in rows:
-        clients.add(int(j.client_id))
-        hc += int(j.headcount or 0)
-    return {
-        "open_client_count": len(clients),
-        "open_job_count": len(rows),
-        "open_hc_total": hc,
-    }
+    return q
 
 
 def _pipeline_overview(apps: List[Any]) -> List[Dict[str, Any]]:
@@ -335,6 +416,101 @@ def _recruiter_performance(
     return rows
 
 
+def _period_label(filters: Dict[str, Any]) -> str:
+    date_from = (filters.get("date_from") or "").strip()
+    date_to = (filters.get("date_to") or "").strip()
+    if date_from and date_to:
+        return f"{date_from} ~ {date_to}"
+    if date_from:
+        return f"{date_from} ~"
+    if date_to:
+        return f"~ {date_to}"
+    return "全量"
+
+
+def _app_to_statuses(app: Any, hist_map: Dict[int, List[Any]]) -> Set[str]:
+    statuses = {h.to_status for h in hist_map.get(app.id, []) if h.to_status}
+    current = (app.status or "").strip()
+    if current:
+        statuses.add(current)
+    return statuses
+
+
+def _empty_job_metrics() -> Dict[str, int]:
+    return {key: 0 for key in _SUMMARY_METRIC_KEYS}
+
+
+def _metrics_for_apps(apps: List[Any], hist_map: Dict[int, List[Any]]) -> Dict[str, int]:
+    metrics = _empty_job_metrics()
+    for app in apps:
+        metrics["pushed_resume_count"] += 1
+        to_statuses = _app_to_statuses(app, hist_map)
+        current = (app.status or "").strip()
+
+        if to_statuses & _INTERNAL_SCREEN_PASSED_STATUSES:
+            metrics["internal_screen_passed"] += 1
+        # duplicate_count: first-version placeholder until duplicate detection field ships.
+        if current == "pending_client_screen":
+            metrics["pending_client_screen"] += 1
+        if to_statuses & _CLIENT_SCREEN_PASSED_STATUSES:
+            metrics["client_screen_passed"] += 1
+        if to_statuses & _ABANDONED_STATUSES:
+            metrics["interview_abandoned"] += 1
+        if current == "pending_first_interview":
+            metrics["pending_interview"] += 1
+        if to_statuses & _INTERVIEWED_STATUSES:
+            metrics["interviewed"] += 1
+        if to_statuses & _INTERVIEW_PASSED_STATUSES:
+            metrics["interview_passed"] += 1
+        if current == "pending_offer":
+            metrics["pending_offer_count"] += 1
+        if to_statuses & _OFFER_DROPPED_STATUSES:
+            metrics["offer_dropped_count"] += 1
+        if "onboarding" in to_statuses:
+            metrics["onboarding_count"] += 1
+        if to_statuses & _ONBOARDING_LOST_STATUSES:
+            metrics["onboarding_lost_count"] += 1
+        if to_statuses & _HIRED_STATUSES:
+            metrics["hired_count"] += 1
+    return metrics
+
+
+def _client_job_stage_summary(
+    db: Session,
+    ctx: AuthContext,
+    cohort: List[Any],
+    hist_map: Dict[int, List[Any]],
+    RmsJob: Type[Any],
+    Client: Type[Any],
+    filters: Dict[str, Any],
+) -> Dict[str, Any]:
+    jobs = _scoped_jobs_query(db, ctx, RmsJob, Client, filters).all()
+    apps_by_job: Dict[int, List[Any]] = defaultdict(list)
+    for app in cohort:
+        apps_by_job[int(app.job_id)].append(app)
+
+    rows: List[Dict[str, Any]] = []
+    total = _empty_job_metrics()
+    for job in sorted(jobs, key=lambda j: int(j.id)):
+        metrics = _metrics_for_apps(apps_by_job.get(int(job.id), []), hist_map)
+        row = {
+            "job_id": int(job.id),
+            "job_title": (job.title or "").strip() or f"岗位#{job.id}",
+            "headcount": int(job.headcount or 0),
+            "location": (job.location or "").strip(),
+            **metrics,
+        }
+        rows.append(row)
+        for key in _SUMMARY_METRIC_KEYS:
+            total[key] += metrics[key]
+
+    return {
+        "period_label": _period_label(filters),
+        "rows": rows,
+        "total": total,
+    }
+
+
 def compute_rms_dashboard(
     db: Session,
     ctx: AuthContext,
@@ -345,6 +521,7 @@ def compute_rms_dashboard(
     *,
     client_id: Optional[int] = None,
     job_id: Optional[int] = None,
+    job_ids: Optional[List[int]] = None,
     priority: Optional[str] = None,
     city: Optional[str] = None,
     sales_user_id: Optional[int] = None,
@@ -355,7 +532,8 @@ def compute_rms_dashboard(
 ) -> Dict[str, Any]:
     filters = {
         "client_id": client_id,
-        "job_id": job_id,
+        "job_id": job_id if not job_ids else None,
+        "job_ids": job_ids,
         "priority": priority,
         "city": city,
         "sales_user_id": sales_user_id,
@@ -364,7 +542,7 @@ def compute_rms_dashboard(
         "date_from": date_from,
         "date_to": date_to,
     }
-    filters = {k: v for k, v in filters.items() if v is not None and v != ""}
+    filters = {k: v for k, v in filters.items() if v is not None and v != "" and v != []}
 
     cohort = _cohort_apps(db, ctx, RmsApplication, RmsJob, Client, filters)
     active_q = _filter_applications_query(db, ctx, RmsApplication, RmsJob, Client, filters)
@@ -380,5 +558,8 @@ def compute_rms_dashboard(
         "historical_overview": _historical_overview(cohort, hist_map),
         "recruiter_performance": _recruiter_performance(
             db, cohort, hist_map, RmsJob, _utc_today()
+        ),
+        "client_job_stage_summary": _client_job_stage_summary(
+            db, ctx, cohort, hist_map, RmsJob, Client, filters
         ),
     }

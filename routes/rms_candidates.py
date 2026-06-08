@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Type
 
-from fastapi import Depends, File, HTTPException, UploadFile
+from fastapi import Body, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -60,6 +60,22 @@ def register_rms_candidates_routes(
             RmsResume=RmsResume,
             RmsJob=RmsJob,
         )
+
+    @app.post("/api/rms/candidates/check-duplicate")
+    async def api_check_candidate_duplicate(
+        body: dict = Body(...),
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.applications.write")),
+    ):
+        return {
+            "duplicate_detected": cand_svc.detect_duplicate_candidate_for_parse(
+                db,
+                RmsCandidate,
+                name=str((body or {}).get("name") or "").strip(),
+                phone=str((body or {}).get("phone") or "").strip(),
+            )
+        }
 
     @app.post("/api/rms/candidates")
     async def api_create_candidate(

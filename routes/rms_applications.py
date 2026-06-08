@@ -63,11 +63,20 @@ def register_rms_applications_routes(
     async def api_parse_candidate_report_draft(
         file: UploadFile = File(...),
         job_id: Optional[int] = Form(None),
+        db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
         _user: str = Depends(require_permission("rms.applications.write")),
     ):
         content = await file.read()
-        return app_svc.parse_resume_draft(file.filename or "", content)
+        result = app_svc.parse_resume_draft(file.filename or "", content)
+        draft = result.get("draft_fields") or {}
+        result["duplicate_detected"] = cand_svc.detect_duplicate_candidate_for_parse(
+            db,
+            RmsCandidate,
+            name=str(draft.get("name") or "").strip(),
+            phone=str(draft.get("phone") or "").strip(),
+        )
+        return result
 
     @app.post("/api/rms/applications/candidate-report")
     async def api_submit_candidate_report(

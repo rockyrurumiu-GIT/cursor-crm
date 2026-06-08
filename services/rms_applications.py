@@ -827,10 +827,12 @@ def _extract_name_from_header(text: str) -> str:
         return ""
     header = nonempty[:10]
     header_text = "\n".join(header)
+    full_text = text or ""
     if not (
         _RE_PROFILE_LINE.search(header_text)
         or _RE_PHONE.search(header_text)
         or _RE_AGE_LOOSE.search(header_text)
+        or _RE_PHONE.search(full_text)
     ):
         return ""
     for line in header[:4]:

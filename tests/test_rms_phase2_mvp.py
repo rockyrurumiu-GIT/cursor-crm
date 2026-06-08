@@ -944,6 +944,19 @@ def test_status_fail_from_client_screen(client_rbac, admin_auth, rms_engine, uni
     assert r.json()["status"] == "client_screen_failed"
 
 
+def test_status_duplicate_from_client_screen(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, suffix)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "client_screen_duplicate", "reason": "client duplicate"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "client_screen_duplicate"
+    assert r.json()["current_stage"] == "client_screen_duplicate"
+
+
 def test_status_terminal_no_transition(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
     login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, suffix)

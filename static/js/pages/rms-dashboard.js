@@ -11,7 +11,27 @@
     chart_pipeline: true,
     chart_history_pass: true,
     chart_recruiter: true,
+    chart_client_job_stage_grouped: true,
+    chart_client_job_stage_stacked: true,
+    chart_client_job_stage_funnel: true,
   };
+
+  var JOB_STAGE_CHART_COLORS = {
+    pushed: "#7B96B8",
+    internal: "#88A992",
+    client: "#D6A461",
+    interviewed: "#9389AE",
+    passed: "#5B8A72",
+    pendingClient: "#B4C4D8",
+    pendingInterview: "#C2D4C8",
+    abandoned: "#CD9180",
+  };
+
+  function truncateJobLabel(title, maxLen) {
+    var t = String(title || "").trim() || "—";
+    maxLen = maxLen || 10;
+    return t.length > maxLen ? t.slice(0, maxLen) + "…" : t;
+  }
 
   function showMountError(msg) {
     var root = document.getElementById(MOUNT_ID);
@@ -94,9 +114,17 @@
   function buildQuery(filters) {
     var params = new URLSearchParams();
     Object.keys(filters).forEach(function (k) {
+      if (k === "job_ids" || k === "job_ids_text") return;
       var v = filters[k];
       if (v !== "" && v != null) params.set(k, String(v));
     });
+    var jobIds = filters.job_ids;
+    if (Array.isArray(jobIds) && jobIds.length) {
+      params.set("job_ids", jobIds.map(String).join(","));
+    } else if (filters.job_ids_text) {
+      var textIds = String(filters.job_ids_text).split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      if (textIds.length) params.set("job_ids", textIds.join(","));
+    }
     var qs = params.toString();
     return qs ? "?" + qs : "";
   }
@@ -258,7 +286,10 @@
         var manualDragState = null;
         var chatbotWasVisible = ref(false);
         var dragWidgetId = ref(null);
+        var resizeWidgetId = ref(null);
+        var activeWidgetId = ref(null);
         var dragState = null;
+        var resizeState = null;
         var widgetForm = ref(blankWidget());
 
         var clientOptions = ref([]);
@@ -267,7 +298,8 @@
 
         var filters = reactive({
           client_id: "",
-          job_id: "",
+          job_ids: [],
+          job_ids_text: "",
           priority: "",
           city: "",
           sales_user_id: "",
@@ -336,10 +368,26 @@
           return hist[0].stages || [];
         });
 
+        var clientJobStageSummary = computed(function () {
+          return (data.value && data.value.client_job_stage_summary) || null;
+        });
+        var clientJobStageRows = computed(function () {
+          var summary = clientJobStageSummary.value;
+          return summary && summary.rows ? summary.rows : [];
+        });
+        var clientJobStageTotal = computed(function () {
+          var summary = clientJobStageSummary.value;
+          return summary && summary.total ? summary.total : null;
+        });
+        var clientJobStagePeriodLabel = computed(function () {
+          var summary = clientJobStageSummary.value;
+          return (summary && summary.period_label) || "全量";
+        });
+
         var activeFilterSummary = computed(function () {
           var labels = {
             client_id: "客户ID",
-            job_id: "岗位ID",
+            job_ids: "岗位",
             priority: "优先级",
             city: "城市",
             sales_user_id: "销售用户ID",
@@ -351,8 +399,20 @@
           var out = [];
           Object.keys(labels).forEach(function (k) {
             var v = filters[k];
+            if (k === "job_ids") {
+              if (!Array.isArray(v) || !v.length) return;
+              var names = v.map(function (id) {
+                var job = jobOptions.value.find(function (j) { return String(j.id) === String(id); });
+                return job ? (job.title || ("岗位#" + job.id)) : String(id);
+              });
+              out.push({ key: k, label: labels[k], value: names.join("、") });
+              return;
+            }
             if (v !== "" && v != null) out.push({ key: k, label: labels[k], value: String(v) });
           });
+          if ((!filters.job_ids || !filters.job_ids.length) && filters.job_ids_text) {
+            out.push({ key: "job_ids_text", label: "岗位", value: String(filters.job_ids_text) });
+          }
           return out;
         });
 
@@ -362,12 +422,29 @@
         var deliveryFieldLabel = computed(function () { return userOptions.value.length ? "交付" : "交付用户ID"; });
         var recruiterFieldLabel = computed(function () { return userOptions.value.length ? "推荐人" : "推荐人用户ID"; });
 
+        var RMS_DASHBOARD_API_BLOCKS = {
+          filter: true,
+          kpi_clients: true,
+          kpi_jobs: true,
+          kpi_hc: true,
+          chart_pipeline: true,
+          filter_summary: true,
+          chart_history_pass: true,
+          table_history: true,
+          chart_recruiter: true,
+          table_recruiter: true,
+          table_client_job_stage: true,
+          chart_client_job_stage_grouped: true,
+          chart_client_job_stage_stacked: true,
+          chart_client_job_stage_funnel: true,
+        };
+
         var tabNeedsDashboardData = computed(function () {
           var tab = activeTab.value;
           if (!tab || !tab.widgets) return false;
           return tab.widgets.some(function (w) {
             var b = widgetBlock(w);
-            return !!(b && (b === "filter" || b.indexOf("roster_") !== 0));
+            return !!(b && RMS_DASHBOARD_API_BLOCKS[b]);
           });
         });
         var tabNeedsRosterData = computed(function () {
@@ -383,7 +460,7 @@
           return KIT.DATA_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
         });
         var chartTypePills = computed(function () {
-          return ["bar", "horizontal_bar", "line", "pie", "number"];
+          return ["bar", "horizontal_bar", "line", "pie", "number", "rms_block"];
         });
         var supportsSecondary = computed(function () {
           return ["bar", "horizontal_bar", "line"].indexOf(widgetForm.value.widget_type) >= 0;
@@ -544,13 +621,35 @@
           colorPickerOpen.value = false;
         }
 
+        function bringWidgetToFront(widgetId) {
+          if (widgetId == null) return;
+          var tab = activeTab.value;
+          if (!tab || !tab.widgets) return;
+          var idx = -1;
+          for (var i = 0; i < tab.widgets.length; i++) {
+            if (tab.widgets[i].id === widgetId) { idx = i; break; }
+          }
+          if (idx < 0) return;
+          var moved = tab.widgets.splice(idx, 1)[0];
+          tab.widgets.push(moved);
+          activeWidgetId.value = widgetId;
+        }
+
         function cardStyle(w) {
           var x = Math.max(0, Math.min(11, w.x || 0));
           var ww = Math.max(1, Math.min(12, w.w || 4));
-          return {
+          var style = {
             gridColumn: (x + 1) + " / span " + ww,
             gridRow: ((w.y || 0) + 1) + " / span " + Math.max(1, w.h || 3),
           };
+          if (editMode.value && w.id != null) {
+            if (dragWidgetId.value === w.id || resizeWidgetId.value === w.id) {
+              style.zIndex = 20;
+            } else if (activeWidgetId.value === w.id) {
+              style.zIndex = 10;
+            }
+          }
+          return style;
         }
 
         function suggestNextLayout(tab) {
@@ -629,12 +728,137 @@
           });
         }
 
+        var RMS_BLOCK_LAYOUT_PRESETS = {
+          filter: { w: 12, h: 2, title: "筛选" },
+          kpi_clients: { w: 4, h: 3, title: "有需求客户数" },
+          kpi_jobs: { w: 4, h: 3, title: "需求总数" },
+          kpi_hc: { w: 4, h: 3, title: "HC 总数" },
+          chart_pipeline: { w: 8, h: 6, title: "招聘管道（活动态）" },
+          filter_summary: { w: 4, h: 6, title: "当前筛选" },
+          chart_history_pass: { w: 12, h: 6, title: "阶段通过率" },
+          table_history: { w: 12, h: 5, title: "阶段明细" },
+          chart_recruiter: { w: 12, h: 6, title: "当月入职排名" },
+          table_recruiter: { w: 12, h: 6, title: "人效明细" },
+          table_client_job_stage: { w: 12, h: 7, title: "客户岗位阶段统计" },
+          chart_client_job_stage_grouped: { w: 12, h: 7, title: "岗位阶段（分组柱）" },
+          chart_client_job_stage_stacked: { w: 12, h: 7, title: "岗位阶段（堆叠柱）" },
+          chart_client_job_stage_funnel: { w: 12, h: 6, title: "岗位阶段（漏斗）" },
+        };
+
+        function jobStageChartRows(limit) {
+          var summary = data.value && data.value.client_job_stage_summary;
+          var rows = summary && summary.rows ? summary.rows : [];
+          return rows.slice(0, limit || 12);
+        }
+
+        function jobStageChartTotal() {
+          var summary = data.value && data.value.client_job_stage_summary;
+          return summary && summary.total ? summary.total : null;
+        }
+
+        function applyRmsBlockLayout(block) {
+          var preset = RMS_BLOCK_LAYOUT_PRESETS[block];
+          if (!preset || !widgetForm.value) return;
+          widgetForm.value.w = preset.w;
+          widgetForm.value.h = preset.h;
+          if (preset.title) widgetForm.value.title = preset.title;
+        }
+
+        function onRmsBlockChange() {
+          var block = widgetForm.value.config && widgetForm.value.config.block;
+          if (!block) return;
+          panelUserEdited.value = true;
+          applyRmsBlockLayout(block);
+          flushPersistWidget().then(function () {
+            if (widgetForm.value.id) scrollToWidget(widgetForm.value.id);
+          });
+        }
+
+        function scrollToWidget(widgetId) {
+          if (widgetId == null) return;
+          nextTick(function () {
+            var el = document.querySelector('.dash-card[data-widget-id="' + widgetId + '"]');
+            if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          });
+        }
+
+        function persistWidgetLayout(widget) {
+          if (!widget || widget.id == null) return Promise.resolve();
+          return api("PUT", "/api/rms/dashboard-widgets/" + widget.id, {
+            title: widget.title,
+            widget_type: widget.widget_type,
+            source_key: widget.source_key || "",
+            config: widget.config,
+            x: widget.x,
+            y: widget.y,
+            w: widget.w,
+            h: widget.h,
+          }).catch(function (e) {
+            error.value = e.message || String(e);
+          });
+        }
+
+        function onCardResizeMove(evt) {
+          if (!resizeState || evt.pointerId !== resizeState.pointerId) return;
+          var widget = findWidgetById(resizeState.widgetId);
+          if (!widget) return;
+          var m = gridMetrics(resizeState.grid);
+          var dx = evt.clientX - resizeState.startClientX;
+          var dy = evt.clientY - resizeState.startClientY;
+          var dw = Math.round(dx / (m.colW + m.gap));
+          var dh = Math.round(dy / (m.rowH + m.gap));
+          widget.w = Math.max(2, Math.min(12, resizeState.startW + dw));
+          widget.h = Math.max(2, resizeState.startH + dh);
+        }
+
+        function onCardResizeEnd(evt) {
+          if (!resizeState || evt.pointerId !== resizeState.pointerId) return;
+          document.removeEventListener("pointermove", onCardResizeMove);
+          document.removeEventListener("pointerup", onCardResizeEnd);
+          document.removeEventListener("pointercancel", onCardResizeEnd);
+          var widget = findWidgetById(resizeState.widgetId);
+          var wid = resizeState.widgetId;
+          resizeState = null;
+          resizeWidgetId.value = null;
+          if (!widget || wid == null) return;
+          persistWidgetLayout(widget).then(function () {
+            return refreshWidgetChart(wid, { animate: false });
+          });
+        }
+
+        function onCardResizePointerDown(item, evt) {
+          if (!editMode.value || !canWrite.value || item.isExtra) return;
+          if (evt.button !== 0) return;
+          var w = item.widget;
+          if (!w || w.id == null) return;
+          bringWidgetToFront(w.id);
+          var grid = evt.currentTarget.closest(".dash-grid");
+          if (!grid) return;
+          evt.preventDefault();
+          evt.stopPropagation();
+          resizeState = {
+            widgetId: w.id,
+            grid: grid,
+            pointerId: evt.pointerId,
+            startW: w.w || 6,
+            startH: w.h || 3,
+            startClientX: evt.clientX,
+            startClientY: evt.clientY,
+          };
+          resizeWidgetId.value = w.id;
+          document.addEventListener("pointermove", onCardResizeMove);
+          document.addEventListener("pointerup", onCardResizeEnd);
+          document.addEventListener("pointercancel", onCardResizeEnd);
+        }
+
         function onCardHeadPointerDown(item, evt) {
           if (!editMode.value || !canWrite.value || item.isExtra) return;
           if (evt.button !== 0) return;
           if (evt.target.closest(".card-actions")) return;
+          if (evt.target.closest(".card-resize-handle")) return;
           var w = item.widget;
           if (!w || w.id == null) return;
+          bringWidgetToFront(w.id);
           var grid = evt.currentTarget.closest(".dash-grid");
           if (!grid) return;
           evt.preventDefault();
@@ -761,6 +985,152 @@
             });
           });
         }
+        function groupedBarOptions() {
+          return {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: true,
+                position: "bottom",
+                labels: { boxWidth: 10, padding: 8, font: { size: 10 }, color: "#6b7280" },
+              },
+              datalabels: { display: false },
+              tooltip: whiteTooltip(function (c) {
+                return c.dataset.label + ": " + String(c.parsed.y);
+              }),
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                border: { display: false },
+                ticks: { color: "#8f949b", font: { size: 9 }, maxRotation: 45, minRotation: 0 },
+              },
+              y: {
+                beginAtZero: true,
+                grid: { color: "#f2f3f5" },
+                border: { display: false },
+                ticks: { color: "#8f949b", font: { size: 10 }, precision: 0 },
+              },
+            },
+          };
+        }
+
+        function stackedHorizontalOptions() {
+          return {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: "y",
+            plugins: {
+              legend: {
+                display: true,
+                position: "bottom",
+                labels: { boxWidth: 10, padding: 8, font: { size: 10 }, color: "#6b7280" },
+              },
+              datalabels: { display: false },
+              tooltip: whiteTooltip(function (c) {
+                return c.dataset.label + ": " + String(c.parsed.x);
+              }),
+            },
+            scales: {
+              x: {
+                stacked: true,
+                beginAtZero: true,
+                grid: { color: "#f2f3f5" },
+                border: { display: false },
+                ticks: { color: "#8f949b", font: { size: 10 }, precision: 0 },
+              },
+              y: {
+                stacked: true,
+                grid: { display: false },
+                border: { display: false },
+                ticks: { color: "#8f949b", font: { size: 10 } },
+              },
+            },
+          };
+        }
+
+        function renderClientJobStageGroupedChart(canvasId) {
+          if (!data.value) return;
+          safeRenderChart(canvasId, function () {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            destroyChartKey(canvasId);
+            var rows = jobStageChartRows(8);
+            if (!rows.length) return;
+            var labels = rows.map(function (r) { return truncateJobLabel(r.job_title, 8); });
+            chartInstances[canvasId] = new Chart(canvas, {
+              type: "bar",
+              data: {
+                labels: labels,
+                datasets: [
+                  { label: "推送", data: rows.map(function (r) { return r.pushed_resume_count || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.pushed, borderRadius: 4 },
+                  { label: "内筛通过", data: rows.map(function (r) { return r.internal_screen_passed || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.internal, borderRadius: 4 },
+                  { label: "客筛通过", data: rows.map(function (r) { return r.client_screen_passed || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.client, borderRadius: 4 },
+                  { label: "面试通过", data: rows.map(function (r) { return r.interview_passed || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.passed, borderRadius: 4 },
+                ],
+              },
+              options: groupedBarOptions(),
+            });
+          });
+        }
+
+        function renderClientJobStageStackedChart(canvasId) {
+          if (!data.value) return;
+          safeRenderChart(canvasId, function () {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            destroyChartKey(canvasId);
+            var rows = jobStageChartRows(8);
+            if (!rows.length) return;
+            var labels = rows.map(function (r) { return truncateJobLabel(r.job_title, 10); });
+            chartInstances[canvasId] = new Chart(canvas, {
+              type: "bar",
+              data: {
+                labels: labels,
+                datasets: [
+                  { label: "待客户筛选", data: rows.map(function (r) { return r.pending_client_screen || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.pendingClient },
+                  { label: "待面试", data: rows.map(function (r) { return r.pending_interview || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.pendingInterview },
+                  { label: "面试通过", data: rows.map(function (r) { return r.interview_passed || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.passed },
+                  { label: "放弃面试", data: rows.map(function (r) { return r.interview_abandoned || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.abandoned },
+                ],
+              },
+              options: stackedHorizontalOptions(),
+            });
+          });
+        }
+
+        function renderClientJobStageFunnelChart(canvasId) {
+          if (!data.value) return;
+          safeRenderChart(canvasId, function () {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            destroyChartKey(canvasId);
+            var total = jobStageChartTotal();
+            if (!total) return;
+            var stages = [
+              { label: "推送简历", value: total.pushed_resume_count || 0, color: JOB_STAGE_CHART_COLORS.pushed },
+              { label: "内筛通过", value: total.internal_screen_passed || 0, color: JOB_STAGE_CHART_COLORS.internal },
+              { label: "客筛通过", value: total.client_screen_passed || 0, color: JOB_STAGE_CHART_COLORS.client },
+              { label: "已面试", value: total.interviewed || 0, color: JOB_STAGE_CHART_COLORS.interviewed },
+              { label: "面试通过", value: total.interview_passed || 0, color: JOB_STAGE_CHART_COLORS.passed },
+            ];
+            chartInstances[canvasId] = new Chart(canvas, {
+              type: "bar",
+              data: {
+                labels: stages.map(function (s) { return s.label; }),
+                datasets: [{
+                  data: stages.map(function (s) { return s.value; }),
+                  backgroundColor: stages.map(function (s) { return s.color; }),
+                  borderRadius: 6,
+                  barPercentage: 0.65,
+                }],
+              },
+              options: horizontalBarOptions(""),
+            });
+          });
+        }
+
         function renderRecruiterChart(canvasId) {
           if (!data.value) return;
           safeRenderChart(canvasId, function () {
@@ -804,6 +1174,18 @@
           }
           if (block === "chart_recruiter") {
             renderRecruiterChart(rmsId);
+            return;
+          }
+          if (block === "chart_client_job_stage_grouped") {
+            renderClientJobStageGroupedChart(rmsId);
+            return;
+          }
+          if (block === "chart_client_job_stage_stacked") {
+            renderClientJobStageStackedChart(rmsId);
+            return;
+          }
+          if (block === "chart_client_job_stage_funnel") {
+            renderClientJobStageFunnelChart(rmsId);
             return;
           }
 
@@ -1183,7 +1565,12 @@
               var wid = widgetForm.value.id;
               if (!wid) return nextTick();
               return nextTick().then(function () {
+                scrollToWidget(wid);
                 return refreshWidgetChart(wid, { animate: !isNew });
+              }).then(function () {
+                if (isNew && widgetBlock(widgetForm.value)) {
+                  return loadDashboard();
+                }
               });
             })
             .catch(function (e) {
@@ -1236,10 +1623,13 @@
           } else {
             var next = suggestNextLayout(activeTab.value);
             widgetForm.value = blankWidget();
+            widgetForm.value.widget_type = "rms_block";
+            widgetForm.value.source_key = "";
+            widgetForm.value.config.block = "table_client_job_stage";
+            widgetForm.value.title = "客户岗位阶段统计";
             widgetForm.value.x = next.x;
             widgetForm.value.y = next.y;
-            widgetForm.value.w = next.w;
-            widgetForm.value.h = next.h;
+            applyRmsBlockLayout("table_client_job_stage");
             rosterScope.value = "all";
           }
           colorSearch.value = "";
@@ -1504,8 +1894,11 @@
           panelUserEdited.value = true;
           widgetForm.value.widget_type = t;
           if (!widgetForm.value.config) widgetForm.value.config = {};
-          if (t === "rms_block" && !widgetForm.value.config.block) {
-            widgetForm.value.config.block = "kpi_jobs";
+          if (t === "rms_block") {
+            if (!widgetForm.value.config.block) {
+              widgetForm.value.config.block = "table_client_job_stage";
+            }
+            applyRmsBlockLayout(widgetForm.value.config.block);
           }
           if (t === "roster_summary") {
             widgetForm.value.source_key = "roster_entries";
@@ -1604,7 +1997,8 @@
         watch(activeTab, function () {
           reloadActiveTabData();
         });
-        watch(editMode, function () {
+        watch(editMode, function (on) {
+          if (!on) activeWidgetId.value = null;
           destroyAllCharts();
           nextTick(function () { renderVisibleCharts({ animate: false }); });
         });
@@ -1694,7 +2088,11 @@
           editMode,
           canWrite,
           dragWidgetId,
+          resizeWidgetId,
+          activeWidgetId,
           onCardHeadPointerDown,
+          onCardResizePointerDown,
+          onRmsBlockChange,
           showDashboardModal,
           showTabModal,
           panelOpen,
@@ -1714,6 +2112,9 @@
           deliveryFieldLabel,
           recruiterFieldLabel,
           historicalStages,
+          clientJobStageRows,
+          clientJobStageTotal,
+          clientJobStagePeriodLabel,
           activeFilterSummary,
           tabNeedsDashboardData,
           chartCanvasId,

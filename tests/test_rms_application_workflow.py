@@ -260,6 +260,18 @@ def test_extract_draft_fields_name_not_merged_with_phone_label():
     assert draft.get("phone") == "18161749101"
 
 
+def test_extract_draft_fields_name_header_when_phone_later_in_resume():
+    text = (
+        "张宇志\n"
+        "个人简历\n"
+        "工作经历\n"
+        "手机：13800138881\n"
+    )
+    draft = _extract_draft_fields_from_text(text)
+    assert draft.get("name") == "张宇志"
+    assert draft.get("phone") == "13800138881"
+
+
 def test_extract_draft_fields_boss_style_header():
     text = (
         "邓明超\n"
@@ -380,6 +392,64 @@ def test_parse_draft_txt_extracts_phone_email_and_work_years(client_rbac, admin_
     assert draft.get("email_wechat") == "draft@example.com"
     assert draft.get("work_years") == "5年"
     assert body.get("parsed_text")
+    assert body.get("duplicate_detected") is False
+
+
+def test_parse_draft_duplicate_detected_when_candidate_exists(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    suffix = f"parse_dup_{uniq}"
+    login, _job_id, _cand_id, _client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    dup_name = f"Cand {suffix}"
+    dup_phone = "13700137000"
+    txt = f"姓名：{dup_name}\n手机 {dup_phone}\n"
+    r = client_rbac.post(
+        PARSE_DRAFT_URL,
+        cookies=login.cookies,
+        files={"file": ("resume.txt", txt.encode("utf-8"), "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    draft = body.get("draft_fields") or {}
+    assert draft.get("name") == dup_name
+    assert draft.get("phone") == dup_phone
+    assert body.get("duplicate_detected") is True
+
+
+def test_check_duplicate_route_detects_existing_phone(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    suffix = f"check_dup_{uniq}"
+    login, _job_id, _cand_id, _client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    r = client_rbac.post(
+        "/api/rms/candidates/check-duplicate",
+        cookies=login.cookies,
+        json={"name": "其他人", "phone": "13700137000"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json().get("duplicate_detected") is True
+
+
+def test_parse_draft_duplicate_detected_by_phone_only(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    suffix = f"parse_phone_dup_{uniq}"
+    login, _job_id, _cand_id, _client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    dup_phone = "13700137000"
+    txt = f"姓名：其他姓名\n手机 {dup_phone}\n"
+    r = client_rbac.post(
+        PARSE_DRAFT_URL,
+        cookies=login.cookies,
+        files={"file": ("resume.txt", txt.encode("utf-8"), "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json().get("duplicate_detected") is True
 
 
 def test_parse_draft_txt_contact_and_education(client_rbac, admin_auth, rms_engine, uniq):

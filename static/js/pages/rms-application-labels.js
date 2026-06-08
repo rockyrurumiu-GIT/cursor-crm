@@ -16,6 +16,7 @@
     internal_screen_failed: "内筛fail",
     pending_client_screen: "待客筛",
     client_screen_failed: "客筛fail",
+    client_screen_duplicate: "重复",
     scheduling_interview: "约面中",
     interview_scheduling_failed: "约面fail",
     pending_first_interview: "待一面",
@@ -27,7 +28,7 @@
     final_interview_failed: "终面fail",
     final_interview_abandoned: "终面弃面",
     pending_offer: "待offer",
-    offer_dropped: "drop offer",
+    offer_dropped: "弃offer",
     onboarding: "在途",
     onboarding_lost: "在途流失",
     hired: "已入职",
@@ -44,7 +45,7 @@
 
   var ALLOWED_PROGRESS_TRANSITIONS = {
     pending_internal_screen: ["internal_screen_failed", "pending_client_screen"],
-    pending_client_screen: ["client_screen_failed", "scheduling_interview"],
+    pending_client_screen: ["client_screen_failed", "scheduling_interview", "client_screen_duplicate"],
     scheduling_interview: ["interview_scheduling_failed", "pending_first_interview"],
     pending_first_interview: ["first_interview_failed", "first_interview_passed"],
     first_interview_passed: ["second_interview_failed", "second_interview_passed", "second_interview_abandoned"],
@@ -65,6 +66,7 @@
     "internal_screen_failed",
     "pending_client_screen",
     "client_screen_failed",
+    "client_screen_duplicate",
     "scheduling_interview",
     "interview_scheduling_failed",
     "pending_first_interview",
@@ -85,6 +87,7 @@
   var PROGRESS_TERMINAL = {
     internal_screen_failed: 1,
     client_screen_failed: 1,
+    client_screen_duplicate: 1,
     interview_scheduling_failed: 1,
     first_interview_failed: 1,
     second_interview_failed: 1,
@@ -99,6 +102,7 @@
   var PROTECTION_TERMINAL = {
     internal_screen_failed: 1,
     client_screen_failed: 1,
+    client_screen_duplicate: 1,
     second_interview_abandoned: 1,
     final_interview_abandoned: 1,
     offer_dropped: 1,
@@ -158,11 +162,21 @@
     return ALLOWED_PROGRESS_TRANSITIONS[normalizeProgressStatus(status)] || [];
   }
 
+  /** Pipeline「下一步操作」第三列：统一黑色文案按钮 */
+  var PIPELINE_NEXT_OP_COL3 = {
+    client_screen_duplicate: 1,
+    second_interview_abandoned: 1,
+    final_interview_abandoned: 1,
+  };
+
   function progressActionBtnClass(targetStatus) {
     var s = targetStatus == null ? "" : String(targetStatus).trim();
     if (!s) return "crm-op-btn-detail";
     if (/_failed$/.test(s) || s === "offer_dropped" || s === "onboarding_lost") {
       return "crm-op-btn-delete";
+    }
+    if (PIPELINE_NEXT_OP_COL3[s]) {
+      return "crm-op-btn-detail";
     }
     if (/_abandoned$/.test(s)) {
       return "crm-op-btn-handoff";

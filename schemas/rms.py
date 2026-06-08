@@ -15,6 +15,7 @@ APPLICATION_PROGRESS_LABELS: dict[str, str] = {
     "internal_screen_failed": "内筛fail",
     "pending_client_screen": "待客筛",
     "client_screen_failed": "客筛fail",
+    "client_screen_duplicate": "重复",
     "scheduling_interview": "约面中",
     "interview_scheduling_failed": "约面fail",
     "pending_first_interview": "待一面",
@@ -26,7 +27,7 @@ APPLICATION_PROGRESS_LABELS: dict[str, str] = {
     "final_interview_failed": "终面fail",
     "final_interview_abandoned": "终面弃面",
     "pending_offer": "待offer",
-    "offer_dropped": "drop offer",
+    "offer_dropped": "弃offer",
     "onboarding": "在途",
     "onboarding_lost": "在途流失",
     "hired": "已入职",
@@ -119,6 +120,7 @@ LEGACY_STATUS_NORMALIZE: dict[str, str] = {
 APPLICATION_PROGRESS_TERMINAL = frozenset({
     "internal_screen_failed",
     "client_screen_failed",
+    "client_screen_duplicate",
     "interview_scheduling_failed",
     "first_interview_failed",
     "second_interview_failed",
@@ -166,6 +168,7 @@ APPLICATION_PROGRESS_STATUSES = frozenset({
     "internal_screen_failed",
     "pending_client_screen",
     "client_screen_failed",
+    "client_screen_duplicate",
     "scheduling_interview",
     "interview_scheduling_failed",
     "pending_first_interview",
@@ -189,6 +192,7 @@ APPLICATION_PROGRESS_ORDER: Tuple[str, ...] = (
     "internal_screen_failed",
     "pending_client_screen",
     "client_screen_failed",
+    "client_screen_duplicate",
     "scheduling_interview",
     "interview_scheduling_failed",
     "pending_first_interview",
@@ -208,7 +212,11 @@ APPLICATION_PROGRESS_ORDER: Tuple[str, ...] = (
 
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
     "pending_internal_screen": {"internal_screen_failed", "pending_client_screen"},
-    "pending_client_screen": {"client_screen_failed", "scheduling_interview"},
+    "pending_client_screen": {
+        "client_screen_failed",
+        "client_screen_duplicate",
+        "scheduling_interview",
+    },
     "scheduling_interview": {"interview_scheduling_failed", "pending_first_interview"},
     "pending_first_interview": {"first_interview_failed", "first_interview_passed"},
     "first_interview_passed": {

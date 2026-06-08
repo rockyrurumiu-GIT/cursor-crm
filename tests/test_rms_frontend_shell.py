@@ -125,6 +125,8 @@ def test_rms_frontend_js_assets_exist():
     assert "jobFormOptions.users" not in rms_src
     assert '"interview_scheduling"' not in labels_src
     assert "scheduling_interview" in labels_src
+    assert "client_screen_duplicate" in labels_src
+    assert '"重复"' in labels_src or "重复" in labels_src
 
 
 def test_create_app_display_helpers_behavior():
@@ -328,8 +330,37 @@ if (L.progressActionBtnClass("second_interview_passed") !== "crm-op-btn-edit") {
   console.error("pass action should use edit style");
   process.exit(1);
 }}
-if (L.progressActionBtnClass("second_interview_abandoned") !== "crm-op-btn-handoff") {{
-  console.error("abandon action should use handoff style");
+if (L.progressActionBtnClass("second_interview_abandoned") !== "crm-op-btn-detail") {{
+  console.error("third-column abandon action should use detail (black) style");
+  process.exit(1);
+}}
+if (L.progressActionBtnClass("final_interview_abandoned") !== "crm-op-btn-detail") {{
+  console.error("final abandon third column should use detail (black) style");
+  process.exit(1);
+}}
+const clientNext = L.progressTransitionsFor("pending_client_screen");
+if (clientNext.indexOf("client_screen_duplicate") < 0) {{
+  console.error("pending_client_screen should allow duplicate transition");
+  process.exit(1);
+}}
+if (L.progressLabel("client_screen_duplicate") !== "重复") {{
+  console.error("client_screen_duplicate label");
+  process.exit(1);
+}}
+if (L.progressActionBtnClass("client_screen_duplicate") !== "crm-op-btn-detail") {{
+  console.error("duplicate action should use detail (black) style");
+  process.exit(1);
+}}
+if (clientNext[clientNext.length - 1] !== "client_screen_duplicate") {{
+  console.error("duplicate transition should be last after scheduling_interview");
+  process.exit(1);
+}}
+if (L.deriveProtectionStatus("client_screen_duplicate") !== "已终止") {{
+  console.error("client_screen_duplicate protection");
+  process.exit(1);
+}}
+if (!L.isApplicationTerminal("client_screen_duplicate")) {{
+  console.error("client_screen_duplicate should be terminal");
   process.exit(1);
 }}
 """
@@ -415,6 +446,10 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
 
     rms_js = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
     assert "人选已存在系统中" in rms_js
+    assert "系统中已存在该人选" in rms_js
+    assert "duplicate_detected" in rms_js
+    assert "/api/rms/candidates/check-duplicate" in rms_js
+    assert "10000" in rms_js
     assert "showCandidateDuplicateDialog" in rms_js
     assert 'window.confirm("人选已存在系统中")' not in rms_js
 
@@ -514,6 +549,17 @@ def test_rms_dashboard_twenty_shell():
         "+ 组件",
         "card-actions",
         "icon-btn",
+        "table_client_job_stage",
+        ".rms-job-stage-table",
+        "offer在谈",
+        "弃offer",
+        "在途数",
+        "在途流失",
+        "入职数",
+        "card-resize-handle",
+        "chart_client_job_stage_grouped",
+        "chart_client_job_stage_stacked",
+        "chart_client_job_stage_funnel",
     ):
         assert required in html, f"missing {required!r} in rms_dashboard.html"
 
@@ -548,6 +594,17 @@ def test_rms_dashboard_twenty_shell():
         "primary_axis_order",
         "grouped_series",
         "normalizeWidgetConfig",
+        "job_ids",
+        "clientJobStageRows",
+        "rms_block",
+        "onCardResizePointerDown",
+        "resizeWidgetId",
+        "onRmsBlockChange",
+        "renderClientJobStageGroupedChart",
+        "renderClientJobStageStackedChart",
+        "renderClientJobStageFunnelChart",
+        "bringWidgetToFront",
+        "activeWidgetId",
     ):
         assert js_required in js, f"missing {js_required!r} in rms-dashboard.js"
 
