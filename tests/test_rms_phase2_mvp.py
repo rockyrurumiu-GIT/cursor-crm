@@ -685,6 +685,7 @@ def test_candidate_hidden_when_not_creator_or_visible_application(client_rbac, a
 
 
 def test_candidate_contact_masked_without_rms_contacts_view(client_rbac, admin_auth, rms_engine, uniq):
+    _revoke_role_permissions(rms_engine, ROLE_DELIVERY, ("rms.contacts.view",))
     suffix = uniq
     login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"mask_{suffix}")
     created = client_rbac.post(
@@ -786,28 +787,29 @@ def test_candidate_create_rejects_non_open_job(client_rbac, admin_auth, rms_engi
 
 def test_candidate_contact_visible_with_rms_contacts_view(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
-    import main as crm_main
-
-    _grant_role_permissions(crm_main.engine, ROLE_DELIVERY, ("rms.contacts.view",))
-    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"cont_{suffix}")
-    phone = "13800138088"
-    created = client_rbac.post(
-        "/api/rms/candidates",
-        cookies=login.cookies,
-        json=_candidate_json(
-            job_id,
-            name="Clear",
-            phone=phone,
-            email="clear@example.com",
-            wechat="wxclear",
-            email_wechat="clear@example.com",
-        ),
-    )
-    assert created.status_code == 200
-    body = created.json()
-    assert body["phone"] == phone
-    assert body["email"] == "clear@example.com"
-    assert body["wechat"] == "wxclear"
+    _grant_role_permissions(rms_engine, ROLE_DELIVERY, ("rms.contacts.view",))
+    try:
+        login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"cont_{suffix}")
+        phone = "13800138088"
+        created = client_rbac.post(
+            "/api/rms/candidates",
+            cookies=login.cookies,
+            json=_candidate_json(
+                job_id,
+                name="Clear",
+                phone=phone,
+                email="clear@example.com",
+                wechat="wxclear",
+                email_wechat="clear@example.com",
+            ),
+        )
+        assert created.status_code == 200
+        body = created.json()
+        assert body["phone"] == phone
+        assert body["email"] == "clear@example.com"
+        assert body["wechat"] == "wxclear"
+    finally:
+        _revoke_role_permissions(rms_engine, ROLE_DELIVERY, ("rms.contacts.view",))
 
 
 def _trial_job_and_candidate(client, engine, admin_auth, suffix: str):

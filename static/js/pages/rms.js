@@ -402,6 +402,30 @@
       const applicationDetailFailNote = ref("");
       const applicationDetailLoading = ref(false);
 
+      const candidateDetailOpen = ref(false);
+      const candidateDetailRow = ref(null);
+      const candidateDetailLoading = ref(false);
+      const candidateDetailError = ref("");
+
+      const candidateParseSummaryFields = [
+        { key: "name", label: "姓名" },
+        { key: "phone", label: "手机号" },
+        { key: "email_wechat", label: "邮箱/微信" },
+        { key: "email", label: "邮箱" },
+        { key: "wechat", label: "微信" },
+        { key: "age", label: "年龄" },
+        { key: "work_years", label: "工作年限" },
+        { key: "city", label: "城市" },
+        { key: "current_company", label: "当前公司" },
+        { key: "current_title", label: "当前职位" },
+        { key: "gender", label: "性别" },
+        { key: "marital_status", label: "婚姻状况" },
+        { key: "source", label: "来源" },
+        { key: "school", label: "学校" },
+        { key: "major", label: "专业" },
+        { key: "education_level", label: "学历" },
+      ];
+
       const progressOptions = (Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
         return { value: s, label: Labels.progressLabel ? Labels.progressLabel(s) : s };
       });
@@ -1232,6 +1256,46 @@
         applicationDetailModal.value = null;
         applicationDetailFailNote.value = "";
         applicationDetailLoading.value = false;
+      }
+
+      function candidateParseSummaryEmpty(row) {
+        const summary = row && row.latest_resume_parse_summary;
+        return !summary || !Object.keys(summary).length;
+      }
+
+      function candidateParseSummaryValue(row, key) {
+        const summary = row && row.latest_resume_parse_summary;
+        if (!summary) return "—";
+        const val = String(summary[key] == null ? "" : summary[key]).trim();
+        return val || "—";
+      }
+
+      async function openCandidateDetail(c) {
+        if (!c || c.id == null) return;
+        candidateDetailOpen.value = true;
+        candidateDetailRow.value = null;
+        candidateDetailLoading.value = true;
+        candidateDetailError.value = "";
+        const r = await rmsRequest("GET", "/api/rms/candidates/" + c.id);
+        candidateDetailLoading.value = false;
+        if (!r.ok) {
+          candidateDetailError.value = r.message || ("请求失败（" + r.status + "）");
+          return;
+        }
+        candidateDetailRow.value = r.data;
+        if (window.crmSyncHeaderHeight) {
+          requestAnimationFrame(function () { window.crmSyncHeaderHeight(); });
+        }
+      }
+
+      function closeCandidateDetail() {
+        candidateDetailOpen.value = false;
+        candidateDetailRow.value = null;
+        candidateDetailLoading.value = false;
+        candidateDetailError.value = "";
+        if (window.crmSyncHeaderHeight) {
+          requestAnimationFrame(function () { window.crmSyncHeaderHeight(); });
+        }
       }
 
       async function openStatusHistoryModal(app) {
@@ -2156,6 +2220,15 @@
         applicationDetailLoading,
         openApplicationDetailModal,
         closeApplicationDetailModal,
+        candidateDetailOpen,
+        candidateDetailRow,
+        candidateDetailLoading,
+        candidateDetailError,
+        candidateParseSummaryFields,
+        candidateParseSummaryEmpty,
+        candidateParseSummaryValue,
+        openCandidateDetail,
+        closeCandidateDetail,
         openStatusHistoryModal,
         closeStatusHistoryModal,
         reportForm,

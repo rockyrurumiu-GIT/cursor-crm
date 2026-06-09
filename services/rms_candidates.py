@@ -1,6 +1,7 @@
 """RMS candidates business logic (Phase 2)."""
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, Dict, List, Optional, Type
 
@@ -70,6 +71,54 @@ def _mask_email_wechat(value: str) -> str:
     if "@" in s:
         return _mask_email(s)
     return _mask_wechat(s)
+
+
+_RESUME_PARSE_SUMMARY_KEYS = (
+    "name",
+    "age",
+    "work_years",
+    "school",
+    "major",
+    "education_level",
+    "city",
+    "current_company",
+    "current_title",
+    "gender",
+    "marital_status",
+    "source",
+    "phone",
+    "email",
+    "wechat",
+    "email_wechat",
+)
+
+
+def _latest_resume_parse_summary(resume_row: Any, *, can_view_contacts: bool) -> Dict[str, str]:
+    if not resume_row:
+        return {}
+    try:
+        raw = json.loads(resume_row.parsed_json or "{}")
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    summary = {
+        k: str(raw.get(k) or "").strip()
+        for k in _RESUME_PARSE_SUMMARY_KEYS
+        if str(raw.get(k) or "").strip()
+    }
+    if not summary:
+        return {}
+    if not can_view_contacts:
+        if "phone" in summary:
+            summary["phone"] = _mask_phone(summary["phone"])
+        if "email" in summary:
+            summary["email"] = _mask_email(summary["email"])
+        if "wechat" in summary:
+            summary["wechat"] = _mask_wechat(summary["wechat"])
+        if "email_wechat" in summary:
+            summary["email_wechat"] = _mask_email_wechat(summary["email_wechat"])
+    return summary
 
 
 def _sync_email_wechat_fields(data: Dict[str, Any]) -> None:
@@ -405,9 +454,11 @@ def _rows_to_dicts(
     RmsJob: Optional[Type[Any]] = None,
     Client: Optional[Type[Any]] = None,
     RmsApplication: Optional[Type[Any]] = None,
+    resume_map: Optional[Dict[int, Any]] = None,
 ) -> List[Dict[str, Any]]:
     ids = [r.id for r in rows]
-    resume_map = _latest_resumes_by_candidate(db, RmsResume, ids) if RmsResume else {}
+    if resume_map is None:
+        resume_map = _latest_resumes_by_candidate(db, RmsResume, ids) if RmsResume else {}
     recommended_map = (
         _recommended_at_by_candidate(db, RmsApplication, rows) if RmsApplication else {}
     )
@@ -482,6 +533,7 @@ def get_candidate(
     ).first()
     if not row:
         raise HTTPException(status_code=404, detail="候选人不存在")
+    resume_map = _latest_resumes_by_candidate(db, RmsResume, [row.id]) if RmsResume else {}
     items = _rows_to_dicts(
         db,
         ctx,
@@ -490,8 +542,15 @@ def get_candidate(
         RmsJob=RmsJob,
         Client=Client,
         RmsApplication=RmsApplication,
+        resume_map=resume_map,
     )
-    return items[0]
+    result = items[0]
+    can_view_contacts = ctx.is_super or "rms.contacts.view" in ctx.permissions
+    result["latest_resume_parse_summary"] = _latest_resume_parse_summary(
+        resume_map.get(row.id),
+        can_view_contacts=can_view_contacts,
+    )
+    return result
 
 
 def _apply_candidate_fields(row: Any, data: Dict[str, Any]) -> None:

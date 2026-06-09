@@ -115,6 +115,10 @@ def test_rms_frontend_js_assets_exist():
     assert "suppressCandidateSearchWatch" in rms_src
     assert "candidateKeywordTimer" in rms_src
     assert "/api/rms/candidates?q=" in rms_src
+    assert '"/api/rms/candidates/"' in rms_src or '"/api/rms/candidates/" + c.id' in rms_src
+    assert "openCandidateDetail" in rms_src
+    assert "closeCandidateDetail" in rms_src
+    assert "latest_resume_parse_summary" in rms_src
     assert "encodeURIComponent(keyword)" in rms_src
     assert "await loadCandidates()" in rms_src
     filtered_candidates_start = rms_src.index("const filteredCandidates = computed")
@@ -122,6 +126,10 @@ def test_rms_frontend_js_assets_exist():
     assert "indexOf(name)" not in filtered_candidates_slice
     rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
     assert 'data-rms-region="candidates"' in rms_html
+    assert 'data-rms-region="candidate-detail"' in rms_html
+    assert "简历解析摘要" in rms_html
+    assert "暂无简历解析结果" in rms_html
+    assert "openCandidateDetail" in rms_html
     assert "candidateFilter.name" in rms_html
     assert "关键词" in rms_html
     assert "姓名/学校/专业/公司/简历关键词" in rms_html
@@ -444,12 +452,17 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "resumeViewUrl" in html
     assert "resumeCanView" in html
     assert ">年限</th>" in html
+    cand_region = _extract_rms_region(html, "candidates")
+    assert cand_region, "candidates region not found"
     cand_table_start = html.index('data-table-id="rms-candidates"')
     cand_slice = html[cand_table_start : cand_table_start + 3000]
     assert cand_slice.index(">来源</th>") < cand_slice.index(">推荐时间</th>")
     assert cand_slice.index(">推荐时间</th>") < cand_slice.index(">简历</th>")
+    assert ">详情</" in cand_region or "openCandidateDetail" in cand_region
+    assert ">修改</button>" in cand_region
     assert "formatRmsDate(c.recommended_at)" in html
     assert "crm-sticky-right-op" in html
+    assert "crm-right-drawer" in html
     assert "maritalOptions" in html or "未婚" in html
     assert "rms-jobs-scroll-fill" in html
     assert "crm-table" in html

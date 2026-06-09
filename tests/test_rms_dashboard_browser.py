@@ -95,9 +95,11 @@ def test_rms_dashboard_browser_smoke(rms_dashboard_live_url):
             _login_admin(page, rms_dashboard_live_url)
 
             page.locator("#rms-dashboard-app.dash-root").wait_for(state="visible", timeout=15000)
-            page.get_by_role("button", name="招聘Dashboard").wait_for(state="visible", timeout=10000)
-            page.get_by_role("button", name="总览").wait_for(state="visible", timeout=10000)
-            page.get_by_text("需求总数", exact=True).wait_for(state="visible", timeout=15000)
+            page.get_by_role("button", name="招聘总览").wait_for(state="visible", timeout=15000)
+            page.locator('nav[aria-label="标签页"]').get_by_role(
+                "button", name="总览", exact=True
+            ).wait_for(state="visible", timeout=15000)
+            page.get_by_text("需求总数", exact=True).first.wait_for(state="visible", timeout=15000)
 
             html = page.locator("#rms-dashboard-app").inner_html() or ""
             assert "crm-table" not in html
