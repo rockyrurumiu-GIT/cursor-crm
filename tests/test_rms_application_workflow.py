@@ -11,6 +11,7 @@ from starlette.testclient import TestClient
 
 from auth.permissions import ROLE_DELIVERY
 from services.rms_applications import (
+    PARSE_DRAFT_TEXT_MAX,
     _build_extract_warning,
     _clean_resume_text_for_parse,
     _extract_draft_fields_from_text,
@@ -95,6 +96,25 @@ def _delivery_login(client, admin_auth, uniq_suffix: str):
     login = _login(client, delivery_user)
     assert login.status_code == 200
     return login
+
+
+def _fetch_resume_parse(rms_engine, resume_id: int) -> tuple[str, dict]:
+    with rms_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT parsed_text, parsed_json FROM rms_resumes WHERE id = :id"),
+            {"id": resume_id},
+        ).one()
+    return row[0] or "", json.loads(row[1] or "{}")
+
+
+def _long_resume_text_for_truncation_test() -> str:
+    header = (
+        "姓名：长简历测试\n"
+        "手机 13800138888\n"
+        "email: long@test.com\n"
+    )
+    filler = "工作经历补充说明段落内容。" * 250
+    return header + filler
 
 
 def _make_text_pdf(text: str) -> bytes:
@@ -402,9 +422,8 @@ def test_parse_draft_duplicate_detected_when_candidate_exists(
     login, _job_id, _cand_id, _client_id = _trial_job_and_candidate(
         client_rbac, rms_engine, admin_auth, suffix
     )
-    dup_name = f"Cand {suffix}"
     dup_phone = "13700137000"
-    txt = f"姓名：{dup_name}\n手机 {dup_phone}\n"
+    txt = f"姓名：王磊\n手机 {dup_phone}\n"
     r = client_rbac.post(
         PARSE_DRAFT_URL,
         cookies=login.cookies,
@@ -413,7 +432,7 @@ def test_parse_draft_duplicate_detected_when_candidate_exists(
     assert r.status_code == 200, r.text
     body = r.json()
     draft = body.get("draft_fields") or {}
-    assert draft.get("name") == dup_name
+    assert draft.get("name") == "王磊"
     assert draft.get("phone") == dup_phone
     assert body.get("duplicate_detected") is True
 
@@ -647,6 +666,149 @@ def test_submit_candidate_report_creates_candidate_and_application(
         item for item in listed.json() if item["id"] == body["candidate"]["id"]
     )
     assert cand_row["recommended_at"] == body["application"]["recommended_at"]
+
+
+def test_submit_candidate_report_persists_txt_parse(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, job_id, _cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"report_txt_parse_{uniq}"
+    )
+    txt = _resume_with_contact_and_education()
+    phone = _unique_phone()
+    report = _full_candidate_report(
+        job_id,
+        client_id,
+        phone=phone,
+        email_wechat=f"{phone}@163.com",
+    )
+    r = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+        files={"file": ("resume.txt", txt.encode("utf-8"), "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    resume_id = r.json()["application"]["resume_id"]
+    parsed_text, parsed_json = _fetch_resume_parse(rms_engine, resume_id)
+    assert parsed_text
+    _assert_contact_and_education_draft(parsed_json)
+
+
+def test_submit_candidate_report_persists_pdf_parse(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, job_id, _cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"report_pdf_parse_{uniq}"
+    )
+    pdf_bytes = _make_text_pdf(_resume_with_contact_and_education())
+    phone = _unique_phone()
+    report = _full_candidate_report(
+        job_id,
+        client_id,
+        phone=phone,
+        email_wechat=f"{phone}@163.com",
+    )
+    r = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+        files={"file": ("resume.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert r.status_code == 200, r.text
+    resume_id = r.json()["application"]["resume_id"]
+    parsed_text, parsed_json = _fetch_resume_parse(rms_engine, resume_id)
+    assert parsed_text
+    _assert_contact_and_education_draft(parsed_json)
+
+
+def test_upload_candidate_resume_persists_parse(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, _job_id, cand_id, _client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"upload_parse_{uniq}"
+    )
+    txt = _resume_with_contact_and_education()
+    r = client_rbac.post(
+        f"/api/rms/candidates/{cand_id}/resume",
+        cookies=login.cookies,
+        files={"file": ("resume.txt", txt.encode("utf-8"), "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    resume_id = r.json()["id"]
+    parsed_text, parsed_json = _fetch_resume_parse(rms_engine, resume_id)
+    assert parsed_text
+    _assert_contact_and_education_draft(parsed_json)
+
+
+def test_submit_candidate_report_word_resume_empty_parse_ok(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, job_id, _cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"report_word_{uniq}"
+    )
+    phone = _unique_phone()
+    report = _full_candidate_report(
+        job_id,
+        client_id,
+        phone=phone,
+        email_wechat=f"{phone}@163.com",
+    )
+    r = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+        files={
+            "file": (
+                "resume.docx",
+                b"PK fake docx",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+    assert r.status_code == 200, r.text
+    resume_id = r.json()["application"]["resume_id"]
+    parsed_text, parsed_json = _fetch_resume_parse(rms_engine, resume_id)
+    assert parsed_text == ""
+    assert parsed_json == {}
+
+
+def test_persisted_parsed_text_not_truncated_at_2000(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, job_id, _cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"report_long_{uniq}"
+    )
+    txt = _long_resume_text_for_truncation_test()
+    txt_bytes = txt.encode("utf-8")
+
+    draft_r = client_rbac.post(
+        PARSE_DRAFT_URL,
+        cookies=login.cookies,
+        files={"file": ("resume.txt", txt_bytes, "text/plain")},
+    )
+    assert draft_r.status_code == 200, draft_r.text
+    draft_body = draft_r.json()
+    assert len(draft_body.get("parsed_text") or "") <= PARSE_DRAFT_TEXT_MAX
+    assert draft_body.get("parsed_text_length", 0) > PARSE_DRAFT_TEXT_MAX
+
+    phone = _unique_phone()
+    report = _full_candidate_report(
+        job_id,
+        client_id,
+        phone=phone,
+        email_wechat=f"{phone}@163.com",
+    )
+    submit_r = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+        files={"file": ("resume.txt", txt_bytes, "text/plain")},
+    )
+    assert submit_r.status_code == 200, submit_r.text
+    resume_id = submit_r.json()["application"]["resume_id"]
+    parsed_text, _parsed_json = _fetch_resume_parse(rms_engine, resume_id)
+    assert len(parsed_text) > PARSE_DRAFT_TEXT_MAX
 
 
 def test_candidate_report_duplicate_blocks_candidate_and_application(

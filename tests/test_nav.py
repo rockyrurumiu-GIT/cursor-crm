@@ -22,4 +22,5 @@ def test_rms_nav_entry():
     nav = _nav_html()
     assert 'href="/rms"' in nav
     assert 'data-crm-nav-perm="rms.jobs.read"' in nav
-    assert ">招聘</a>" in nav or ">招聘<" in nav
+    assert 'class="nav-trigger cursor-default">招聘' in nav
+    assert "需求&amp;人才库" in nav

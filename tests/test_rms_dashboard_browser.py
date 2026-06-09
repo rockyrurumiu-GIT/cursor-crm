@@ -72,8 +72,22 @@ def _login_admin(page, base_url: str) -> None:
     page.locator("#main-shell:not(.hidden)").wait_for(state="attached", timeout=15000)
 
 
+def _chromium_launchable() -> bool:
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+        return True
+    except Exception as exc:
+        if "Executable doesn't exist" in str(exc):
+            return False
+        raise
+
+
 def test_rms_dashboard_browser_smoke(rms_dashboard_live_url):
     """Real browser: Vue mount + dashboard API; must not be a blank page."""
+    if not _chromium_launchable():
+        pytest.skip("playwright chromium not installed; run: playwright install")
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:

@@ -1,6 +1,7 @@
 """RMS applications business logic (Phase 2)."""
 from __future__ import annotations
 
+import json
 import os
 import re
 from datetime import date
@@ -1373,14 +1374,17 @@ def _extract_draft_fields_from_text(text: str, *, file_name: str = "") -> Dict[s
     return fields
 
 
-def parse_resume_draft(file_name: str, content: bytes) -> Dict[str, Any]:
-    if len(content) > MAX_RESUME_BYTES:
-        raise HTTPException(status_code=400, detail="简历文件不能超过 10MB")
-
+def _parse_resume_content(file_name: str, content: bytes) -> Dict[str, Any]:
     ext = os.path.splitext(file_name or "")[1].lower()
     raw_text, word_msg = _extract_resume_text(file_name, content)
     if word_msg:
-        return _empty_parse_draft_response(word_msg)
+        return {
+            "draft_fields": {},
+            "cleaned_text": "",
+            "raw_text": "",
+            "extract_warning": "",
+            "message": word_msg,
+        }
 
     cleaned_text = _clean_resume_text_for_parse(raw_text)
     draft_fields = _extract_draft_fields_from_text(cleaned_text, file_name=file_name)
@@ -1392,10 +1396,43 @@ def parse_resume_draft(file_name: str, content: bytes) -> Dict[str, Any]:
     )
     return {
         "draft_fields": draft_fields,
+        "cleaned_text": cleaned_text,
+        "raw_text": raw_text,
+        "extract_warning": extract_warning,
+        "message": "",
+    }
+
+
+def parse_resume_file_for_storage(file_name: str, content: bytes) -> Tuple[str, str]:
+    """Return (parsed_text, parsed_json_str) for rms_resumes persistence."""
+    try:
+        parsed = _parse_resume_content(file_name, content)
+        cleaned_text = parsed.get("cleaned_text") or ""
+        draft_fields = parsed.get("draft_fields") or {}
+        parsed_json = json.dumps(draft_fields, ensure_ascii=False)
+        return cleaned_text, parsed_json
+    except HTTPException:
+        raise
+    except Exception:
+        return "", "{}"
+
+
+def parse_resume_draft(file_name: str, content: bytes) -> Dict[str, Any]:
+    if len(content) > MAX_RESUME_BYTES:
+        raise HTTPException(status_code=400, detail="简历文件不能超过 10MB")
+
+    parsed = _parse_resume_content(file_name, content)
+    if parsed.get("message"):
+        return _empty_parse_draft_response(parsed["message"])
+
+    cleaned_text = parsed["cleaned_text"]
+    raw_text = parsed["raw_text"]
+    return {
+        "draft_fields": parsed["draft_fields"],
         "parsed_text": cleaned_text[:PARSE_DRAFT_TEXT_MAX] if cleaned_text else "",
         "parsed_text_raw": raw_text[:PARSE_DRAFT_TEXT_MAX] if raw_text else "",
         "parsed_text_length": len(cleaned_text),
         "parsed_text_raw_length": len(raw_text),
-        "extract_warning": extract_warning,
+        "extract_warning": parsed["extract_warning"],
         "message": "",
     }

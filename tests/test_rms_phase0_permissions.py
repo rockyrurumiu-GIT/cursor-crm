@@ -59,6 +59,35 @@ def _login(client, username: str, password: str):
     return client.post("/api/auth/login", json={"username": username, "password": password})
 
 
+def _revoke_role_permissions(engine, role_code: str, perm_codes: tuple[str, ...]) -> None:
+    with engine.begin() as conn:
+        rid = conn.execute(
+            text("SELECT id FROM sys_role WHERE code = :c"),
+            {"c": role_code},
+        ).scalar()
+        assert rid is not None
+        for code in perm_codes:
+            pid = conn.execute(
+                text("SELECT id FROM sys_permission WHERE code = :c"),
+                {"c": code},
+            ).scalar()
+            if pid:
+                conn.execute(
+                    text(
+                        "DELETE FROM sys_role_permission "
+                        "WHERE role_id = :rid AND permission_id = :pid"
+                    ),
+                    {"rid": rid, "pid": pid},
+                )
+
+
+@pytest.fixture
+def rms_engine(client_rbac):
+    import main as crm_main
+
+    return crm_main.engine
+
+
 def _create_user(client, admin_auth, username: str, role_codes: list[str], password: str = "pass1234"):
     user, pwd = admin_auth
     headers = {**auth_header(user, pwd), "Content-Type": "application/json"}
@@ -222,7 +251,13 @@ def test_seed_does_not_overwrite_existing_scope(client_rbac, admin_auth):
     assert row[0] == SCOPE_DEPT
 
 
-def test_get_rms_page_forbidden_without_perm(client_rbac, admin_auth):
+def test_get_rms_page_forbidden_without_perm(client_rbac, admin_auth, rms_engine):
+    # Product default: SALES has no rms.jobs.read. Earlier RMS tests may grant it on the shared role row.
+    _revoke_role_permissions(
+        rms_engine,
+        ROLE_SALES,
+        ("rms.jobs.read", "rms.jobs.write"),
+    )
     suffix = os.getpid()
     sales_user = f"rms_sales_{suffix}"
     _create_user(client_rbac, admin_auth, sales_user, [ROLE_SALES])

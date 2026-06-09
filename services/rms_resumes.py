@@ -1,4 +1,4 @@
-"""RMS resume file storage (upload metadata; parsing later)."""
+"""RMS resume file storage and parse-result persistence."""
 from __future__ import annotations
 
 import os
@@ -61,6 +61,10 @@ async def upload_candidate_resume(
     if len(content) > MAX_RESUME_BYTES:
         raise HTTPException(status_code=400, detail="简历文件不能超过 10MB")
 
+    from services.rms_applications import parse_resume_file_for_storage
+
+    parsed_text, parsed_json = parse_resume_file_for_storage(raw_name, content)
+
     safe = sec.safe_visit_attachment_name(raw_name)
     if not os.path.splitext(safe)[1]:
         safe = safe + ext
@@ -79,8 +83,8 @@ async def upload_candidate_resume(
         file_name=raw_name or safe,
         file_path=rel,
         file_type=ext.lstrip("."),
-        parsed_text="",
-        parsed_json="{}",
+        parsed_text=parsed_text,
+        parsed_json=parsed_json,
         uploaded_by=ctx.user_id,
         created_at=now,
     )

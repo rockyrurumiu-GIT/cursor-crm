@@ -396,7 +396,10 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "活跃推荐数" in html
     assert "历史推荐数" in html
     assert "交付内审" in html
-    dr_table_start = html.index('data-table-id="rms-delivery-review"')
+    dr_table_marker = (
+        '<table class="crm-table rms-candidates-table" data-table-id="rms-delivery-review">'
+    )
+    dr_table_start = html.index(dr_table_marker)
     dr_slice = html[dr_table_start : dr_table_start + 4000]
     for col in (">年龄</th>", ">年限</th>", ">当前薪资</th>", ">期望薪资</th>", ">到岗时间</th>", ">学历</th>"):
         assert col in dr_slice, f"missing delivery review column {col}"
@@ -477,11 +480,13 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert 'data-rms-action="progress-transition"' not in pipe_region
     assert "transitionProgress" not in pipe_region
     assert "progressOptions" in pipe_region
-    assert "pipelineFilter.statuses" in pipe_region
+    assert "pipelineStatusFilterSummary" in pipe_region
+    assert "pipelineStatusDraft" in pipe_region
     assert "rms-pipeline-status-filter" in pipe_region
     assert "pipelineStatusFilterSummary" in rms_src
     assert "applyPipelineStatusFilter" in rms_src
     assert "pipelineStatusMatches" in rms_src
+    labels_src = (REPO_ROOT / "static/js/pages/rms-application-labels.js").read_text(encoding="utf-8")
     assert "statusMatchesFilter" in labels_src
     assert ">确定</button>" in pipe_region
     base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
