@@ -43,30 +43,88 @@ def resolve_insurance_costs(custom_insurance, social_base, social_rate, housing_
     return float(location_rates["social_insurance"]), float(location_rates["housing_fund"])
 
 
-def annual_leave(salary):
+def resolve_annual_leave_days(raw):
+    n = float(raw) if raw is not None else float("nan")
+    if not (n == n and n == int(n) and 5 <= n <= 15):  # noqa: PLR2004
+        return 5, True
+    return int(n), False
+
+
+def annual_leave(salary, days=5):
     if salary <= 0:
         return 0.0
-    return salary / 21.75 * 5 / 12
+    return salary / 21.75 * days / 12
 
 
-def compute_gm(L, salary, bonus, social, housing, welfare=0, laptop=0, rec=0, cap=0, other=0):
+def compute_effective_salary(salary, ratio_pct, discount_months, ratio_filled, months_filled):
+    s = float(salary or 0)
+    if s <= 0:
+        return s
+    if not ratio_filled or not months_filled:
+        return s
+    ratio = float(ratio_pct or 0)
+    months = float(discount_months or 0)
+    if ratio < 80 or ratio > 100:  # noqa: PLR2004
+        return s
+    if months != int(months) or months < 1 or months > 3:  # noqa: PLR2004
+        return s
+    months = int(months)
+    return (s * (ratio / 100) * months + s * (12 - months)) / 12
+
+
+def compute_gm(L, salary, bonus, social, housing, welfare=0, laptop=0, rec=0, cap=0, other=0,
+               annual_leave_days=5, probation_ratio=None, probation_months=None):
     M = L / TAX_DIVISOR
-    leave = annual_leave(salary)
-    Y = salary + bonus + social + housing + leave + welfare + laptop + rec + cap + other
+    days, _invalid = resolve_annual_leave_days(annual_leave_days)
+    leave = annual_leave(salary, days)
+    ratio_filled = probation_ratio is not None and probation_ratio != ""
+    months_filled = probation_months is not None and probation_months != ""
+    effective = compute_effective_salary(salary, probation_ratio, probation_months, ratio_filled, months_filled)
+    Y = effective + bonus + social + housing + leave + welfare + laptop + rec + cap + other
     Z = M - Y
-    return M, Y, Z, Z / M if M else None, leave
+    return M, Y, Z, Z / M if M else None, leave, effective
 
 
 def test_annual_leave_formula():
     assert abs(annual_leave(20000) - 20000 / 21.75 * 5 / 12) < 0.02
     assert abs(annual_leave(15000) - 287.35632183908) < 0.02
+    assert abs(annual_leave(20000, 10) - 20000 / 21.75 * 10 / 12) < 0.02
+
+
+def test_annual_leave_invalid_falls_back_to_five_days():
+    days, invalid = resolve_annual_leave_days(4)
+    assert days == 5
+    assert invalid is True
+    assert abs(annual_leave(15000, days) - annual_leave(15000, 5)) < 0.001
+    days, invalid = resolve_annual_leave_days(16)
+    assert days == 5
+    assert invalid is True
+
+
+def test_effective_salary_probation():
+    assert abs(compute_effective_salary(12000, 80, 2, True, True) - 11600) < 0.01
+
+
+def test_effective_salary_partial_fill_uses_original():
+    assert compute_effective_salary(12000, 80, None, True, False) == 12000
+    assert compute_effective_salary(12000, None, 2, False, True) == 12000
+
+
+def test_effective_salary_out_of_range_uses_original():
+    assert compute_effective_salary(12000, 75, 2, True, True) == 12000
+    assert compute_effective_salary(12000, 80, 4, True, True) == 12000
+
+
+def test_effective_salary_full_ratio_no_discount():
+    assert abs(compute_effective_salary(12000, 100, 3, True, True) - 12000) < 0.01
 
 
 def test_tax_divisor_sample():
     L = 26500
-    M, Y, Z, margin, leave = compute_gm(L, 15000, 0, 1207, 120, 200, 0, 750, 530, 0)
+    M, Y, Z, margin, leave, effective = compute_gm(L, 15000, 0, 1207, 120, 200, 0, 750, 530, 0)
     assert abs(M - L / TAX_DIVISOR) < 0.02
     assert abs(leave - annual_leave(15000)) < 0.02
+    assert effective == 15000
     assert abs(Y - (17807 + leave)) < 1
     assert margin is not None
     assert 0.25 < margin < 0.30

@@ -64,6 +64,28 @@ def _user_id(engine, username: str) -> int:
     return int(uid)
 
 
+def _revoke_role_permissions(engine, role_code: str, perm_codes: tuple[str, ...]) -> None:
+    with engine.begin() as conn:
+        rid = conn.execute(
+            text("SELECT id FROM sys_role WHERE code = :c"),
+            {"c": role_code},
+        ).scalar()
+        assert rid is not None
+        for code in perm_codes:
+            pid = conn.execute(
+                text("SELECT id FROM sys_permission WHERE code = :c"),
+                {"c": code},
+            ).scalar()
+            if pid:
+                conn.execute(
+                    text(
+                        "DELETE FROM sys_role_permission "
+                        "WHERE role_id = :rid AND permission_id = :pid"
+                    ),
+                    {"rid": rid, "pid": pid},
+                )
+
+
 def _grant_role_permissions(engine, role_code: str, perm_codes: tuple[str, ...]) -> None:
     with engine.begin() as conn:
         rid = conn.execute(
@@ -544,6 +566,104 @@ def test_candidate_created_by_visible(client_rbac, admin_auth, rms_engine, uniq)
     got = client_rbac.get(f"/api/rms/candidates/{cid}", cookies=login.cookies)
     assert got.status_code == 200
     assert got.json()["name"] == "Alice"
+
+
+def _candidate_ids_from_list(body: list) -> set[int]:
+    return {int(c["id"]) for c in body}
+
+
+def test_candidate_search_by_name(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"srch_name_{suffix}")
+    created = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(job_id, name="Alice", phone=_unique_phone()),
+    )
+    assert created.status_code == 200, created.text
+    cid = created.json()["id"]
+    r = client_rbac.get("/api/rms/candidates?q=Alice", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    assert cid in _candidate_ids_from_list(r.json())
+
+
+def test_candidate_search_by_school_or_major(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"srch_edu_{suffix}")
+    school = f"清华特研学院_{suffix}"
+    major = f"量子工程_{suffix}"
+    created = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(job_id, name=f"EduCand_{suffix}", phone=_unique_phone(), school=school, major=major),
+    )
+    assert created.status_code == 200, created.text
+    cid = created.json()["id"]
+    by_school = client_rbac.get(f"/api/rms/candidates?q={school}", cookies=login.cookies)
+    assert by_school.status_code == 200, by_school.text
+    assert cid in _candidate_ids_from_list(by_school.json())
+    by_major = client_rbac.get(f"/api/rms/candidates?q={major}", cookies=login.cookies)
+    assert by_major.status_code == 200, by_major.text
+    assert cid in _candidate_ids_from_list(by_major.json())
+
+
+def test_candidate_search_by_job_title(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"srch_job_{suffix}")
+    created = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(job_id, name=f"JobCand_{suffix}", phone=_unique_phone()),
+    )
+    assert created.status_code == 200, created.text
+    cid = created.json()["id"]
+    r = client_rbac.get(f"/api/rms/candidates?q=Job_{suffix}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    assert cid in _candidate_ids_from_list(r.json())
+
+
+def test_candidate_search_by_client_name(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"srch_cli_{suffix}")
+    with rms_engine.connect() as conn:
+        cid = conn.execute(
+            text("SELECT client_id FROM rms_jobs WHERE id = :id"),
+            {"id": job_id},
+        ).scalar()
+    client_name = f"RMS Job srch_cli_{suffix}"
+    created = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(
+            job_id,
+            name=f"CliCand_{suffix}",
+            phone=_unique_phone(),
+            target_client_id=int(cid),
+        ),
+    )
+    assert created.status_code == 200, created.text
+    cand_id = created.json()["id"]
+    r = client_rbac.get(f"/api/rms/candidates?q={client_name}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    assert cand_id in _candidate_ids_from_list(r.json())
+
+
+def test_candidate_search_respects_visibility(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login_a, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"srch_vis_{suffix}")
+    del_b = f"rms2_cdb_srch_{suffix}"
+    _create_user(client_rbac, admin_auth, del_b, [ROLE_DELIVERY])
+    created = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_a.cookies,
+        json=_candidate_json(job_id, name="Hidden Bob", phone="13900139001"),
+    )
+    assert created.status_code == 200
+    cand_id = created.json()["id"]
+    login_b = _login(client_rbac, del_b)
+    r = client_rbac.get("/api/rms/candidates?q=Hidden Bob", cookies=login_b.cookies)
+    assert r.status_code == 200, r.text
+    assert cand_id not in _candidate_ids_from_list(r.json())
 
 
 def test_candidate_hidden_when_not_creator_or_visible_application(client_rbac, admin_auth, rms_engine, uniq):

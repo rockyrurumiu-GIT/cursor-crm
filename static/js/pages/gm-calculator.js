@@ -79,10 +79,38 @@
         return num(base) * num(ratePct) / 100;
     }
 
-    function annualLeaveCost(salary) {
+    function resolveAnnualLeaveDays(raw) {
+        const n = Number(raw);
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n < 5 || n > 15) {
+            return { days: ANNUAL_LEAVE_DAYS, invalid: true };
+        }
+        return { days: n, invalid: false };
+    }
+
+    function annualLeaveCost(salary, days) {
         const N = num(salary);
-        if (N <= 0) return 0;
-        return (N / MONTHLY_WORK_DAYS) * ANNUAL_LEAVE_DAYS / 12;
+        const d = num(days);
+        if (N <= 0 || d <= 0) return 0;
+        return (N / MONTHLY_WORK_DAYS) * d / 12;
+    }
+
+    function computeEffectiveSalary(salary, ratioPct, discountMonths, ratioFilled, monthsFilled) {
+        const S = num(salary);
+        if (S <= 0) return S;
+        if (!ratioFilled || !monthsFilled) return S;
+        const ratio = num(ratioPct);
+        const months = num(discountMonths);
+        if (ratio < 80 || ratio > 100) return S;
+        if (!Number.isInteger(months) || months < 1 || months > 3) return S;
+        return (S * (ratio / 100) * months + S * (12 - months)) / 12;
+    }
+
+    function validateProbationFields(ratioFilled, monthsFilled, ratio, months) {
+        const partialFill = (ratioFilled && !monthsFilled) || (!ratioFilled && monthsFilled);
+        const ratioOk = !ratioFilled || (num(ratio) >= 80 && num(ratio) <= 100);
+        const monthsOk = !monthsFilled || (Number.isInteger(num(months)) && num(months) >= 1 && num(months) <= 3);
+        const applied = ratioFilled && monthsFilled && ratioOk && monthsOk;
+        return { applied, partialFill, ratioOk, monthsOk };
     }
 
     /** 将用户输入的含税报价换算为人月含税报价 L */
@@ -108,6 +136,9 @@
         MONTHLY_HOURS_2026,
         QUOTE_UNITS,
         annualLeaveCost,
+        resolveAnnualLeaveDays,
+        computeEffectiveSalary,
+        validateProbationFields,
         normalizeQuoteToMonthly,
         computeCustomSocialCost,
         computeCustomHousingCost,
@@ -133,14 +164,30 @@
                 social = rates ? num(rates.social_insurance) : 0;
                 housing = rates ? num(rates.housing_fund) : 0;
             }
-            const annualLeave = annualLeaveCost(salary);
+            const { days: annualLeaveDays, invalid: annualLeaveInvalid } = resolveAnnualLeaveDays(input.annualLeaveDays);
+            const annualLeave = annualLeaveCost(salary, annualLeaveDays);
+            const ratioFilled = input.probationRatio != null && input.probationRatio !== '';
+            const monthsFilled = input.probationDiscountMonths != null && input.probationDiscountMonths !== '';
+            const probation = validateProbationFields(
+                ratioFilled,
+                monthsFilled,
+                input.probationRatio,
+                input.probationDiscountMonths
+            );
+            const effectiveSalary = computeEffectiveSalary(
+                salary,
+                input.probationRatio,
+                input.probationDiscountMonths,
+                ratioFilled,
+                monthsFilled
+            );
             const welfare = num(input.welfare);
             const laptop = num(input.laptop);
             const recruitment = num(input.recruitment);
             const capital = num(input.capital);
             const other = num(input.other);
             const Y =
-                salary +
+                effectiveSalary +
                 bonusMonthly +
                 social +
                 housing +
@@ -164,6 +211,10 @@
                 L,
                 M,
                 salary,
+                effectiveSalary,
+                probationApplied: probation.applied,
+                annualLeaveDays,
+                annualLeaveInvalid,
                 bonusMonthly,
                 social,
                 housing,

@@ -112,9 +112,19 @@ def test_rms_frontend_js_assets_exist():
     assert "crmEnsureRmsCandidatesTableColumns" in rms_src
     assert "prevLen === 0" in rms_src
     assert "resetCandidateFilter" in rms_src
+    assert "suppressCandidateSearchWatch" in rms_src
+    assert "candidateKeywordTimer" in rms_src
+    assert "/api/rms/candidates?q=" in rms_src
+    assert "encodeURIComponent(keyword)" in rms_src
+    assert "await loadCandidates()" in rms_src
+    filtered_candidates_start = rms_src.index("const filteredCandidates = computed")
+    filtered_candidates_slice = rms_src[filtered_candidates_start : filtered_candidates_start + 800]
+    assert "indexOf(name)" not in filtered_candidates_slice
     rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
     assert 'data-rms-region="candidates"' in rms_html
     assert "candidateFilter.name" in rms_html
+    assert "关键词" in rms_html
+    assert "姓名/学校/专业/公司/简历关键词" in rms_html
     assert "暂无符合条件的候选人" in rms_html
     assert "openDeliveryReviewFailModal" in rms_html
     assert "reviewFailPromptOpen" in rms_html

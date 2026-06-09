@@ -38,7 +38,7 @@
                 </button>
             </div>
         </div>
-        <p class="text-xs text-gray-500 mb-6">不含税报价 = 含税报价 ÷ 1.0672；毛利率 = 毛利额 ÷ 不含税报价；年假 = 月薪 ÷ 21.75 × 5 ÷ 12</p>
+        <p class="text-xs text-gray-500 mb-6">不含税报价 = 含税报价 ÷ 1.0672；毛利率 = 毛利额 ÷ 不含税报价；年假 = 月薪 ÷ 21.75 × 年假天数 ÷ 12；首年月均实际月薪 = [月薪×试用期比例×折扣月数 + 月薪×(12−折扣月数)] ÷ 12</p>
         <div class="space-y-4">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -165,12 +165,44 @@
                         @input="onMoneyInput('capital', $event)"
                         @blur="onMoneyBlur('capital')">
                 </div>
-                <div class="sm:col-span-2">
-                    <label class="block text-sm font-medium mb-1">其他成本 (元/月)</label>
-                    <input type="text" inputmode="decimal" autocomplete="off" class="w-full p-2 border rounded"
-                        :value="moneyDisplay.other"
-                        @input="onMoneyInput('other', $event)"
-                        @blur="onMoneyBlur('other')">
+                <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">其他成本 (元/月)</label>
+                        <input type="text" inputmode="decimal" autocomplete="off" class="w-full p-2 border rounded"
+                            :value="moneyDisplay.other"
+                            @input="onMoneyInput('other', $event)"
+                            @blur="onMoneyBlur('other')">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">年假天数</label>
+                        <input type="text" inputmode="numeric" autocomplete="off" class="w-full p-2 border rounded"
+                            :value="annualLeaveDaysDisplay"
+                            @input="onAnnualLeaveDaysInput"
+                            @blur="onAnnualLeaveDaysBlur">
+                        <p v-if="annualLeaveDaysWarning" class="text-xs text-amber-600 mt-1">{{ annualLeaveDaysWarning }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">试用期比例</label>
+                        <div class="gm-pct-wrap">
+                            <input type="text" inputmode="decimal" autocomplete="off" class="gm-input-suffix w-full p-2 border rounded"
+                                placeholder="可选"
+                                :value="probationRatioDisplay"
+                                @input="onProbationRatioInput"
+                                @blur="onProbationRatioBlur">
+                            <span class="gm-pct-suffix">%</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">折扣月数</label>
+                        <input type="text" inputmode="numeric" autocomplete="off" class="w-full p-2 border rounded"
+                            placeholder="可选"
+                            :value="probationDiscountMonthsDisplay"
+                            @input="onProbationDiscountMonthsInput"
+                            @blur="onProbationDiscountMonthsBlur">
+                    </div>
+                    <div v-if="probationWarning" class="sm:col-span-4">
+                        <p class="text-xs text-amber-600">{{ probationWarning }}</p>
+                    </div>
                 </div>
             </div>
 
@@ -178,11 +210,11 @@
                 <summary class="cursor-pointer font-medium text-gray-700">成本明细（计入成本合计）</summary>
                 <table class="w-full mt-2 text-sm">
                     <tbody>
-                        <tr><td class="py-1 text-gray-600">月薪</td><td class="text-right">¥ {{ result.salaryText }}</td></tr>
+                        <tr><td class="py-1 text-gray-600">{{ result.salaryLabel }}</td><td class="text-right">¥ {{ result.salaryText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">年终奖（元/月）</td><td class="text-right">¥ {{ result.bonusText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">{{ result.socialLabel }}</td><td class="text-right">¥ {{ result.socialText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">{{ result.housingLabel }}</td><td class="text-right">¥ {{ result.housingText }}</td></tr>
-                        <tr><td class="py-1 text-gray-600">年假（自动）</td><td class="text-right">¥ {{ result.annualLeaveText }}</td></tr>
+                        <tr><td class="py-1 text-gray-600">年假</td><td class="text-right">¥ {{ result.annualLeaveText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">福利</td><td class="text-right">¥ {{ result.welfareText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">电脑折旧</td><td class="text-right">¥ {{ result.laptopText }}</td></tr>
                         <tr><td class="py-1 text-gray-600">招聘成本</td><td class="text-right">¥ {{ result.recruitmentText }}</td></tr>
@@ -220,7 +252,7 @@
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/gm-calculator.js?v=5"></script>
+<script src="/static/js/pages/gm-calculator.js?v=6"></script>
 <script>
 const { createApp, ref, computed, onMounted } = Vue;
 const core = window.GmCalculatorCore;
@@ -247,6 +279,9 @@ createApp({
             recruitment: 0,
             capital: 0,
             other: 0,
+            annualLeaveDays: 5,
+            probationRatio: null,
+            probationDiscountMonths: null,
             customInsurance: false,
             socialBase: 0,
             socialCompanyRate: 0,
@@ -258,6 +293,9 @@ createApp({
         const monthlyHoursDisplay = ref('0');
         const socialRateDisplay = ref('0');
         const housingRateDisplay = ref('0');
+        const annualLeaveDaysDisplay = ref('5');
+        const probationRatioDisplay = ref('');
+        const probationDiscountMonthsDisplay = ref('');
         const locationQuery = ref('');
         const locationDropdownOpen = ref(false);
         const locationHighlightIndex = ref(0);
@@ -366,6 +404,76 @@ createApp({
             housingRateDisplay.value = core.formatPercentInput(form.value.housingCompanyRate, 0);
         }
 
+        function parseIntegerInput(str) {
+            const raw = String(str == null ? '' : str).trim();
+            if (!raw) return null;
+            const cleaned = raw.replace(/[^\d-]/g, '');
+            if (!cleaned || cleaned === '-') return null;
+            const n = Number(cleaned);
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function onAnnualLeaveDaysInput(ev) {
+            const raw = String(ev.target.value || '').trim();
+            annualLeaveDaysDisplay.value = raw;
+            const n = parseIntegerInput(raw);
+            form.value.annualLeaveDays = n == null ? null : n;
+        }
+
+        function onAnnualLeaveDaysBlur() {
+            const n = parseIntegerInput(annualLeaveDaysDisplay.value);
+            if (n == null) {
+                form.value.annualLeaveDays = null;
+                annualLeaveDaysDisplay.value = '';
+                return;
+            }
+            form.value.annualLeaveDays = n;
+            annualLeaveDaysDisplay.value = String(n);
+        }
+
+        function onProbationRatioInput(ev) {
+            const raw = String(ev.target.value || '').trim();
+            probationRatioDisplay.value = raw;
+            if (!raw) {
+                form.value.probationRatio = null;
+                return;
+            }
+            form.value.probationRatio = core.parsePercentInput(raw);
+        }
+
+        function onProbationRatioBlur() {
+            const raw = probationRatioDisplay.value.trim();
+            if (!raw) {
+                form.value.probationRatio = null;
+                probationRatioDisplay.value = '';
+                return;
+            }
+            form.value.probationRatio = core.parsePercentInput(raw);
+            probationRatioDisplay.value = core.formatPercentInput(form.value.probationRatio, 0);
+        }
+
+        function onProbationDiscountMonthsInput(ev) {
+            const raw = String(ev.target.value || '').trim();
+            probationDiscountMonthsDisplay.value = raw;
+            if (!raw) {
+                form.value.probationDiscountMonths = null;
+                return;
+            }
+            form.value.probationDiscountMonths = parseIntegerInput(raw);
+        }
+
+        function onProbationDiscountMonthsBlur() {
+            const raw = probationDiscountMonthsDisplay.value.trim();
+            if (!raw) {
+                form.value.probationDiscountMonths = null;
+                probationDiscountMonthsDisplay.value = '';
+                return;
+            }
+            const n = parseIntegerInput(raw);
+            form.value.probationDiscountMonths = n;
+            probationDiscountMonthsDisplay.value = n == null ? raw : String(n);
+        }
+
         function initCustomInsuranceDisplay() {
             socialRateDisplay.value = core.formatPercentInput(form.value.socialCompanyRate, 2);
             housingRateDisplay.value = core.formatPercentInput(form.value.housingCompanyRate, 0);
@@ -396,6 +504,9 @@ createApp({
             form.value.recruitment = 0;
             form.value.capital = 0;
             form.value.other = 0;
+            form.value.annualLeaveDays = 5;
+            form.value.probationRatio = null;
+            form.value.probationDiscountMonths = null;
             form.value.customInsurance = false;
             form.value.socialBase = 0;
             form.value.socialCompanyRate = 0;
@@ -406,6 +517,9 @@ createApp({
             locationHighlightIndex.value = 0;
             initMoneyDisplay();
             monthlyHoursDisplay.value = '0';
+            annualLeaveDaysDisplay.value = '5';
+            probationRatioDisplay.value = '';
+            probationDiscountMonthsDisplay.value = '';
             initCustomInsuranceDisplay();
         }
 
@@ -424,6 +538,27 @@ createApp({
             if (form.value.quoteUnit !== 'custom') return '';
             if (num(form.value.monthlyHours) > 0) return '';
             if (num(form.value.quoteTaxIncluded) > 0) return '请填写月小时数';
+            return '';
+        });
+
+        const annualLeaveDaysWarning = computed(() => {
+            const resolved = core.resolveAnnualLeaveDays(form.value.annualLeaveDays);
+            if (!resolved.invalid) return '';
+            return '年假天数须为 5–15 的整数，已按默认 5 天计算';
+        });
+
+        const probationWarning = computed(() => {
+            const ratioFilled = form.value.probationRatio != null && probationRatioDisplay.value.trim() !== '';
+            const monthsFilled = form.value.probationDiscountMonths != null && probationDiscountMonthsDisplay.value.trim() !== '';
+            const v = core.validateProbationFields(
+                ratioFilled,
+                monthsFilled,
+                form.value.probationRatio,
+                form.value.probationDiscountMonths
+            );
+            if (v.partialFill) return '试用期比例与折扣月数须同时填写，已按合同月薪测算';
+            if (ratioFilled && !v.ratioOk) return '试用期比例须在 80%–100% 之间，已按合同月薪测算';
+            if (monthsFilled && !v.monthsOk) return '折扣月数须为 1–3 的整数，已按合同月薪测算';
             return '';
         });
 
@@ -448,14 +583,23 @@ createApp({
 
         const result = computed(() => {
             const r = core.compute(form.value, selectedRates.value);
-            const leaveNote = r.salary > 0
-                ? `；年假 ${core.money(r.salary)} / 21.75 × 5 / 12 = ${core.money(r.annualLeave)}`
-                : '';
+            let leaveNote = '';
+            if (r.salary > 0) {
+                leaveNote = `；年假 ${core.money(r.salary)} / 21.75 × ${r.annualLeaveDays} / 12 = ${core.money(r.annualLeave)}`;
+                if (r.annualLeaveInvalid) {
+                    leaveNote += '（无效输入已回退 5 天）';
+                }
+            }
+            let probationNote = '';
+            if (r.probationApplied && r.salary > 0) {
+                probationNote = `；合同月薪 ${core.money(r.salary)}，首年月均 ${core.money(r.effectiveSalary)}`;
+            }
             const conversionNote = buildQuoteConversionNote(r);
             const conversionPrefix = conversionNote ? `${conversionNote}；` : '';
             return {
                 netQuoteText: core.money(r.M),
-                salaryText: core.money(r.salary),
+                salaryLabel: r.probationApplied ? '月薪（首年月均）' : '月薪',
+                salaryText: core.money(r.probationApplied ? r.effectiveSalary : r.salary),
                 bonusText: core.money(r.bonusMonthly),
                 socialText: core.money(r.social),
                 housingText: core.money(r.housing),
@@ -471,7 +615,7 @@ createApp({
                 profitText: core.money(r.Z),
                 marginText: core.pct(r.margin),
                 formula: r.M > 0
-                    ? `${conversionPrefix}M = ${core.money(r.L)} / 1.0672 = ${core.money(r.M)}；Y = 各项成本之和 = ${core.money(r.Y)}；GM% = ${core.money(r.Z)} / ${core.money(r.M)}${leaveNote}`
+                    ? `${conversionPrefix}M = ${core.money(r.L)} / 1.0672 = ${core.money(r.M)}；Y = 各项成本之和 = ${core.money(r.Y)}；GM% = ${core.money(r.Z)} / ${core.money(r.M)}${leaveNote}${probationNote}`
                     : (conversionNote || '—'),
             };
         });
@@ -514,6 +658,7 @@ createApp({
         onMounted(() => {
             initMoneyDisplay();
             monthlyHoursDisplay.value = core.formatMoneyInput(form.value.monthlyHours);
+            annualLeaveDaysDisplay.value = String(form.value.annualLeaveDays);
             initCustomInsuranceDisplay();
             loadClients();
             loadLocations();
@@ -527,6 +672,9 @@ createApp({
             monthlyHoursDisplay,
             socialRateDisplay,
             housingRateDisplay,
+            annualLeaveDaysDisplay,
+            probationRatioDisplay,
+            probationDiscountMonthsDisplay,
             locationQuery,
             locationDropdownOpen,
             locationHighlightIndex,
@@ -534,6 +682,8 @@ createApp({
             result,
             locationWarning,
             quoteUnitWarning,
+            annualLeaveDaysWarning,
+            probationWarning,
             onMoneyInput,
             onMoneyBlur,
             onMonthlyHoursInput,
@@ -542,6 +692,12 @@ createApp({
             onSocialRateBlur,
             onHousingRateInput,
             onHousingRateBlur,
+            onAnnualLeaveDaysInput,
+            onAnnualLeaveDaysBlur,
+            onProbationRatioInput,
+            onProbationRatioBlur,
+            onProbationDiscountMonthsInput,
+            onProbationDiscountMonthsBlur,
             onLocationInput,
             onLocationFocus,
             onLocationBlur,

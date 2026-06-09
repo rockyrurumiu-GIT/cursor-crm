@@ -5,6 +5,7 @@ import re
 from typing import Any, Dict, List, Optional, Type
 
 from fastapi import HTTPException
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from auth.service import AuthContext
@@ -357,6 +358,44 @@ def _filtered_candidates_query(
     return q
 
 
+def _apply_candidate_keyword_search(
+    db: Session,
+    q: Any,
+    q_text: Optional[str],
+    ctx: AuthContext,
+    RmsCandidate: Type[Any],
+    *,
+    RmsResume: Optional[Type[Any]] = None,
+    RmsJob: Optional[Type[Any]] = None,
+    Client: Optional[Type[Any]] = None,
+) -> Any:
+    keyword = (q_text or "").strip()
+    if not keyword:
+        return q
+    like = f"%{keyword}%"
+    conditions = [
+        RmsCandidate.name.like(like),
+        RmsCandidate.city.like(like),
+        RmsCandidate.source.like(like),
+        RmsCandidate.education_level.like(like),
+        RmsCandidate.school.like(like),
+        RmsCandidate.major.like(like),
+        RmsCandidate.current_company.like(like),
+        RmsCandidate.current_title.like(like),
+    ]
+    if RmsJob is not None:
+        job_ids = db.query(RmsJob.id).filter(RmsJob.title.like(like))
+        conditions.append(RmsCandidate.target_job_id.in_(job_ids))
+    if Client is not None:
+        client_ids = db.query(Client.id).filter(Client.name.like(like))
+        conditions.append(RmsCandidate.target_client_id.in_(client_ids))
+    can_view_contacts = ctx.is_super or "rms.contacts.view" in ctx.permissions
+    if can_view_contacts and RmsResume is not None:
+        resume_cids = db.query(RmsResume.candidate_id).filter(RmsResume.parsed_text.like(like))
+        conditions.append(RmsCandidate.id.in_(resume_cids))
+    return q.filter(or_(*conditions))
+
+
 def _rows_to_dicts(
     db: Session,
     ctx: AuthContext,
@@ -405,9 +444,16 @@ def list_candidates(
     q_text: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     q = _filtered_candidates_query(db, ctx, RmsCandidate, RmsApplication, Client)
-    if q_text:
-        like = f"%{q_text.strip()}%"
-        q = q.filter(RmsCandidate.name.like(like))
+    q = _apply_candidate_keyword_search(
+        db,
+        q,
+        q_text,
+        ctx,
+        RmsCandidate,
+        RmsResume=RmsResume,
+        RmsJob=RmsJob,
+        Client=Client,
+    )
     rows = q.order_by(RmsCandidate.id.desc()).all()
     return _rows_to_dicts(
         db,

@@ -554,12 +554,6 @@
 
       const filteredCandidates = computed(function () {
         let rows = candidatesState.items.slice();
-        const name = (candidateFilter.name || "").trim().toLowerCase();
-        if (name) {
-          rows = rows.filter(function (c) {
-            return String(c.name || "").toLowerCase().indexOf(name) !== -1;
-          });
-        }
         if (candidateFilter.client_id !== "" && candidateFilter.client_id != null) {
           const cid = Number(candidateFilter.client_id);
           rows = rows.filter(function (c) {
@@ -1005,11 +999,18 @@
         }
       }
 
+      let candidateKeywordTimer = null;
+      let suppressCandidateSearchWatch = false;
+
       async function loadCandidates() {
         candidatesState.loading = true;
         candidatesState.error = "";
         try {
-          const r = await rmsRequest("GET", "/api/rms/candidates");
+          const keyword = (candidateFilter.name || "").trim();
+          const path = keyword
+            ? "/api/rms/candidates?q=" + encodeURIComponent(keyword)
+            : "/api/rms/candidates";
+          const r = await rmsRequest("GET", path);
           if (!r.ok) {
             candidatesState.items = [];
             candidatesState.error = r.message;
@@ -1182,7 +1183,12 @@
         pipelineStatusDropdownOpen.value = false;
       }
 
-      function resetCandidateFilter() {
+      async function resetCandidateFilter() {
+        if (candidateKeywordTimer) {
+          clearTimeout(candidateKeywordTimer);
+          candidateKeywordTimer = null;
+        }
+        suppressCandidateSearchWatch = true;
         candidateFilter.name = "";
         candidateFilter.client_id = "";
         candidateFilter.job_id = "";
@@ -1191,6 +1197,8 @@
         candidateFilter.education_level = "";
         candidateFilter.date_from = "";
         candidateFilter.date_to = "";
+        await loadCandidates();
+        suppressCandidateSearchWatch = false;
       }
 
       function deliveryReviewFailNoteFromHistory(items) {
@@ -2078,6 +2086,20 @@
         }
         await openProgressConfirmModal(app, target, "correction");
       }
+
+      watch(
+        function () {
+          return candidateFilter.name;
+        },
+        function () {
+          if (suppressCandidateSearchWatch) return;
+          if (candidateKeywordTimer) clearTimeout(candidateKeywordTimer);
+          candidateKeywordTimer = setTimeout(function () {
+            candidateKeywordTimer = null;
+            loadCandidates();
+          }, 300);
+        }
+      );
 
       watch(activeTab, function (tab) {
         if (tab === "candidates" || tab === "applications" || tab === "deliveryReview" || tab === "pipeline") {

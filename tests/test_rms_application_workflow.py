@@ -24,7 +24,9 @@ from tests.test_rms_phase2_mvp import (
     _create_user,
     _enable_delivery_rms_mvp,
     _enable_sales_rms_jobs_write,
+    _grant_role_permissions,
     _login,
+    _revoke_role_permissions,
     _trial_job_and_candidate,
     _unique_phone,
 )
@@ -739,6 +741,73 @@ def test_upload_candidate_resume_persists_parse(
     parsed_text, parsed_json = _fetch_resume_parse(rms_engine, resume_id)
     assert parsed_text
     _assert_contact_and_education_draft(parsed_json)
+
+
+def _resume_with_parse_only_keyword(keyword: str) -> str:
+    return (
+        "姓名：简历检索测试\n"
+        "手机 15900001111\n"
+        "email: parseonly@example.com\n"
+        f"项目经历：{keyword}\n"
+    )
+
+
+def test_candidate_search_parsed_text_with_contacts_view(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    import main as crm_main
+
+    keyword = f"PARSEONLY_{uniq}"
+    _grant_role_permissions(crm_main.engine, ROLE_DELIVERY, ("rms.contacts.view",))
+    login, _job_id, cand_id, _client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"srch_parse_{uniq}"
+    )
+    txt = _resume_with_parse_only_keyword(keyword)
+    upload = client_rbac.post(
+        f"/api/rms/candidates/{cand_id}/resume",
+        cookies=login.cookies,
+        files={"file": ("resume.txt", txt.encode("utf-8"), "text/plain")},
+    )
+    assert upload.status_code == 200, upload.text
+    r = client_rbac.get(f"/api/rms/candidates?q={keyword}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    assert cand_id in {c["id"] for c in r.json()}
+
+
+def test_candidate_search_phone_not_leaked_without_contacts_view(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, _job_id, cand_id, _client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"srch_ph_{uniq}"
+    )
+    with rms_engine.connect() as conn:
+        phone = conn.execute(
+            text("SELECT phone FROM rms_candidates WHERE id = :id"),
+            {"id": cand_id},
+        ).scalar()
+    r = client_rbac.get(f"/api/rms/candidates?q={phone}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    assert cand_id not in {c["id"] for c in r.json()}
+
+
+def test_candidate_search_parsed_text_gated_without_contacts_view(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    keyword = f"PARSEONLY_{uniq}"
+    _revoke_role_permissions(rms_engine, ROLE_DELIVERY, ("rms.contacts.view",))
+    login, _job_id, cand_id, _client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"srch_noparse_{uniq}"
+    )
+    txt = _resume_with_parse_only_keyword(keyword)
+    upload = client_rbac.post(
+        f"/api/rms/candidates/{cand_id}/resume",
+        cookies=login.cookies,
+        files={"file": ("resume.txt", txt.encode("utf-8"), "text/plain")},
+    )
+    assert upload.status_code == 200, upload.text
+    r = client_rbac.get(f"/api/rms/candidates?q={keyword}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    assert cand_id not in {c["id"] for c in r.json()}
 
 
 def test_submit_candidate_report_word_resume_empty_parse_ok(
