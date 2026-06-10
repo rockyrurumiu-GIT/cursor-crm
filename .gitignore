@@ -36,6 +36,9 @@ icon_bk/
 Throme logo1.png
 permission-archi.pdf
 
+# RMS 批量简历导入报告，可能包含候选人信息
+reports/rms_imports/
+
 # Pytest / Playwright 本地测试产物（勿提交）
 test-results/
 playwright-report/
