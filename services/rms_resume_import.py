@@ -13,7 +13,10 @@ from sqlalchemy.orm import Session
 
 import security_foundation as sec
 from schemas.rms import utc_date_str
-from services.rms_applications import parse_resume_file_for_storage as _parse_resume_for_storage
+from services.rms_applications import (
+    parse_resume_file_for_storage as _parse_resume_for_storage,
+    reject_candidate_name_reason,
+)
 from services.rms_candidates import PHONE_RE, detect_duplicate_candidate
 from services.rms_resumes import MAX_RESUME_BYTES, RESUME_ALLOWED_SUFFIXES
 
@@ -31,6 +34,7 @@ REPORT_CSV_FIELDS = (
     "duplicate_reason",
     "parse_status",
     "error",
+    "name_reject_reason",
 )
 
 _CANDIDATE_FIELD_KEYS = (
@@ -162,6 +166,7 @@ def _report_row(
     duplicate_reason: str = "",
     parse_status: str = "",
     error: str = "",
+    name_reject_reason: str = "",
 ) -> Dict[str, Any]:
     contact = email or email_wechat
     return {
@@ -176,6 +181,7 @@ def _report_row(
         "duplicate_reason": duplicate_reason,
         "parse_status": parse_status,
         "error": error,
+        "name_reject_reason": name_reject_reason,
     }
 
 
@@ -429,6 +435,24 @@ def import_resume_batch(
 
         fields["name"] = name
         fields["phone"] = phone
+
+        name_reject_reason = reject_candidate_name_reason(name, strict_length=True)
+        if name_reject_reason:
+            counts["skipped_unparseable"] += 1
+            rows.append(
+                _report_row(
+                    file_path=file_path,
+                    status="skipped_unparseable",
+                    name=name,
+                    phone=phone,
+                    email=fields.get("email") or "",
+                    email_wechat=fields.get("email_wechat") or "",
+                    parse_status=pstatus,
+                    error="invalid_candidate_name",
+                    name_reject_reason=name_reject_reason,
+                )
+            )
+            continue
 
         if _is_batch_duplicate(db, RmsCandidate, name=name, phone=phone, batch_seen=batch_seen):
             counts["skipped_duplicate"] += 1

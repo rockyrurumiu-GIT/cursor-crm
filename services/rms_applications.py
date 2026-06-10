@@ -72,6 +72,39 @@ _RE_AGE_GENDER_NEAR = re.compile(r"(?:男|女)[^|\n]{0,20}(\d{1,2})\s*岁")
 _RE_AGE_LOOSE = re.compile(r"(?<![0-9])(\d{1,2})\s*岁(?!\s*(?:工作|以上)?经验)")
 _RE_GENDER_PROFILE = re.compile(r"(?:^|[|｜]\s*)(男|女)(?:\s*[|｜])")
 _RE_NAME_STANDALONE = re.compile(r"^[\u4e00-\u9fa5·]{2,6}$")
+_RE_NAME_CHARS = re.compile(r"^[\u4e00-\u9fa5·]+$")
+_NON_PERSON_NAME_EXACT = frozenset({
+    "电话",
+    "手机",
+    "联系方式",
+    "个人简历",
+    "简历",
+    "基本信息",
+    "个人信息",
+    "求职意向",
+    "教育经历",
+    "工作经历",
+    "项目经历",
+    "自我评价",
+    "技能",
+    "证书",
+    "测试",
+    "效果",
+    "相机",
+})
+_INSTITUTION_NAME_MARKERS = (
+    "大学",
+    "学院",
+    "学校",
+    "中学",
+    "公司",
+    "科技",
+    "技术",
+    "集团",
+    "有限公司",
+    "中心",
+    "部门",
+)
 _RE_PROFILE_LINE = re.compile(
     r"(?:男|女).*(?:\d{1,2}岁|1[3-9]\d{9})|"
     r"(?:\d{1,2}岁|1[3-9]\d{9}).*(?:男|女)|"
@@ -81,7 +114,12 @@ _RE_PROFILE_LINE = re.compile(
 _NAME_HEADER_SKIP = frozenset({
     "个人信息",
     "基本资料",
+    "基本信息",
     "联系方式",
+    "个人简历",
+    "简历",
+    "电话",
+    "手机",
     "求职意向",
     "自我评价",
     "工作经历",
@@ -89,6 +127,11 @@ _NAME_HEADER_SKIP = frozenset({
     "教育经历",
     "教育背景",
     "项目经历",
+    "技能",
+    "证书",
+    "测试",
+    "效果",
+    "相机",
 })
 _RE_WORK_YEARS_LABEL = re.compile(
     r"工作年限\s*[:：]\s*(\d+\s*(?:年(?:以上)?)?)"
@@ -804,11 +847,39 @@ def _first_match(pattern: re.Pattern[str], text: str) -> str:
     return (m.group(1) if m.lastindex else m.group(0)).strip()
 
 
+def _han_char_count(name: str) -> int:
+    return sum(1 for ch in name if "\u4e00" <= ch <= "\u9fa5")
+
+
+def reject_candidate_name_reason(name: str, *, strict_length: bool = False) -> str:
+    """Return empty string if name is plausible; otherwise a reject reason code."""
+    val = (name or "").strip()
+    if not val:
+        return "empty"
+    if val in _NON_PERSON_NAME_EXACT:
+        return "blocklist"
+    for marker in _INSTITUTION_NAME_MARKERS:
+        if marker in val:
+            return "institution_suffix"
+    if not _RE_NAME_CHARS.fullmatch(val):
+        return "format"
+    if strict_length:
+        han = _han_char_count(val)
+        if "·" in val:
+            if han < 2 or han > 8:
+                return "length"
+        elif han < 2 or han > 4:
+            return "length"
+    return ""
+
+
 def _clean_extracted_name(raw: str) -> str:
     val = (raw or "").strip()
     if not val:
         return ""
-    val = _FIELD_LABEL_SPLIT.split(val, maxsplit=1)[0]
+    label_parts = _FIELD_LABEL_SPLIT.split(val, maxsplit=1)
+    if label_parts[0].strip():
+        val = label_parts[0]
     val = re.sub(r"1[3-9][0-9 \-()]{9,20}.*$", "", val)
     val = val.strip(" \t:：,，;；|·")
     return val.strip()
@@ -839,8 +910,11 @@ def _extract_name_from_header(text: str) -> str:
     for line in header[:4]:
         if line in _NAME_HEADER_SKIP:
             continue
-        if _RE_NAME_STANDALONE.fullmatch(line):
-            return line
+        if not _RE_NAME_STANDALONE.fullmatch(line):
+            continue
+        if reject_candidate_name_reason(line, strict_length=False):
+            continue
+        return line
     return ""
 
 
@@ -852,6 +926,8 @@ def _extract_name_from_filename(file_name: str) -> str:
         if not _RE_NAME_STANDALONE.fullmatch(part):
             continue
         if re.search(r"[A-Za-z0-9]", part):
+            continue
+        if reject_candidate_name_reason(part, strict_length=False):
             continue
         candidates.append(part)
     if not candidates:

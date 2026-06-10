@@ -24,7 +24,7 @@ from tests.test_rms_phase2_mvp import (
 RAW_PHONE = "15988192434"
 RAW_EMAIL = "15988192434@163.com"
 IMPORT_NAME = "测试候选人"
-DUP_IMPORT_NAME = "重复候选人"
+DUP_IMPORT_NAME = "重复张三"
 
 
 def _import_phone() -> str:
@@ -36,6 +36,10 @@ def _import_phone() -> str:
 
 def _unique_name() -> str:
     return "张三"
+
+
+def _minimal_resume(name: str, phone: str) -> str:
+    return f"姓名：{name}\n手机 {phone}\n"
 
 
 def _resume_content(*, name: str | None = None, phone: str | None = None) -> str:
@@ -186,6 +190,87 @@ def test_commit_creates_candidate_and_resume(import_engine, tmp_path):
     assert parsed.get("phone") == phone
 
 
+@pytest.mark.parametrize(
+    "bad_name",
+    ["个人简历", "电话", "许昌学院", "相机效果测试"],
+)
+def test_import_rejects_invalid_candidate_name_commit(import_engine, tmp_path, bad_name):
+    phone = _import_phone()
+    src = tmp_path / "src"
+    src.mkdir()
+    _write_resume_txt(src, "resume.txt", _minimal_resume(bad_name, phone))
+    upload_dir = tmp_path / "uploads"
+    report_dir = tmp_path / "reports"
+    before_c = _count_table(import_engine, "rms_candidates")
+    before_r = _count_table(import_engine, "rms_resumes")
+
+    result = _run_import(
+        import_engine,
+        src,
+        commit=True,
+        upload_dir=upload_dir,
+        report_dir=report_dir,
+    )
+
+    assert result["created"] == 0, result
+    assert result["skipped_unparseable"] == 1
+    assert _count_table(import_engine, "rms_candidates") == before_c
+    assert _count_table(import_engine, "rms_resumes") == before_r
+    row = result["rows"][0]
+    assert row["status"] == "skipped_unparseable"
+    assert row["error"] == "invalid_candidate_name"
+    assert row["name_reject_reason"]
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    ["个人简历", "电话", "许昌学院", "相机效果测试"],
+)
+def test_import_rejects_invalid_candidate_name_dry_run(import_engine, tmp_path, bad_name):
+    phone = _import_phone()
+    src = tmp_path / "src"
+    src.mkdir()
+    _write_resume_txt(src, "resume.txt", _minimal_resume(bad_name, phone))
+    upload_dir = tmp_path / "uploads"
+    report_dir = tmp_path / "reports"
+
+    result = _run_import(
+        import_engine,
+        src,
+        dry_run=True,
+        upload_dir=upload_dir,
+        report_dir=report_dir,
+    )
+
+    assert result["would_create"] == 0, result
+    assert result["skipped_unparseable"] == 1
+    row = result["rows"][0]
+    assert row["status"] == "skipped_unparseable"
+    assert row["error"] == "invalid_candidate_name"
+    assert row["name_reject_reason"]
+
+
+@pytest.mark.parametrize("good_name", ["周鹏飞", "刘昱辰", "张丽娜"])
+def test_import_accepts_valid_candidate_names(import_engine, tmp_path, good_name):
+    phone = _import_phone()
+    src = tmp_path / "src"
+    src.mkdir()
+    _write_resume_txt(src, "resume.txt", _minimal_resume(good_name, phone))
+    upload_dir = tmp_path / "uploads"
+    report_dir = tmp_path / "reports"
+
+    result = _run_import(
+        import_engine,
+        src,
+        commit=True,
+        upload_dir=upload_dir,
+        report_dir=report_dir,
+    )
+
+    assert result["created"] == 1, result
+    assert result["rows"][0]["name"] == good_name
+
+
 def test_missing_name_or_phone_skipped(import_engine, tmp_path):
     src = tmp_path / "src"
     src.mkdir()
@@ -293,7 +378,7 @@ def test_commit_partial_failure_rolls_back_candidate(import_engine, tmp_path):
     src = tmp_path / "src"
     src.mkdir()
     _write_resume_txt(src, "fail.txt", _resume_content(phone=_import_phone()))
-    _write_resume_txt(src, "ok.txt", _resume_content(name="另一候选人", phone=_import_phone()))
+    _write_resume_txt(src, "ok.txt", _resume_content(name="另一候选", phone=_import_phone()))
     upload_dir = tmp_path / "uploads"
     report_dir = tmp_path / "reports"
     before_c = _count_table(import_engine, "rms_candidates")
@@ -394,11 +479,12 @@ def test_reports_csv_json_and_masked_contacts(import_engine, tmp_path):
 def test_limit_processes_n_files(import_engine, tmp_path):
     src = tmp_path / "src"
     src.mkdir()
+    limit_names = ["张三", "李四", "王五", "赵六", "孙七"]
     for i in range(5):
         _write_resume_txt(
             src,
             f"cand_{i}.txt",
-            f"姓名：候选人{i}\n手机 {_import_phone()}\n",
+            _minimal_resume(limit_names[i], _import_phone()),
         )
     upload_dir = tmp_path / "uploads"
     report_dir = tmp_path / "reports"
@@ -420,7 +506,7 @@ def test_import_visible_in_candidates_api(rms_client, admin_auth, tmp_path, uniq
     client, engine = rms_client
     src = tmp_path / "src"
     src.mkdir()
-    name = "导入候选人"
+    name = "周鹏飞"
     phone = _import_phone()
     content = _resume_content(name=name, phone=phone)
     _write_resume_txt(src, "resume.txt", content)
@@ -453,7 +539,7 @@ def test_import_detail_shows_parse_summary(rms_client, admin_auth, tmp_path, uni
     src = tmp_path / "src"
     src.mkdir()
     phone = _import_phone()
-    content = _resume_content(name="导入候选人", phone=phone)
+    content = _resume_content(name="周鹏飞", phone=phone)
     _write_resume_txt(src, "resume.txt", content)
     upload_dir = tmp_path / "uploads"
     report_dir = tmp_path / "reports"
@@ -482,7 +568,7 @@ def test_list_excludes_parse_summary(rms_client, admin_auth, tmp_path, uniq):
     client, engine = rms_client
     src = tmp_path / "src"
     src.mkdir()
-    content = _resume_content(name="导入候选人", phone=_import_phone())
+    content = _resume_content(name="周鹏飞", phone=_import_phone())
     _write_resume_txt(src, "resume.txt", content)
     upload_dir = tmp_path / "uploads"
     report_dir = tmp_path / "reports"
