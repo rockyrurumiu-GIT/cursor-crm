@@ -16,6 +16,7 @@ from services.rms_applications import (
     _clean_resume_text_for_parse,
     _extract_draft_fields_from_text,
     _extract_explicit_work_years,
+    _extract_name,
     _parse_work_years_from_periods,
 )
 from sqlalchemy import text
@@ -352,6 +353,64 @@ def test_extract_draft_fields_name_from_filename_fallback():
     )
     assert draft.get("name") == "邓明超"
     assert draft.get("age") == "41"
+
+
+def _resume_with_split_name_labels() -> str:
+    return (
+        "个人简历\n"
+        "个人资料\n"
+        "姓\n"
+        "名：马兵文\n"
+        "性\n"
+        "别：\n"
+        "男\n"
+        "手\n"
+        "机：17319885735\n"
+        "邮\n"
+        "箱：1005867925@qq.com\n"
+    )
+
+
+def test_extract_draft_fields_split_name_labels_without_filename_fallback():
+    draft = _extract_draft_fields_from_text(
+        _resume_with_split_name_labels(),
+        file_name="unknown.pdf",
+    )
+    assert draft.get("name") == "马兵文"
+    assert draft.get("name") != "名：马兵文"
+    assert draft.get("phone") == "17319885735"
+    assert draft.get("email_wechat") == "1005867925@qq.com"
+
+
+def test_extract_draft_fields_spaced_name_label():
+    draft = _extract_draft_fields_from_text(
+        "姓 名： 马 兵 文\n手机：17319885735\n",
+        file_name="unknown.pdf",
+    )
+    assert draft.get("name") == "马兵文"
+    assert draft.get("phone") == "17319885735"
+
+
+def test_extract_name_rejects_standalone_ming_label_line():
+    assert _extract_name("名：马兵文\n") == ""
+
+
+def test_parse_draft_split_name_labels_unknown_pdf(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    pdf_bytes = _make_text_pdf(_resume_with_split_name_labels())
+    r = client_rbac.post(
+        PARSE_DRAFT_URL,
+        cookies=login.cookies,
+        files={"file": ("unknown.pdf", pdf_bytes, "application/pdf")},
+    )
+    assert r.status_code == 200, r.text
+    draft = r.json().get("draft_fields") or {}
+    assert draft.get("name") == "马兵文"
+    assert draft.get("name") != "名：马兵文"
+    assert draft.get("phone") == "17319885735"
+    assert draft.get("email_wechat") == "1005867925@qq.com"
 
 
 def test_extract_draft_fields_boss_style_does_not_treat_section_as_name():

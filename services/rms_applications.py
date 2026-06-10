@@ -64,6 +64,35 @@ _RE_NAME = re.compile(
     r"|[\s,，;；|｜]|$)",
     re.IGNORECASE,
 )
+_RE_NAME_FIELD_STOP = (
+    r"(?=(?:\s*(?:电话|手机|mobile|tel|email|邮箱|微信|性别|年龄|工作年限|年限)\s*[:：])"
+    r"|[\s,，;；|｜]|$)"
+)
+_RE_NAME_LABEL_INLINE = re.compile(
+    r"姓\s*名\s*[:：]\s*"
+    r"([^\n\r:：|｜,，;；\d]{1,24}?)"
+    + _RE_NAME_FIELD_STOP,
+    re.IGNORECASE | re.DOTALL,
+)
+_RE_NAME_LABEL_NEXT_LINE = re.compile(
+    r"姓\s*名\s*[:：]?\s*\n\s*"
+    r"([^\n\r:：|｜,，;；\d]{2,24}?)"
+    + _RE_NAME_FIELD_STOP,
+    re.IGNORECASE,
+)
+_RE_NAME_HEADER_STANDALONE = re.compile(r"^[\u4e00-\u9fa5·]{2,4}$")
+_RE_RESUME_CONTEXT_NEAR_NAME = re.compile(
+    r"(?:"
+    r"电\s*话|手\s*机|mobile|tel|"
+    r"学\s*历|毕业院校|院\s*校|专\s*业|"
+    r"个人信息|个人资料|基本信息|"
+    r"性\s*别|年\s*龄"
+    r")\s*[:：]?|"
+    r"1[3-9]\d{9}|"
+    r"(?:男|女).*(?:\d{1,2}岁|1[3-9]\d{9})|"
+    r"(?:\d{1,2}岁|1[3-9]\d{9}).*(?:男|女)",
+    re.IGNORECASE,
+)
 _RE_AGE = re.compile(r"年龄\s*[:：]\s*(\d{1,2})")
 _RE_AGE_PROFILE = re.compile(r"(?:男|女)\s*[|｜]\s*(\d{1,2})\s*岁")
 _RE_AGE_PROFILE_BARE = re.compile(r"(?:男|女)\s*[|｜]\s*(\d{1,2})(?:\s*[|｜]|$)")
@@ -78,9 +107,14 @@ _NON_PERSON_NAME_EXACT = frozenset({
     "手机",
     "联系方式",
     "个人简历",
+    "个人资料",
+    "个人履历",
     "简历",
+    "简历资料",
     "基本信息",
+    "基本资料",
     "个人信息",
+    "个人介绍",
     "求职意向",
     "教育经历",
     "工作经历",
@@ -92,6 +126,31 @@ _NON_PERSON_NAME_EXACT = frozenset({
     "效果",
     "相机",
 })
+_PLACE_NAME_EXACT = frozenset({
+    "西安",
+    "北京",
+    "上海",
+    "深圳",
+    "广州",
+    "杭州",
+    "南京",
+    "苏州",
+    "成都",
+    "重庆",
+    "武汉",
+    "长沙",
+    "郑州",
+    "天津",
+    "青岛",
+    "合肥",
+    "厦门",
+    "宁波",
+    "无锡",
+    "常州",
+    "东莞",
+    "佛山",
+})
+_RE_NAME_BRACKETS = re.compile(r"[\[\]【】（）()《》〈〉]")
 _INSTITUTION_NAME_MARKERS = (
     "大学",
     "学院",
@@ -113,11 +172,15 @@ _RE_PROFILE_LINE = re.compile(
 )
 _NAME_HEADER_SKIP = frozenset({
     "个人信息",
+    "个人资料",
+    "个人履历",
+    "个人介绍",
     "基本资料",
     "基本信息",
     "联系方式",
     "个人简历",
     "简历",
+    "简历资料",
     "电话",
     "手机",
     "求职意向",
@@ -858,9 +921,13 @@ def reject_candidate_name_reason(name: str, *, strict_length: bool = False) -> s
         return "empty"
     if val in _NON_PERSON_NAME_EXACT:
         return "blocklist"
+    if val in _PLACE_NAME_EXACT:
+        return "place_name"
     for marker in _INSTITUTION_NAME_MARKERS:
         if marker in val:
             return "institution_suffix"
+    if _RE_NAME_BRACKETS.search(val):
+        return "invalid_format"
     if not _RE_NAME_CHARS.fullmatch(val):
         return "format"
     if strict_length:
@@ -885,10 +952,36 @@ def _clean_extracted_name(raw: str) -> str:
     return val.strip()
 
 
+def _normalize_extracted_person_name(raw: str) -> str:
+    val = (raw or "").strip()
+    val = re.sub(r"\s+", "", val)
+    val = val.strip(" \t:：,，;；|｜")
+    if re.match(r"^名\s*[:：]", val):
+        return ""
+    return val
+
+
+def _extract_name_from_labeled_fields(text: str) -> str:
+    src = text or ""
+    for pattern in (_RE_NAME_LABEL_INLINE, _RE_NAME_LABEL_NEXT_LINE):
+        for match in pattern.finditer(src):
+            name = _normalize_extracted_person_name(match.group(1))
+            if name and not reject_candidate_name_reason(name, strict_length=False):
+                return name
+    return ""
+
+
 def _extract_name(text: str) -> str:
+    name = _extract_name_from_labeled_fields(text or "")
+    if name:
+        return name
+
     match = _RE_NAME.search(text or "")
     if match:
-        return _clean_extracted_name(match.group(1))
+        name = _clean_extracted_name(match.group(1))
+        if name and not reject_candidate_name_reason(name, strict_length=False):
+            return name
+
     return _extract_name_from_header(text or "")
 
 
@@ -897,20 +990,17 @@ def _extract_name_from_header(text: str) -> str:
     nonempty = [line for line in lines if line]
     if not nonempty:
         return ""
-    header = nonempty[:10]
-    header_text = "\n".join(header)
-    full_text = text or ""
+    context_window = "\n".join(nonempty[:10])
     if not (
-        _RE_PROFILE_LINE.search(header_text)
-        or _RE_PHONE.search(header_text)
-        or _RE_AGE_LOOSE.search(header_text)
-        or _RE_PHONE.search(full_text)
+        _RE_RESUME_CONTEXT_NEAR_NAME.search(context_window)
+        or _RE_PROFILE_LINE.search(context_window)
+        or _RE_AGE_LOOSE.search(context_window)
     ):
         return ""
-    for line in header[:4]:
+    for line in nonempty[:3]:
         if line in _NAME_HEADER_SKIP:
             continue
-        if not _RE_NAME_STANDALONE.fullmatch(line):
+        if not _RE_NAME_HEADER_STANDALONE.fullmatch(line):
             continue
         if reject_candidate_name_reason(line, strict_length=False):
             continue

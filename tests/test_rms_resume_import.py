@@ -13,6 +13,7 @@ from sqlalchemy import text
 from starlette.testclient import TestClient
 
 from services import rms_resume_import as import_svc
+from services.rms_applications import reject_candidate_name_reason
 
 from tests.helpers import auth_header
 from tests.test_rms_application_workflow import _resume_with_contact_and_education
@@ -190,11 +191,34 @@ def test_commit_creates_candidate_and_resume(import_engine, tmp_path):
     assert parsed.get("phone") == phone
 
 
-@pytest.mark.parametrize(
-    "bad_name",
-    ["个人简历", "电话", "许昌学院", "相机效果测试"],
-)
-def test_import_rejects_invalid_candidate_name_commit(import_engine, tmp_path, bad_name):
+_INVALID_NAME_CASES = [
+    ("个人简历", "blocklist"),
+    ("电话", "blocklist"),
+    ("许昌学院", "institution_suffix"),
+    ("相机效果测试", "length"),
+    ("个人资料", "blocklist"),
+    ("西安", "place_name"),
+    ("[张帅]", "invalid_format"),
+]
+
+# Parser rejects these before import gate (no name in draft_fields).
+_IMPORT_MISSING_NAME_CASES = [
+    case for case in _INVALID_NAME_CASES if case[0] != "相机效果测试"
+]
+_IMPORT_INVALID_NAME_CASES = [
+    case for case in _INVALID_NAME_CASES if case[0] == "相机效果测试"
+]
+
+
+@pytest.mark.parametrize("name,expected_reason", _INVALID_NAME_CASES)
+def test_reject_candidate_name_reason_codes(name, expected_reason):
+    assert reject_candidate_name_reason(name, strict_length=True) == expected_reason
+
+
+@pytest.mark.parametrize("bad_name,expected_reason", _IMPORT_INVALID_NAME_CASES)
+def test_import_rejects_invalid_candidate_name_commit(
+    import_engine, tmp_path, bad_name, expected_reason
+):
     phone = _import_phone()
     src = tmp_path / "src"
     src.mkdir()
@@ -219,14 +243,44 @@ def test_import_rejects_invalid_candidate_name_commit(import_engine, tmp_path, b
     row = result["rows"][0]
     assert row["status"] == "skipped_unparseable"
     assert row["error"] == "invalid_candidate_name"
-    assert row["name_reject_reason"]
+    assert row["name_reject_reason"] == expected_reason
 
 
-@pytest.mark.parametrize(
-    "bad_name",
-    ["个人简历", "电话", "许昌学院", "相机效果测试"],
-)
-def test_import_rejects_invalid_candidate_name_dry_run(import_engine, tmp_path, bad_name):
+@pytest.mark.parametrize("bad_name,expected_reason", _IMPORT_MISSING_NAME_CASES)
+def test_import_skips_parser_rejected_candidate_name_commit(
+    import_engine, tmp_path, bad_name, expected_reason
+):
+    phone = _import_phone()
+    src = tmp_path / "src"
+    src.mkdir()
+    _write_resume_txt(src, "resume.txt", _minimal_resume(bad_name, phone))
+    upload_dir = tmp_path / "uploads"
+    report_dir = tmp_path / "reports"
+    before_c = _count_table(import_engine, "rms_candidates")
+    before_r = _count_table(import_engine, "rms_resumes")
+
+    result = _run_import(
+        import_engine,
+        src,
+        commit=True,
+        upload_dir=upload_dir,
+        report_dir=report_dir,
+    )
+
+    assert result["created"] == 0, result
+    assert result["skipped_unparseable"] == 1
+    assert _count_table(import_engine, "rms_candidates") == before_c
+    assert _count_table(import_engine, "rms_resumes") == before_r
+    row = result["rows"][0]
+    assert row["status"] == "skipped_unparseable"
+    assert row["error"] == "missing_name_or_phone"
+    assert row["name_reject_reason"] == ""
+
+
+@pytest.mark.parametrize("bad_name,expected_reason", _IMPORT_INVALID_NAME_CASES)
+def test_import_rejects_invalid_candidate_name_dry_run(
+    import_engine, tmp_path, bad_name, expected_reason
+):
     phone = _import_phone()
     src = tmp_path / "src"
     src.mkdir()
@@ -247,7 +301,34 @@ def test_import_rejects_invalid_candidate_name_dry_run(import_engine, tmp_path, 
     row = result["rows"][0]
     assert row["status"] == "skipped_unparseable"
     assert row["error"] == "invalid_candidate_name"
-    assert row["name_reject_reason"]
+    assert row["name_reject_reason"] == expected_reason
+
+
+@pytest.mark.parametrize("bad_name,expected_reason", _IMPORT_MISSING_NAME_CASES)
+def test_import_skips_parser_rejected_candidate_name_dry_run(
+    import_engine, tmp_path, bad_name, expected_reason
+):
+    phone = _import_phone()
+    src = tmp_path / "src"
+    src.mkdir()
+    _write_resume_txt(src, "resume.txt", _minimal_resume(bad_name, phone))
+    upload_dir = tmp_path / "uploads"
+    report_dir = tmp_path / "reports"
+
+    result = _run_import(
+        import_engine,
+        src,
+        dry_run=True,
+        upload_dir=upload_dir,
+        report_dir=report_dir,
+    )
+
+    assert result["would_create"] == 0, result
+    assert result["skipped_unparseable"] == 1
+    row = result["rows"][0]
+    assert row["status"] == "skipped_unparseable"
+    assert row["error"] == "missing_name_or_phone"
+    assert row["name_reject_reason"] == ""
 
 
 @pytest.mark.parametrize("good_name", ["周鹏飞", "刘昱辰", "张丽娜"])

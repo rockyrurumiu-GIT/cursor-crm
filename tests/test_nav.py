@@ -21,6 +21,9 @@ def test_dashboard_nav_moved_under_customers():
 def test_rms_nav_entry():
     nav = _nav_html()
     assert 'href="/rms"' in nav
-    assert 'data-crm-nav-perm="rms.jobs.read"' in nav
+    assert 'data-crm-nav-any="rms.jobs.read,rms.analytics.read,rms.candidates.read"' in nav
     assert 'class="nav-trigger cursor-default">招聘' in nav
-    assert "需求&amp;人才库" in nav
+    assert 'href="/rms" data-crm-nav-perm="rms.jobs.read">需求&amp;人才库' in nav
+    assert "帮助文件" in nav
+    assert 'href="/rms/import-help"' in nav
+    assert 'data-crm-nav-perm="rms.candidates.read">批量导入帮助' in nav

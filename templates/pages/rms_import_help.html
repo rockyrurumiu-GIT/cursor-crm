@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}RMS 批量导入帮助 · ITO CRM{% endblock %}
+{% block content %}
+<div class="container mx-auto p-6 max-w-[960px]">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
+        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">招聘模块</p>
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">RMS 批量导入帮助</h1>
+        <p class="text-gray-600 mb-6">命令行批量导入人才库简历，以及用 corrections.csv 修正导入结果。请将示例中的占位路径替换为本机路径。</p>
+
+        <div class="prose prose-sm max-w-none text-gray-700 space-y-8">
+            <section>
+                <h2>1. 批量导入 dry-run（预览）</h2>
+                <p>先预览，不写数据库、不保存简历文件。</p>
+                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>cd /path/to/cursor-crm
+
+./venv/bin/python scripts/import_rms_resumes.py \
+  --source-dir "/你的简历文件夹" \
+  --dry-run \
+  --recursive</code></pre>
+            </section>
+
+            <section>
+                <h2>2. 批量导入 commit（正式入库）</h2>
+                <p>确认 dry-run 报告无误后再执行。仅写入候选人与简历，不会自动推荐到岗位。</p>
+                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/import_rms_resumes.py \
+  --source-dir "/你的简历文件夹" \
+  --commit \
+  --recursive</code></pre>
+            </section>
+
+            <section>
+                <h2>3. 查看导入报告</h2>
+                <p>报告默认输出到 <code>reports/rms_imports/</code>，包含 CSV 与 JSON 摘要。报告中的手机号、邮箱已脱敏。</p>
+                <ul>
+                    <li>批量导入：<code>rms_resume_import_YYYYMMDD_HHMMSS.csv/json</code></li>
+                    <li>修正 CSV：<code>rms_resume_correction_YYYYMMDD_HHMMSS.csv/json</code></li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>4. corrections.csv 模板</h2>
+                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>resume_file_path,action,candidate_id,name,phone,email_wechat,school,major,education_level,source
+/你的简历文件夹/a.pdf,create,,张三,13800138000,zhangsan@example.com,西安电子科技大学,计算机,本科,批量导入
+,update,123,李四,13900139000,lisi@example.com,许昌学院,软件工程,本科,批量导入
+/你的简历文件夹/c.pdf,skip,,,,,,,</code></pre>
+                <p><strong>action</strong>：<code>create</code>（新建候选人+简历）、<code>update</code>（按 candidate_id 更新非空字段）、<code>skip</code>（跳过）。</p>
+            </section>
+
+            <section>
+                <h2>5. 修正 CSV dry-run</h2>
+                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/apply_rms_resume_import_corrections.py \
+  --csv "/你的修正CSV路径/rms_resume_corrections.csv" \
+  --dry-run</code></pre>
+            </section>
+
+            <section>
+                <h2>6. 修正 CSV commit</h2>
+                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/apply_rms_resume_import_corrections.py \
+  --csv "/你的修正CSV路径/rms_resume_corrections.csv" \
+  --commit</code></pre>
+            </section>
+
+            <section>
+                <h2>注意事项</h2>
+                <ul>
+                    <li>务必先 <strong>dry-run</strong>，再 <strong>commit</strong>。</li>
+                    <li>不要把真实简历、导入报告、修正 CSV 提交到 GitHub；<code>reports/rms_imports/</code> 已在 .gitignore 中忽略。</li>
+                    <li>导入只写 <code>rms_candidates</code> 与 <code>rms_resumes</code>，不会自动推荐到岗位。</li>
+                    <li>去重规则：仅当<strong>姓名 + 手机号</strong>同时相同才判定重复。</li>
+                </ul>
+            </section>
+        </div>
+
+        <a href="/rms" class="inline-block mt-8 text-sm text-[#0969da] hover:underline">← 返回需求&amp;人才库</a>
+    </div>
+</div>
+{% endblock %}
