@@ -359,7 +359,152 @@ def test_extract_draft_fields_name_from_filename_fallback():
 def test_extract_name_candidates_from_filename_preserves_multiple_candidates_order():
     assert _extract_name_candidates_from_filename(
         "海橘OSSOFT-相机效果测试-李湘-西安.pdf"
-    ) == ["李湘", "相机效果测试"]
+    ) == ["李湘"]
+
+
+def test_filename_name_gets_boost_when_appears_anywhere_in_resume_text():
+    text = (
+        "1998 年2 月\n"
+        "汉族\n"
+        "武汉市\n"
+        "15600033699\n"
+        "qinyx_ws@163.com\n"
+        "教育背景：本科\n"
+        "专业：计算机科学与技术\n"
+        "主修课程：移动应用程序设计\n"
+        "袁雪芹\n"
+        "基础、数据库原理\n"
+    )
+    draft = _extract_draft_fields_from_text(
+        text,
+        file_name="海橘OSSOFT-Android开发-袁雪芹-武汉.pdf",
+    )
+    assert draft.get("name") == "袁雪芹"
+
+
+def test_filename_role_and_city_candidates_do_not_get_name_boost():
+    text = (
+        "Android开发\n"
+        "武汉\n"
+        "汉族\n"
+        "15600033699\n"
+        "qinyx_ws@163.com\n"
+    )
+    draft = _extract_draft_fields_from_text(
+        text,
+        file_name="海橘OSSOFT-Android开发-武汉.pdf",
+    )
+    assert "name" not in draft
+
+
+def test_filename_name_boost_matches_spaced_name_in_resume_text():
+    text = (
+        "1998 年2 月\n"
+        "汉族\n"
+        "袁 雪 芹\n"
+        "15600033699\n"
+    )
+    draft = _extract_draft_fields_from_text(
+        text,
+        file_name="海橘OSSOFT-Android开发-袁雪芹-武汉.pdf",
+    )
+    assert draft.get("name") == "袁雪芹"
+
+
+def test_filename_name_wins_over_province_header_line():
+    text = (
+        "1998 年2 月\n"
+        "汉族\n"
+        "云南\n"
+        "15600033699\n"
+        "qinyx@163.com\n"
+        "教育背景：本科\n"
+        "主修课程：Java 程序设计\n"
+        "左金平\n"
+        "基础、数据库原理\n"
+    )
+    draft = _extract_draft_fields_from_text(
+        text,
+        file_name="海橘OSSOFT-Java开发-左金平-昆明.pdf",
+    )
+    assert draft.get("name") == "左金平"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "刘注男26 岁",
+        "刘注 男 26岁",
+        "刘注 女 | 23岁",
+        "刘注 男 | 26",
+    ],
+)
+def test_profile_line_extracts_name_gender_age(line):
+    draft = _extract_draft_fields_from_text(
+        f"{line}\n手机 13800138000\n",
+        file_name="unknown.pdf",
+    )
+    assert draft.get("name") == "刘注"
+
+
+def test_extract_draft_fields_profile_line_wins_over_filename_degree_tokens():
+    text = (
+        "刘注男26 岁\n"
+        "手机 13800138000\n"
+        "邮箱 liuzhu@example.com\n"
+    )
+    draft = _extract_draft_fields_from_text(
+        text,
+        file_name="海橘OSSOFT-天线工程师-本科-刘注-武汉.pdf",
+    )
+    assert draft.get("name") == "刘注"
+
+
+def test_filename_excludes_degree_tokens():
+    assert "本科" not in _extract_name_candidates_from_filename(
+        "海橘OSSOFT-天线工程师-本科-刘注-武汉.pdf"
+    )
+    assert "刘注" in _extract_name_candidates_from_filename(
+        "海橘OSSOFT-天线工程师-本科-刘注-武汉.pdf"
+    )
+
+
+def test_section_heading_does_not_beat_filename_name_in_resume_text():
+    draft = _extract_draft_fields_from_text(
+        "个人优势\n"
+        "在天线行业调试工作快十年\n"
+        "曾庆雄\n"
+        "男 | 38岁\n"
+        "联系方式\n"
+        "电话：13265760393\n",
+        file_name="海橘科技-天线开发-曾庆雄-东莞.pdf",
+    )
+    assert draft.get("name") == "曾庆雄"
+
+
+def test_header_line_rejects_full_section_heading():
+    draft = _extract_draft_fields_from_text(
+        "个人优势\n联系方式\n电话：13265760393\n",
+        file_name="unknown.pdf",
+    )
+    assert "name" not in draft
+
+
+def test_extract_draft_fields_prefers_filename_confirmed_header_name_over_split_section_title():
+    draft = _extract_draft_fields_from_text(
+        "个人优\n势\n郑力豪\n拥有 4 年海外社交与 AI 聊天产品经验\n男 | 26岁\n"
+        "联系方式\n电话：18939178834\n邮箱：314575111@qq.com\n",
+        file_name="海橘-OSSOFT-产品经理-北京-郑力豪.pdf",
+    )
+    assert draft.get("name") == "郑力豪"
+
+
+def test_extract_draft_fields_rejects_split_section_heading_as_name():
+    draft = _extract_draft_fields_from_text(
+        "个人优\n势\n联系方式\n电话：18939178834\n",
+        file_name="unknown.pdf",
+    )
+    assert "name" not in draft
 
 
 def test_extract_draft_fields_filename_scores_multiple_candidates():

@@ -152,6 +152,92 @@ _PLACE_NAME_EXACT = frozenset({
     "佛山",
 })
 _RE_NAME_BRACKETS = re.compile(r"[\[\]【】（）()《》〈〉]")
+_RE_NAME_GENDER_AGE_LINE = re.compile(
+    r"^([\u4e00-\u9fa5·]{2,4})\s*(?:男|女)\s*[|｜]?\s*\d{1,2}\s*(?:岁)?"
+)
+_RE_ADMIN_PLACE_SUFFIX = re.compile(r"^[\u4e00-\u9fa5]{1,3}[省市区县]$")
+_FILENAME_ROLE_MARKERS = (
+    "开发",
+    "测试",
+    "产品",
+    "经理",
+    "工程师",
+    "运维",
+    "算法",
+    "安卓",
+    "Android",
+    "iOS",
+    "Java",
+    "Python",
+    "C++",
+    "前端",
+    "后端",
+    "设计",
+)
+_FILENAME_NON_PERSON_EXACT = frozenset({
+    "本科",
+    "大专",
+    "硕士",
+    "博士",
+    "研究生",
+    "统本",
+    "全日制",
+    "非全日制",
+})
+_PROVINCE_NAME_EXACT = frozenset({
+    "云南",
+    "贵州",
+    "四川",
+    "陕西",
+    "河南",
+    "河北",
+    "山东",
+    "山西",
+    "广东",
+    "广西",
+    "湖南",
+    "湖北",
+    "江苏",
+    "浙江",
+    "福建",
+    "江西",
+    "安徽",
+    "甘肃",
+    "青海",
+    "海南",
+    "辽宁",
+    "吉林",
+    "黑龙江",
+    "内蒙古",
+    "新疆",
+    "西藏",
+    "宁夏",
+})
+_DEMOGRAPHIC_NAME_EXACT = frozenset({
+    "汉族",
+    "回族",
+    "满族",
+    "蒙古族",
+    "藏族",
+    "维吾尔族",
+    "壮族",
+    "苗族",
+    "土家族",
+    "彝族",
+    "朝鲜族",
+})
+_SECTION_HEADING_NAME_EXACT = frozenset({
+    "个人优势",
+    "专业技能",
+    "工作经历",
+    "项目经历",
+    "教育经历",
+    "教育背景",
+    "求职信息",
+    "联系方式",
+    "荣誉奖励",
+    "技能证书",
+})
 
 
 @dataclass(frozen=True)
@@ -208,6 +294,7 @@ _NAME_HEADER_SKIP = frozenset({
     "效果",
     "相机",
 })
+_SPLIT_SECTION_HEADING_TARGETS = _SECTION_HEADING_NAME_EXACT | _NAME_HEADER_SKIP
 _RE_WORK_YEARS_LABEL = re.compile(
     r"工作年限\s*[:：]\s*(\d+\s*(?:年(?:以上)?)?)"
 )
@@ -935,6 +1022,10 @@ def reject_candidate_name_reason(name: str, *, strict_length: bool = False) -> s
         return "blocklist"
     if val in _PLACE_NAME_EXACT:
         return "place_name"
+    if val in _DEMOGRAPHIC_NAME_EXACT:
+        return "demographic"
+    if val in _SECTION_HEADING_NAME_EXACT:
+        return "section_heading"
     for marker in _INSTITUTION_NAME_MARKERS:
         if marker in val:
             return "institution_suffix"
@@ -999,13 +1090,79 @@ def _has_resume_context_near(lines: List[str], line_index: int) -> bool:
     return False
 
 
+def _compact_text_for_name_match(text: str) -> str:
+    return re.sub(r"\s+", "", text or "")
+
+
+def _name_appears_in_resume_text(name: str, text: str) -> bool:
+    compact_name = re.sub(r"\s+", "", name or "")
+    compact_text = _compact_text_for_name_match(text)
+    return bool(compact_name and compact_name in compact_text)
+
+
+def _is_admin_place_short_field(value: str) -> bool:
+    val = (value or "").strip()
+    if not val:
+        return False
+    if val in _PLACE_NAME_EXACT or val in _PROVINCE_NAME_EXACT:
+        return True
+    if _RE_NAME_HEADER_STANDALONE.fullmatch(val) and _RE_ADMIN_PLACE_SUFFIX.fullmatch(val):
+        return True
+    return False
+
+
+def _is_filename_person_candidate(value: str) -> bool:
+    val = (value or "").strip()
+    if not val:
+        return False
+    if not _RE_NAME_HEADER_STANDALONE.fullmatch(val):
+        return False
+    if re.search(r"[A-Za-z0-9]", val):
+        return False
+    if val in _FILENAME_NON_PERSON_EXACT:
+        return False
+    if _is_admin_place_short_field(val):
+        return False
+    if reject_candidate_name_reason(val, strict_length=False):
+        return False
+    lower = val.lower()
+    if any(marker.lower() in lower for marker in _FILENAME_ROLE_MARKERS):
+        return False
+    return True
+
+
+def _next_nonempty_line_index(lines: List[str], start: int) -> int:
+    for j in range(start, len(lines)):
+        if lines[j]:
+            return j
+    return -1
+
+
+def _is_split_section_heading_candidate(lines: List[str], line_index: int) -> bool:
+    line = lines[line_index]
+    if not line or not _RE_NAME_HEADER_STANDALONE.fullmatch(line):
+        return False
+    next_idx = _next_nonempty_line_index(lines, line_index + 1)
+    if next_idx < 0:
+        return False
+    next_line = lines[next_idx]
+    if not next_line or not _RE_NAME_CHARS.fullmatch(next_line):
+        return False
+    if not (1 <= _han_char_count(next_line) <= 4):
+        return False
+    return (line + next_line) in _SPLIT_SECTION_HEADING_TARGETS
+
+
 def _score_name_candidate(
     value: str,
     *,
     source: str,
     line_index: int,
     lines: List[str],
+    resume_text: str = "",
+    filename_values: set[str] | frozenset[str] | None = None,
 ) -> tuple[int, str]:
+    filename_values = filename_values or frozenset()
     if not value:
         return 0, "empty"
     if reject_candidate_name_reason(value, strict_length=False):
@@ -1017,6 +1174,7 @@ def _score_name_candidate(
         "labeled": 90,
         "labeled_split": 90,
         "legacy_labeled": 90,
+        "profile_line": 90,
         "header_line": 70,
         "filename": 65,
     }
@@ -1039,6 +1197,12 @@ def _score_name_candidate(
     if source != "filename" and not _has_resume_context_near(lines, line_index):
         score -= 10
 
+    if source == "filename" and _name_appears_in_resume_text(value, resume_text):
+        score += 25
+
+    if source != "filename" and value in filename_values:
+        score += 15
+
     return max(score, 0), reason
 
 
@@ -1049,12 +1213,19 @@ def _append_name_candidate(
     source: str,
     line_index: int,
     lines: List[str],
+    resume_text: str = "",
+    filename_values: set[str] | frozenset[str] | None = None,
 ) -> None:
     value = _normalize_name_candidate(raw)
     if not value:
         return
     score, reason = _score_name_candidate(
-        value, source=source, line_index=line_index, lines=lines
+        value,
+        source=source,
+        line_index=line_index,
+        lines=lines,
+        resume_text=resume_text,
+        filename_values=filename_values,
     )
     if score > 0:
         candidates.append(
@@ -1070,6 +1241,7 @@ def _append_name_candidate(
 
 _NAME_SOURCE_PRIORITY = {
     "labeled": 0,
+    "profile_line": 0,
     "labeled_split": 1,
     "legacy_labeled": 2,
     "header_line": 3,
@@ -1098,6 +1270,10 @@ def _collect_name_candidates(text: str, *, file_name: str = "") -> List[_NameCan
     src = text or ""
     lines = [_normalize_resume_line(line) for line in src.splitlines()]
     candidates: List[_NameCandidate] = []
+    filename_values: set[str] = set()
+    if file_name:
+        filename_values = set(_extract_name_candidates_from_filename(file_name))
+    ctx = dict(resume_text=src, filename_values=filename_values)
 
     for pattern, source in (
         (_RE_NAME_LABEL_INLINE, "labeled"),
@@ -1111,6 +1287,19 @@ def _collect_name_candidates(text: str, *, file_name: str = "") -> List[_NameCan
                 source=source,
                 line_index=line_index,
                 lines=lines,
+                **ctx,
+            )
+
+    for i, line in enumerate(lines):
+        profile_match = _RE_NAME_GENDER_AGE_LINE.match(line)
+        if profile_match:
+            _append_name_candidate(
+                candidates,
+                profile_match.group(1),
+                source="profile_line",
+                line_index=i,
+                lines=lines,
+                **ctx,
             )
 
     nonempty = [line for line in lines if line]
@@ -1130,6 +1319,10 @@ def _collect_name_candidates(text: str, *, file_name: str = "") -> List[_NameCan
                 nonempty_count += 1
                 if line in _NAME_HEADER_SKIP:
                     continue
+                if _is_split_section_heading_candidate(lines, i):
+                    continue
+                if _is_admin_place_short_field(line):
+                    continue
                 if _RE_NAME_HEADER_STANDALONE.fullmatch(line):
                     _append_name_candidate(
                         candidates,
@@ -1137,17 +1330,18 @@ def _collect_name_candidates(text: str, *, file_name: str = "") -> List[_NameCan
                         source="header_line",
                         line_index=i,
                         lines=lines,
+                        **ctx,
                     )
 
-    if file_name:
-        for name in _extract_name_candidates_from_filename(file_name):
-            _append_name_candidate(
-                candidates,
-                name,
-                source="filename",
-                line_index=-1,
-                lines=lines,
-            )
+    for name in filename_values:
+        _append_name_candidate(
+            candidates,
+            name,
+            source="filename",
+            line_index=-1,
+            lines=lines,
+            **ctx,
+        )
 
     for match in _RE_NAME.finditer(src):
         line_index = src[: match.start()].count("\n")
@@ -1158,6 +1352,7 @@ def _collect_name_candidates(text: str, *, file_name: str = "") -> List[_NameCan
             source="legacy_labeled",
             line_index=line_index,
             lines=lines,
+            **ctx,
         )
 
     return candidates
@@ -1208,11 +1403,7 @@ def _extract_name_candidates_from_filename(file_name: str) -> List[str]:
     seen: set[str] = set()
 
     for part in reversed(parts):
-        if not _RE_NAME_STANDALONE.fullmatch(part):
-            continue
-        if re.search(r"[A-Za-z0-9]", part):
-            continue
-        if reject_candidate_name_reason(part, strict_length=False):
+        if not _is_filename_person_candidate(part):
             continue
         if part in seen:
             continue
