@@ -17,6 +17,7 @@ from services.rms_applications import (
     _extract_draft_fields_from_text,
     _extract_explicit_work_years,
     _extract_name,
+    _extract_name_candidates_from_filename,
     _parse_work_years_from_periods,
 )
 from sqlalchemy import text
@@ -355,6 +356,22 @@ def test_extract_draft_fields_name_from_filename_fallback():
     assert draft.get("age") == "41"
 
 
+def test_extract_name_candidates_from_filename_preserves_multiple_candidates_order():
+    assert _extract_name_candidates_from_filename(
+        "海橘OSSOFT-相机效果测试-李湘-西安.pdf"
+    ) == ["李湘", "相机效果测试"]
+
+
+def test_extract_draft_fields_filename_scores_multiple_candidates():
+    draft = _extract_draft_fields_from_text(
+        "联系方式\n电话：17349211872\n邮箱：434814837@qq.com\n求职意向：测试工程师\n",
+        file_name="海橘OSSOFT-相机效果测试-李湘-西安.pdf",
+    )
+    assert draft.get("name") == "李湘"
+    assert draft.get("phone") == "17349211872"
+    assert draft.get("email_wechat") == "434814837@qq.com"
+
+
 def _resume_with_split_name_labels() -> str:
     return (
         "个人简历\n"
@@ -392,7 +409,34 @@ def test_extract_draft_fields_spaced_name_label():
 
 
 def test_extract_name_rejects_standalone_ming_label_line():
-    assert _extract_name("名：马兵文\n") == ""
+    assert _extract_name("名：马兵文\n", file_name="unknown.pdf") == ""
+
+
+def test_extract_draft_fields_split_name_labels_zhangqin_without_filename_fallback():
+    draft = _extract_draft_fields_from_text(
+        "个人简历\n基本信息\n姓\n名：张钦\n性\n别：男\n电\n话：19898718413\n",
+        file_name="unknown.pdf",
+    )
+    assert draft.get("name") == "张钦"
+    assert draft.get("phone") == "19898718413"
+
+
+def test_extract_draft_fields_header_line_name_without_filename_fallback():
+    draft = _extract_draft_fields_from_text(
+        "王浩\n个人信息\n学历：本科\n毕业院校：许昌学院\n专业：通信工程\n电话：18103990015\n",
+        file_name="unknown.pdf",
+    )
+    assert draft.get("name") == "王浩"
+    assert draft.get("phone") == "18103990015"
+
+
+def test_extract_draft_fields_rejects_bad_header_name_candidates():
+    draft = _extract_draft_fields_from_text(
+        "个人简历\n个人资料\n西安\n电话：13572324241\n",
+        file_name="unknown.pdf",
+    )
+    assert "name" not in draft
+    assert draft.get("phone") == "13572324241"
 
 
 def test_parse_draft_split_name_labels_unknown_pdf(

@@ -16,7 +16,10 @@ from services import rms_resume_import as import_svc
 from services.rms_applications import reject_candidate_name_reason
 
 from tests.helpers import auth_header
-from tests.test_rms_application_workflow import _resume_with_contact_and_education
+from tests.test_rms_application_workflow import (
+    _resume_with_contact_and_education,
+    _resume_with_split_name_labels,
+)
 from tests.test_rms_phase2_mvp import (
     _enable_delivery_rms_mvp,
     _enable_sales_rms_jobs_write,
@@ -155,6 +158,25 @@ def test_dry_run_writes_no_db_rows(import_engine, tmp_path):
     assert result["would_create"] == 1
     assert result["rows"][0]["status"] == "would_create"
     assert not list(upload_dir.glob("**/*"))
+
+
+def test_dry_run_split_name_labels_unknown_txt(import_engine, tmp_path):
+    src = tmp_path / "src"
+    src.mkdir()
+    _write_resume_txt(src, "unknown.txt", _resume_with_split_name_labels())
+    upload_dir = tmp_path / "uploads"
+    report_dir = tmp_path / "reports"
+
+    result = _run_import(
+        import_engine,
+        src,
+        dry_run=True,
+        upload_dir=upload_dir,
+        report_dir=report_dir,
+    )
+
+    assert result["would_create"] == 1, result
+    assert result["rows"][0]["name"] == "马兵文"
 
 
 def test_commit_creates_candidate_and_resume(import_engine, tmp_path):

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from dataclasses import dataclass
 from datetime import date
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple, Type
@@ -151,6 +152,17 @@ _PLACE_NAME_EXACT = frozenset({
     "佛山",
 })
 _RE_NAME_BRACKETS = re.compile(r"[\[\]【】（）()《》〈〉]")
+
+
+@dataclass(frozen=True)
+class _NameCandidate:
+    value: str
+    source: str
+    line_index: int
+    score: int
+    reason: str
+
+
 _INSTITUTION_NAME_MARKERS = (
     "大学",
     "学院",
@@ -952,13 +964,203 @@ def _clean_extracted_name(raw: str) -> str:
     return val.strip()
 
 
-def _normalize_extracted_person_name(raw: str) -> str:
+def _normalize_name_candidate(raw: str) -> str:
     val = (raw or "").strip()
-    val = re.sub(r"\s+", "", val)
-    val = val.strip(" \t:：,，;；|｜")
+    if not val:
+        return ""
     if re.match(r"^名\s*[:：]", val):
         return ""
+    val = re.sub(r"^(?:姓\s*名|姓名)\s*[:：]?", "", val)
+    val = re.sub(r"\s+", "", val)
+    val = val.strip(" \t:：,，;；|｜")
+    if not val or reject_candidate_name_reason(val, strict_length=False):
+        return ""
     return val
+
+
+def _normalize_extracted_person_name(raw: str) -> str:
+    return _normalize_name_candidate(raw)
+
+
+def _resume_context_window(lines: List[str], line_index: int, *, radius: int = 6) -> str:
+    start = max(0, line_index - radius)
+    end = min(len(lines), line_index + radius + 1)
+    return "\n".join(lines[start:end])
+
+
+def _has_resume_context_near(lines: List[str], line_index: int) -> bool:
+    if line_index < 0:
+        return False
+    window = _resume_context_window(lines, line_index)
+    if _RE_RESUME_CONTEXT_NEAR_NAME.search(window):
+        return True
+    if _RE_PHONE.search(window) or _RE_EMAIL.search(window):
+        return True
+    return False
+
+
+def _score_name_candidate(
+    value: str,
+    *,
+    source: str,
+    line_index: int,
+    lines: List[str],
+) -> tuple[int, str]:
+    if not value:
+        return 0, "empty"
+    if reject_candidate_name_reason(value, strict_length=False):
+        return 0, "rejected"
+    if re.search(r"[A-Za-z0-9]", value):
+        return 0, "format"
+
+    base_scores = {
+        "labeled": 90,
+        "labeled_split": 90,
+        "legacy_labeled": 90,
+        "header_line": 70,
+        "filename": 65,
+    }
+    score = base_scores.get(source, 0)
+    reason = source
+
+    han = _han_char_count(value)
+    if 2 <= han <= 4:
+        score += 10
+
+    if 0 <= line_index <= 3:
+        score += 8
+
+    if _has_resume_context_near(lines, line_index):
+        score += 6
+
+    if line_index > 20:
+        score -= 20
+
+    if source != "filename" and not _has_resume_context_near(lines, line_index):
+        score -= 10
+
+    return max(score, 0), reason
+
+
+def _append_name_candidate(
+    candidates: List[_NameCandidate],
+    raw: str,
+    *,
+    source: str,
+    line_index: int,
+    lines: List[str],
+) -> None:
+    value = _normalize_name_candidate(raw)
+    if not value:
+        return
+    score, reason = _score_name_candidate(
+        value, source=source, line_index=line_index, lines=lines
+    )
+    if score > 0:
+        candidates.append(
+            _NameCandidate(
+                value=value,
+                source=source,
+                line_index=line_index,
+                score=score,
+                reason=reason,
+            )
+        )
+
+
+_NAME_SOURCE_PRIORITY = {
+    "labeled": 0,
+    "labeled_split": 1,
+    "legacy_labeled": 2,
+    "header_line": 3,
+    "filename": 4,
+}
+
+
+def _select_best_name_candidate(candidates: List[_NameCandidate]) -> str:
+    if not candidates:
+        return ""
+    ranked = sorted(
+        candidates,
+        key=lambda c: (
+            -c.score,
+            _NAME_SOURCE_PRIORITY.get(c.source, 99),
+            c.line_index if c.line_index >= 0 else 999,
+        ),
+    )
+    best = ranked[0]
+    if best.score < 75:
+        return ""
+    return best.value
+
+
+def _collect_name_candidates(text: str, *, file_name: str = "") -> List[_NameCandidate]:
+    src = text or ""
+    lines = [_normalize_resume_line(line) for line in src.splitlines()]
+    candidates: List[_NameCandidate] = []
+
+    for pattern, source in (
+        (_RE_NAME_LABEL_INLINE, "labeled"),
+        (_RE_NAME_LABEL_NEXT_LINE, "labeled_split"),
+    ):
+        for match in pattern.finditer(src):
+            line_index = src[: match.start()].count("\n")
+            _append_name_candidate(
+                candidates,
+                match.group(1),
+                source=source,
+                line_index=line_index,
+                lines=lines,
+            )
+
+    nonempty = [line for line in lines if line]
+    if nonempty:
+        context_window = "\n".join(nonempty[:10])
+        if (
+            _RE_RESUME_CONTEXT_NEAR_NAME.search(context_window)
+            or _RE_PROFILE_LINE.search(context_window)
+            or _RE_AGE_LOOSE.search(context_window)
+        ):
+            nonempty_count = 0
+            for i, line in enumerate(lines):
+                if not line:
+                    continue
+                if nonempty_count >= 3:
+                    break
+                nonempty_count += 1
+                if line in _NAME_HEADER_SKIP:
+                    continue
+                if _RE_NAME_HEADER_STANDALONE.fullmatch(line):
+                    _append_name_candidate(
+                        candidates,
+                        line,
+                        source="header_line",
+                        line_index=i,
+                        lines=lines,
+                    )
+
+    if file_name:
+        for name in _extract_name_candidates_from_filename(file_name):
+            _append_name_candidate(
+                candidates,
+                name,
+                source="filename",
+                line_index=-1,
+                lines=lines,
+            )
+
+    for match in _RE_NAME.finditer(src):
+        line_index = src[: match.start()].count("\n")
+        cleaned = _clean_extracted_name(match.group(1))
+        _append_name_candidate(
+            candidates,
+            cleaned,
+            source="legacy_labeled",
+            line_index=line_index,
+            lines=lines,
+        )
+
+    return candidates
 
 
 def _extract_name_from_labeled_fields(text: str) -> str:
@@ -971,18 +1173,9 @@ def _extract_name_from_labeled_fields(text: str) -> str:
     return ""
 
 
-def _extract_name(text: str) -> str:
-    name = _extract_name_from_labeled_fields(text or "")
-    if name:
-        return name
-
-    match = _RE_NAME.search(text or "")
-    if match:
-        name = _clean_extracted_name(match.group(1))
-        if name and not reject_candidate_name_reason(name, strict_length=False):
-            return name
-
-    return _extract_name_from_header(text or "")
+def _extract_name(text: str, *, file_name: str = "") -> str:
+    candidates = _collect_name_candidates(text or "", file_name=file_name)
+    return _select_best_name_candidate(candidates)
 
 
 def _extract_name_from_header(text: str) -> str:
@@ -1008,10 +1201,12 @@ def _extract_name_from_header(text: str) -> str:
     return ""
 
 
-def _extract_name_from_filename(file_name: str) -> str:
+def _extract_name_candidates_from_filename(file_name: str) -> List[str]:
     stem = os.path.splitext(os.path.basename(file_name or ""))[0]
     parts = [part.strip() for part in re.split(r"[-—_]", stem) if part.strip()]
     candidates: List[str] = []
+    seen: set[str] = set()
+
     for part in reversed(parts):
         if not _RE_NAME_STANDALONE.fullmatch(part):
             continue
@@ -1019,13 +1214,17 @@ def _extract_name_from_filename(file_name: str) -> str:
             continue
         if reject_candidate_name_reason(part, strict_length=False):
             continue
+        if part in seen:
+            continue
+        seen.add(part)
         candidates.append(part)
-    if not candidates:
-        return ""
-    longish = [candidate for candidate in candidates if len(candidate) >= 3]
-    if longish:
-        return longish[0]
-    return candidates[0]
+
+    return candidates
+
+
+def _extract_name_from_filename(file_name: str) -> str:
+    candidates = _extract_name_candidates_from_filename(file_name)
+    return candidates[0] if candidates else ""
 
 
 def _is_plausible_age(raw: str) -> bool:
@@ -1476,9 +1675,7 @@ def _extract_draft_fields_from_text(text: str, *, file_name: str = "") -> Dict[s
     if email_m:
         fields["email_wechat"] = email_m.group(0)
 
-    name = _extract_name(src)
-    if not name and file_name:
-        name = _extract_name_from_filename(file_name)
+    name = _extract_name(src, file_name=file_name)
     if name:
         fields["name"] = name
 
