@@ -409,6 +409,9 @@ def application_to_dict(row: Any) -> Dict[str, Any]:
         "receive_status": getattr(row, "receive_status", None) or "pending",
         "delivery_review_status": getattr(row, "delivery_review_status", None) or "pending",
         "hired_at": normalize_rms_date(getattr(row, "hired_at", None)),
+        "converted_to_roster_entry_id": getattr(row, "converted_to_roster_entry_id", None),
+        "converted_to_roster_at": normalize_rms_date(getattr(row, "converted_to_roster_at", None)),
+        "converted_to_roster_by": getattr(row, "converted_to_roster_by", None),
     }
     return d
 

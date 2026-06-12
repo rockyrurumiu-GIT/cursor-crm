@@ -318,6 +318,23 @@
       const reportResumeDragging = ref(false);
       const reportAutoFilledFields = reactive({});
       const reportForm = reactive(CandidateReport.emptyReportForm ? CandidateReport.emptyReportForm() : {});
+      const reportMode = ref("new");
+      const selectedExistingCandidate = ref(null);
+      const existingCandidatePickerOpen = ref(false);
+      const existingCandidatePickerQuery = ref("");
+      const existingCandidatePickerItems = ref([]);
+      const existingCandidatePickerLoading = ref(false);
+      const existingCandidatePickerError = ref("");
+      const existingCandidatePickerDetail = ref(null);
+      const existingCandidatePickerDetailLoading = ref(false);
+      const existingCandidateHoverCard = reactive({
+        open: false,
+        x: 0,
+        y: 0,
+        candidateId: null,
+      });
+      let existingCandidatePickerTimer = null;
+      let existingCandidatePopoverHideTimer = null;
 
       let reportPageDragGuardOn = false;
       function onReportPageDragOver(ev) {
@@ -496,6 +513,168 @@
       const canWriteApplications = computed(function () {
         return me.value.permissions.indexOf("rms.applications.write") !== -1;
       });
+      const canReadCandidates = computed(function () {
+        return me.value.permissions.indexOf("rms.candidates.read") !== -1;
+      });
+      const canRecommendExistingCandidate = computed(function () {
+        return canWriteApplications.value && canReadCandidates.value;
+      });
+      const canSubmitCandidateReport = computed(function () {
+        if (reportMode.value === "existing") {
+          return canWriteApplications.value && canReadCandidates.value;
+        }
+        return canWriteApplications.value && canWriteCandidates.value;
+      });
+      const existingCandidatePopoverStyle = computed(function () {
+        var gap = 12;
+        var width = 320;
+        var height = 460;
+        var viewportW = typeof window !== "undefined" ? window.innerWidth : 1920;
+        var viewportH = typeof window !== "undefined" ? window.innerHeight : 1080;
+        var left = existingCandidateHoverCard.x + gap;
+        var top = existingCandidateHoverCard.y + gap;
+        if (left + width > viewportW - 12) {
+          left = existingCandidateHoverCard.x - width - gap;
+        }
+        if (top + height > viewportH - 12) {
+          top = viewportH - height - 12;
+        }
+        if (top < 12) top = 12;
+        if (left < 12) left = 12;
+        return { left: left + "px", top: top + "px" };
+      });
+      const canConvertToRoster = computed(function () {
+        const perms = me.value.permissions || [];
+        return perms.indexOf("rms.applications.write") !== -1 &&
+          perms.indexOf("delivery.roster.write") !== -1;
+      });
+
+      const rosterConvertModal = ref(null);
+      const rosterConvertSaving = ref(false);
+      const rosterConvertError = ref("");
+      const rosterConvertForm = reactive({
+        employment_status: "在职",
+        full_name: "",
+        contact_info: "",
+        customer_name: "",
+        work_location: "",
+        position_title: "",
+        business_line: "",
+        entry_date: "",
+        monthly_quote_tax: "",
+        pre_tax_salary: "",
+        gms: "",
+        gm_pct: "",
+        salary_quote_ratio: "",
+        zntx_onboarding_channel: "RMS",
+        remarks: "",
+      });
+
+      function emptyRosterConvertForm() {
+        rosterConvertForm.employment_status = "在职";
+        rosterConvertForm.full_name = "";
+        rosterConvertForm.contact_info = "";
+        rosterConvertForm.customer_name = "";
+        rosterConvertForm.work_location = "";
+        rosterConvertForm.position_title = "";
+        rosterConvertForm.business_line = "";
+        rosterConvertForm.entry_date = "";
+        rosterConvertForm.monthly_quote_tax = "";
+        rosterConvertForm.pre_tax_salary = "";
+        rosterConvertForm.gms = "";
+        rosterConvertForm.gm_pct = "";
+        rosterConvertForm.salary_quote_ratio = "";
+        rosterConvertForm.zntx_onboarding_channel = "RMS";
+        rosterConvertForm.remarks = "";
+      }
+
+      function normalizeRosterAmountText(val) {
+        return String(val || "").replace(/[,¥￥\s\u00a0]/g, "").trim();
+      }
+
+      function formatGmPctSymbol(val) {
+        var s = String(val || "").trim().replace(/\uff05/g, "%");
+        if (!s) return "";
+        if (s.indexOf("%") === s.length - 1) return s;
+        return s + "%";
+      }
+
+      function validateRosterConvertClientForm() {
+        var required = [
+          ["employment_status", "在职情况"],
+          ["full_name", "姓名"],
+          ["contact_info", "联系方式"],
+          ["customer_name", "客户"],
+          ["work_location", "工作地"],
+          ["position_title", "岗位"],
+          ["business_line", "业务线"],
+          ["entry_date", "入职时间"],
+          ["monthly_quote_tax", "月报价(含税)"],
+          ["pre_tax_salary", "税前工资"],
+          ["gms", "GM$"],
+          ["gm_pct", "GM%"],
+        ];
+        var missing = [];
+        required.forEach(function (pair) {
+          if (!String(rosterConvertForm[pair[0]] || "").trim()) missing.push(pair[1]);
+        });
+        if (missing.length) return "请先完整填写必填项：" + missing.join("、");
+        var phone = String(rosterConvertForm.contact_info || "").trim();
+        if (!/^\d{11}$/.test(phone)) return "联系方式必须为11位数字";
+        return "";
+      }
+
+      async function openRosterConvertModal(appRow) {
+        rosterConvertError.value = "";
+        rosterConvertSaving.value = false;
+        emptyRosterConvertForm();
+        rosterConvertModal.value = { applicationId: appRow.id };
+        var r = await rmsRequest("GET", "/api/rms/applications/" + appRow.id + "/roster-draft");
+        if (!r.ok) {
+          rosterConvertError.value = r.message || "加载花名册草稿失败";
+          return;
+        }
+        var data = r.data || {};
+        var payload = data.roster_payload || {};
+        Object.keys(rosterConvertForm).forEach(function (key) {
+          if (payload[key] != null) rosterConvertForm[key] = String(payload[key]);
+        });
+      }
+
+      function closeRosterConvertModal() {
+        rosterConvertModal.value = null;
+        rosterConvertError.value = "";
+        rosterConvertSaving.value = false;
+      }
+
+      async function submitRosterConvert() {
+        if (!rosterConvertModal.value) return;
+        var clientErr = validateRosterConvertClientForm();
+        if (clientErr) {
+          rosterConvertError.value = clientErr;
+          return;
+        }
+        rosterConvertSaving.value = true;
+        rosterConvertError.value = "";
+        var payload = {};
+        Object.keys(rosterConvertForm).forEach(function (key) {
+          payload[key] = rosterConvertForm[key];
+        });
+        payload.monthly_quote_tax = normalizeRosterAmountText(payload.monthly_quote_tax);
+        payload.pre_tax_salary = normalizeRosterAmountText(payload.pre_tax_salary);
+        payload.gms = normalizeRosterAmountText(payload.gms);
+        payload.gm_pct = formatGmPctSymbol(payload.gm_pct);
+        var appId = rosterConvertModal.value.applicationId;
+        var r = await rmsRequest("POST", "/api/rms/applications/" + appId + "/convert-to-roster", payload);
+        rosterConvertSaving.value = false;
+        if (!r.ok) {
+          rosterConvertError.value = r.message || "转入花名册失败";
+          return;
+        }
+        closeRosterConvertModal();
+        toast("已成功转入花名册", false);
+        await loadApplications();
+      }
 
       const modalTitle = computed(function () {
         if (modal.value === "job") {
@@ -1577,11 +1756,188 @@
           : String(bytes || 0);
       }
 
+      function hideExistingCandidatePopover() {
+        if (existingCandidatePopoverHideTimer) {
+          clearTimeout(existingCandidatePopoverHideTimer);
+          existingCandidatePopoverHideTimer = null;
+        }
+        existingCandidateHoverCard.open = false;
+        existingCandidateHoverCard.candidateId = null;
+        existingCandidatePickerDetail.value = null;
+        existingCandidatePickerDetailLoading.value = false;
+      }
+
+      function keepExistingCandidatePopover() {
+        if (existingCandidatePopoverHideTimer) {
+          clearTimeout(existingCandidatePopoverHideTimer);
+          existingCandidatePopoverHideTimer = null;
+        }
+      }
+
+      function scheduleHideExistingCandidatePopover() {
+        keepExistingCandidatePopover();
+        existingCandidatePopoverHideTimer = setTimeout(function () {
+          existingCandidatePopoverHideTimer = null;
+          hideExistingCandidatePopover();
+        }, 150);
+      }
+
+      function moveExistingCandidatePopover(event) {
+        if (!event) return;
+        existingCandidateHoverCard.x = event.clientX;
+        existingCandidateHoverCard.y = event.clientY;
+      }
+
+      async function showExistingCandidatePopover(c, event) {
+        if (!c || c.id == null) return;
+        keepExistingCandidatePopover();
+        existingCandidateHoverCard.open = true;
+        existingCandidateHoverCard.candidateId = c.id;
+        moveExistingCandidatePopover(event);
+        if (
+          existingCandidatePickerDetail.value &&
+          Number(existingCandidatePickerDetail.value.id) === Number(c.id)
+        ) {
+          return;
+        }
+        await showExistingCandidatePickerDetail(c);
+      }
+
+      function resetExistingCandidatePickerState() {
+        hideExistingCandidatePopover();
+        existingCandidatePickerOpen.value = false;
+        existingCandidatePickerQuery.value = "";
+        existingCandidatePickerItems.value = [];
+        existingCandidatePickerLoading.value = false;
+        existingCandidatePickerError.value = "";
+        if (existingCandidatePickerTimer) {
+          clearTimeout(existingCandidatePickerTimer);
+          existingCandidatePickerTimer = null;
+        }
+      }
+
+      function resetExistingCandidateReportState() {
+        reportMode.value = "new";
+        selectedExistingCandidate.value = null;
+        resetExistingCandidatePickerState();
+      }
+
+      function fillReportFormFromCandidate(detail) {
+        if (!detail) return;
+        reportForm.name = detail.name || "";
+        reportForm.age = detail.age || "";
+        reportForm.work_years = detail.work_years || "";
+        reportForm.phone = detail.phone || "";
+        reportForm.email_wechat = (detail.email_wechat || detail.email || detail.wechat || "").trim();
+        reportForm.current_salary = formatSalaryThousands(detail.current_salary || "");
+        reportForm.expected_salary = formatSalaryThousands(detail.expected_salary || "");
+        reportForm.available_date = detail.available_date || "";
+        reportForm.education_level = detail.education_level || "";
+        reportForm.school = detail.school || "";
+        reportForm.major = detail.major || "";
+        reportForm.gender = detail.gender || "";
+        reportForm.marital_status = detail.marital_status || "";
+        reportForm.source = detail.source || "";
+        if ((detail.city || "").trim()) {
+          reportForm.location = detail.city.trim();
+        }
+      }
+
+      function clearSelectedExistingCandidate() {
+        const jobId = reportForm.job_id;
+        const job = jobsState.items.find(function (j) {
+          return Number(j.id) === Number(jobId);
+        });
+        reportMode.value = "new";
+        selectedExistingCandidate.value = null;
+        Object.assign(
+          reportForm,
+          CandidateReport.emptyReportForm ? CandidateReport.emptyReportForm() : {}
+        );
+        if (job && CandidateReport.fillFromJob) {
+          CandidateReport.fillFromJob(reportForm, job, clientNameById);
+        }
+      }
+
+      async function searchExistingCandidates() {
+        existingCandidatePickerError.value = "";
+        const keyword = (existingCandidatePickerQuery.value || "").trim();
+        if (!keyword) {
+          existingCandidatePickerItems.value = [];
+          existingCandidatePickerLoading.value = false;
+          return;
+        }
+        existingCandidatePickerLoading.value = true;
+        try {
+          const path = "/api/rms/candidates?q=" + encodeURIComponent(keyword);
+          const r = await rmsRequest("GET", path);
+          if (!r.ok) {
+            existingCandidatePickerItems.value = [];
+            existingCandidatePickerError.value = r.message;
+            return;
+          }
+          existingCandidatePickerItems.value = Array.isArray(r.data) ? r.data : [];
+        } finally {
+          existingCandidatePickerLoading.value = false;
+        }
+      }
+
+      function openExistingCandidatePicker() {
+        existingCandidatePickerOpen.value = true;
+        existingCandidatePickerQuery.value = "";
+        existingCandidatePickerItems.value = [];
+        existingCandidatePickerError.value = "";
+        existingCandidatePickerDetail.value = null;
+      }
+
+      function closeExistingCandidatePicker() {
+        hideExistingCandidatePopover();
+        existingCandidatePickerOpen.value = false;
+        if (existingCandidatePickerTimer) {
+          clearTimeout(existingCandidatePickerTimer);
+          existingCandidatePickerTimer = null;
+        }
+      }
+
+      async function showExistingCandidatePickerDetail(c) {
+        if (!c || c.id == null) return;
+        existingCandidatePickerDetailLoading.value = true;
+        existingCandidatePickerDetail.value = null;
+        const r = await rmsRequest("GET", "/api/rms/candidates/" + c.id);
+        existingCandidatePickerDetailLoading.value = false;
+        if (!r.ok) {
+          existingCandidatePickerError.value = r.message || ("请求失败（" + r.status + "）");
+          return;
+        }
+        existingCandidatePickerDetail.value = r.data;
+      }
+
+      async function selectExistingCandidateForReport(c) {
+        if (!c || c.id == null) return;
+        hideExistingCandidatePopover();
+        closeExistingCandidatePicker();
+        reportMode.value = "existing";
+        selectedExistingCandidate.value = {
+          id: c.id,
+          name: c.name || "",
+          resume_id: c.resume_id != null ? c.resume_id : null,
+        };
+        clearReportResumeFile();
+        const r = await rmsRequest("GET", "/api/rms/candidates/" + c.id);
+        if (r.ok && r.data) {
+          if (r.data.resume_id != null) {
+            selectedExistingCandidate.value.resume_id = r.data.resume_id;
+          }
+          fillReportFormFromCandidate(r.data);
+        }
+      }
+
       function openCandidateReport(job) {
         reportError.value = "";
         reportSaving.value = false;
         reportResumeFile.value = null;
         resetReportDraftUi();
+        resetExistingCandidateReportState();
         Object.assign(
           reportForm,
           CandidateReport.emptyReportForm ? CandidateReport.emptyReportForm() : {}
@@ -1598,6 +1954,7 @@
         viewMode.value = null;
         reportError.value = "";
         clearReportResumeFile();
+        resetExistingCandidateReportState();
       }
 
       function clearReportResumeFile() {
@@ -1682,6 +2039,9 @@
 
       function onReportFilePicked(file) {
         if (!file) return;
+        if (reportMode.value === "existing") {
+          clearSelectedExistingCandidate();
+        }
         revokeReportResumePdfPreview();
         reportResumeFile.value = file;
         setupReportFileMainPreview(file);
@@ -1781,6 +2141,33 @@
         reportSaving.value = true;
         reportError.value = "";
         try {
+          if (reportMode.value === "existing") {
+            if (!selectedExistingCandidate.value || selectedExistingCandidate.value.id == null) {
+              setReportError("请选择库内候选人");
+              return;
+            }
+            if (!reportForm.job_id) {
+              setReportError("请选择应聘岗位");
+              return;
+            }
+            const body = {
+              job_id: Number(reportForm.job_id),
+              candidate_id: Number(selectedExistingCandidate.value.id),
+              resume_id:
+                selectedExistingCandidate.value.resume_id != null
+                  ? selectedExistingCandidate.value.resume_id
+                  : null,
+            };
+            const r = await rmsRequest("POST", "/api/rms/applications", body);
+            if (!r.ok) {
+              setReportError(userFacingRmsError(r));
+              return;
+            }
+            toast("已推荐库内候选人", false);
+            closeCandidateReport();
+            await Promise.all([loadApplications(), loadCandidates(), loadDeliveryReview()]);
+            return;
+          }
           const reportValidation = CandidateReport.validateReportForm
             ? CandidateReport.validateReportForm(reportForm)
             : { ok: true, message: "" };
@@ -2165,6 +2552,20 @@
         }
       );
 
+      watch(
+        function () {
+          return existingCandidatePickerQuery.value;
+        },
+        function () {
+          if (!existingCandidatePickerOpen.value) return;
+          if (existingCandidatePickerTimer) clearTimeout(existingCandidatePickerTimer);
+          existingCandidatePickerTimer = setTimeout(function () {
+            existingCandidatePickerTimer = null;
+            searchExistingCandidates();
+          }, 300);
+        }
+      );
+
       watch(activeTab, function (tab) {
         if (tab === "candidates" || tab === "applications" || tab === "deliveryReview" || tab === "pipeline") {
           scheduleCandidatesTableColumnFit();
@@ -2253,6 +2654,37 @@
         canWriteJobs,
         canWriteCandidates,
         canWriteApplications,
+        canReadCandidates,
+        canRecommendExistingCandidate,
+        canSubmitCandidateReport,
+        reportMode,
+        selectedExistingCandidate,
+        existingCandidatePickerOpen,
+        existingCandidatePickerQuery,
+        existingCandidatePickerItems,
+        existingCandidatePickerLoading,
+        existingCandidatePickerError,
+        existingCandidatePickerDetail,
+        existingCandidatePickerDetailLoading,
+        existingCandidateHoverCard,
+        existingCandidatePopoverStyle,
+        openExistingCandidatePicker,
+        closeExistingCandidatePicker,
+        showExistingCandidatePopover,
+        moveExistingCandidatePopover,
+        scheduleHideExistingCandidatePopover,
+        keepExistingCandidatePopover,
+        hideExistingCandidatePopover,
+        selectExistingCandidateForReport,
+        clearSelectedExistingCandidate,
+        canConvertToRoster,
+        rosterConvertModal,
+        rosterConvertSaving,
+        rosterConvertError,
+        rosterConvertForm,
+        openRosterConvertModal,
+        closeRosterConvertModal,
+        submitRosterConvert,
         modal,
         modalTitle,
         modalError,

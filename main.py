@@ -1532,6 +1532,7 @@ register_rms_applications_routes(
     RmsInterview=RMS_MODELS["RmsInterview"],
     RmsOffer=RMS_MODELS["RmsOffer"],
     RmsMatchResult=RMS_MODELS["RmsMatchResult"],
+    AuditLog=AuditLog,
 )
 register_rms_dashboard_routes(
     app,

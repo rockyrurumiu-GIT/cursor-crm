@@ -20,6 +20,7 @@ from services import rms_applications as app_svc
 from services import rms_candidates as cand_svc
 from services import rms_resumes as resume_svc
 from services import rms_roster_check as roster_chk
+from services import rms_roster_conversion as roster_conv
 
 
 def register_rms_applications_routes(
@@ -37,6 +38,7 @@ def register_rms_applications_routes(
     RmsInterview: Type[Any],
     RmsOffer: Type[Any],
     RmsMatchResult: Type[Any],
+    AuditLog: Type[Any],
 ):
     @app.get("/api/rms/applications")
     async def api_list_applications(
@@ -292,6 +294,47 @@ def register_rms_applications_routes(
             Client,
             RmsCandidate=RmsCandidate,
             RosterEntry=RosterEntry,
+        )
+
+    @app.get("/api/rms/applications/{application_id}/roster-draft")
+    async def api_get_application_roster_draft(
+        application_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _rms_read: str = Depends(require_permission("rms.applications.read")),
+        _roster_write: str = Depends(require_permission("delivery.roster.write")),
+    ):
+        return roster_conv.get_roster_draft(
+            db,
+            ctx,
+            application_id,
+            RmsApplication=RmsApplication,
+            RmsCandidate=RmsCandidate,
+            RmsJob=RmsJob,
+            Client=Client,
+        )
+
+    @app.post("/api/rms/applications/{application_id}/convert-to-roster")
+    async def api_convert_application_to_roster(
+        application_id: int,
+        body: Dict[str, Any] = Body(default={}),
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        operator: str = Depends(require_permission("rms.applications.write")),
+        _roster_write: str = Depends(require_permission("delivery.roster.write")),
+    ):
+        return roster_conv.convert_application_to_roster(
+            db,
+            ctx,
+            application_id,
+            body if isinstance(body, dict) else {},
+            operator_username=operator,
+            RmsApplication=RmsApplication,
+            RmsCandidate=RmsCandidate,
+            RmsJob=RmsJob,
+            Client=Client,
+            RosterEntry=RosterEntry,
+            AuditLog=AuditLog,
         )
 
     @app.get("/api/rms/applications/{application_id}/status-history")

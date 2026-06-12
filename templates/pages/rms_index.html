@@ -110,6 +110,18 @@
         color: #1f2328;
     }
     .rms-required-mark { color: #dc2626; font-weight: 700; }
+    .rms-existing-candidate-popover {
+        position: fixed;
+        z-index: 100;
+        width: 320px;
+        max-height: 460px;
+        overflow: auto;
+        padding: 14px 16px;
+        border: 1px solid #d0d7de;
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 16px 40px rgba(31, 35, 40, 0.18);
+    }
     /* 滚动区勿加左右 padding，否则横向滚动后冻结列与圆角边框之间会露白缝 */
     .rms-candidates-scroll {
         padding: 0;
@@ -513,6 +525,17 @@
             <p v-if="reportError" data-rms-report-error class="mb-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{{ reportError }}</p>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="border border-[#d0d7de] rounded-lg p-4 bg-[#f6f8fa]">
+                    <template v-if="reportMode === 'existing'">
+                        <p class="text-sm font-medium mb-2">库内候选人</p>
+                        <div class="rounded-md border border-[#0969da] bg-white px-3 py-3 text-sm">
+                            <p class="text-[#1f2328]">已选择库内候选人：<span class="font-medium">{{ selectedExistingCandidate && selectedExistingCandidate.name }}</span></p>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                                <button v-if="canRecommendExistingCandidate" type="button" class="text-xs border border-[#0969da] text-[#0969da] px-2 py-1 rounded-md hover:bg-[#f0f6ff]" @click="openExistingCandidatePicker">重新选择</button>
+                                <button type="button" class="text-xs border border-[#d0d7de] text-[#57606a] px-2 py-1 rounded-md hover:bg-[#f6f8fa]" @click="clearSelectedExistingCandidate">清除选择</button>
+                            </div>
+                        </div>
+                    </template>
+                    <template v-else>
                     <p class="text-sm font-medium mb-2">拖拽上传简历</p>
                     <div
                         data-rms-report-dropzone
@@ -574,6 +597,14 @@
                             <pre class="rms-report-preview-body">{{ reportResumePreviewRawText }}</pre>
                         </details>
                     </div>
+                    </template>
+                    <button
+                        v-if="canRecommendExistingCandidate && reportMode !== 'existing'"
+                        type="button"
+                        data-rms-action="open-existing-candidate-picker"
+                        class="mt-3 w-full rounded-md bg-[#0969da] px-3 py-2 text-sm font-medium text-white hover:bg-[#0860ca]"
+                        @click="openExistingCandidatePicker"
+                    >推荐库内人选</button>
                 </div>
                 <div class="space-y-3 text-sm" data-rms-report-form>
                     <label class="block"><span class="text-[#57606a]">应聘岗位 <span class="rms-required-mark">*</span></span>
@@ -649,7 +680,7 @@
                         <p v-if="reportError" data-rms-report-error class="mb-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{{ reportError }}</p>
                         <div class="flex justify-end gap-2">
                         <button type="button" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md" :disabled="reportSaving" @click="closeCandidateReport">取消</button>
-                        <button v-if="canWriteApplications && canWriteCandidates" type="button" class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50"
+                        <button v-if="canSubmitCandidateReport" type="button" class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50"
                             :disabled="reportSaving" @click="submitCandidateReport">{{ reportSaving ? '提交中…' : '提交推荐' }}</button>
                         </div>
                     </div>
@@ -999,6 +1030,8 @@
                                 <button type="button" class="crm-op-btn-detail" @click="openApplicationDetailModal(a)">查看详情</button>
                                 <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
                                 <button type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)">状态历史</button>
+                                <button v-if="a.status === 'hired' && !a.converted_to_roster_entry_id && canConvertToRoster" type="button" class="crm-op-btn-edit" data-rms-action="roster-convert-open" @click="openRosterConvertModal(a)">转入花名册</button>
+                                <span v-else-if="a.status === 'hired' && a.converted_to_roster_entry_id" class="text-xs text-[#57606a]">已转入</span>
                                 <button v-if="canWriteApplications" type="button" class="crm-op-btn-delete"
                                     data-crm-delete-title="确认删除推荐记录"
                                     :data-crm-delete-target="'将删除推荐：' + (appCandidateName(a) || ('#' + a.id)) + ' · ' + (appJobTitle(a) || '—')"
@@ -1292,6 +1325,147 @@
             </div>
             <div class="flex justify-end">
                 <button type="button" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md" @click="closeStatusHistoryModal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- RMS existing candidate picker modal -->
+    <div v-if="existingCandidatePickerOpen" class="crm-esc-modal crm-form-modal-overlay z-[70]" @click.self="closeExistingCandidatePicker">
+        <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
+            <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">选择库内候选人</h3>
+                <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeExistingCandidatePicker">&times;</button>
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-5">
+                <p v-if="existingCandidatePickerError" class="mb-3 text-sm text-red-700">{{ existingCandidatePickerError }}</p>
+                <input
+                    v-model.trim="existingCandidatePickerQuery"
+                    type="search"
+                    class="w-full border border-[#d0d7de] rounded-md px-3 py-2 text-sm mb-3"
+                    placeholder="搜索姓名 / 职位 / 技术 / 学校 / 公司"
+                />
+                <div class="min-h-[12rem]">
+                    <p v-if="existingCandidatePickerLoading" class="text-sm text-[#57606a] py-6 text-center">加载中…</p>
+                    <p v-else-if="!existingCandidatePickerQuery.trim()" class="text-sm text-[#57606a] py-6 text-center">请输入关键词搜索</p>
+                    <p v-else-if="!existingCandidatePickerItems.length" class="text-sm text-[#57606a] py-6 text-center">未找到候选人</p>
+                    <div v-else class="border border-[#d0d7de] rounded-md overflow-x-auto">
+                        <table class="crm-table w-full text-sm">
+                            <thead>
+                                <tr>
+                                    <th class="crm-th">姓名</th>
+                                    <th class="crm-th">手机号</th>
+                                    <th class="crm-th">当前职位</th>
+                                    <th class="crm-th">当前公司</th>
+                                    <th class="crm-th">学校</th>
+                                    <th class="crm-th">专业</th>
+                                    <th class="crm-th">城市</th>
+                                    <th class="crm-th">来源</th>
+                                    <th class="crm-th crm-sticky-right-op">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="c in existingCandidatePickerItems" :key="'ecp'+c.id">
+                                    <td
+                                        class="crm-td cursor-default"
+                                        @mouseenter="showExistingCandidatePopover(c, $event)"
+                                        @mousemove="moveExistingCandidatePopover($event)"
+                                        @mouseleave="scheduleHideExistingCandidatePopover"
+                                    >{{ c.name || ('#' + c.id) }}</td>
+                                    <td class="crm-td">{{ c.phone || '—' }}</td>
+                                    <td class="crm-td">{{ c.current_title || '—' }}</td>
+                                    <td class="crm-td">{{ c.current_company || '—' }}</td>
+                                    <td class="crm-td">{{ c.school || '—' }}</td>
+                                    <td class="crm-td">{{ c.major || '—' }}</td>
+                                    <td class="crm-td">{{ c.city || '—' }}</td>
+                                    <td class="crm-td">{{ c.source || '—' }}</td>
+                                    <td class="crm-td crm-sticky-right-op whitespace-nowrap">
+                                        <a
+                                            v-if="c.resume_id && resumeCanView(c)"
+                                            :href="resumeViewUrl(c)"
+                                            target="_blank"
+                                            rel="noopener"
+                                            class="text-xs text-[#0969da] hover:underline mr-2"
+                                        >简历</a>
+                                        <span v-else class="text-xs text-[#8c959f] mr-2">无简历</span>
+                                        <button type="button" class="text-xs bg-[#0969da] text-white px-2 py-1 rounded-md hover:bg-[#0860ca]" @click="selectExistingCandidateForReport(c)">选择</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-[#d0d7de] flex justify-end shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de]" @click="closeExistingCandidatePicker">取消</button>
+            </div>
+        </div>
+        <div
+            v-if="existingCandidateHoverCard.open && existingCandidatePickerDetail"
+            class="rms-existing-candidate-popover"
+            :style="existingCandidatePopoverStyle"
+            data-rms-region="existing-candidate-popover"
+            @mouseenter="keepExistingCandidatePopover"
+            @mouseleave="scheduleHideExistingCandidatePopover"
+        >
+            <div class="space-y-2 text-xs">
+                <div><span class="text-[#57606a]">姓名</span><div class="text-[#1f2328]">{{ existingCandidatePickerDetail.name || '—' }}</div></div>
+                <div><span class="text-[#57606a]">手机号</span><div class="text-[#1f2328]">{{ existingCandidatePickerDetail.phone || '—' }}</div></div>
+                <div><span class="text-[#57606a]">邮箱/微信</span><div class="text-[#1f2328]">{{ displayCandidateContact(existingCandidatePickerDetail) }}</div></div>
+                <div><span class="text-[#57606a]">学校</span><div class="text-[#1f2328]">{{ existingCandidatePickerDetail.school || '—' }}</div></div>
+                <div><span class="text-[#57606a]">专业</span><div class="text-[#1f2328]">{{ existingCandidatePickerDetail.major || '—' }}</div></div>
+                <div><span class="text-[#57606a]">当前公司</span><div class="text-[#1f2328]">{{ existingCandidatePickerDetail.current_company || '—' }}</div></div>
+                <div><span class="text-[#57606a]">当前职位</span><div class="text-[#1f2328]">{{ existingCandidatePickerDetail.current_title || '—' }}</div></div>
+                <div><span class="text-[#57606a]">年限</span><div class="text-[#1f2328]">{{ existingCandidatePickerDetail.work_years || '—' }}</div></div>
+            </div>
+            <div class="mt-3 pt-2 border-t border-[#d0d7de] text-xs">
+                <p class="text-[#57606a] mb-1">简历解析摘要</p>
+                <p v-if="candidateParseSummaryEmpty(existingCandidatePickerDetail)" class="text-[#57606a]">暂无简历解析结果</p>
+                <div v-else class="space-y-1">
+                    <div v-for="f in candidateParseSummaryFields" :key="'ecpp'+f.key">
+                        <span class="text-[#57606a]">{{ f.label }}</span>
+                        <div class="text-[#1f2328]">{{ candidateParseSummaryValue(existingCandidatePickerDetail, f.key) }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RMS roster convert modal -->
+    <div v-if="rosterConvertModal" class="crm-esc-modal crm-form-modal-overlay z-50" @click.self="closeRosterConvertModal">
+        <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
+            <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">转入花名册</h3>
+                <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeRosterConvertModal">&times;</button>
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-5">
+                <p v-if="rosterConvertError" class="mb-3 text-sm text-red-700">{{ rosterConvertError }}</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">在职情况<span class="text-red-500" data-rms-roster-required="1">*</span></span>
+                        <select v-model="rosterConvertForm.employment_status" class="crm-form-control">
+                            <option value="待入职">待入职</option>
+                            <option value="在职">在职</option>
+                            <option value="离职">离职</option>
+                        </select></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">姓名<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.full_name" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">联系方式<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.contact_info" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">客户<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.customer_name" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">工作地<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.work_location" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">岗位<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.position_title" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">业务线<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.business_line" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">入职时间<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model="rosterConvertForm.entry_date" type="date" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">月报价(含税)<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.monthly_quote_tax" class="crm-form-control" inputmode="numeric" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">税前工资<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.pre_tax_salary" class="crm-form-control" inputmode="numeric" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM$<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.gms" class="crm-form-control" inputmode="numeric" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM%<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.gm_pct" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">薪资报价比</span><input v-model="rosterConvertForm.salary_quote_ratio" disabled class="crm-form-control bg-[#f6f8fa] text-[#57606a]" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">入职渠道</span><input v-model.trim="rosterConvertForm.zntx_onboarding_channel" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1 sm:col-span-2 lg:col-span-4"><span class="text-[#57606a]">备注</span><textarea v-model.trim="rosterConvertForm.remarks" rows="2" class="crm-form-control"></textarea></label>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-end shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de]" @click="closeRosterConvertModal">取消</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-[#0969da] text-white hover:bg-[#0860ca] disabled:opacity-50" :disabled="rosterConvertSaving" @click="submitRosterConvert">{{ rosterConvertSaving ? '保存中…' : '保存' }}</button>
             </div>
         </div>
     </div>

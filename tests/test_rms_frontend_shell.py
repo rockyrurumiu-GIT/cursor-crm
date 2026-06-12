@@ -116,6 +116,23 @@ def test_rms_frontend_js_assets_exist():
     assert "candidateKeywordTimer" in rms_src
     assert "/api/rms/candidates?q=" in rms_src
     assert '"/api/rms/candidates/"' in rms_src or '"/api/rms/candidates/" + c.id' in rms_src
+    for sym in (
+        "openExistingCandidatePicker",
+        "selectExistingCandidateForReport",
+        "selectedExistingCandidate",
+        "reportMode",
+        "canRecommendExistingCandidate",
+        "canSubmitCandidateReport",
+        "canReadCandidates",
+        "showExistingCandidatePopover",
+        "moveExistingCandidatePopover",
+        "scheduleHideExistingCandidatePopover",
+        "existingCandidatePopoverStyle",
+        "existingCandidateHoverCard",
+        "hideExistingCandidatePopover",
+    ):
+        assert sym in rms_src, f"missing symbol: {sym}"
+    assert 'rmsRequest("POST", "/api/rms/applications"' in rms_src
     assert "openCandidateDetail" in rms_src
     assert "closeCandidateDetail" in rms_src
     assert "latest_resume_parse_summary" in rms_src
@@ -432,6 +449,22 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "crmEnsureRmsCandidatesTableColumns" in resize_js
     assert "appCandidateAge" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
     assert "推荐候选人" in html
+    assert "推荐库内人选" in html
+    assert 'data-rms-action="open-existing-candidate-picker"' in html
+    assert "选择库内候选人" in html
+    assert "请输入关键词搜索" in html
+    assert 'data-rms-region="existing-candidate-popover"' in html
+    assert "rms-existing-candidate-popover" in html
+    assert "showExistingCandidatePopover" in html
+    picker_marker = "<!-- RMS existing candidate picker modal -->"
+    assert picker_marker in html
+    picker_start = html.index(picker_marker)
+    picker_slice = html[picker_start : picker_start + 5500]
+    assert "resumeViewUrl" in picker_slice
+    assert ">简历</a>" in picker_slice or ">简历</" in picker_slice
+    assert "候选人摘要" not in picker_slice
+    assert "showExistingCandidatePickerDetail(c)" not in picker_slice
+    assert ">详情</button>" not in picker_slice
 
     assert "data-rms-error" in html
     assert "data-rms-empty" in html
@@ -476,6 +509,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "deliveryReviewLabel" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
 
     rms_js = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    assert "canSubmitCandidateReport" in rms_js
+    assert "closeExistingCandidatePickerDetail" not in rms_js
     assert "人选已存在系统中" in rms_js
     assert "系统中已存在该人选" in rms_js
     assert "duplicate_detected" in rms_js
@@ -521,6 +556,16 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "openStatusHistoryModal" in apps_region
     assert "removeApplication" in apps_region
     assert "确认删除推荐记录" in apps_region
+    assert "转入花名册" in apps_region
+    assert "已转入" in apps_region
+    assert 'data-rms-action="roster-convert-open"' in apps_region
+    assert "openRosterConvertModal" in apps_region
+    assert "data-rms-roster-required" in html
+    assert "月报价(含税)" in html
+    assert "submitRosterConvert" in rms_src
+    assert "/roster-draft" in rms_src
+    assert "/convert-to-roster" in rms_src
+    assert "canConvertToRoster" in rms_src
 
     assert "Plan 34" not in html
     assert "占位" not in html

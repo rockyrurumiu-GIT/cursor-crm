@@ -1097,6 +1097,9 @@ def test_rms_widget_sort_sum_desc(client_rbac, admin_auth, rms_engine, uniq):
             "metric": "count",
             "primary_axis_field": "current_stage",
             "primary_axis_sort": "sum_desc",
+            "filters": [
+                {"field": "job_id", "op": "eq", "value": job_id},
+            ],
         },
     )
     assert created.status_code == 200, created.text
@@ -1108,8 +1111,9 @@ def test_rms_widget_sort_sum_desc(client_rbac, admin_auth, rms_engine, uniq):
     values = body.get("values") or []
     assert values == sorted(values, reverse=True)
     by_label = dict(zip(labels, values))
-    assert by_label[application_progress_label("pending_internal_screen")] >= by_label[application_progress_label("pending_first_interview")]
-    assert by_label[application_progress_label("pending_first_interview")] >= by_label[application_progress_label("pending_client_screen")]
+    assert by_label[application_progress_label("pending_internal_screen")] == 5
+    assert by_label[application_progress_label("pending_first_interview")] == 3
+    assert by_label[application_progress_label("pending_client_screen")] == 1
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
 
