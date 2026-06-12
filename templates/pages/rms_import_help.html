@@ -5,59 +5,90 @@
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-8">
         <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">招聘模块</p>
         <h1 class="text-2xl font-bold text-gray-900 mb-2">RMS 批量导入帮助</h1>
-        <p class="text-gray-600 mb-6">命令行批量导入人才库简历，以及用 corrections.csv 修正导入结果。请将示例中的占位路径替换为本机路径。</p>
+        <p class="text-gray-600 mb-6">以后批量导入默认使用 <code>scripts/import_rms_resumes_with_ocr_retry.py</code>：先文本解析入库，再自动对缺姓名/电话的 PDF 做 OCR retry。请将示例中的占位路径替换为本机路径。OCR 需本地安装 Tesseract：<code>brew install tesseract tesseract-lang</code>。</p>
 
         <div class="prose prose-sm max-w-none text-gray-700 space-y-8">
             <section>
-                <h2>1. 批量导入 dry-run（预览）</h2>
+                <h2>1. 一键导入 dry-run（预览）</h2>
                 <p>先预览，不写数据库、不保存简历文件。</p>
-                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>cd /path/to/cursor-crm
-
-./venv/bin/python scripts/import_rms_resumes.py \
-  --source-dir "/你的简历文件夹" \
-  --dry-run \
-  --recursive</code></pre>
+                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/import_rms_resumes_with_ocr_retry.py \
+  --source-dir "/你的简历目录" \
+  --recursive \
+  --dry-run</code></pre>
             </section>
 
             <section>
-                <h2>2. 批量导入 commit（正式入库）</h2>
-                <p>确认 dry-run 报告无误后再执行。仅写入候选人与简历，不会自动推荐到岗位。</p>
-                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/import_rms_resumes.py \
-  --source-dir "/你的简历文件夹" \
-  --commit \
-  --recursive</code></pre>
+                <h2>2. 一键导入 commit（正式入库）</h2>
+                <p>确认 dry-run 报告无误后再执行。仅写入候选人与简历，不会自动推荐到岗位。可选：<code>--limit</code> 限制导入文件数；<code>--ocr-limit</code> 限制 OCR 尝试数。</p>
+                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/import_rms_resumes_with_ocr_retry.py \
+  --source-dir "/你的简历目录" \
+  --recursive \
+  --commit</code></pre>
             </section>
 
             <section>
-                <h2>3. 查看导入报告</h2>
+                <h2>3. 导入与 OCR 结果含义</h2>
+                <p>一键流程会分别输出文本导入与 OCR retry 的统计。报告行 <code>status</code> 常见值：</p>
+                <ul>
+                    <li><code>created</code>：文本解析或 OCR 后姓名+电话齐全，成功新建候选人及简历（dry-run 时为 <code>would_create</code>）</li>
+                    <li><code>updated</code>：OCR 为<strong>已有</strong>候选人补全缺失的姓名/电话（dry-run 时为 <code>would_update</code>）</li>
+                    <li><code>skipped_duplicate</code>：姓名 + 手机号与库内或本批次重复，跳过</li>
+                    <li><code>skipped_unparseable</code>：文本解析或 OCR 后仍缺姓名/电话，或姓名校验不通过</li>
+                    <li><code>failed</code>：读文件失败、文件过大、Tesseract 异常、数据库写入错误等</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>4. 查看导入报告</h2>
                 <p>报告默认输出到 <code>reports/rms_imports/</code>，包含 CSV 与 JSON 摘要。报告中的手机号、邮箱已脱敏。</p>
                 <ul>
-                    <li>批量导入：<code>rms_resume_import_YYYYMMDD_HHMMSS.csv/json</code></li>
+                    <li>文本导入：<code>rms_resume_import_YYYYMMDD_HHMMSS.csv/json</code></li>
+                    <li>OCR retry：<code>rms_resume_ocr_retry_YYYYMMDD_HHMMSS.csv/json</code></li>
+                    <li>一键合并摘要：<code>rms_resume_import_with_ocr_retry_YYYYMMDD_HHMMSS.json</code></li>
                     <li>修正 CSV：<code>rms_resume_correction_YYYYMMDD_HHMMSS.csv/json</code></li>
                 </ul>
             </section>
 
             <section>
-                <h2>4. corrections.csv 模板</h2>
+                <h2>5. corrections.csv（OCR 后仍错误的记录）</h2>
+                <p>仅用于<strong>一键导入 + OCR 后仍错误</strong>的行（如 <code>skipped_unparseable</code>、<code>conflict</code> 等需人工修正的记录）。</p>
                 <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>resume_file_path,action,candidate_id,name,phone,email_wechat,school,major,education_level,source
-/你的简历文件夹/a.pdf,create,,张三,13800138000,zhangsan@example.com,西安电子科技大学,计算机,本科,批量导入
+/你的简历目录/a.pdf,create,,张三,13800138000,zhangsan@example.com,西安电子科技大学,计算机,本科,批量导入
 ,update,123,李四,13900139000,lisi@example.com,许昌学院,软件工程,本科,批量导入
-/你的简历文件夹/c.pdf,skip,,,,,,,</code></pre>
+/你的简历目录/c.pdf,skip,,,,,,,</code></pre>
                 <p><strong>action</strong>：<code>create</code>（新建候选人+简历）、<code>update</code>（按 candidate_id 更新非空字段）、<code>skip</code>（跳过）。</p>
             </section>
 
             <section>
-                <h2>5. 修正 CSV dry-run</h2>
+                <h2>6. 修正 CSV dry-run</h2>
                 <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/apply_rms_resume_import_corrections.py \
   --csv "/你的修正CSV路径/rms_resume_corrections.csv" \
   --dry-run</code></pre>
             </section>
 
             <section>
-                <h2>6. 修正 CSV commit</h2>
+                <h2>7. 修正 CSV commit</h2>
                 <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/apply_rms_resume_import_corrections.py \
   --csv "/你的修正CSV路径/rms_resume_corrections.csv" \
   --commit</code></pre>
+            </section>
+
+            <section>
+                <h2>8. 调试 / 排障（单独脚本）</h2>
+                <p>以下脚本<strong>不是</strong>日常批量导入入口，仅在需要拆分排查时使用：</p>
+                <ul>
+                    <li><code>scripts/import_rms_resumes.py</code> — 仅文本解析，不自动 OCR</li>
+                    <li><code>scripts/retry_rms_resume_ocr.py</code> — 对已有导入报告 CSV 单独跑 OCR retry</li>
+                </ul>
+                <p>示例（仅文本导入预览）：</p>
+                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/import_rms_resumes.py \
+  --source-dir "/你的简历目录" \
+  --recursive \
+  --dry-run</code></pre>
+                <p>示例（单独 OCR retry 预览）：</p>
+                <pre class="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs overflow-x-auto"><code>./venv/bin/python scripts/retry_rms_resume_ocr.py \
+  --report-csv "reports/rms_imports/rms_resume_import_YYYYMMDD_HHMMSS.csv" \
+  --dry-run</code></pre>
             </section>
 
             <section>

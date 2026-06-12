@@ -528,10 +528,15 @@ def test_correction_reports_masked(import_engine, tmp_path):
 def test_import_help_page_content_and_placeholders():
     html = HELP_PATH.read_text(encoding="utf-8")
     assert "RMS 批量导入帮助" in html
-    assert "dry-run" in html
-    assert "commit" in html
+    assert "import_rms_resumes_with_ocr_retry.py" in html
+    assert "--dry-run" in html
+    assert "--commit" in html
+    assert "created" in html
+    assert "updated" in html
+    assert "skipped_duplicate" in html
+    assert "skipped_unparseable" in html
     assert "corrections.csv" in html
-    assert "/你的简历文件夹" in html
+    assert "/你的简历目录" in html
     assert "/你的修正CSV路径" in html
     assert "/Users/rocky" not in html
 
