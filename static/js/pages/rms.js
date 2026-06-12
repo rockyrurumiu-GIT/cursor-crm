@@ -399,6 +399,10 @@
         date_to: "",
       });
 
+      const applicationsFilter = reactive({
+        hired_unconverted_only: false,
+      });
+
       const candidateFilter = reactive({
         name: "",
         client_id: "",
@@ -647,6 +651,11 @@
         rosterConvertSaving.value = false;
       }
 
+      function openConvertedRosterEntry(a) {
+        if (!a || !a.client_id || !a.converted_to_roster_entry_id) return;
+        window.location.href = "/customers/roster/" + a.client_id + "?row_id=" + a.converted_to_roster_entry_id;
+      }
+
       async function submitRosterConvert() {
         if (!rosterConvertModal.value) return;
         var clientErr = validateRosterConvertClientForm();
@@ -724,6 +733,16 @@
         if (jobFilter.status) {
           rows = rows.filter(function (j) {
             return j.status === jobFilter.status;
+          });
+        }
+        return rows;
+      });
+
+      const filteredApplications = computed(function () {
+        var rows = applicationsState.items.slice();
+        if (applicationsFilter.hired_unconverted_only) {
+          rows = rows.filter(function (a) {
+            return a.status === "hired" && !a.converted_to_roster_entry_id;
           });
         }
         return rows;
@@ -2684,6 +2703,7 @@
         rosterConvertForm,
         openRosterConvertModal,
         closeRosterConvertModal,
+        openConvertedRosterEntry,
         submitRosterConvert,
         modal,
         modalTitle,
@@ -2699,6 +2719,8 @@
         jobFilterPanelExpanded,
         jobFilter,
         filteredJobs,
+        applicationsFilter,
+        filteredApplications,
         pipelineFilter,
         pipelineStatusDropdownOpen,
         pipelineStatusDraft,

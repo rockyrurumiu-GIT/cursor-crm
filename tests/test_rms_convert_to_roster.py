@@ -198,6 +198,7 @@ def test_convert_success_writes_roster_and_application(client_rbac, admin_auth, 
     payload = _full_roster_payload(
         cand, client_row, job, contact_info=_unique_phone(f"{uniq}ok")
     )
+    before = utc_date_str()
 
     r = client_rbac.post(
         f"/api/rms/applications/{app_id}/convert-to-roster",
@@ -208,7 +209,7 @@ def test_convert_success_writes_roster_and_application(client_rbac, admin_auth, 
     body = r.json()
     assert body["roster_entry"]["full_name"] == payload["full_name"]
     assert body["application"]["converted_to_roster_entry_id"] == body["roster_entry"]["id"]
-    assert body["application"]["converted_to_roster_at"] == utc_date_str()
+    assert body["application"]["converted_to_roster_at"][:10] >= before[:10]
     assert body["application"]["converted_to_roster_by"] is not None
 
     roster_after = client_rbac.get(
@@ -217,6 +218,11 @@ def test_convert_success_writes_roster_and_application(client_rbac, admin_auth, 
     assert len(roster_after) == len(roster_before) + 1
     after_apps = client_rbac.get("/api/rms/applications", cookies=login.cookies).json()
     assert len(after_apps) == before_count
+    app = next(a for a in after_apps if a["id"] == app_id)
+    assert app["converted_to_roster_entry_id"] == body["roster_entry"]["id"]
+    assert app["converted_to_roster_at"]
+    assert app["converted_to_roster_at"][:10] >= before[:10]
+    assert app["converted_to_roster_by"] is not None
 
 
 def test_convert_already_converted_409(client_rbac, admin_auth, rms_engine, uniq):

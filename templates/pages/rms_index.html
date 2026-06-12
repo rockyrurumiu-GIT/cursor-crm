@@ -423,6 +423,44 @@
         border-color: rgba(17, 24, 39, 0.75);
         color: #fff;
     }
+    .rms-roster-tag {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 0.35rem;
+        padding: 0.1rem 0.4rem;
+        border-radius: 9999px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        line-height: 1.3;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    .rms-roster-tag--pending {
+        background: #fee2e2;
+        color: #b91c1c;
+        border: 1px solid #fecaca;
+    }
+    .rms-roster-tag--done {
+        background: #dcfce7;
+        color: #15803d;
+        border: 1px solid #bbf7d0;
+    }
+    .rms-apps-filter-checkbox {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        white-space: nowrap;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #0969da;
+        padding: 0 0.25rem;
+        cursor: pointer;
+        user-select: none;
+    }
+    .rms-apps-filter-checkbox input[type="checkbox"] {
+        border-radius: 0.25rem;
+        border-color: #d0d7de;
+    }
     /* 岗位列表：JD 默认 35 汉字 */
     .crm-table.rms-jobs-table .crm-td.rms-col-jd,
     .crm-table.rms-jobs-table .crm-th.rms-col-jd {
@@ -987,12 +1025,17 @@
 
     <!-- Applications -->
     <section v-show="activeTab === 'applications' && viewMode !== 'candidateReport'" data-rms-region="applications">
-        <div class="flex justify-between items-center mb-3">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
             <h2 class="text-lg font-medium text-[#1f2328]">推荐记录</h2>
+            <label class="rms-apps-filter-checkbox">
+                <input v-model="applicationsFilter.hired_unconverted_only" type="checkbox" class="rounded border-[#d0d7de]" />
+                <span>只看未转入花名册</span>
+            </label>
         </div>
         <div v-if="applicationsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ applicationsState.error }}</div>
         <div v-else-if="applicationsState.loading" class="text-sm text-[#57606a]">加载中…</div>
         <div v-else-if="!applicationsState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无推荐记录</div>
+        <div v-else-if="!filteredApplications.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无符合条件的推荐记录</div>
         <div v-else class="rms-candidates-frame border border-[#d0d7de]">
             <div class="rms-candidates-scroll crm-table-scroll">
             <table class="crm-table rms-candidates-table" data-table-id="rms-applications">
@@ -1013,25 +1056,30 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="a in applicationsState.items" :key="a.id">
-                        <td class="crm-td crm-name-cell rms-candidate-sticky-name">{{ appCandidateName(a) }}</td>
+                    <tr v-for="a in filteredApplications" :key="a.id">
+                        <td class="crm-td crm-name-cell rms-candidate-sticky-name">
+                            <button type="button" class="text-left text-[#0969da] hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer"
+                                @click="openApplicationDetailModal(a)">{{ appCandidateName(a) }}</button>
+                        </td>
                         <td class="crm-td">{{ appClientName(a) }}</td>
                         <td class="crm-td">{{ appJobTitle(a) }}</td>
                         <td class="crm-td">{{ appJobLocation(a) }}</td>
                         <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
                         <td class="crm-td">{{ receiveLabel(a.receive_status) }}</td>
                         <td class="crm-td">{{ deliveryReviewLabel(a.delivery_review_status) }}</td>
-                        <td class="crm-td">{{ progressLabel(a.status) }}</td>
+                        <td class="crm-td">
+                            <span>{{ progressLabel(a.status) }}</span>
+                            <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
+                            <span v-else-if="a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
+                        </td>
                         <td class="crm-td" :title="'保护期规则后续单独实现'">{{ protectionLabel(a.status) }}</td>
                         <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
                         <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
                         <td class="crm-td crm-sticky-right-op crm-op-col-wide whitespace-nowrap">
                             <div class="crm-op-actions flex flex-wrap items-center gap-1">
-                                <button type="button" class="crm-op-btn-detail" @click="openApplicationDetailModal(a)">查看详情</button>
-                                <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
+                                <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">简历</a>
                                 <button type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)">状态历史</button>
                                 <button v-if="a.status === 'hired' && !a.converted_to_roster_entry_id && canConvertToRoster" type="button" class="crm-op-btn-edit" data-rms-action="roster-convert-open" @click="openRosterConvertModal(a)">转入花名册</button>
-                                <span v-else-if="a.status === 'hired' && a.converted_to_roster_entry_id" class="text-xs text-[#57606a]">已转入</span>
                                 <button v-if="canWriteApplications" type="button" class="crm-op-btn-delete"
                                     data-crm-delete-title="确认删除推荐记录"
                                     :data-crm-delete-target="'将删除推荐：' + (appCandidateName(a) || ('#' + a.id)) + ' · ' + (appJobTitle(a) || '—')"
@@ -1218,7 +1266,11 @@
                         <td class="crm-td">{{ appJobLocation(a) }}</td>
                         <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
                         <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
-                        <td class="crm-td rms-pipeline-progress">{{ progressLabel(a.status) }}</td>
+                        <td class="crm-td rms-pipeline-progress">
+                            <span>{{ progressLabel(a.status) }}</span>
+                            <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
+                            <span v-else-if="a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
+                        </td>
                         <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
                         <td class="crm-td">{{ formatRmsDate(a.updated_at) }}</td>
                         <td class="crm-td whitespace-nowrap rms-pipeline-next-op">

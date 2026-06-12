@@ -557,7 +557,6 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "removeApplication" in apps_region
     assert "确认删除推荐记录" in apps_region
     assert "转入花名册" in apps_region
-    assert "已转入" in apps_region
     assert 'data-rms-action="roster-convert-open"' in apps_region
     assert "openRosterConvertModal" in apps_region
     assert "data-rms-roster-required" in html
@@ -566,6 +565,14 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "/roster-draft" in rms_src
     assert "/convert-to-roster" in rms_src
     assert "canConvertToRoster" in rms_src
+    assert "openConvertedRosterEntry" in rms_src
+    assert ">简历</a>" in apps_region
+    assert "hired_unconverted_only" in rms_src
+    assert "applicationsFilter" in rms_src
+    assert "待转花名册" in apps_region
+    assert "已转花名册" in html
+    assert "filteredApplications" in rms_src
+    assert "只看未转入花名册" in apps_region
 
     assert "Plan 34" not in html
     assert "占位" not in html

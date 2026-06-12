@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Type
 from sqlalchemy.orm import Session
 
 from auth.service import AuthContext
+from schemas.rms import normalize_rms_date
 from services.date_utils import parse_loose_date
 from services.delivery_roster import contact_dedup_key
 
@@ -183,6 +184,8 @@ def list_hired_roster_checks(
             "roster_row_id": chk.get("roster_row_id"),
             "roster_entry_date": chk.get("roster_entry_date") or "",
             "message": chk.get("message") or "",
+            "converted_to_roster_entry_id": getattr(app, "converted_to_roster_entry_id", None),
+            "converted_to_roster_at": normalize_rms_date(getattr(app, "converted_to_roster_at", None)),
         })
 
     return {"summary": summary, "items": items}

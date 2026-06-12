@@ -84,7 +84,18 @@
     }
     /* 与花名册筛选条同款 */
     .turnover-filter-row {
-        overflow: hidden;
+        flex-wrap: wrap;
+        width: 100%;
+        overflow: visible;
+        align-items: center;
+    }
+    .turnover-filter-name {
+        width: 4em;
+        min-width: 4em;
+        max-width: 4em;
+        flex: 0 0 4em;
+        padding-left: 0.375rem;
+        padding-right: 0.375rem;
     }
     .turnover-filter-control {
         min-width: 80px;
@@ -109,6 +120,13 @@
         display: flex;
         align-items: center;
         gap: 6px;
+    }
+    .turnover-filter-trailing {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-left: auto;
+        flex-shrink: 0;
     }
     .turnover-filter-reset {
         white-space: nowrap;
@@ -585,15 +603,11 @@
             v-model.trim="filters.fullName"
             type="search"
             placeholder="姓名（模糊）"
-            class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control min-w-[7rem]"
+            class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control turnover-filter-name"
         />
         <select v-model="filters.positionTitle" class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control">
             <option value="">岗位（全部）</option>
             <option v-for="v in positionTitleOptions" :key="`pt-${v}`" :value="v">{{ v }}</option>
-        </select>
-        <select v-model="filters.workLocation" class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control">
-            <option value="">工作地（全部）</option>
-            <option v-for="v in workLocationOptions" :key="`wl-${v}`" :value="v">{{ v }}</option>
         </select>
         <select v-model="filters.customerName" class="crm-filter-item turnover-filter-item crm-filter-control turnover-filter-control">
             <option value="">客户（全部）</option>
@@ -621,12 +635,14 @@
             <option value="">主动/被动（全部）</option>
             <option v-for="v in separationTypeOptions" :key="`sep-${v}`" :value="v">{{ v }}</option>
         </select>
-        <label class="crm-filter-item turnover-filter-item turnover-filter-checkbox">
-            <input type="checkbox" v-model="filters.hasCompensationOnly" />
-            <span>仅显示有补偿金</span>
-        </label>
-        <div class="crm-filter-item turnover-filter-item turnover-filter-actions">
-            <button type="button" class="crm-filter-reset turnover-filter-reset crm-filter-reset shrink-0" @click="clearFilters">重置</button>
+        <div class="turnover-filter-trailing">
+            <label class="crm-filter-item turnover-filter-item turnover-filter-checkbox">
+                <input type="checkbox" v-model="filters.hasCompensationOnly" />
+                <span>仅显示有补偿金</span>
+            </label>
+            <div class="crm-filter-item turnover-filter-item turnover-filter-actions">
+                <button type="button" class="crm-filter-reset turnover-filter-reset crm-filter-reset shrink-0" @click="clearFilters">重置</button>
+            </div>
         </div>
     </div>
 

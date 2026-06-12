@@ -662,7 +662,7 @@
                     <template v-else-if="item.block === 'table_roster'">
                         <table class="rms-stage-table" v-if="rosterCheck && rosterCheck.items.length">
                             <thead><tr>
-                                <th>候选人</th><th>客户</th><th>入职日</th><th>核对结果</th><th>说明</th>
+                                <th>候选人</th><th>客户</th><th>入职日</th><th>核对结果</th><th>转入状态</th><th>说明</th>
                             </tr></thead>
                             <tbody>
                                 <tr v-for="row in rosterCheck.items" :key="row.application_id">
@@ -670,6 +670,7 @@
                                     <td>{{ row.client_name }}</td>
                                     <td>{{ formatRmsDate(row.hired_at) }}</td>
                                     <td>{{ row.roster_status }}</td>
+                                    <td>{{ rosterConversionLabel(row) }}</td>
                                     <td>{{ row.message }}</td>
                                 </tr>
                             </tbody>

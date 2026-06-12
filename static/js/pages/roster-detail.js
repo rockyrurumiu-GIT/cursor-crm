@@ -942,6 +942,31 @@ const rosterDetailApp = createApp({
                 window.history.replaceState(null, '', newUrl);
             } catch (e) { /* ignore */ }
         };
+        const stripRowIdQueryFromUrl = () => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                if (!params.has('row_id')) return;
+                params.delete('row_id');
+                const qs = params.toString();
+                const newUrl = window.location.pathname + (qs ? `?${qs}` : '') + (window.location.hash || '');
+                window.history.replaceState(null, '', newUrl);
+            } catch (e) { /* ignore */ }
+        };
+        const applyRowIdFromQuery = async () => {
+            if (IS_GLOBAL_ROSTER) return;
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const rowId = Number(params.get('row_id') || 0);
+                if (!rowId) return;
+                await nextTick();
+                const row = rows.value.find((r) => Number(r.id) === rowId);
+                if (row) openRosterDetail(row);
+            } catch (e) {
+                console.error('applyRowIdFromQuery failed:', e);
+            } finally {
+                stripRowIdQueryFromUrl();
+            }
+        };
         const applyRosterAddFromQuery = async () => {
             if (IS_GLOBAL_ROSTER) return;
             try {
@@ -983,6 +1008,7 @@ const rosterDetailApp = createApp({
             await loadBrief();
             await loadRows();
             loadCrmClients();
+            await applyRowIdFromQuery();
             await applyRosterAddFromQuery();
             window.crmScheduleTableColumnResize?.();
             nextTick(() => {

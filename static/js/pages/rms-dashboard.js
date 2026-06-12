@@ -1561,6 +1561,13 @@
           });
         }
 
+        function rosterConversionLabel(row) {
+          if (!row) return "—";
+          if (row.converted_to_roster_entry_id) return "已转入";
+          if (row.roster_status === "matched") return "疑似已存在，未绑定";
+          return "未转入";
+        }
+
         function findTabWithBlock(blockKey) {
           for (var i = 0; i < dashboards.value.length; i++) {
             var d = dashboards.value[i];
@@ -2320,6 +2327,7 @@
           selectTab,
           loadDashboard,
           loadRosterCheck,
+          rosterConversionLabel,
           loadWidgetData,
           reloadActiveTabData,
           goRosterTab,
