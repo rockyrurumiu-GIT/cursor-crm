@@ -14,6 +14,23 @@ from tests.test_rms_phase0_permissions import _create_user, _login
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+RMS_JS_BUNDLE_FILES = (
+    "static/js/pages/rms-application-labels.js",
+    "static/js/pages/rms-core.js",
+    "static/js/pages/rms-candidate-report.js",
+    "static/js/pages/rms-jobs.js",
+    "static/js/pages/rms-candidates.js",
+    "static/js/pages/rms.js",
+)
+
+
+def _read_rms_js_file(rel_path: str) -> str:
+    return (REPO_ROOT / rel_path).read_text(encoding="utf-8")
+
+
+def _read_rms_js_bundle() -> dict[str, str]:
+    return {rel: _read_rms_js_file(rel) for rel in RMS_JS_BUNDLE_FILES}
+
 
 def _extract_rms_region(html: str, region: str) -> str:
     """Return inner HTML of first element with data-rms-region=region (best-effort)."""
@@ -53,16 +70,74 @@ def client_rbac(_test_env, monkeypatch):
 
 
 def test_rms_frontend_js_assets_exist():
-    labels = REPO_ROOT / "static/js/pages/rms-application-labels.js"
-    report = REPO_ROOT / "static/js/pages/rms-candidate-report.js"
-    rms = REPO_ROOT / "static/js/pages/rms.js"
-    assert labels.is_file(), "missing rms-application-labels.js"
-    assert report.is_file(), "missing rms-candidate-report.js"
-    assert rms.is_file(), "missing rms.js"
+    bundle = _read_rms_js_bundle()
+    labels_src = bundle["static/js/pages/rms-application-labels.js"]
+    core_src = bundle["static/js/pages/rms-core.js"]
+    report_src = bundle["static/js/pages/rms-candidate-report.js"]
+    jobs_src = bundle["static/js/pages/rms-jobs.js"]
+    candidates_src = bundle["static/js/pages/rms-candidates.js"]
+    rms_src = bundle["static/js/pages/rms.js"]
+    rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
 
-    labels_src = labels.read_text(encoding="utf-8")
-    report_src = report.read_text(encoding="utf-8")
-    rms_src = rms.read_text(encoding="utf-8")
+    for rel in RMS_JS_BUNDLE_FILES:
+        assert (REPO_ROOT / rel).is_file(), f"missing {rel}"
+
+    assert "/static/js/pages/rms-core.js" in rms_html
+    assert "/static/js/pages/rms-jobs.js" in rms_html
+    assert "/static/js/pages/rms-candidates.js" in rms_html
+    assert rms_html.index("rms-core.js") < rms_html.index("rms-candidate-report.js")
+    assert rms_html.index("rms-candidate-report.js") < rms_html.index("rms-jobs.js")
+    assert rms_html.index("rms-jobs.js") < rms_html.index("rms-candidates.js")
+    assert rms_html.index("rms-candidates.js") < rms_html.index("rms.js")
+
+    for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError"):
+        assert sym in core_src, f"missing core symbol: {sym}"
+    assert "global.CrmRmsCore" in core_src
+
+    for sym in (
+        "createJobsState",
+        "jobModalTitle",
+        "jobModalShowSave",
+        "jobModalReadonly",
+        "submitJobModal",
+        "resetJobModalState",
+        "loadJobs",
+        "loadJobFormOptions",
+    ):
+        assert sym in jobs_src, f"missing jobs symbol: {sym}"
+    assert "global.CrmRmsJobs" in jobs_src
+    assert "jobModalTitle" in jobs_src
+    assert "return {" in jobs_src
+    jobs_return = jobs_src.split("return {", 1)[1].split("};", 1)[0]
+    assert "modalTitle" not in jobs_return
+
+    assert "CrmRmsCore" in rms_src
+    assert "CrmRmsJobs.createJobsState" in rms_src
+    assert "...jobs" in rms_src
+    assert "canWriteJobs" in rms_src
+    assert "jobs.jobModalTitle.value" in rms_src
+    assert "jobs.jobModalShowSave.value" in rms_src
+    assert "jobs.submitJobModal" in rms_src
+
+    for sym in (
+        "createCandidatesState",
+        "submitCandidateModal",
+        "resetCandidateModalState",
+        "candidateModalTitle",
+        "candidateModalShowSave",
+        "loadCandidates",
+    ):
+        assert sym in candidates_src, f"missing candidates symbol: {sym}"
+    assert "global.CrmRmsCandidates" in candidates_src
+    cand_return = candidates_src.split("return {", 1)[1].split("};", 1)[0]
+    assert "modalTitle" not in cand_return
+
+    assert "CrmRmsCandidates.createCandidatesState" in rms_src
+    assert "...candidates" in rms_src
+    assert "HC-R2-11" in rms_src
+    assert "candidates.candidateModalTitle.value" in rms_src
+    assert "candidates.submitCandidateModal" in rms_src
+    assert "const loadCandidates = candidates.loadCandidates" in rms_src
 
     assert "parseCandidateReportDraft" in report_src
     assert "validateReportForm" in report_src
@@ -107,15 +182,15 @@ def test_rms_frontend_js_assets_exist():
         assert sym in labels_src, f"missing pipeline helper: {sym}"
     assert "progressOptions" in rms_src
     assert "filteredPipelineApplications" in rms_src
-    assert "candidateFilter" in rms_src
-    assert "filteredCandidates" in rms_src
-    assert "crmEnsureRmsCandidatesTableColumns" in rms_src
-    assert "prevLen === 0" in rms_src
-    assert "resetCandidateFilter" in rms_src
-    assert "suppressCandidateSearchWatch" in rms_src
-    assert "candidateKeywordTimer" in rms_src
-    assert "/api/rms/candidates?q=" in rms_src
-    assert '"/api/rms/candidates/"' in rms_src or '"/api/rms/candidates/" + c.id' in rms_src
+    assert "candidateFilter" in rms_src or "candidateFilter" in candidates_src
+    assert "filteredCandidates" in rms_src or "filteredCandidates" in candidates_src
+    assert "crmEnsureRmsCandidatesTableColumns" in candidates_src
+    assert "prevLen === 0" in candidates_src
+    assert "resetCandidateFilter" in rms_src or "resetCandidateFilter" in candidates_src
+    assert "suppressCandidateSearchWatch" in candidates_src
+    assert "candidateKeywordTimer" in candidates_src
+    assert "/api/rms/candidates?q=" in candidates_src
+    assert '"/api/rms/candidates/"' in candidates_src or '"/api/rms/candidates/" + c.id' in candidates_src
     for sym in (
         "openExistingCandidatePicker",
         "selectExistingCandidateForReport",
@@ -133,13 +208,13 @@ def test_rms_frontend_js_assets_exist():
     ):
         assert sym in rms_src, f"missing symbol: {sym}"
     assert 'rmsRequest("POST", "/api/rms/applications"' in rms_src
-    assert "openCandidateDetail" in rms_src
-    assert "closeCandidateDetail" in rms_src
-    assert "latest_resume_parse_summary" in rms_src
-    assert "encodeURIComponent(keyword)" in rms_src
-    assert "await loadCandidates()" in rms_src
-    filtered_candidates_start = rms_src.index("const filteredCandidates = computed")
-    filtered_candidates_slice = rms_src[filtered_candidates_start : filtered_candidates_start + 800]
+    assert "openCandidateDetail" in rms_src or "openCandidateDetail" in candidates_src
+    assert "closeCandidateDetail" in rms_src or "closeCandidateDetail" in candidates_src
+    assert "latest_resume_parse_summary" in candidates_src
+    assert "encodeURIComponent(keyword)" in candidates_src
+    assert "loadCandidates()" in rms_src
+    filtered_candidates_start = candidates_src.index("var filteredCandidates = computed")
+    filtered_candidates_slice = candidates_src[filtered_candidates_start : filtered_candidates_start + 800]
     assert "indexOf(name)" not in filtered_candidates_slice
     rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
     assert 'data-rms-region="candidates"' in rms_html
@@ -158,7 +233,7 @@ def test_rms_frontend_js_assets_exist():
     assert "reviewFailPromptOpen" in rms_src
     assert "内审失败须填写理由" in rms_src
     assert "请说明内审未通过原因" in rms_src
-    assert "userOptions.value" in rms_src
+    assert "jobs.userOptions.value" in rms_src or "userOptions" in jobs_src
     assert "jobFormOptions.users" not in rms_src
     assert '"interview_scheduling"' not in labels_src
     assert "scheduling_interview" in labels_src
@@ -500,7 +575,10 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "rms-jobs-scroll-fill" in html
     assert "crm-table" in html
     assert "/static/js/pages/rms-application-labels.js" in html
+    assert "/static/js/pages/rms-core.js" in html
     assert "/static/js/pages/rms-candidate-report.js" in html
+    assert "/static/js/pages/rms-jobs.js" in html
+    assert "/static/js/pages/rms-candidates.js" in html
     assert "/static/js/pages/rms.js" in html
     assert "接收状态" in html
     assert "内审状态" in html
