@@ -20,6 +20,7 @@ RMS_JS_BUNDLE_FILES = (
     "static/js/pages/rms-candidate-report.js",
     "static/js/pages/rms-jobs.js",
     "static/js/pages/rms-candidates.js",
+    "static/js/pages/rms-applications.js",
     "static/js/pages/rms.js",
 )
 
@@ -76,6 +77,7 @@ def test_rms_frontend_js_assets_exist():
     report_src = bundle["static/js/pages/rms-candidate-report.js"]
     jobs_src = bundle["static/js/pages/rms-jobs.js"]
     candidates_src = bundle["static/js/pages/rms-candidates.js"]
+    applications_src = bundle["static/js/pages/rms-applications.js"]
     rms_src = bundle["static/js/pages/rms.js"]
     rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
 
@@ -85,10 +87,14 @@ def test_rms_frontend_js_assets_exist():
     assert "/static/js/pages/rms-core.js" in rms_html
     assert "/static/js/pages/rms-jobs.js" in rms_html
     assert "/static/js/pages/rms-candidates.js" in rms_html
+    assert "/static/js/pages/rms-applications.js" in rms_html
     assert rms_html.index("rms-core.js") < rms_html.index("rms-candidate-report.js")
     assert rms_html.index("rms-candidate-report.js") < rms_html.index("rms-jobs.js")
     assert rms_html.index("rms-jobs.js") < rms_html.index("rms-candidates.js")
-    assert rms_html.index("rms-candidates.js") < rms_html.index("rms.js")
+    assert rms_html.index("rms-candidates.js") < rms_html.index("rms-applications.js")
+    assert rms_html.index("rms-applications.js") < rms_html.index("rms.js")
+    assert "r2b-20260614" not in rms_html
+    assert rms_html.count("r3a-20260614") == 7
 
     for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError"):
         assert sym in core_src, f"missing core symbol: {sym}"
@@ -139,6 +145,30 @@ def test_rms_frontend_js_assets_exist():
     assert "candidates.submitCandidateModal" in rms_src
     assert "const loadCandidates = candidates.loadCandidates" in rms_src
     assert "const displaySalary = candidates.displaySalary" in rms_src
+
+    for sym in (
+        "createApplicationsState",
+        "loadApplications",
+        "openApplicationDetailModal",
+        "closeApplicationDetailModal",
+        "openStatusHistoryModal",
+        "closeStatusHistoryModal",
+        "removeApplication",
+        "applicationsFilter",
+        "filteredApplications",
+        "appCandidateAge",
+        "deliveryReviewFailNoteFromHistory",
+    ):
+        assert sym in applications_src, f"missing applications symbol: {sym}"
+    assert "global.CrmRmsApplications" in applications_src
+    apps_return = applications_src.split("return {", 1)[1].split("};", 1)[0]
+    assert "modalTitle" not in apps_return
+    assert "CrmRmsApplications.createApplicationsState" in rms_src
+    assert "...applications" in rms_src
+    assert "RMS 推荐记录模块未加载" in rms_src
+    assert "RMS 推荐记录状态初始化失败" in rms_src
+    assert "const applicationsState = applications.applicationsState" in rms_src
+    assert "const loadApplications = applications.loadApplications" in rms_src
 
     assert "parseCandidateReportDraft" in report_src
     assert "validateReportForm" in report_src
@@ -540,7 +570,7 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "RMS_DELIVERY_REVIEW_STORAGE_VERSION" in resize_js
     assert "ensureRmsCandidatesTableColumns" in resize_js
     assert "crmEnsureRmsCandidatesTableColumns" in resize_js
-    assert "appCandidateAge" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    assert "appCandidateAge" in (REPO_ROOT / "static/js/pages/rms-applications.js").read_text(encoding="utf-8")
     assert "推荐候选人" in html
     assert "推荐库内人选" in html
     assert 'data-rms-action="open-existing-candidate-picker"' in html
@@ -597,6 +627,7 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "/static/js/pages/rms-candidate-report.js" in html
     assert "/static/js/pages/rms-jobs.js" in html
     assert "/static/js/pages/rms-candidates.js" in html
+    assert "/static/js/pages/rms-applications.js" in html
     assert "/static/js/pages/rms.js" in html
     assert "接收状态" in html
     assert "内审状态" in html
@@ -629,6 +660,7 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert ">历史</button>" in pipe_region
     assert "只看活动状态" in pipe_region
     rms_src = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    applications_js = (REPO_ROOT / "static/js/pages/rms-applications.js").read_text(encoding="utf-8")
     assert "openProgressConfirmModal" in rms_src
     assert "progressOptionsForCorrection" in rms_src
     assert 'data-rms-action="progress-transition"' not in pipe_region
@@ -648,10 +680,10 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "openApplicationDetailModal" in apps_region
     assert "内审失败原因" in html
     assert "applicationDetailFailNote" in html
-    assert "deliveryReviewFailNoteFromHistory" in rms_src
+    assert "deliveryReviewFailNoteFromHistory" in applications_js
     assert "openStatusHistoryModal" in apps_region
-    assert "function openStatusHistoryModal" in rms_src
-    assert "function closeStatusHistoryModal" in rms_src
+    assert "function openStatusHistoryModal" in applications_js
+    assert "function closeStatusHistoryModal" in applications_js
     assert "removeApplication" in apps_region
     assert "确认删除推荐记录" in apps_region
     assert "转入花名册" in apps_region
@@ -669,11 +701,11 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "canConvertToRoster" in rms_src
     assert "openConvertedRosterEntry" in rms_src
     assert ">简历</a>" in apps_region
-    assert "hired_unconverted_only" in rms_src
-    assert "applicationsFilter" in rms_src
+    assert "hired_unconverted_only" in applications_js
+    assert "applicationsFilter" in applications_js
     assert "待转花名册" in apps_region
     assert "已转花名册" in html
-    assert "filteredApplications" in rms_src
+    assert "filteredApplications" in applications_js
     assert "只看未转入花名册" in apps_region
 
     assert "Plan 34" not in html

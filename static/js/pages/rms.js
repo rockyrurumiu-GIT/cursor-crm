@@ -141,7 +141,6 @@
       const viewMode = ref(null);
       const me = ref({ user: { id: null }, permissions: [] });
 
-      const applicationsState = reactive({ loading: false, items: [], error: "" });
       const deliveryReviewState = reactive({ loading: false, items: [], error: "" });
       const reviewModal = ref(null);
       const reviewFailPromptOpen = ref(false);
@@ -189,19 +188,6 @@
         date_from: "",
         date_to: "",
       });
-
-      const applicationsFilter = reactive({
-        hired_unconverted_only: false,
-      });
-
-      const statusHistoryModal = ref(null);
-      const statusHistoryLoading = ref(false);
-      const statusHistoryError = ref("");
-      const statusHistoryItems = ref([]);
-
-      const applicationDetailModal = ref(null);
-      const applicationDetailFailNote = ref("");
-      const applicationDetailLoading = ref(false);
 
       const progressOptions = (Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
         return { value: s, label: Labels.progressLabel ? Labels.progressLabel(s) : s };
@@ -406,42 +392,6 @@
         return true;
       });
 
-      const filteredApplications = computed(function () {
-        var rows = applicationsState.items.slice();
-        if (applicationsFilter.hired_unconverted_only) {
-          rows = rows.filter(function (a) {
-            return a.status === "hired" && !a.converted_to_roster_entry_id;
-          });
-        }
-        return rows;
-      });
-
-      const filteredPipelineApplications = computed(function () {
-        if (!Labels.filterPipelineApplications) return [];
-        const appliedStatuses = (pipelineFilter.statuses || []).slice();
-        const rows = Labels.filterPipelineApplications(applicationsState.items, {
-          filters: {
-            client_id: pipelineFilter.client_id,
-            job_id: pipelineFilter.job_id,
-            city: pipelineFilter.city,
-            delivery: pipelineFilter.delivery,
-            recommender: pipelineFilter.recommender,
-            statuses: [],
-            activeOnly: appliedStatuses.length ? false : pipelineFilter.activeOnly,
-            date_from: pipelineFilter.date_from,
-            date_to: pipelineFilter.date_to,
-          },
-          getJobs: function () { return jobs.jobsState.items; },
-          getCandidates: function () { return candidatesState.items; },
-          getUsers: function () { return jobs.userOptions.value; },
-          clientNameById: clientNameById,
-        });
-        if (!appliedStatuses.length) return rows;
-        return rows.filter(function (a) {
-          return pipelineStatusMatches(a.status, appliedStatuses);
-        });
-      });
-
       const clientNameByIdMap = computed(function () {
         const m = {};
         jobs.clientOptions.value.forEach(function (c) {
@@ -563,53 +513,6 @@
       const appDeliveryLabel = appDisplay.appDeliveryLabel || function () { return "—"; };
       const appRecommenderLabel = appDisplay.appRecommenderLabel || function () { return "—"; };
 
-      function candidateForApp(a) {
-        if (!a || a.candidate_id == null || a.candidate_id === "") return null;
-        const cid = Number(a.candidate_id);
-        return candidatesState.items.find(function (c) {
-          return Number(c.id) === cid;
-        }) || null;
-      }
-
-      function appCandidateAge(a) {
-        const c = candidateForApp(a);
-        return (c && c.age) ? c.age : "—";
-      }
-
-      function appCandidateWorkYears(a) {
-        const c = candidateForApp(a);
-        return (c && c.work_years) ? c.work_years : "—";
-      }
-
-      function appCandidateCurrentSalary(a) {
-        const c = candidateForApp(a);
-        return c ? displaySalary(c.current_salary) : "—";
-      }
-
-      function appCandidateExpectedSalary(a) {
-        const c = candidateForApp(a);
-        return c ? displaySalary(c.expected_salary) : "—";
-      }
-
-      function appCandidateAvailableDate(a) {
-        const c = candidateForApp(a);
-        return c ? formatRmsDate(c.available_date) : "—";
-      }
-
-      function appCandidateEducation(a) {
-        const c = candidateForApp(a);
-        return (c && c.education_level) ? c.education_level : "—";
-      }
-
-      function resumeViewUrlById(resumeId) {
-        if (resumeId == null || resumeId === "") return "#";
-        return "/api/rms/resumes/" + resumeId + "/view";
-      }
-
-      function resumeCanViewByName(fileName) {
-        return /\.(pdf|txt|rtf)$/i.test(String(fileName || ""));
-      }
-
       async function loadMe() {
         try {
           const data = await window.crmApi.get("/api/me");
@@ -617,23 +520,6 @@
           if (jobs.applyDefaultOwnerFromMe) jobs.applyDefaultOwnerFromMe();
         } catch (e) {
           /* page still usable; owner_user_id manual */
-        }
-      }
-
-      async function loadApplications() {
-        applicationsState.loading = true;
-        applicationsState.error = "";
-        try {
-          const r = await rmsRequest("GET", "/api/rms/applications");
-          if (!r.ok) {
-            applicationsState.items = [];
-            applicationsState.error = r.message;
-            return;
-          }
-          applicationsState.items = Array.isArray(r.data) ? r.data : [];
-        } finally {
-          applicationsState.loading = false;
-          scheduleCandidatesTableColumnFit();
         }
       }
 
@@ -658,6 +544,56 @@
           alert(msg);
         }
       }
+
+      if (!window.CrmRmsApplications || typeof window.CrmRmsApplications.createApplicationsState !== "function") {
+        showRmsBootError("RMS 推荐记录模块未加载，请刷新后重试。");
+        return {};
+      }
+      const applications = window.CrmRmsApplications.createApplicationsState({
+        ref: ref,
+        reactive: reactive,
+        computed: computed,
+        rmsRequest: rmsRequest,
+        toast: toast,
+        candidatesState: candidatesState,
+        displaySalary: displaySalary,
+        formatRmsDate: formatRmsDate,
+        scheduleCandidatesTableColumnFit: scheduleCandidatesTableColumnFit,
+        loadCandidates: loadCandidates,
+        loadDeliveryReview: loadDeliveryReview,
+      });
+      const applicationsState = applications.applicationsState;
+      const loadApplications = applications.loadApplications;
+      if (!applicationsState || !loadApplications) {
+        showRmsBootError("RMS 推荐记录状态初始化失败，请刷新后重试。");
+        return {};
+      }
+
+      const filteredPipelineApplications = computed(function () {
+        if (!Labels.filterPipelineApplications) return [];
+        const appliedStatuses = (pipelineFilter.statuses || []).slice();
+        const rows = Labels.filterPipelineApplications(applicationsState.items, {
+          filters: {
+            client_id: pipelineFilter.client_id,
+            job_id: pipelineFilter.job_id,
+            city: pipelineFilter.city,
+            delivery: pipelineFilter.delivery,
+            recommender: pipelineFilter.recommender,
+            statuses: [],
+            activeOnly: appliedStatuses.length ? false : pipelineFilter.activeOnly,
+            date_from: pipelineFilter.date_from,
+            date_to: pipelineFilter.date_to,
+          },
+          getJobs: function () { return jobs.jobsState.items; },
+          getCandidates: function () { return candidatesState.items; },
+          getUsers: function () { return jobs.userOptions.value; },
+          clientNameById: clientNameById,
+        });
+        if (!appliedStatuses.length) return rows;
+        return rows.filter(function (a) {
+          return pipelineStatusMatches(a.status, appliedStatuses);
+        });
+      });
 
       let report = null;
       if (!window.CrmRmsReport || typeof window.CrmRmsReport.createReportState !== "function") {
@@ -755,75 +691,6 @@
           pipelineFilter.statuses.push(v);
         });
         pipelineStatusDropdownOpen.value = false;
-      }
-
-      function deliveryReviewFailNoteFromHistory(items) {
-        if (!Array.isArray(items)) return "";
-        for (let i = 0; i < items.length; i++) {
-          const h = items[i];
-          if (h && h.reason === "delivery_review_failed") {
-            return String(h.note || "").trim();
-          }
-        }
-        return "";
-      }
-
-      async function openApplicationDetailModal(app) {
-        if (!app) return;
-        applicationDetailModal.value = app;
-        applicationDetailFailNote.value = "";
-        applicationDetailLoading.value = false;
-        const dr = String(app.delivery_review_status == null ? "" : app.delivery_review_status).trim();
-        const needsFailNote = dr === "failed" || app.status === "internal_screen_failed";
-        if (!needsFailNote || app.id == null) return;
-        applicationDetailLoading.value = true;
-        const r = await rmsRequest("GET", "/api/rms/applications/" + app.id + "/status-history");
-        applicationDetailLoading.value = false;
-        if (r.ok) {
-          applicationDetailFailNote.value = deliveryReviewFailNoteFromHistory(r.data);
-        }
-      }
-
-      function closeApplicationDetailModal() {
-        applicationDetailModal.value = null;
-        applicationDetailFailNote.value = "";
-        applicationDetailLoading.value = false;
-      }
-
-      function closeStatusHistoryModal() {
-        statusHistoryModal.value = null;
-        statusHistoryLoading.value = false;
-        statusHistoryError.value = "";
-        statusHistoryItems.value = [];
-      }
-
-      async function openStatusHistoryModal(app) {
-        if (!app || app.id == null) return;
-        statusHistoryModal.value = app;
-        statusHistoryLoading.value = true;
-        statusHistoryError.value = "";
-        statusHistoryItems.value = [];
-        const r = await rmsRequest("GET", "/api/rms/applications/" + app.id + "/status-history");
-        statusHistoryLoading.value = false;
-        if (!r.ok) {
-          statusHistoryError.value = r.message || "加载状态历史失败";
-          return;
-        }
-        statusHistoryItems.value = Array.isArray(r.data) ? r.data : [];
-      }
-
-      async function removeApplication(row) {
-        const base = "/api/rms/applications/" + row.id;
-        let r = await rmsRequest("DELETE", base);
-        if (!r.ok && r.status === 405) {
-          r = await rmsRequest("POST", base + "/delete");
-        }
-        if (!r.ok) {
-          toast(r.message, true);
-          return;
-        }
-        toast("已删除推荐记录", false);
-        await Promise.all([loadApplications(), loadCandidates(), loadDeliveryReview()]);
       }
 
       function openDeliveryReviewModal(app) {
@@ -1098,23 +965,12 @@
         ...jobs,
         jobModalReadonly: jobs.jobModalReadonly,
         ...candidates,
-        applicationsState,
+        ...applications,
         deliveryReviewState,
         reviewModal,
         reviewFailPromptOpen,
         reviewModalSaving,
         reviewModalError,
-        statusHistoryModal,
-        statusHistoryLoading,
-        statusHistoryError,
-        statusHistoryItems,
-        applicationDetailModal,
-        applicationDetailFailNote,
-        applicationDetailLoading,
-        openApplicationDetailModal,
-        closeApplicationDetailModal,
-        openStatusHistoryModal,
-        closeStatusHistoryModal,
         ...report,
         canWriteJobs,
         canWriteCandidates,
@@ -1138,8 +994,6 @@
         modalSaving,
         modalCloseLabel,
         modalShowSave,
-        applicationsFilter,
-        filteredApplications,
         pipelineFilter,
         pipelineStatusDropdownOpen,
         pipelineStatusDraft,
@@ -1173,14 +1027,6 @@
         appJobLocation,
         appDeliveryLabel,
         appRecommenderLabel,
-        appCandidateAge,
-        appCandidateWorkYears,
-        appCandidateCurrentSalary,
-        appCandidateExpectedSalary,
-        appCandidateAvailableDate,
-        appCandidateEducation,
-        resumeViewUrlById,
-        resumeCanViewByName,
         userOptionLabel,
         clientNameById,
         resetPipelineFilter,
@@ -1188,7 +1034,6 @@
         closeDeliveryReviewModal,
         openDeliveryReviewFailModal,
         submitDeliveryReview,
-        removeApplication,
         closeModal,
         submitModal,
       };
