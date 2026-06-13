@@ -20,7 +20,6 @@
   const fuzzyMatch = Core.fuzzyMatch ? Core.fuzzyMatch.bind(Core) : function () { return true; };
   const showValidationPrompt = Core.showValidationPrompt ? Core.showValidationPrompt.bind(Core) : function (m) { return String(m || ""); };
   const showRmsBootError = Core.showRmsBootError ? Core.showRmsBootError.bind(Core) : function () {};
-  const REPORT_LOCAL_TEXT_PREVIEW_MAX = Core.REPORT_LOCAL_TEXT_PREVIEW_MAX || 2000;
 
   function pipelineStatusMatches(appStatus, selectedStatuses) {
     if (Labels.statusMatchesFilter) {
@@ -148,65 +147,6 @@
       const reviewFailPromptOpen = ref(false);
       const reviewModalSaving = ref(false);
       const reviewModalError = ref("");
-      const reportSaving = ref(false);
-      const reportError = ref("");
-      const reportResumeFile = ref(null);
-      const reportResumeInput = ref(null);
-      const reportResumeDraftStatus = ref("idle");
-      const reportResumeDraftError = ref("");
-      const reportResumePdfPreviewUrl = ref("");
-      const reportResumeTextPreview = ref("");
-      const reportResumeTextPreviewTruncated = ref(false);
-      const reportResumePreviewText = ref("");
-      const reportResumePreviewError = ref("");
-      const reportResumePreviewWarning = ref("");
-      const reportResumePreviewRawText = ref("");
-      const reportResumePreviewLength = ref(0);
-      const reportResumePreviewRawLength = ref(0);
-      const reportShowRawExtractDebug = ref(
-        typeof window !== "undefined" &&
-          /(?:^|[?&])rms_debug=1(?:&|$)/.test(window.location.search || "")
-      );
-      const reportResumeDragging = ref(false);
-      const reportAutoFilledFields = reactive({});
-      const reportForm = reactive(CandidateReport.emptyReportForm ? CandidateReport.emptyReportForm() : {});
-      const reportMode = ref("new");
-      const selectedExistingCandidate = ref(null);
-      const existingCandidatePickerOpen = ref(false);
-      const existingCandidatePickerQuery = ref("");
-      const existingCandidatePickerItems = ref([]);
-      const existingCandidatePickerLoading = ref(false);
-      const existingCandidatePickerError = ref("");
-      const existingCandidatePickerDetail = ref(null);
-      const existingCandidatePickerDetailLoading = ref(false);
-      const existingCandidateHoverCard = reactive({
-        open: false,
-        x: 0,
-        y: 0,
-        candidateId: null,
-      });
-      let existingCandidatePickerTimer = null;
-      let existingCandidatePopoverHideTimer = null;
-
-      let reportPageDragGuardOn = false;
-      function onReportPageDragOver(ev) {
-        ev.preventDefault();
-      }
-      function onReportPageDrop(ev) {
-        ev.preventDefault();
-      }
-      function installReportPageDragGuard() {
-        if (reportPageDragGuardOn) return;
-        reportPageDragGuardOn = true;
-        document.addEventListener("dragover", onReportPageDragOver);
-        document.addEventListener("drop", onReportPageDrop);
-      }
-      function removeReportPageDragGuard() {
-        if (!reportPageDragGuardOn) return;
-        reportPageDragGuardOn = false;
-        document.removeEventListener("dragover", onReportPageDragOver);
-        document.removeEventListener("drop", onReportPageDrop);
-      }
       async function rmsRequestWorkflow(method, url, body, endpoint) {
         const r = await rmsRequest(method, url, body);
         if (!r.ok && r.status === 404) {
@@ -286,33 +226,6 @@
       });
       const canReadCandidates = computed(function () {
         return me.value.permissions.indexOf("rms.candidates.read") !== -1;
-      });
-      const canRecommendExistingCandidate = computed(function () {
-        return canWriteApplications.value && canReadCandidates.value;
-      });
-      const canSubmitCandidateReport = computed(function () {
-        if (reportMode.value === "existing") {
-          return canWriteApplications.value && canReadCandidates.value;
-        }
-        return canWriteApplications.value && canWriteCandidates.value;
-      });
-      const existingCandidatePopoverStyle = computed(function () {
-        var gap = 12;
-        var width = 320;
-        var height = 460;
-        var viewportW = typeof window !== "undefined" ? window.innerWidth : 1920;
-        var viewportH = typeof window !== "undefined" ? window.innerHeight : 1080;
-        var left = existingCandidateHoverCard.x + gap;
-        var top = existingCandidateHoverCard.y + gap;
-        if (left + width > viewportW - 12) {
-          left = existingCandidateHoverCard.x - width - gap;
-        }
-        if (top + height > viewportH - 12) {
-          top = viewportH - height - 12;
-        }
-        if (top < 12) top = 12;
-        if (left < 12) left = 12;
-        return { left: left + "px", top: top + "px" };
       });
       const canConvertToRoster = computed(function () {
         const perms = me.value.permissions || [];
@@ -583,10 +496,6 @@
       const candidateParseSummaryEmpty = candidates.candidateParseSummaryEmpty;
       const candidateParseSummaryValue = candidates.candidateParseSummaryValue;
 
-      function formatReportSalaryField(field) {
-        reportForm[field] = formatSalaryThousands(reportForm[field]);
-      }
-
       function progressLabel(status) {
         return Labels.progressLabel ? Labels.progressLabel(status) : status;
       }
@@ -750,6 +659,56 @@
         }
       }
 
+      let report = null;
+      if (!window.CrmRmsReport || typeof window.CrmRmsReport.createReportState !== "function") {
+        showRmsBootError("RMS 推荐报告模块未加载，请刷新后重试。");
+        return {};
+      }
+      report = window.CrmRmsReport.createReportState({
+        ref: ref,
+        reactive: reactive,
+        computed: computed,
+        watch: watch,
+        nextTick: nextTick,
+        viewMode: viewMode,
+        rmsRequest: rmsRequest,
+        toast: toast,
+        jobs: jobs,
+        candidatesState: candidatesState,
+        loadApplications: loadApplications,
+        loadCandidates: loadCandidates,
+        loadDeliveryReview: loadDeliveryReview,
+        clientNameById: clientNameById,
+        labelCandidate: labelCandidate,
+        displayCandidateContact: displayCandidateContact,
+        resumeViewUrl: resumeViewUrl,
+        resumeCanView: resumeCanView,
+        candidateParseSummaryFields: candidateParseSummaryFields,
+        candidateParseSummaryEmpty: candidateParseSummaryEmpty,
+        candidateParseSummaryValue: candidateParseSummaryValue,
+        formatSalaryThousands: formatSalaryThousands,
+        PHONE_RE: PHONE_RE,
+        showCandidateDuplicateDialog: showCandidateDuplicateDialog,
+        isCandidateDuplicateError: isCandidateDuplicateError,
+        userFacingRmsError: userFacingRmsError,
+      });
+
+      const reportMode = report.reportMode;
+      if (!reportMode) {
+        showRmsBootError("RMS 推荐报告状态初始化失败，请刷新后重试。");
+        return {};
+      }
+
+      const canRecommendExistingCandidate = computed(function () {
+        return canWriteApplications.value && canReadCandidates.value;
+      });
+      const canSubmitCandidateReport = computed(function () {
+        if (reportMode.value === "existing") {
+          return canWriteApplications.value && canReadCandidates.value;
+        }
+        return canWriteApplications.value && canWriteCandidates.value;
+      });
+
       function userOptionLabel(u) {
         const dn = (u.display_name || "").trim();
         const un = (u.username || "").trim();
@@ -865,491 +824,6 @@
         }
         toast("已删除推荐记录", false);
         await Promise.all([loadApplications(), loadCandidates(), loadDeliveryReview()]);
-      }
-
-      function reportResumeFileExt(file) {
-        const name = (file && file.name) || "";
-        const dot = name.lastIndexOf(".");
-        return dot >= 0 ? name.slice(dot).toLowerCase() : "";
-      }
-
-      function revokeReportResumePdfPreview() {
-        if (reportResumePdfPreviewUrl.value) {
-          URL.revokeObjectURL(reportResumePdfPreviewUrl.value);
-          reportResumePdfPreviewUrl.value = "";
-        }
-      }
-
-      function clearReportFileMainPreview() {
-        revokeReportResumePdfPreview();
-        reportResumeTextPreview.value = "";
-        reportResumeTextPreviewTruncated.value = false;
-      }
-
-      function clearReportRecognizedText() {
-        reportResumePreviewText.value = "";
-        reportResumePreviewError.value = "";
-        reportResumePreviewWarning.value = "";
-        reportResumePreviewRawText.value = "";
-        reportResumePreviewLength.value = 0;
-        reportResumePreviewRawLength.value = 0;
-      }
-
-      function setupReportFileMainPreview(file) {
-        clearReportFileMainPreview();
-        if (!file) return;
-        const ext = reportResumeFileExt(file);
-        if (ext === ".pdf") {
-          reportResumePdfPreviewUrl.value = URL.createObjectURL(file);
-          return;
-        }
-        if (ext === ".txt" || ext === ".rtf") {
-          const reader = new FileReader();
-          reader.onload = function () {
-            const full = String(reader.result || "");
-            reportResumeTextPreviewTruncated.value = full.length > REPORT_LOCAL_TEXT_PREVIEW_MAX;
-            reportResumeTextPreview.value = full.slice(0, REPORT_LOCAL_TEXT_PREVIEW_MAX);
-          };
-          reader.onerror = function () {
-            reportResumeTextPreview.value = "";
-            reportResumeTextPreviewTruncated.value = false;
-          };
-          reader.readAsText(file);
-        }
-      }
-
-      function resetReportDraftUi() {
-        reportResumeDraftStatus.value = "idle";
-        reportResumeDraftError.value = "";
-        reportResumeDragging.value = false;
-        clearReportFileMainPreview();
-        clearReportRecognizedText();
-        Object.keys(reportAutoFilledFields).forEach(function (k) {
-          delete reportAutoFilledFields[k];
-        });
-      }
-
-      function formatReportFileSize(bytes) {
-        return CandidateReport.formatFileSize
-          ? CandidateReport.formatFileSize(bytes)
-          : String(bytes || 0);
-      }
-
-      function hideExistingCandidatePopover() {
-        if (existingCandidatePopoverHideTimer) {
-          clearTimeout(existingCandidatePopoverHideTimer);
-          existingCandidatePopoverHideTimer = null;
-        }
-        existingCandidateHoverCard.open = false;
-        existingCandidateHoverCard.candidateId = null;
-        existingCandidatePickerDetail.value = null;
-        existingCandidatePickerDetailLoading.value = false;
-      }
-
-      function keepExistingCandidatePopover() {
-        if (existingCandidatePopoverHideTimer) {
-          clearTimeout(existingCandidatePopoverHideTimer);
-          existingCandidatePopoverHideTimer = null;
-        }
-      }
-
-      function scheduleHideExistingCandidatePopover() {
-        keepExistingCandidatePopover();
-        existingCandidatePopoverHideTimer = setTimeout(function () {
-          existingCandidatePopoverHideTimer = null;
-          hideExistingCandidatePopover();
-        }, 150);
-      }
-
-      function moveExistingCandidatePopover(event) {
-        if (!event) return;
-        existingCandidateHoverCard.x = event.clientX;
-        existingCandidateHoverCard.y = event.clientY;
-      }
-
-      async function showExistingCandidatePopover(c, event) {
-        if (!c || c.id == null) return;
-        keepExistingCandidatePopover();
-        existingCandidateHoverCard.open = true;
-        existingCandidateHoverCard.candidateId = c.id;
-        moveExistingCandidatePopover(event);
-        if (
-          existingCandidatePickerDetail.value &&
-          Number(existingCandidatePickerDetail.value.id) === Number(c.id)
-        ) {
-          return;
-        }
-        await showExistingCandidatePickerDetail(c);
-      }
-
-      function resetExistingCandidatePickerState() {
-        hideExistingCandidatePopover();
-        existingCandidatePickerOpen.value = false;
-        existingCandidatePickerQuery.value = "";
-        existingCandidatePickerItems.value = [];
-        existingCandidatePickerLoading.value = false;
-        existingCandidatePickerError.value = "";
-        if (existingCandidatePickerTimer) {
-          clearTimeout(existingCandidatePickerTimer);
-          existingCandidatePickerTimer = null;
-        }
-      }
-
-      function resetExistingCandidateReportState() {
-        reportMode.value = "new";
-        selectedExistingCandidate.value = null;
-        resetExistingCandidatePickerState();
-      }
-
-      function fillReportFormFromCandidate(detail) {
-        if (!detail) return;
-        reportForm.name = detail.name || "";
-        reportForm.age = detail.age || "";
-        reportForm.work_years = detail.work_years || "";
-        reportForm.phone = detail.phone || "";
-        reportForm.email_wechat = String(detail.email_wechat || detail.email || detail.wechat || "").trim();
-        reportForm.current_salary = formatSalaryThousands(detail.current_salary || "");
-        reportForm.expected_salary = formatSalaryThousands(detail.expected_salary || "");
-        reportForm.available_date = detail.available_date || "";
-        reportForm.education_level = detail.education_level || "";
-        reportForm.school = detail.school || "";
-        reportForm.major = detail.major || "";
-        reportForm.gender = detail.gender || "";
-        reportForm.marital_status = detail.marital_status || "";
-        reportForm.source = detail.source || "";
-        var detailCity = String(detail.city || "").trim();
-        if (detailCity) {
-          reportForm.location = detailCity;
-        }
-      }
-
-      function clearSelectedExistingCandidate() {
-        const jobId = reportForm.job_id;
-        const job = jobs.jobsState.items.find(function (j) {
-          return Number(j.id) === Number(jobId);
-        });
-        reportMode.value = "new";
-        selectedExistingCandidate.value = null;
-        Object.assign(
-          reportForm,
-          CandidateReport.emptyReportForm ? CandidateReport.emptyReportForm() : {}
-        );
-        if (job && CandidateReport.fillFromJob) {
-          CandidateReport.fillFromJob(reportForm, job, clientNameById);
-        }
-      }
-
-      async function searchExistingCandidates() {
-        existingCandidatePickerError.value = "";
-        const keyword = (existingCandidatePickerQuery.value || "").trim();
-        if (!keyword) {
-          existingCandidatePickerItems.value = [];
-          existingCandidatePickerLoading.value = false;
-          return;
-        }
-        existingCandidatePickerLoading.value = true;
-        try {
-          const path = "/api/rms/candidates?q=" + encodeURIComponent(keyword);
-          const r = await rmsRequest("GET", path);
-          if (!r.ok) {
-            existingCandidatePickerItems.value = [];
-            existingCandidatePickerError.value = r.message;
-            return;
-          }
-          existingCandidatePickerItems.value = Array.isArray(r.data) ? r.data : [];
-        } finally {
-          existingCandidatePickerLoading.value = false;
-        }
-      }
-
-      function openExistingCandidatePicker() {
-        existingCandidatePickerOpen.value = true;
-        existingCandidatePickerQuery.value = "";
-        existingCandidatePickerItems.value = [];
-        existingCandidatePickerError.value = "";
-        existingCandidatePickerDetail.value = null;
-      }
-
-      function closeExistingCandidatePicker() {
-        hideExistingCandidatePopover();
-        existingCandidatePickerOpen.value = false;
-        if (existingCandidatePickerTimer) {
-          clearTimeout(existingCandidatePickerTimer);
-          existingCandidatePickerTimer = null;
-        }
-      }
-
-      async function showExistingCandidatePickerDetail(c) {
-        if (!c || c.id == null) return;
-        existingCandidatePickerDetailLoading.value = true;
-        existingCandidatePickerDetail.value = null;
-        const r = await rmsRequest("GET", "/api/rms/candidates/" + c.id);
-        existingCandidatePickerDetailLoading.value = false;
-        if (!r.ok) {
-          existingCandidatePickerError.value = r.message || ("请求失败（" + r.status + "）");
-          return;
-        }
-        existingCandidatePickerDetail.value = r.data;
-      }
-
-      async function selectExistingCandidateForReport(c) {
-        if (!c || c.id == null) return;
-        hideExistingCandidatePopover();
-        closeExistingCandidatePicker();
-        reportMode.value = "existing";
-        selectedExistingCandidate.value = {
-          id: c.id,
-          name: c.name || "",
-          resume_id: c.resume_id != null ? c.resume_id : null,
-        };
-        clearReportResumeFile();
-        const r = await rmsRequest("GET", "/api/rms/candidates/" + c.id);
-        if (r.ok && r.data) {
-          if (r.data.resume_id != null) {
-            selectedExistingCandidate.value.resume_id = r.data.resume_id;
-          }
-          fillReportFormFromCandidate(r.data);
-        }
-      }
-
-      function openCandidateReport(job) {
-        reportError.value = "";
-        reportSaving.value = false;
-        reportResumeFile.value = null;
-        resetReportDraftUi();
-        resetExistingCandidateReportState();
-        Object.assign(
-          reportForm,
-          CandidateReport.emptyReportForm ? CandidateReport.emptyReportForm() : {}
-        );
-        if (CandidateReport.fillFromJob) {
-          CandidateReport.fillFromJob(reportForm, job, clientNameById);
-        }
-        viewMode.value = "candidateReport";
-        installReportPageDragGuard();
-      }
-
-      function closeCandidateReport() {
-        removeReportPageDragGuard();
-        viewMode.value = null;
-        reportError.value = "";
-        clearReportResumeFile();
-        resetExistingCandidateReportState();
-      }
-
-      function clearReportResumeFile() {
-        if (CandidateReport.clearAutoFilledFields) {
-          CandidateReport.clearAutoFilledFields(reportForm, reportAutoFilledFields);
-        }
-        reportResumeFile.value = null;
-        reportResumeDraftStatus.value = "idle";
-        reportResumeDraftError.value = "";
-        reportResumeDragging.value = false;
-        clearReportFileMainPreview();
-        clearReportRecognizedText();
-        if (reportResumeInput.value) reportResumeInput.value.value = "";
-      }
-
-      async function parseReportResumeDraft(file) {
-        if (!file || !CandidateReport.parseCandidateReportDraft) return;
-        reportResumeDraftStatus.value = "parsing";
-        reportResumeDraftError.value = "";
-        clearReportRecognizedText();
-        if (CandidateReport.clearAutoFilledFields) {
-          CandidateReport.clearAutoFilledFields(reportForm, reportAutoFilledFields);
-        }
-        const r = await CandidateReport.parseCandidateReportDraft(
-          file,
-          reportForm.job_id,
-          authHeaders,
-          function (status, detail) {
-            return workflowMessageForStatus(status, detail, "parse-draft");
-          }
-        );
-        if (!r.ok) {
-          reportResumeDraftStatus.value = "error";
-          reportResumeDraftError.value = r.message;
-          reportResumePreviewError.value = r.message;
-          return;
-        }
-        const data = r.data || {};
-        const draft = data.draft_fields || {};
-        const filled = CandidateReport.applyDraftToForm
-          ? CandidateReport.applyDraftToForm(reportForm, draft, reportAutoFilledFields)
-          : 0;
-        formatReportSalaryField("current_salary");
-        formatReportSalaryField("expected_salary");
-        const n = CandidateReport.countDraftFields
-          ? CandidateReport.countDraftFields(draft)
-          : filled;
-        if (n > 0 || filled > 0) {
-          reportResumeDraftStatus.value = "ok";
-        } else {
-          reportResumeDraftStatus.value = "empty";
-        }
-        if (data.message) reportResumeDraftError.value = data.message;
-        reportResumePreviewLength.value = Number(data.parsed_text_length) || 0;
-        reportResumePreviewRawLength.value = Number(data.parsed_text_raw_length) || 0;
-        reportResumePreviewWarning.value = String(data.extract_warning || "").trim();
-        const preview = String(data.parsed_text || "").trim();
-        const rawPreview = String(data.parsed_text_raw || "").trim();
-        if (preview) {
-          reportResumePreviewText.value = preview;
-          reportResumePreviewError.value = "";
-        } else if (data.message) {
-          reportResumePreviewText.value = "";
-          reportResumePreviewError.value = data.message;
-        } else {
-          reportResumePreviewText.value = "";
-          reportResumePreviewError.value = "";
-        }
-        reportResumePreviewRawText.value = rawPreview;
-        let parseDuplicate = data.duplicate_detected === true;
-        if (!parseDuplicate && (reportForm.phone || "").trim()) {
-          const dupR = await rmsRequest("POST", "/api/rms/candidates/check-duplicate", {
-            name: (reportForm.name || "").trim(),
-            phone: (reportForm.phone || "").trim(),
-          });
-          parseDuplicate = !!(dupR.ok && dupR.data && dupR.data.duplicate_detected === true);
-        }
-        if (parseDuplicate) {
-          await showCandidateDuplicateDialog(CANDIDATE_DUPLICATE_PARSE_HINT);
-        }
-      }
-
-      function onReportFilePicked(file) {
-        if (!file) return;
-        if (reportMode.value === "existing") {
-          clearSelectedExistingCandidate();
-        }
-        revokeReportResumePdfPreview();
-        reportResumeFile.value = file;
-        setupReportFileMainPreview(file);
-        parseReportResumeDraft(file);
-      }
-
-      function onReportResumeChange(ev) {
-        const f = ev.target && ev.target.files && ev.target.files[0];
-        onReportFilePicked(f || null);
-      }
-
-      function onReportDrop(ev) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        reportResumeDragging.value = false;
-        const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-        onReportFilePicked(f || null);
-      }
-
-      function onReportDragEnter(ev) {
-        ev.preventDefault();
-        reportResumeDragging.value = true;
-      }
-
-      function onReportDragLeave(ev) {
-        ev.preventDefault();
-        reportResumeDragging.value = false;
-      }
-
-      function focusReportField(field) {
-        const key = String(field || "").trim();
-        if (!key) return;
-        nextTick(function () {
-          const root = document.querySelector("[data-rms-report-form]");
-          const host = root
-            ? root.querySelector('[data-rms-report-field="' + key + '"]')
-            : document.querySelector('[data-rms-report-field="' + key + '"]');
-          if (!host) return;
-          const focusable =
-            host.matches && host.matches("input, select, textarea")
-              ? host
-              : host.querySelector
-                ? host.querySelector("input, select, textarea")
-                : null;
-          if (host.scrollIntoView) {
-            host.scrollIntoView({ block: "center", behavior: "smooth" });
-          }
-          if (focusable && focusable.focus) {
-            focusable.focus({ preventScroll: true });
-          }
-        });
-      }
-
-      function resolveValidationField(message, field) {
-        if (field) return field;
-        return CandidateReport.fieldKeyForValidationMessage
-          ? CandidateReport.fieldKeyForValidationMessage(message)
-          : "";
-      }
-
-      function setReportError(message, field) {
-        reportError.value = showValidationPrompt(message);
-        focusReportField(resolveValidationField(message, field));
-      }
-
-      async function submitCandidateReport() {
-        reportSaving.value = true;
-        reportError.value = "";
-        try {
-          if (reportMode.value === "existing") {
-            if (!selectedExistingCandidate.value || selectedExistingCandidate.value.id == null) {
-              setReportError("请选择库内候选人");
-              return;
-            }
-            if (!reportForm.job_id) {
-              setReportError("请选择应聘岗位");
-              return;
-            }
-            const body = {
-              job_id: Number(reportForm.job_id),
-              candidate_id: Number(selectedExistingCandidate.value.id),
-              resume_id:
-                selectedExistingCandidate.value.resume_id != null
-                  ? selectedExistingCandidate.value.resume_id
-                  : null,
-            };
-            const r = await rmsRequest("POST", "/api/rms/applications", body);
-            if (!r.ok) {
-              setReportError(userFacingRmsError(r));
-              return;
-            }
-            toast("已推荐库内候选人", false);
-            closeCandidateReport();
-            await Promise.all([loadApplications(), loadCandidates(), loadDeliveryReview()]);
-            return;
-          }
-          const reportValidation = CandidateReport.validateReportForm
-            ? CandidateReport.validateReportForm(reportForm)
-            : { ok: true, message: "" };
-          if (!reportValidation.ok) {
-            setReportError(reportValidation.message, reportValidation.field);
-            return;
-          }
-          const r = await CandidateReport.submitCandidateReport(
-            reportForm,
-            reportResumeFile.value,
-            authHeaders,
-            function (status, detail) {
-              return workflowMessageForStatus(status, detail, "candidate-report");
-            }
-          );
-          if (!r.ok) {
-            if (isCandidateDuplicateError(r)) {
-              await showCandidateDuplicateDialog();
-              return;
-            }
-            setReportError(userFacingRmsError(r));
-            return;
-          }
-          toast("推荐已提交", false);
-          closeCandidateReport();
-          await Promise.all([loadApplications(), loadCandidates(), loadDeliveryReview()]);
-        } catch (err) {
-          const msg = err && err.message ? err.message : String(err);
-          setReportError("提交失败：" + msg);
-        } finally {
-          reportSaving.value = false;
-        }
       }
 
       function openDeliveryReviewModal(app) {
@@ -1595,20 +1069,6 @@
         await openProgressConfirmModal(app, target, "correction");
       }
 
-      watch(
-        function () {
-          return existingCandidatePickerQuery.value;
-        },
-        function () {
-          if (!existingCandidatePickerOpen.value) return;
-          if (existingCandidatePickerTimer) clearTimeout(existingCandidatePickerTimer);
-          existingCandidatePickerTimer = setTimeout(function () {
-            existingCandidatePickerTimer = null;
-            searchExistingCandidates();
-          }, 300);
-        }
-      );
-
       watch(activeTab, function (tab) {
         if (tab === "candidates" || tab === "applications" || tab === "deliveryReview" || tab === "pipeline") {
           scheduleCandidatesTableColumnFit();
@@ -1655,51 +1115,13 @@
         closeApplicationDetailModal,
         openStatusHistoryModal,
         closeStatusHistoryModal,
-        reportForm,
-        reportSaving,
-        reportError,
-        reportResumeFile,
-        reportResumeInput,
-        reportResumeDraftStatus,
-        reportResumeDraftError,
-        reportResumePdfPreviewUrl,
-        reportResumeTextPreview,
-        reportResumeTextPreviewTruncated,
-        reportResumePreviewText,
-        reportResumePreviewError,
-        reportResumePreviewWarning,
-        reportResumePreviewRawText,
-        reportResumePreviewLength,
-        reportResumePreviewRawLength,
-        reportShowRawExtractDebug,
-        reportResumeDragging,
-        formatReportFileSize,
+        ...report,
         canWriteJobs,
         canWriteCandidates,
         canWriteApplications,
         canReadCandidates,
         canRecommendExistingCandidate,
         canSubmitCandidateReport,
-        reportMode,
-        selectedExistingCandidate,
-        existingCandidatePickerOpen,
-        existingCandidatePickerQuery,
-        existingCandidatePickerItems,
-        existingCandidatePickerLoading,
-        existingCandidatePickerError,
-        existingCandidatePickerDetail,
-        existingCandidatePickerDetailLoading,
-        existingCandidateHoverCard,
-        existingCandidatePopoverStyle,
-        openExistingCandidatePicker,
-        closeExistingCandidatePicker,
-        showExistingCandidatePopover,
-        moveExistingCandidatePopover,
-        scheduleHideExistingCandidatePopover,
-        keepExistingCandidatePopover,
-        hideExistingCandidatePopover,
-        selectExistingCandidateForReport,
-        clearSelectedExistingCandidate,
         canConvertToRoster,
         rosterConvertModal,
         rosterConvertSaving,
@@ -1736,7 +1158,6 @@
         genderOptions: GENDER_OPTIONS,
         sourceOptions: SOURCE_OPTIONS,
         maritalOptions: MARITAL_OPTIONS,
-        formatReportSalaryField,
         progressLabel,
         formatRmsDate,
         receiveLabel,
@@ -1763,14 +1184,6 @@
         userOptionLabel,
         clientNameById,
         resetPipelineFilter,
-        openCandidateReport,
-        closeCandidateReport,
-        onReportResumeChange,
-        onReportDrop,
-        onReportDragEnter,
-        onReportDragLeave,
-        clearReportResumeFile,
-        submitCandidateReport,
         openDeliveryReviewModal,
         closeDeliveryReviewModal,
         openDeliveryReviewFailModal,

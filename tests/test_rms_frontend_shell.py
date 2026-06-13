@@ -144,9 +144,12 @@ def test_rms_frontend_js_assets_exist():
     assert "validateReportForm" in report_src
     assert "validateCandidateCreateForm" in report_src
     assert "fieldKeyForValidationMessage" in report_src
+    assert "createReportState" in report_src
+    assert "global.CrmRmsReport" in report_src
+    assert "ReportApi" in report_src
     assert "data-rms-report-field" in (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
-    assert "focusReportField" in rms_src
-    assert "showValidationPrompt" in rms_src
+    assert "focusReportField" in report_src
+    assert "showValidationPrompt" in report_src or "showValidationPrompt" in report_src
     assert "到岗时间" in report_src
     assert '"phone"' in report_src
     assert 'phone: ""' in report_src
@@ -154,11 +157,22 @@ def test_rms_frontend_js_assets_exist():
     assert "form.email_wechat = String(draft.phone)" not in report_src
     for sym in (
         "reportForm",
-        "reportResumeFile",
+        "openCandidateReport",
         "submitCandidateReport",
+        "existingCandidatePickerOpen",
+        "existingCandidatePopoverStyle",
+        "showExistingCandidatePopover",
+        "selectExistingCandidateForReport",
         "onReportResumeChange",
+        "reportResumeFile",
     ):
-        assert sym in rms_src or sym in report_src, f"missing symbol: {sym}"
+        assert sym in report_src, f"missing report factory symbol: {sym}"
+
+    assert "CrmRmsReport.createReportState" in rms_src
+    assert "...report" in rms_src
+    assert "showRmsBootError" in rms_src
+    assert "RMS 推荐报告模块未加载" in rms_src
+    assert "RMS 推荐报告状态初始化失败" in rms_src
 
     assert "createAppDisplayHelpers" in labels_src
     assert "Labels.createAppDisplayHelpers" in rms_src
@@ -197,9 +211,6 @@ def test_rms_frontend_js_assets_exist():
         "selectExistingCandidateForReport",
         "selectedExistingCandidate",
         "reportMode",
-        "canRecommendExistingCandidate",
-        "canSubmitCandidateReport",
-        "canReadCandidates",
         "showExistingCandidatePopover",
         "moveExistingCandidatePopover",
         "scheduleHideExistingCandidatePopover",
@@ -207,8 +218,14 @@ def test_rms_frontend_js_assets_exist():
         "existingCandidateHoverCard",
         "hideExistingCandidatePopover",
     ):
-        assert sym in rms_src, f"missing symbol: {sym}"
-    assert 'rmsRequest("POST", "/api/rms/applications"' in rms_src
+        assert sym in report_src, f"missing report factory symbol: {sym}"
+    for sym in (
+        "canRecommendExistingCandidate",
+        "canSubmitCandidateReport",
+        "canReadCandidates",
+    ):
+        assert sym in rms_src, f"missing shell symbol: {sym}"
+    assert 'rmsRequest("POST", "/api/rms/applications"' in report_src
     assert "openCandidateDetail" in rms_src or "openCandidateDetail" in candidates_src
     assert "closeCandidateDetail" in rms_src or "closeCandidateDetail" in candidates_src
     assert "latest_resume_parse_summary" in candidates_src
@@ -588,12 +605,12 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "deliveryReviewLabel" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
 
     rms_js = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    report_js = (REPO_ROOT / "static/js/pages/rms-candidate-report.js").read_text(encoding="utf-8")
     assert "canSubmitCandidateReport" in rms_js
     assert "closeExistingCandidatePickerDetail" not in rms_js
     assert "人选已存在系统中" in rms_js
-    assert "系统中已存在该人选" in rms_js
-    assert "duplicate_detected" in rms_js
-    assert "/api/rms/candidates/check-duplicate" in rms_js
+    assert "duplicate_detected" in report_js
+    assert "/api/rms/candidates/check-duplicate" in report_js
     assert "10000" in rms_js
     assert "showCandidateDuplicateDialog" in rms_js
     assert 'window.confirm("人选已存在系统中")' not in rms_js
