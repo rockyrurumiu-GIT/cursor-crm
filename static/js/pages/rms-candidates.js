@@ -208,16 +208,26 @@
       return name ? name : "#" + candidateId;
     }
 
+    function textOrDash(value) {
+      var text = String(value == null ? "" : value).trim();
+      return text || "—";
+    }
+
     function displayCandidateContact(c) {
-      return (c.email_wechat || c.email || c.wechat || "—").trim() || "—";
+      if (!c) return "—";
+      return textOrDash(c.email_wechat || c.email || c.wechat);
     }
 
     function displayTargetJob(c) {
-      return (c.target_job_title || "").trim() || (c.target_job_id ? "#" + c.target_job_id : "—");
+      if (!c) return "—";
+      var title = String(c.target_job_title == null ? "" : c.target_job_title).trim();
+      return title || (c.target_job_id ? "#" + c.target_job_id : "—");
     }
 
     function displayTargetClient(c) {
-      return (c.target_client_name || "").trim() || (c.target_client_id ? "#" + c.target_client_id : "—");
+      if (!c) return "—";
+      var name = String(c.target_client_name == null ? "" : c.target_client_name).trim();
+      return name || (c.target_client_id ? "#" + c.target_client_id : "—");
     }
 
     function displaySalary(value) {
@@ -440,7 +450,7 @@
       candidateForm.age = c.age || "";
       candidateForm.work_years = c.work_years || "";
       candidateForm.phone = c.phone || "";
-      candidateForm.email_wechat = (c.email_wechat || c.email || c.wechat || "").trim();
+      candidateForm.email_wechat = String(c.email_wechat || c.email || c.wechat || "").trim();
       candidateForm.target_job_id = c.target_job_id != null ? c.target_job_id : "";
       candidateForm.target_client_id = c.target_client_id != null ? c.target_client_id : "";
       candidateForm.city = c.city || "";
@@ -455,7 +465,7 @@
       candidateForm.source = c.source || "";
       jobPickerQuery.value = displayTargetJob(c) === "—" ? "" : displayTargetJob(c);
       clientPickerQuery.value = displayTargetClient(c) === "—" ? "" : displayTargetClient(c);
-      editingCandidateResumeName.value = (c.resume_file_name || "").trim();
+      editingCandidateResumeName.value = String(c.resume_file_name || "").trim();
     }
 
     function buildCandidateBody() {

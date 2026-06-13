@@ -299,6 +299,13 @@ createApp({
         const locationQuery = ref('');
         const locationDropdownOpen = ref(false);
         const locationHighlightIndex = ref(0);
+        const passthrough = ref({
+            fullName: '',
+            position: '',
+            workLocation: '',
+            returnTo: '',
+            rosterAdd: '',
+        });
         const authHeader = () => window.crmAuthHeader();
 
         const filteredLocations = computed(() => {
@@ -633,6 +640,37 @@ createApp({
 
         const canCreateRosterEntry = computed(() => !!form.value.targetClientId);
 
+        const applyQueryPrefill = () => {
+            const params = new URLSearchParams(window.location.search);
+            const targetId = params.get('targetClientId');
+            if (targetId != null && String(targetId).trim() !== '') {
+                form.value.targetClientId = String(targetId).trim();
+            }
+            const quote = params.get('monthly_quote_tax');
+            if (quote != null && String(quote).trim() !== '') {
+                const n = core.parseMoneyInput(quote);
+                form.value.quoteTaxIncluded = n;
+                moneyDisplay.value.quoteTaxIncluded = core.formatMoneyInput(n);
+            }
+            const salary = params.get('pre_tax_salary');
+            if (salary != null && String(salary).trim() !== '') {
+                const n = core.parseMoneyInput(salary);
+                form.value.salary = n;
+                moneyDisplay.value.salary = core.formatMoneyInput(n);
+            }
+            const workLoc = params.get('work_location');
+            if (workLoc != null && String(workLoc).trim() !== '') {
+                const loc = String(workLoc).trim();
+                form.value.location = loc;
+                locationQuery.value = loc;
+            }
+            passthrough.value.fullName = params.get('full_name') != null ? String(params.get('full_name')).trim() : '';
+            passthrough.value.position = params.get('position') != null ? String(params.get('position')).trim() : '';
+            passthrough.value.workLocation = params.get('work_location') != null ? String(params.get('work_location')).trim() : '';
+            passthrough.value.returnTo = params.get('return_to') != null ? String(params.get('return_to')).trim() : '';
+            passthrough.value.rosterAdd = params.get('roster_add') != null ? String(params.get('roster_add')).trim() : '';
+        };
+
         const goCreateRosterEntry = () => {
             if (!form.value.targetClientId) return;
             const r = core.compute(form.value, selectedRates.value);
@@ -652,6 +690,15 @@ createApp({
             if (Number.isFinite(r.margin)) {
                 params.set('prefill_gm_pct', (r.margin * 100).toFixed(2));
             }
+            if (passthrough.value.fullName) {
+                params.set('prefill_full_name', passthrough.value.fullName);
+            }
+            if (passthrough.value.position) {
+                params.set('prefill_position_title', passthrough.value.position);
+            }
+            if (passthrough.value.workLocation) {
+                params.set('prefill_work_location', passthrough.value.workLocation);
+            }
             window.location.href = `/customers/roster/${form.value.targetClientId}?${params.toString()}`;
         };
 
@@ -660,6 +707,7 @@ createApp({
             monthlyHoursDisplay.value = core.formatMoneyInput(form.value.monthlyHours);
             annualLeaveDaysDisplay.value = String(form.value.annualLeaveDays);
             initCustomInsuranceDisplay();
+            applyQueryPrefill();
             loadClients();
             loadLocations();
         });

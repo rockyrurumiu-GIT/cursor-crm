@@ -302,13 +302,17 @@
     return null;
   }
 
+  function textValue(value) {
+    return String(value == null ? "" : value).trim();
+  }
+
   function userLabelById(users, userId) {
     if (userId == null || userId === "") return "—";
     var id = Number(userId);
     for (var i = 0; i < users.length; i++) {
       if (Number(users[i].id) === id) {
-        var dn = (users[i].display_name || "").trim();
-        var un = (users[i].username || "").trim();
+        var dn = textValue(users[i].display_name);
+        var un = textValue(users[i].username);
         if (dn && un) return dn + " · " + un;
         return dn || un || String(id);
       }
@@ -332,57 +336,62 @@
 
     return {
       appCandidateName: function (a) {
-        var direct = (a && a.candidate_name || "").trim();
+        var direct = textValue(a && a.candidate_name);
         if (direct) return direct;
         if (!a || a.candidate_id == null || a.candidate_id === "") return "—";
         var c = candidateById(getCandidates(), a.candidate_id);
-        if (c && (c.name || "").trim()) return c.name.trim();
+        var candidateName = textValue(c && c.name);
+        if (candidateName) return candidateName;
         return "#" + a.candidate_id;
       },
       appClientName: function (a) {
-        var direct = (a && a.client_name || "").trim();
+        var direct = textValue(a && a.client_name);
         if (direct) return direct;
         var job = a && a.job_id != null && a.job_id !== "" ? jobById(getJobs(), a.job_id) : null;
-        if (job && (job.client_name || "").trim()) return job.client_name.trim();
+        var jobClientName = textValue(job && job.client_name);
+        if (jobClientName) return jobClientName;
         if (job && job.client_id != null && job.client_id !== "") {
-          var fromJobClient = (clientNameById(job.client_id) || "").trim();
+          var fromJobClient = textValue(clientNameById(job.client_id));
           if (fromJobClient) return fromJobClient;
         }
         if (a && a.client_id != null && a.client_id !== "") {
-          var fromClient = (clientNameById(a.client_id) || "").trim();
+          var fromClient = textValue(clientNameById(a.client_id));
           if (fromClient) return fromClient;
           return "#" + a.client_id;
         }
         return "—";
       },
       appJobTitle: function (a) {
-        var direct = (a && a.job_title || "").trim();
+        var direct = textValue(a && a.job_title);
         if (direct) return direct;
         if (!a || a.job_id == null || a.job_id === "") return "—";
         var job = jobById(getJobs(), a.job_id);
-        if (job && (job.title || "").trim()) return job.title.trim();
-        var labeled = (labelJob(a.job_id) || "").trim();
+        var jobTitle = textValue(job && job.title);
+        if (jobTitle) return jobTitle;
+        var labeled = textValue(labelJob(a.job_id));
         return labeled || "—";
       },
       appJobLocation: function (a) {
-        var direct = (a && a.job_location || "").trim();
+        var direct = textValue(a && a.job_location);
         if (direct) return direct;
         if (!a || a.job_id == null || a.job_id === "") return "—";
         var job = jobById(getJobs(), a.job_id);
-        if (job && (job.location || "").trim()) return job.location.trim();
+        var jobLocation = textValue(job && job.location);
+        if (jobLocation) return jobLocation;
         return "—";
       },
       appRecommenderLabel: function (a) {
-        var direct = (a && a.recommended_by_name || "").trim();
+        var direct = textValue(a && a.recommended_by_name);
         if (direct) return direct;
         return userLabelById(getUsers(), a && a.recommended_by);
       },
       appDeliveryLabel: function (a) {
-        var direct = (a && a.delivery_owner_label || "").trim();
+        var direct = textValue(a && a.delivery_owner_label);
         if (direct) return direct;
 
         var job = a && a.job_id != null && a.job_id !== "" ? jobById(getJobs(), a.job_id) : null;
-        if (job && (job.delivery_owner_label || "").trim()) return job.delivery_owner_label.trim();
+        var jobDeliveryLabel = textValue(job && job.delivery_owner_label);
+        if (jobDeliveryLabel) return jobDeliveryLabel;
         if (job && job.delivery_owner_user_id != null && job.delivery_owner_user_id !== "") {
           return userLabelById(getUsers(), job.delivery_owner_user_id);
         }

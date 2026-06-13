@@ -138,6 +138,7 @@ def test_rms_frontend_js_assets_exist():
     assert "candidates.candidateModalTitle.value" in rms_src
     assert "candidates.submitCandidateModal" in rms_src
     assert "const loadCandidates = candidates.loadCandidates" in rms_src
+    assert "const displaySalary = candidates.displaySalary" in rms_src
 
     assert "parseCandidateReportDraft" in report_src
     assert "validateReportForm" in report_src
@@ -632,6 +633,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "applicationDetailFailNote" in html
     assert "deliveryReviewFailNoteFromHistory" in rms_src
     assert "openStatusHistoryModal" in apps_region
+    assert "function openStatusHistoryModal" in rms_src
+    assert "function closeStatusHistoryModal" in rms_src
     assert "removeApplication" in apps_region
     assert "确认删除推荐记录" in apps_region
     assert "转入花名册" in apps_region
@@ -640,6 +643,10 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "data-rms-roster-required" in html
     assert "月报价(含税)" in html
     assert "submitRosterConvert" in rms_src
+    assert "openRosterGmCalculatorFromRms" in rms_src
+    assert "/tools/calc" in rms_src
+    assert "毛利测算器" in html
+    assert "openRosterGmCalculatorFromRms" in html
     assert "/roster-draft" in rms_src
     assert "/convert-to-roster" in rms_src
     assert "canConvertToRoster" in rms_src

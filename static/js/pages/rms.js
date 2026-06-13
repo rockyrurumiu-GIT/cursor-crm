@@ -395,11 +395,31 @@
         return "";
       }
 
+      function appendGmCalcQueryPart(parts, key, val) {
+        var s = String(val == null ? "" : val).trim();
+        if (!s) return;
+        parts.push(key + "=" + encodeURIComponent(s));
+      }
+
+      function openRosterGmCalculatorFromRms() {
+        if (!rosterConvertModal.value) return;
+        var parts = ["return_to=roster", "roster_add=1"];
+        appendGmCalcQueryPart(parts, "targetClientId", rosterConvertModal.value.clientId);
+        appendGmCalcQueryPart(parts, "full_name", rosterConvertForm.full_name);
+        appendGmCalcQueryPart(parts, "work_location", rosterConvertForm.work_location);
+        appendGmCalcQueryPart(parts, "position", rosterConvertForm.position_title);
+        appendGmCalcQueryPart(parts, "monthly_quote_tax", normalizeRosterAmountText(rosterConvertForm.monthly_quote_tax));
+        appendGmCalcQueryPart(parts, "pre_tax_salary", normalizeRosterAmountText(rosterConvertForm.pre_tax_salary));
+        appendGmCalcQueryPart(parts, "gms", normalizeRosterAmountText(rosterConvertForm.gms));
+        appendGmCalcQueryPart(parts, "gm_pct", rosterConvertForm.gm_pct);
+        window.open("/tools/calc?" + parts.join("&"), "_blank");
+      }
+
       async function openRosterConvertModal(appRow) {
         rosterConvertError.value = "";
         rosterConvertSaving.value = false;
         emptyRosterConvertForm();
-        rosterConvertModal.value = { applicationId: appRow.id };
+        rosterConvertModal.value = { applicationId: appRow.id, clientId: appRow.client_id };
         var r = await rmsRequest("GET", "/api/rms/applications/" + appRow.id + "/roster-draft");
         if (!r.ok) {
           rosterConvertError.value = r.message || "加载花名册草稿失败";
@@ -407,6 +427,9 @@
         }
         var data = r.data || {};
         var payload = data.roster_payload || {};
+        if (data.client_id != null) {
+          rosterConvertModal.value.clientId = data.client_id;
+        }
         Object.keys(rosterConvertForm).forEach(function (key) {
           if (payload[key] != null) rosterConvertForm[key] = String(payload[key]);
         });
@@ -553,6 +576,7 @@
       const labelCandidate = candidates.labelCandidate;
       const candidateNameById = candidates.candidateNameById;
       const displayCandidateContact = candidates.displayCandidateContact;
+      const displaySalary = candidates.displaySalary;
       const resumeViewUrl = candidates.resumeViewUrl;
       const resumeCanView = candidates.resumeCanView;
       const candidateParseSummaryFields = candidates.candidateParseSummaryFields;
@@ -814,6 +838,21 @@
         statusHistoryItems.value = [];
       }
 
+      async function openStatusHistoryModal(app) {
+        if (!app || app.id == null) return;
+        statusHistoryModal.value = app;
+        statusHistoryLoading.value = true;
+        statusHistoryError.value = "";
+        statusHistoryItems.value = [];
+        const r = await rmsRequest("GET", "/api/rms/applications/" + app.id + "/status-history");
+        statusHistoryLoading.value = false;
+        if (!r.ok) {
+          statusHistoryError.value = r.message || "加载状态历史失败";
+          return;
+        }
+        statusHistoryItems.value = Array.isArray(r.data) ? r.data : [];
+      }
+
       async function removeApplication(row) {
         const base = "/api/rms/applications/" + row.id;
         let r = await rmsRequest("DELETE", base);
@@ -968,7 +1007,7 @@
         reportForm.age = detail.age || "";
         reportForm.work_years = detail.work_years || "";
         reportForm.phone = detail.phone || "";
-        reportForm.email_wechat = (detail.email_wechat || detail.email || detail.wechat || "").trim();
+        reportForm.email_wechat = String(detail.email_wechat || detail.email || detail.wechat || "").trim();
         reportForm.current_salary = formatSalaryThousands(detail.current_salary || "");
         reportForm.expected_salary = formatSalaryThousands(detail.expected_salary || "");
         reportForm.available_date = detail.available_date || "";
@@ -978,8 +1017,9 @@
         reportForm.gender = detail.gender || "";
         reportForm.marital_status = detail.marital_status || "";
         reportForm.source = detail.source || "";
-        if ((detail.city || "").trim()) {
-          reportForm.location = detail.city.trim();
+        var detailCity = String(detail.city || "").trim();
+        if (detailCity) {
+          reportForm.location = detailCity;
         }
       }
 
@@ -1667,6 +1707,7 @@
         rosterConvertForm,
         openRosterConvertModal,
         closeRosterConvertModal,
+        openRosterGmCalculatorFromRms,
         openConvertedRosterEntry,
         submitRosterConvert,
         modal,

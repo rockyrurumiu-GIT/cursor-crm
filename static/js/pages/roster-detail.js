@@ -211,6 +211,8 @@ function formatRatioAsPercent(ratio) {
 const ROSTER_ADD_QUERY_KEYS = [
     'roster_add',
     'prefill_full_name',
+    'prefill_position_title',
+    'prefill_work_location',
     'from_calc',
     'prefill_monthly_quote_tax',
     'prefill_pre_tax_salary',
@@ -640,6 +642,24 @@ const rosterDetailApp = createApp({
                 })
                 .finally(() => { loading.value = false; });
         };
+        const appendGmCalcQueryPart = (parts, key, val) => {
+            const s = String(val == null ? '' : val).trim();
+            if (!s) return;
+            parts.push(`${key}=${encodeURIComponent(s)}`);
+        };
+        const openRosterGmCalculatorFromRosterForm = () => {
+            if (IS_GLOBAL_ROSTER) return;
+            const parts = ['return_to=roster', 'roster_add=1'];
+            appendGmCalcQueryPart(parts, 'targetClientId', CLIENT_ID);
+            appendGmCalcQueryPart(parts, 'full_name', form.full_name);
+            appendGmCalcQueryPart(parts, 'work_location', form.work_location);
+            appendGmCalcQueryPart(parts, 'position', form.position_title);
+            appendGmCalcQueryPart(parts, 'monthly_quote_tax', normalizeAmountText(form.monthly_quote_tax));
+            appendGmCalcQueryPart(parts, 'pre_tax_salary', normalizeAmountText(form.pre_tax_salary));
+            appendGmCalcQueryPart(parts, 'gms', normalizeAmountText(form.gms));
+            appendGmCalcQueryPart(parts, 'gm_pct', form.gm_pct);
+            window.open(`/tools/calc?${parts.join('&')}`, '_blank');
+        };
         const openAdd = () => {
             if (IS_GLOBAL_ROSTER) return;
             editingId.value = null;
@@ -978,6 +998,14 @@ const rosterDetailApp = createApp({
                 if (nameDecoded) {
                     form.full_name = nameDecoded;
                 }
+                const positionRaw = params.get('prefill_position_title');
+                if (positionRaw != null && String(positionRaw).trim() !== '') {
+                    form.position_title = String(positionRaw).trim();
+                }
+                const workLocRaw = params.get('prefill_work_location');
+                if (workLocRaw != null && String(workLocRaw).trim() !== '') {
+                    form.work_location = String(workLocRaw).trim();
+                }
                 const quoteRaw = params.get('prefill_monthly_quote_tax');
                 if (quoteRaw != null && String(quoteRaw).trim() !== '') {
                     form.monthly_quote_tax = formatAmountThousandsInput(quoteRaw);
@@ -1023,7 +1051,7 @@ const rosterDetailApp = createApp({
             showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors, showOnlyChecked, displayCountHint, emptyStateText,
             IS_GLOBAL_ROSTER,
             rosterCustomerSelectOptions,
-            openAdd, openEdit, openRosterDetail, formReadonly, calcFieldsLocked, saveForm, doDelete,
+            openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, saveForm, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
             showRosterValidation,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,
