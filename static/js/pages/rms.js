@@ -1,6 +1,6 @@
 /**
  * RMS module page (Phase 2.5 frontend MVP).
- * Requires: Vue 3 CDN, crm-api.js, rms-core.js, rms-jobs.js, rms-candidates.js (optional crm-toast.js).
+ * Requires: Vue 3 CDN, crm-api.js, rms-core.js, rms-jobs.js, rms-candidates.js, rms-applications.js, rms-pipeline.js (optional crm-toast.js).
  */
 (function () {
   "use strict";
@@ -20,32 +20,6 @@
   const fuzzyMatch = Core.fuzzyMatch ? Core.fuzzyMatch.bind(Core) : function () { return true; };
   const showValidationPrompt = Core.showValidationPrompt ? Core.showValidationPrompt.bind(Core) : function (m) { return String(m || ""); };
   const showRmsBootError = Core.showRmsBootError ? Core.showRmsBootError.bind(Core) : function () {};
-
-  function pipelineStatusMatches(appStatus, selectedStatuses) {
-    if (Labels.statusMatchesFilter) {
-      return Labels.statusMatchesFilter(appStatus, selectedStatuses);
-    }
-    const selected = Array.isArray(selectedStatuses) ? selectedStatuses : [];
-    if (!selected.length) return true;
-    const raw = String(appStatus == null ? "" : appStatus).trim();
-    let normalized = raw;
-    if (Labels.filterProgressStatus) {
-      normalized = Labels.filterProgressStatus(raw);
-    } else if (raw === "recommended") {
-      normalized = "pending_internal_screen";
-    } else if (raw === "screening") {
-      normalized = "pending_client_screen";
-    } else if (raw === "interview") {
-      normalized = "pending_first_interview";
-    } else if (raw === "offer") {
-      normalized = "pending_offer";
-    }
-    for (let i = 0; i < selected.length; i++) {
-      const want = String(selected[i] == null ? "" : selected[i]).trim();
-      if (want && (raw === want || normalized === want)) return true;
-    }
-    return false;
-  }
 
   const EDUCATION_OPTIONS = ["重本", "统本", "专科", "硕士", "留学生", "民教网", "其他"];
   const GENDER_OPTIONS = ["男", "女"];
@@ -176,30 +150,6 @@
             toast: toast,
           })
         : {};
-
-      const pipelineFilter = reactive({
-        client_id: "",
-        job_id: "",
-        city: "",
-        delivery: "",
-        recommender: "",
-        statuses: [],
-        activeOnly: true,
-        date_from: "",
-        date_to: "",
-      });
-
-      const progressOptions = (Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
-        return { value: s, label: Labels.progressLabel ? Labels.progressLabel(s) : s };
-      });
-      const pipelineStatusDropdownOpen = ref(false);
-      const pipelineStatusDraft = ref([]);
-      const pipelineStatusFilterSummary = computed(function () {
-        const sel = pipelineFilter.statuses || [];
-        if (!sel.length) return "全部";
-        if (sel.length === 1) return progressLabel(sel[0]);
-        return "已选" + sel.length + "项";
-      });
 
       const canWriteJobs = computed(function () {
         return me.value.permissions.indexOf("rms.jobs.write") !== -1;
@@ -446,10 +396,6 @@
       const candidateParseSummaryEmpty = candidates.candidateParseSummaryEmpty;
       const candidateParseSummaryValue = candidates.candidateParseSummaryValue;
 
-      function progressLabel(status) {
-        return Labels.progressLabel ? Labels.progressLabel(status) : status;
-      }
-
       function formatRmsDate(value) {
         return Labels.formatRmsDate ? Labels.formatRmsDate(value) : (value || "—");
       }
@@ -462,39 +408,14 @@
         return Labels.deliveryReviewLabel ? Labels.deliveryReviewLabel(status) : status;
       }
 
-      function todayDateStr() {
-        const d = new Date();
-        const m = String(d.getMonth() + 1).padStart(2, "0");
-        const day = String(d.getDate()).padStart(2, "0");
-        return d.getFullYear() + "-" + m + "-" + day;
-      }
-
-      const hiredAtDates = reactive({});
-
       function protectionLabel(status) {
         return Labels.deriveProtectionStatus ? Labels.deriveProtectionStatus(status) : "—";
-      }
-
-      function progressTransitionsFor(status) {
-        return Labels.progressTransitionsFor ? Labels.progressTransitionsFor(status) : [];
       }
 
       function progressActionBtnClass(status) {
         return Labels.progressActionBtnClass
           ? Labels.progressActionBtnClass(status)
           : "rms-progress-btn rms-progress-btn--blue";
-      }
-
-      function progressOptionsForCorrection(currentStatus) {
-        return Labels.progressOptionsForCorrection
-          ? Labels.progressOptionsForCorrection(currentStatus)
-          : [];
-      }
-
-      function normalizeProgressStatus(status) {
-        return Labels.normalizeProgressStatus
-          ? Labels.normalizeProgressStatus(status)
-          : String(status || "").trim();
       }
 
       const appDisplay = Labels.createAppDisplayHelpers
@@ -569,30 +490,24 @@
         return {};
       }
 
-      const filteredPipelineApplications = computed(function () {
-        if (!Labels.filterPipelineApplications) return [];
-        const appliedStatuses = (pipelineFilter.statuses || []).slice();
-        const rows = Labels.filterPipelineApplications(applicationsState.items, {
-          filters: {
-            client_id: pipelineFilter.client_id,
-            job_id: pipelineFilter.job_id,
-            city: pipelineFilter.city,
-            delivery: pipelineFilter.delivery,
-            recommender: pipelineFilter.recommender,
-            statuses: [],
-            activeOnly: appliedStatuses.length ? false : pipelineFilter.activeOnly,
-            date_from: pipelineFilter.date_from,
-            date_to: pipelineFilter.date_to,
-          },
-          getJobs: function () { return jobs.jobsState.items; },
-          getCandidates: function () { return candidatesState.items; },
-          getUsers: function () { return jobs.userOptions.value; },
-          clientNameById: clientNameById,
-        });
-        if (!appliedStatuses.length) return rows;
-        return rows.filter(function (a) {
-          return pipelineStatusMatches(a.status, appliedStatuses);
-        });
+      if (!window.CrmRmsPipeline || typeof window.CrmRmsPipeline.createPipelineState !== "function") {
+        showRmsBootError("RMS Pipeline 模块未加载，请刷新后重试。");
+        return {};
+      }
+      const pipeline = window.CrmRmsPipeline.createPipelineState({
+        ref: ref,
+        reactive: reactive,
+        computed: computed,
+        Labels: Labels,
+        rmsRequest: rmsRequest,
+        toast: toast,
+        jobs: jobs,
+        applicationsState: applicationsState,
+        candidatesState: candidatesState,
+        loadApplications: loadApplications,
+        clientNameById: clientNameById,
+        appCandidateName: appCandidateName,
+        appJobTitle: appJobTitle,
       });
 
       let report = null;
@@ -650,47 +565,6 @@
         const un = (u.username || "").trim();
         if (dn && un) return dn + " · " + un;
         return dn || un || String(u.id);
-      }
-
-      function resetPipelineFilter() {
-        pipelineFilter.client_id = "";
-        pipelineFilter.job_id = "";
-        pipelineFilter.city = "";
-        pipelineFilter.delivery = "";
-        pipelineFilter.recommender = "";
-        pipelineFilter.statuses.splice(0, pipelineFilter.statuses.length);
-        pipelineStatusDraft.value = [];
-        pipelineFilter.activeOnly = true;
-        pipelineStatusDropdownOpen.value = false;
-        pipelineFilter.date_from = "";
-        pipelineFilter.date_to = "";
-      }
-
-      function togglePipelineStatusDropdown() {
-        if (!pipelineStatusDropdownOpen.value) {
-          pipelineStatusDraft.value = (pipelineFilter.statuses || []).slice();
-        }
-        pipelineStatusDropdownOpen.value = !pipelineStatusDropdownOpen.value;
-      }
-
-      function togglePipelineStatusDraft(value) {
-        const list = pipelineStatusDraft.value;
-        const idx = list.indexOf(value);
-        if (idx >= 0) list.splice(idx, 1);
-        else list.push(value);
-      }
-
-      function clearPipelineStatusDraft() {
-        pipelineStatusDraft.value = [];
-      }
-
-      function applyPipelineStatusFilter() {
-        const next = pipelineStatusDraft.value.slice();
-        pipelineFilter.statuses.splice(0, pipelineFilter.statuses.length);
-        next.forEach(function (v) {
-          pipelineFilter.statuses.push(v);
-        });
-        pipelineStatusDropdownOpen.value = false;
       }
 
       function openDeliveryReviewModal(app) {
@@ -805,137 +679,6 @@
         }
       }
 
-      function hiredAtFor(appId) {
-        const id = String(appId);
-        if (!hiredAtDates[id]) hiredAtDates[id] = todayDateStr();
-        return hiredAtDates[id];
-      }
-
-      function setHiredAtFor(appId, value) {
-        hiredAtDates[String(appId)] = value;
-      }
-
-      async function submitProgressConfirm(applicationId, toStatus, mode, formValues) {
-        formValues = formValues || {};
-        const note = String(formValues.note || "").trim();
-        if (mode === "correction" && note.length < 2) {
-          toast("状态修正备注至少 2 个字", true);
-          return;
-        }
-        const body = { to_status: toStatus, mode: mode, note: note };
-        if (toStatus === "hired") {
-          const dateVal = String(formValues.hired_at || todayDateStr()).trim();
-          if (!dateVal) {
-            toast("请填写入职时间", true);
-            return;
-          }
-          body.hired_at = dateVal;
-        }
-        const r = await rmsRequest("POST", "/api/rms/applications/" + applicationId + "/status", body);
-        if (!r.ok) {
-          toast(r.message, true);
-          return;
-        }
-        const data = r.data || {};
-        if (data.roster_check && data.roster_check.message) {
-          const st = data.roster_check.status;
-          const isWarn = st === "missing" || st === "date_mismatch" || st === "ambiguous";
-          toast(data.roster_check.message, isWarn);
-        } else {
-          toast("招聘进展已更新为 " + progressLabel(toStatus), false);
-        }
-        delete hiredAtDates[String(applicationId)];
-        await loadApplications();
-      }
-
-      async function openProgressConfirmModal(app, targetStatus, mode) {
-        if (!app || app.id == null || !targetStatus) return;
-        if (typeof window.crmConfirmActionDialog !== "function") {
-          toast("确认对话框不可用", true);
-          return;
-        }
-        const lines = [
-          { label: "候选人", value: appCandidateName(app) },
-          { label: "岗位", value: appJobTitle(app) },
-          { label: "当前状态", value: progressLabel(app.status) },
-          { label: "目标状态", value: progressLabel(targetStatus) },
-          { label: "操作类型", value: mode === "correction" ? "状态修正" : "正常推进" },
-        ];
-        let hint = "";
-        if (app.status === "hired" && targetStatus !== "hired") {
-          hint = "确认后将清空入职时间。";
-        }
-        const fields = [{
-          type: "textarea",
-          name: "note",
-          label: "备注/原因",
-          placeholder: mode === "correction" ? "必填，至少 2 个字" : "可选",
-        }];
-        if (targetStatus === "hired") {
-          fields.push({
-            type: "date",
-            name: "hired_at",
-            label: "入职时间",
-            value: hiredAtFor(app.id),
-          });
-        }
-        const result = await window.crmConfirmActionDialog({
-          title: "确认变更招聘进展",
-          lines: lines,
-          hint: hint,
-          fields: fields,
-          confirmText: "确认",
-          cancelText: "取消",
-          zIndex: 120,
-        });
-        if (!result || !result.ok) return;
-        await submitProgressConfirm(app.id, targetStatus, mode, result.values || {});
-      }
-
-      async function openCorrectionPickerModal(app) {
-        if (!app || app.id == null) return;
-        if (typeof window.crmConfirmActionDialog !== "function") {
-          toast("确认对话框不可用", true);
-          return;
-        }
-        const options = progressOptionsForCorrection(app.status);
-        if (!options.length) {
-          toast("暂无可选目标状态", true);
-          return;
-        }
-        let hint = "";
-        if (normalizeProgressStatus(app.status) === "hired") {
-          hint = "若目标不是已入职，确认后将清空入职时间。";
-        }
-        const result = await window.crmConfirmActionDialog({
-          title: "修改招聘进展",
-          lines: [
-            { label: "候选人", value: appCandidateName(app) },
-            { label: "岗位", value: appJobTitle(app) },
-            { label: "当前状态", value: progressLabel(app.status) },
-            { label: "操作类型", value: "状态修正" },
-          ],
-          fields: [{
-            type: "select",
-            name: "to_status",
-            label: "目标招聘进展",
-            placeholder: "请选择",
-            options: options,
-          }],
-          hint: hint,
-          confirmText: "下一步",
-          cancelText: "取消",
-          zIndex: 120,
-        });
-        if (!result || !result.ok) return;
-        const target = String((result.values && result.values.to_status) || "").trim();
-        if (!target) {
-          toast("请选择目标状态", true);
-          return;
-        }
-        await openProgressConfirmModal(app, target, "correction");
-      }
-
       watch(activeTab, function (tab) {
         if (tab === "candidates" || tab === "applications" || tab === "deliveryReview" || tab === "pipeline") {
           scheduleCandidatesTableColumnFit();
@@ -994,33 +737,16 @@
         modalSaving,
         modalCloseLabel,
         modalShowSave,
-        pipelineFilter,
-        pipelineStatusDropdownOpen,
-        pipelineStatusDraft,
-        pipelineStatusFilterSummary,
-        togglePipelineStatusDropdown,
-        togglePipelineStatusDraft,
-        clearPipelineStatusDraft,
-        applyPipelineStatusFilter,
-        filteredPipelineApplications,
-        progressOptions,
-        progressOptionsForCorrection,
-        openCorrectionPickerModal,
-        openProgressConfirmModal,
-        submitProgressConfirm,
+        ...pipeline,
         educationOptions: EDUCATION_OPTIONS,
         genderOptions: GENDER_OPTIONS,
         sourceOptions: SOURCE_OPTIONS,
         maritalOptions: MARITAL_OPTIONS,
-        progressLabel,
         formatRmsDate,
         receiveLabel,
         deliveryReviewLabel,
         protectionLabel,
-        progressTransitionsFor,
         progressActionBtnClass,
-        hiredAtFor,
-        setHiredAtFor,
         appCandidateName,
         appClientName,
         appJobTitle,
@@ -1029,7 +755,6 @@
         appRecommenderLabel,
         userOptionLabel,
         clientNameById,
-        resetPipelineFilter,
         openDeliveryReviewModal,
         closeDeliveryReviewModal,
         openDeliveryReviewFailModal,

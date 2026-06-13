@@ -21,6 +21,7 @@ RMS_JS_BUNDLE_FILES = (
     "static/js/pages/rms-jobs.js",
     "static/js/pages/rms-candidates.js",
     "static/js/pages/rms-applications.js",
+    "static/js/pages/rms-pipeline.js",
     "static/js/pages/rms.js",
 )
 
@@ -78,6 +79,7 @@ def test_rms_frontend_js_assets_exist():
     jobs_src = bundle["static/js/pages/rms-jobs.js"]
     candidates_src = bundle["static/js/pages/rms-candidates.js"]
     applications_src = bundle["static/js/pages/rms-applications.js"]
+    pipeline_src = bundle["static/js/pages/rms-pipeline.js"]
     rms_src = bundle["static/js/pages/rms.js"]
     rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
 
@@ -92,9 +94,12 @@ def test_rms_frontend_js_assets_exist():
     assert rms_html.index("rms-candidate-report.js") < rms_html.index("rms-jobs.js")
     assert rms_html.index("rms-jobs.js") < rms_html.index("rms-candidates.js")
     assert rms_html.index("rms-candidates.js") < rms_html.index("rms-applications.js")
-    assert rms_html.index("rms-applications.js") < rms_html.index("rms.js")
+    assert rms_html.index("rms-applications.js") < rms_html.index("rms-pipeline.js")
+    assert rms_html.index("rms-pipeline.js") < rms_html.index("rms.js")
     assert "r2b-20260614" not in rms_html
-    assert rms_html.count("r3a-20260614") == 7
+    assert "r3a-20260614" not in rms_html
+    assert rms_html.count("r3b-20260614") == 8
+    assert "rms-pipeline.js?v=r3b-20260614" in rms_html
 
     for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError"):
         assert sym in core_src, f"missing core symbol: {sym}"
@@ -170,6 +175,26 @@ def test_rms_frontend_js_assets_exist():
     assert "const applicationsState = applications.applicationsState" in rms_src
     assert "const loadApplications = applications.loadApplications" in rms_src
 
+    for sym in (
+        "pipelineStatusMatches",
+        "filteredPipelineApplications",
+        "pipelineFilter",
+        "openProgressConfirmModal",
+        "submitProgressConfirm",
+        "openCorrectionPickerModal",
+        "progressOptionsForCorrection",
+        "progressTransitionsFor",
+        "progressOptions",
+        "resetPipelineFilter",
+        "progressLabel",
+    ):
+        assert sym in pipeline_src, f"missing pipeline symbol: {sym}"
+    assert "global.CrmRmsPipeline" in pipeline_src
+    assert "createPipelineState" in pipeline_src
+    assert "CrmRmsPipeline.createPipelineState" in rms_src
+    assert "...pipeline" in rms_src
+    assert "RMS Pipeline 模块未加载" in rms_src
+
     assert "parseCandidateReportDraft" in report_src
     assert "validateReportForm" in report_src
     assert "validateCandidateCreateForm" in report_src
@@ -225,8 +250,6 @@ def test_rms_frontend_js_assets_exist():
         "APPLICATION_PROGRESS_STATUSES",
     ):
         assert sym in labels_src, f"missing pipeline helper: {sym}"
-    assert "progressOptions" in rms_src
-    assert "filteredPipelineApplications" in rms_src
     assert "candidateFilter" in rms_src or "candidateFilter" in candidates_src
     assert "filteredCandidates" in rms_src or "filteredCandidates" in candidates_src
     assert "crmEnsureRmsCandidatesTableColumns" in candidates_src
@@ -628,6 +651,7 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "/static/js/pages/rms-jobs.js" in html
     assert "/static/js/pages/rms-candidates.js" in html
     assert "/static/js/pages/rms-applications.js" in html
+    assert "/static/js/pages/rms-pipeline.js" in html
     assert "/static/js/pages/rms.js" in html
     assert "接收状态" in html
     assert "内审状态" in html
@@ -660,18 +684,19 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert ">历史</button>" in pipe_region
     assert "只看活动状态" in pipe_region
     rms_src = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    pipeline_js = (REPO_ROOT / "static/js/pages/rms-pipeline.js").read_text(encoding="utf-8")
     applications_js = (REPO_ROOT / "static/js/pages/rms-applications.js").read_text(encoding="utf-8")
-    assert "openProgressConfirmModal" in rms_src
-    assert "progressOptionsForCorrection" in rms_src
+    assert "openProgressConfirmModal" in pipeline_js
+    assert "progressOptionsForCorrection" in pipeline_js
     assert 'data-rms-action="progress-transition"' not in pipe_region
     assert "transitionProgress" not in pipe_region
     assert "progressOptions" in pipe_region
     assert "pipelineStatusFilterSummary" in pipe_region
     assert "pipelineStatusDraft" in pipe_region
     assert "rms-pipeline-status-filter" in pipe_region
-    assert "pipelineStatusFilterSummary" in rms_src
-    assert "applyPipelineStatusFilter" in rms_src
-    assert "pipelineStatusMatches" in rms_src
+    assert "pipelineStatusFilterSummary" in pipeline_js
+    assert "applyPipelineStatusFilter" in pipeline_js
+    assert "pipelineStatusMatches" in pipeline_js
     labels_src = (REPO_ROOT / "static/js/pages/rms-application-labels.js").read_text(encoding="utf-8")
     assert "statusMatchesFilter" in labels_src
     assert ">确定</button>" in pipe_region
