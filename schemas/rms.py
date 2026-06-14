@@ -417,9 +417,10 @@ CANDIDATE_EDUCATION_LEVELS = frozenset(
     {"重本", "统本", "专科", "硕士", "留学生", "民教网", "其他"}
 )
 CANDIDATE_GENDERS = frozenset({"男", "女"})
-CANDIDATE_SOURCES = frozenset(
-    {"平台", "Boss", "linkedin", "猎聘", "内推", "挂靠", "外协", "其他"}
+CANDIDATE_SOURCE_PRESETS = frozenset(
+    {"内部RMS", "平台", "Boss", "linkedin", "猎聘", "内推", "挂靠", "外协"}
 )
+CANDIDATE_SOURCES = CANDIDATE_SOURCE_PRESETS | {"其他"}
 CANDIDATE_MARITAL_STATUSES = frozenset({"未婚", "已婚"})
 
 CANDIDATE_WRITABLE_STR_FIELDS = (

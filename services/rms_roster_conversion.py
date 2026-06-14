@@ -71,6 +71,7 @@ def _build_roster_payload_prefill(application: Any, candidate: Any, job: Any, cl
     hired_at = (getattr(application, "hired_at", None) or "").strip()
     entry_date = hired_at[:10] if hired_at else utc_date_str()
     app_id = int(application.id)
+    source = (getattr(candidate, "source", None) or "").strip()
     return {
         "employment_status": "在职",
         "full_name": (getattr(candidate, "name", None) or "").strip(),
@@ -84,7 +85,7 @@ def _build_roster_payload_prefill(application: Any, candidate: Any, job: Any, cl
         "pre_tax_salary": "",
         "gms": "",
         "gm_pct": "",
-        "zntx_onboarding_channel": "RMS",
+        "zntx_onboarding_channel": source,
         "remarks": f"来自 RMS application #{app_id}",
     }
 
@@ -152,7 +153,7 @@ def convert_application_to_roster(
     RosterEntry: Type[Any],
     AuditLog: Type[Any],
 ) -> Dict[str, Any]:
-    app, _candidate, _job, _client = _load_convertible_application(
+    app, candidate, _job, _client = _load_convertible_application(
         db,
         ctx,
         application_id,
@@ -163,6 +164,10 @@ def convert_application_to_roster(
         Client=Client,
     )
     data = _validate_roster_create_payload(db, int(app.client_id), body, RosterEntry, Client)
+    if not str(data.get("zntx_onboarding_channel", "")).strip():
+        source = (getattr(candidate, "source", None) or "").strip()
+        if source:
+            data["zntx_onboarding_channel"] = source
 
     try:
         entry = RosterEntry(client_id=int(app.client_id), **data)

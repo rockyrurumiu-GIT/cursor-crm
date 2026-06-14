@@ -110,6 +110,25 @@
         color: #1f2328;
     }
     .rms-required-mark { color: #dc2626; font-weight: 700; }
+    .rms-candidate-resume-linked {
+        margin-top: 0.25rem;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid #d0d7de;
+        border-radius: 0.375rem;
+        background: #f6f8fa;
+    }
+    .rms-candidate-resume-linked-name {
+        font-size: 0.875rem;
+        color: #1f2328;
+        word-break: break-all;
+    }
+    .rms-candidate-resume-linked-badge {
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #0969da;
+        line-height: 1.2;
+    }
     .rms-existing-candidate-popover {
         position: fixed;
         z-index: 100;
@@ -564,12 +583,44 @@
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="border border-[#d0d7de] rounded-lg p-4 bg-[#f6f8fa]">
                     <template v-if="reportMode === 'existing'">
-                        <p class="text-sm font-medium mb-2">库内候选人</p>
-                        <div class="rounded-md border border-[#0969da] bg-white px-3 py-3 text-sm">
-                            <p class="text-[#1f2328]">已选择库内候选人：<span class="font-medium">{{ selectedExistingCandidate && selectedExistingCandidate.name }}</span></p>
-                            <div class="mt-2 flex flex-wrap gap-2">
-                                <button v-if="canRecommendExistingCandidate" type="button" class="text-xs border border-[#0969da] text-[#0969da] px-2 py-1 rounded-md hover:bg-[#f0f6ff]" @click="openExistingCandidatePicker">重新选择</button>
-                                <button type="button" class="text-xs border border-[#d0d7de] text-[#57606a] px-2 py-1 rounded-md hover:bg-[#f6f8fa]" @click="clearSelectedExistingCandidate">清除选择</button>
+                        <p class="text-sm font-medium mb-2">库内候选人简历</p>
+                        <div data-rms-report-existing-resume class="rms-report-dropzone has-file">
+                            <div class="rms-report-file-row">
+                                <span class="min-w-0 truncate">
+                                    已选择：{{ selectedExistingCandidate && selectedExistingCandidate.name }}
+                                    <template v-if="selectedExistingCandidate && selectedExistingCandidate.resume_file_name">
+                                        · {{ selectedExistingCandidate.resume_file_name }}
+                                    </template>
+                                </span>
+                                <div class="shrink-0 flex flex-wrap gap-2">
+                                    <button v-if="canRecommendExistingCandidate" type="button" class="text-xs border border-[#0969da] text-[#0969da] px-2 py-1 rounded-md hover:bg-[#f0f6ff]" @click="openExistingCandidatePicker">重新选择</button>
+                                    <button type="button" class="text-xs border border-[#d0d7de] text-[#57606a] px-2 py-1 rounded-md hover:bg-[#f6f8fa]" @click="clearSelectedExistingCandidate">清除选择</button>
+                                </div>
+                            </div>
+                            <div id="rms-report-existing-preview" data-rms-report-existing-preview class="mt-3 w-full">
+                                <template v-if="selectedExistingCandidate && selectedExistingCandidate.resume_id && resumeCanView(selectedExistingCandidate)">
+                                    <iframe :src="resumeViewUrl(selectedExistingCandidate)" class="rms-report-pdf-preview" title="库内候选人简历预览"></iframe>
+                                </template>
+                                <p v-else-if="selectedExistingCandidate && selectedExistingCandidate.resume_id" class="text-xs text-[#656d76]">
+                                    该简历格式暂不支持内嵌预览，可
+                                    <a :href="resumeViewUrl(selectedExistingCandidate)" target="_blank" rel="noopener" class="text-[#0969da] hover:underline">打开完整简历</a>
+                                    查看。
+                                </p>
+                                <p v-else class="text-xs text-[#656d76]">该候选人暂无简历；如需上传新简历，请清除选择后使用拖拽上传。</p>
+                                <details
+                                    v-if="selectedExistingCandidate && !candidateParseSummaryEmpty(selectedExistingCandidate)"
+                                    class="rms-report-recognized-details mt-3"
+                                    open
+                                >
+                                    <summary>简历解析摘要</summary>
+                                    <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                                        <div v-for="f in candidateParseSummaryFields" :key="'report-existing-summary-'+f.key">
+                                            <span class="text-[#57606a]">{{ f.label }}</span>
+                                            <div class="text-[#1f2328]">{{ candidateParseSummaryValue(selectedExistingCandidate, f.key) }}</div>
+                                        </div>
+                                    </div>
+                                </details>
+                                <p v-else-if="selectedExistingCandidate && selectedExistingCandidate.resume_id" class="text-xs text-[#656d76] mt-2">暂无简历解析摘要</p>
                             </div>
                         </div>
                     </template>
@@ -695,6 +746,8 @@
                                 <option value="">请选择</option>
                                 <option v-for="s in sourceOptions" :key="'rs'+s" :value="s">{{ s }}</option>
                             </select></label>
+                        <label v-if="reportForm.source === '其他'" class="block" data-rms-report-field="source_other"><span class="text-[#57606a]">具体来源 <span class="rms-required-mark">*</span></span>
+                            <input v-model.trim="reportForm.source_other" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="请填写具体来源" /></label>
                     </div>
                     <div class="grid grid-cols-2 gap-3">
                         <label class="block" data-rms-report-field="school"><span class="text-[#57606a]">学校 <span class="rms-required-mark">*</span></span>
@@ -1492,27 +1545,37 @@
             </div>
             <div class="flex-1 min-h-0 overflow-y-auto p-5">
                 <p v-if="rosterConvertError" class="mb-3 text-sm text-red-700">{{ rosterConvertError }}</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-sm">
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">姓名<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.full_name" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">在职情况<span class="text-red-500" data-rms-roster-required="1">*</span></span>
                         <select v-model="rosterConvertForm.employment_status" class="crm-form-control">
                             <option value="待入职">待入职</option>
                             <option value="在职">在职</option>
                             <option value="离职">离职</option>
                         </select></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">姓名<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.full_name" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">联系方式<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.contact_info" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">客户<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.customer_name" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">工作地<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.work_location" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">岗位<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.position_title" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">业务线<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.business_line" class="crm-form-control" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">入职时间<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model="rosterConvertForm.entry_date" type="date" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">入职日期<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model="rosterConvertForm.entry_date" type="date" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">转正时间</span><input v-model="rosterConvertForm.regularization_date" type="date" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">月报价(含税)<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.monthly_quote_tax" class="crm-form-control" inputmode="numeric" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">税前工资<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.pre_tax_salary" class="crm-form-control" inputmode="numeric" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">薪资报价比</span><input v-model="rosterConvertForm.salary_quote_ratio" disabled class="crm-form-control bg-[#f6f8fa] text-[#57606a]" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM$<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.gms" class="crm-form-control" inputmode="numeric" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM%<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.gm_pct" class="crm-form-control" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">薪资报价比</span><input v-model="rosterConvertForm.salary_quote_ratio" disabled class="crm-form-control bg-[#f6f8fa] text-[#57606a]" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">入职渠道</span><input v-model.trim="rosterConvertForm.zntx_onboarding_channel" class="crm-form-control" /></label>
-                    <label class="flex flex-col gap-1 sm:col-span-2 lg:col-span-4"><span class="text-[#57606a]">备注</span><textarea v-model.trim="rosterConvertForm.remarks" rows="2" class="crm-form-control"></textarea></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">员工+1</span><input v-model.trim="rosterConvertForm.employee_plus1" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">员工+2</span><input v-model.trim="rosterConvertForm.employee_plus2" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">接口</span><input v-model.trim="rosterConvertForm.interface_contact" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">入职渠道</span>
+                        <select v-model="rosterConvertForm.zntx_onboarding_channel" class="crm-form-control">
+                            <option value="">请选择</option>
+                            <option v-for="s in sourceOptions" :key="'roster-ch'+s" :value="s">{{ s }}</option>
+                        </select></label>
+                    <label v-if="rosterConvertForm.zntx_onboarding_channel === '其他'" class="flex flex-col gap-1"><span class="text-[#57606a]">具体入职渠道</span>
+                        <input v-model.trim="rosterConvertForm.zntx_onboarding_channel_other" class="crm-form-control" placeholder="请填写具体入职渠道" /></label>
+                    <label class="flex flex-col gap-1 sm:col-span-2 lg:col-span-5"><span class="text-[#57606a]">备注</span><textarea v-model.trim="rosterConvertForm.remarks" rows="2" class="crm-form-control"></textarea></label>
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-between shrink-0">
@@ -1618,19 +1681,19 @@
 
             <template v-else-if="modal === 'candidate'">
                 <div class="overflow-y-auto flex-1 min-h-0 text-sm rms-candidate-form-grid" data-rms-candidate-form>
-                    <label class="block" data-rms-candidate-field="name"><span class="text-[#57606a]">姓名</span>
+                    <label class="block" data-rms-candidate-field="name"><span class="text-[#57606a]">姓名 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.name" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block" data-rms-candidate-field="age"><span class="text-[#57606a]">年龄</span>
+                    <label class="block" data-rms-candidate-field="age"><span class="text-[#57606a]">年龄 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.age" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="如 28" /></label>
-                    <label class="block" data-rms-candidate-field="work_years"><span class="text-[#57606a]">工作年限</span>
+                    <label class="block" data-rms-candidate-field="work_years"><span class="text-[#57606a]">工作年限 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.work_years" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="如 5年" /></label>
-                    <label class="block" data-rms-candidate-field="phone"><span class="text-[#57606a]">手机号</span>
+                    <label class="block" data-rms-candidate-field="phone"><span class="text-[#57606a]">手机号 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.phone" type="tel" maxlength="11" pattern="1[0-9]{10}"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="11位手机号" /></label>
-                    <label class="block" data-rms-candidate-field="email_wechat"><span class="text-[#57606a]">邮箱/微信</span>
+                    <label class="block" data-rms-candidate-field="email_wechat"><span class="text-[#57606a]">邮箱/微信 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.email_wechat" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="邮箱或微信号" /></label>
-                    <label class="block rms-combobox" data-rms-candidate-field="target_job_id"><span class="text-[#57606a]">应聘岗位 <span class="text-red-600">*</span></span>
-                        <input v-model="jobPickerQuery" type="text" autocomplete="off" required
+                    <label class="block rms-combobox" data-rms-candidate-field="target_job_id"><span class="text-[#57606a]">应聘岗位</span>
+                        <input v-model="jobPickerQuery" type="text" autocomplete="off"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5"
                             :placeholder="selectedJobPickerLabel || '仅 open 岗位，输入模糊搜索'"
                             @focus="jobPickerOpen = true" @input="jobPickerOpen = true" />
@@ -1650,54 +1713,86 @@
                                 @click="selectClientPicker(c)">{{ c.name }}</li>
                         </ul>
                     </label>
-                    <label class="block" data-rms-candidate-field="city"><span class="text-[#57606a]">城市</span>
+                    <label class="block" data-rms-candidate-field="city"><span class="text-[#57606a]">城市 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.city" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block" data-rms-candidate-field="current_salary"><span class="text-[#57606a]">当前薪资</span>
+                    <label class="block" data-rms-candidate-field="current_salary"><span class="text-[#57606a]">当前薪资 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.current_salary" inputmode="decimal"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 tabular-nums"
                             placeholder="如 25,000"
                             @blur="formatCandidateSalaryField('current_salary')" /></label>
-                    <label class="block" data-rms-candidate-field="expected_salary"><span class="text-[#57606a]">期望薪资</span>
+                    <label class="block" data-rms-candidate-field="expected_salary"><span class="text-[#57606a]">期望薪资 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.expected_salary" inputmode="decimal"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 tabular-nums"
                             placeholder="如 30,000"
                             @blur="formatCandidateSalaryField('expected_salary')" /></label>
-                    <label class="block" data-rms-candidate-field="available_date"><span class="text-[#57606a]">到岗时间</span>
+                    <label class="block" data-rms-candidate-field="available_date"><span class="text-[#57606a]">到岗时间 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.available_date" type="date"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block" data-rms-candidate-field="education_level"><span class="text-[#57606a]">学历</span>
+                    <label class="block" data-rms-candidate-field="education_level"><span class="text-[#57606a]">学历 <span class="rms-required-mark">*</span></span>
                         <select v-model="candidateForm.education_level" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
                             <option value="">请选择</option>
                             <option v-for="e in educationOptions" :key="'ed'+e" :value="e">{{ e }}</option>
                         </select>
                     </label>
-                    <label class="block" data-rms-candidate-field="school"><span class="text-[#57606a]">学校</span>
+                    <label class="block" data-rms-candidate-field="school"><span class="text-[#57606a]">学校 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.school" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block" data-rms-candidate-field="major"><span class="text-[#57606a]">专业</span>
+                    <label class="block" data-rms-candidate-field="major"><span class="text-[#57606a]">专业 <span class="rms-required-mark">*</span></span>
                         <input v-model="candidateForm.major" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" /></label>
-                    <label class="block" data-rms-candidate-field="gender"><span class="text-[#57606a]">性别</span>
+                    <label class="block" data-rms-candidate-field="gender"><span class="text-[#57606a]">性别 <span class="rms-required-mark">*</span></span>
                         <select v-model="candidateForm.gender" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
                             <option value="">请选择</option>
                             <option v-for="g in genderOptions" :key="'g'+g" :value="g">{{ g }}</option>
                         </select>
                     </label>
-                    <label class="block" data-rms-candidate-field="marital_status"><span class="text-[#57606a]">婚姻状况</span>
+                    <label class="block" data-rms-candidate-field="marital_status"><span class="text-[#57606a]">婚姻状况 <span class="rms-required-mark">*</span></span>
                         <select v-model="candidateForm.marital_status" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
                             <option value="">请选择</option>
                             <option v-for="m in maritalOptions" :key="'m'+m" :value="m">{{ m }}</option>
                         </select>
                     </label>
-                    <label class="block" data-rms-candidate-field="source"><span class="text-[#57606a]">来源</span>
+                    <label class="block" data-rms-candidate-field="source"><span class="text-[#57606a]">来源 <span class="rms-required-mark">*</span></span>
                         <select v-model="candidateForm.source" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
                             <option value="">请选择</option>
                             <option v-for="s in sourceOptions" :key="'src'+s" :value="s">{{ s }}</option>
                         </select>
                     </label>
-                    <label class="block rms-field-full"><span class="text-[#57606a]">简历（附件）</span>
-                        <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" class="mt-1 w-full text-sm"
-                            @change="onCandidateResumeChange" />
-                        <span v-if="editingCandidateResumeName" class="text-xs text-[#57606a] mt-0.5 block">当前：{{ editingCandidateResumeName }}</span>
-                        <span class="text-xs text-[#656d76]">支持 PDF、Word、TXT、RTF，最大 10MB</span>
+                    <label v-if="candidateForm.source === '其他'" class="block" data-rms-candidate-field="source_other"><span class="text-[#57606a]">具体来源 <span class="rms-required-mark">*</span></span>
+                        <input v-model.trim="candidateForm.source_other" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5" placeholder="请填写具体来源" />
+                    </label>
+                    <label class="block rms-field-full" data-rms-candidate-field="resume">
+                        <span class="text-[#57606a]">
+                            简历（附件）
+                            <span v-if="candidateModalMode === 'create' || !editingCandidateResumeName" class="rms-required-mark">*</span>
+                        </span>
+                        <div v-if="candidateModalMode === 'edit' && editingCandidateResumeName && !candidateResumeFile"
+                            class="rms-candidate-resume-linked">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0 flex-1">
+                                    <span class="rms-candidate-resume-linked-badge">已关联</span>
+                                    <div class="rms-candidate-resume-linked-name mt-0.5">{{ editingCandidateResumeName }}</div>
+                                </div>
+                                <div v-if="editingCandidateResumeId" class="shrink-0 flex gap-1">
+                                    <a v-if="resumeCanView({ resume_id: editingCandidateResumeId, resume_file_name: editingCandidateResumeName })"
+                                        :href="resumeViewUrl({ resume_id: editingCandidateResumeId })"
+                                        target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
+                                    <a :href="resumeDownloadUrl({ resume_id: editingCandidateResumeId })"
+                                        class="crm-op-btn-edit">下载</a>
+                                </div>
+                            </div>
+                            <p class="text-xs text-[#656d76] mt-1.5 mb-0">保存时将沿用此文件；如需更换请在下方重新选取。</p>
+                        </div>
+                        <div v-if="candidateResumeFile"
+                            class="rms-candidate-resume-linked mt-1 border-[#0969da] bg-[#eef6ff]">
+                            <span class="rms-candidate-resume-linked-badge">{{ candidateModalMode === 'edit' && editingCandidateResumeName ? '将替换为' : '待上传' }}</span>
+                            <div class="rms-candidate-resume-linked-name mt-0.5">{{ candidateResumeFile.name }}</div>
+                        </div>
+                        <div class="mt-1">
+                            <span v-if="candidateModalMode === 'edit' && editingCandidateResumeName"
+                                class="text-xs text-[#57606a] block mb-1">更换简历（可选）</span>
+                            <input type="file" accept=".pdf,.doc,.docx,.txt,.rtf" class="w-full text-sm"
+                                @change="onCandidateResumeChange" />
+                        </div>
+                        <span class="text-xs text-[#656d76] mt-0.5 block">支持 PDF、Word、TXT、RTF，最大 10MB</span>
                     </label>
                 </div>
             </template>
@@ -1839,12 +1934,14 @@
 <script src="/static/js/vendor/vue.global.prod.js"></script>
 <script src="/static/js/core/crm-api.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
-<script src="/static/js/pages/rms-application-labels.js?v=r3b-20260614"></script>
-<script src="/static/js/pages/rms-core.js?v=r3b-20260614"></script>
-<script src="/static/js/pages/rms-candidate-report.js?v=r3b-20260614"></script>
-<script src="/static/js/pages/rms-jobs.js?v=r3b-20260614"></script>
-<script src="/static/js/pages/rms-candidates.js?v=r3b-20260614"></script>
-<script src="/static/js/pages/rms-applications.js?v=r3b-20260614"></script>
-<script src="/static/js/pages/rms-pipeline.js?v=r3b-20260614"></script>
-<script src="/static/js/pages/rms.js?v=r3b-20260614"></script>
+<script src="/static/js/pages/rms-application-labels.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms-core.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms-candidate-report.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms-jobs.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms-candidates.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms-applications.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms-pipeline.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms-delivery-review.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms-roster-conversion.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms.js?v=r3c2-20260614"></script>
 {% endblock %}

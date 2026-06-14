@@ -14,7 +14,7 @@ from schemas.rms import (
     CANDIDATE_EDUCATION_LEVELS,
     CANDIDATE_GENDERS,
     CANDIDATE_MARITAL_STATUSES,
-    CANDIDATE_SOURCES,
+    CANDIDATE_SOURCE_PRESETS,
     normalize_rms_date,
     utc_date_str,
 )
@@ -182,8 +182,10 @@ def _validate_candidate_enums(data: Dict[str, Any]) -> None:
     source = data.get("source")
     if source is not None:
         source = str(source).strip()
-        if source and source not in CANDIDATE_SOURCES:
-            raise HTTPException(status_code=400, detail=f"无效来源: {source}")
+        if source == "其他":
+            raise HTTPException(status_code=400, detail="请填写具体来源")
+        if source and source not in CANDIDATE_SOURCE_PRESETS and len(source) > 64:
+            raise HTTPException(status_code=400, detail="来源过长")
 
 
 def _latest_resumes_by_candidate(db: Session, RmsResume: Type[Any], candidate_ids: List[int]) -> Dict[int, Any]:
@@ -588,9 +590,13 @@ def create_candidate(
     data["name"] = str(data.get("name") or "").strip()
     data["phone"] = _normalize_phone(data.get("phone"), required=True)
     validate_candidate_create_payload(data)
-    data["target_job_id"] = _validate_target_open_job(
-        db, ctx, data.get("target_job_id"), RmsJob, Client
-    )
+    raw_job = data.get("target_job_id")
+    if raw_job is None or raw_job == "":
+        data["target_job_id"] = None
+    else:
+        data["target_job_id"] = _validate_target_open_job(
+            db, ctx, raw_job, RmsJob, Client
+        )
     _validate_candidate_enums(data)
     _sync_email_wechat_fields(data)
     if _find_duplicate_candidate(
@@ -634,10 +640,22 @@ def update_candidate(
         raise HTTPException(status_code=404, detail="候选人不存在")
     if data.get("phone") is not None:
         data["phone"] = _normalize_phone(data.get("phone"), required=False)
-    if "target_job_id" in data and data.get("target_job_id") is not None:
-        data["target_job_id"] = _validate_target_open_job(
-            db, ctx, data["target_job_id"], RmsJob, Client
-        )
+    if "target_job_id" in data:
+        raw = data.get("target_job_id")
+        if raw is None or raw == "":
+            data["target_job_id"] = None
+        else:
+            try:
+                jid = int(raw)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="应聘岗位无效")
+            current = int(row.target_job_id) if row.target_job_id is not None else None
+            if jid != current:
+                data["target_job_id"] = _validate_target_open_job(
+                    db, ctx, jid, RmsJob, Client
+                )
+            else:
+                data["target_job_id"] = jid
     _validate_candidate_enums(data)
     _sync_email_wechat_fields(data)
     _apply_candidate_fields(row, data)

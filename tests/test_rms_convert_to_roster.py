@@ -98,7 +98,7 @@ def _full_roster_payload(cand, client_row, job, **overrides):
         "pre_tax_salary": "8000",
         "gms": "2000",
         "gm_pct": "20%",
-        "zntx_onboarding_channel": "RMS",
+        "zntx_onboarding_channel": cand.get("source") or "Boss",
         "remarks": "测试转入",
     }
     base.update(overrides)
@@ -145,7 +145,7 @@ def test_hired_roster_draft_prefill(client_rbac, admin_auth, rms_engine, uniq):
     assert payload["work_location"] == (job.get("location") or "")
     assert payload["entry_date"] == "2026-06-15"
     assert payload["employment_status"] == "在职"
-    assert payload["zntx_onboarding_channel"] == "RMS"
+    assert payload["zntx_onboarding_channel"] == (cand.get("source") or "")
     assert f"#{app_id}" in payload["remarks"]
 
 

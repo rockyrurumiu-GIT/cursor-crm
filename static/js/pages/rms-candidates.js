@@ -57,6 +57,7 @@
     var candidateModalMode = ref("create");
     var editingCandidateId = ref(null);
     var editingCandidateResumeName = ref("");
+    var editingCandidateResumeId = ref(null);
     var candidateDetailOpen = ref(false);
     var candidateDetailRow = ref(null);
     var candidateDetailLoading = ref(false);
@@ -97,6 +98,7 @@
       gender: "",
       marital_status: "",
       source: "",
+      source_other: "",
     });
     var candidateResumeFile = ref(null);
     var jobPickerQuery = ref("");
@@ -437,8 +439,10 @@
       candidateForm.gender = "";
       candidateForm.marital_status = "";
       candidateForm.source = "";
+      candidateForm.source_other = "";
       candidateResumeFile.value = null;
       editingCandidateResumeName.value = "";
+      editingCandidateResumeId.value = null;
       jobPickerQuery.value = "";
       clientPickerQuery.value = "";
       jobPickerOpen.value = false;
@@ -462,22 +466,27 @@
       candidateForm.major = c.major || "";
       candidateForm.gender = c.gender || "";
       candidateForm.marital_status = c.marital_status || "";
-      candidateForm.source = c.source || "";
+      var sourceParts = CandidateReport.resolveSourceForForm
+        ? CandidateReport.resolveSourceForForm(c.source || "")
+        : { source: c.source || "", source_other: "" };
+      candidateForm.source = sourceParts.source;
+      candidateForm.source_other = sourceParts.source_other;
       jobPickerQuery.value = displayTargetJob(c) === "—" ? "" : displayTargetJob(c);
       clientPickerQuery.value = displayTargetClient(c) === "—" ? "" : displayTargetClient(c);
       editingCandidateResumeName.value = String(c.resume_file_name || "").trim();
+      editingCandidateResumeId.value =
+        c.resume_id != null && c.resume_id !== "" ? Number(c.resume_id) : null;
     }
 
-    function buildCandidateBody() {
+    function buildCandidateBody(isEdit) {
       formatCandidateSalaryField("current_salary");
       formatCandidateSalaryField("expected_salary");
-      return {
+      var body = {
         name: candidateForm.name.trim(),
         age: (candidateForm.age || "").trim(),
         work_years: (candidateForm.work_years || "").trim(),
         phone: (candidateForm.phone || "").trim(),
         email_wechat: (candidateForm.email_wechat || "").trim(),
-        target_job_id: Number(candidateForm.target_job_id),
         city: (candidateForm.city || "").trim(),
         current_salary: stripSalaryCommas(candidateForm.current_salary),
         expected_salary: stripSalaryCommas(candidateForm.expected_salary),
@@ -487,12 +496,19 @@
         major: (candidateForm.major || "").trim(),
         gender: candidateForm.gender || "",
         marital_status: candidateForm.marital_status || "",
-        source: candidateForm.source || "",
-        target_client_id:
-          candidateForm.target_client_id !== "" && candidateForm.target_client_id != null
-            ? Number(candidateForm.target_client_id)
-            : undefined,
+        source: CandidateReport.resolveSourceForSave
+          ? CandidateReport.resolveSourceForSave(candidateForm.source, candidateForm.source_other)
+          : candidateForm.source || "",
       };
+      if (candidateForm.target_client_id !== "" && candidateForm.target_client_id != null) {
+        body.target_client_id = Number(candidateForm.target_client_id);
+      }
+      if (candidateForm.target_job_id !== "" && candidateForm.target_job_id != null) {
+        body.target_job_id = Number(candidateForm.target_job_id);
+      } else if (!isEdit) {
+        body.target_job_id = null;
+      }
+      return body;
     }
 
     function resolveValidationField(message, field) {
@@ -536,6 +552,7 @@
       candidateModalMode.value = "create";
       editingCandidateId.value = null;
       editingCandidateResumeName.value = "";
+      editingCandidateResumeId.value = null;
     }
 
     async function openCandidateModal() {
@@ -577,37 +594,28 @@
       var r;
       try {
         var phone = (candidateForm.phone || "").trim();
-        if (candidateModalMode.value === "create") {
-          var createValidation = CandidateReport.validateCandidateCreateForm
-            ? CandidateReport.validateCandidateCreateForm(candidateForm)
-            : { ok: true, message: "" };
-          if (!createValidation.ok) {
-            setModalError(createValidation.message, createValidation.field);
-            return;
-          }
-        } else {
-          if (!(candidateForm.name || "").trim()) {
-            setModalError("请填写姓名", "name");
-            return;
-          }
-          if (!PHONE_RE.test(phone)) {
-            setModalError("手机号须为11位数字且以1开头", "phone");
-            return;
-          }
-          if (candidateForm.target_job_id === "" || candidateForm.target_job_id == null) {
-            setModalError("请选择应聘岗位（须为 open 状态）", "target_job_id");
-            return;
-          }
-        }
-        var jobId = Number(candidateForm.target_job_id);
-        var pickedJob = jobs.openJobs.value.find(function (j) {
-          return Number(j.id) === jobId;
-        });
-        if (!pickedJob) {
-          setModalError("应聘岗位不存在或不是 open 状态", "target_job_id");
+        var modalValidation = CandidateReport.validateCandidateModalForm
+          ? CandidateReport.validateCandidateModalForm(candidateForm, {
+              requireResume: true,
+              hasResumeFile: !!candidateResumeFile.value,
+              hasExistingResume: !!String(editingCandidateResumeName.value || "").trim(),
+            })
+          : { ok: true, message: "" };
+        if (!modalValidation.ok) {
+          setModalError(modalValidation.message, modalValidation.field);
           return;
         }
-        var body = buildCandidateBody();
+        if (candidateForm.target_job_id !== "" && candidateForm.target_job_id != null) {
+          var jobId = Number(candidateForm.target_job_id);
+          var pickedJob = jobs.openJobs.value.find(function (j) {
+            return Number(j.id) === jobId;
+          });
+          if (!pickedJob) {
+            setModalError("应聘岗位不存在或不是 open 状态", "target_job_id");
+            return;
+          }
+        }
+        var body = buildCandidateBody(candidateModalMode.value === "edit");
         body.phone = phone;
         if (candidateModalMode.value === "edit") {
           r = await rmsRequest("PATCH", "/api/rms/candidates/" + editingCandidateId.value, body);
@@ -621,7 +629,12 @@
           }
         } else {
           r = await rmsRequest("POST", "/api/rms/candidates", body);
-          if (r.ok && candidateResumeFile.value && r.data && r.data.id) {
+          if (r.ok && r.data && r.data.id) {
+            if (!candidateResumeFile.value) {
+              setModalError("请上传简历", "resume");
+              await loadCandidates();
+              return;
+            }
             var up2 = await uploadCandidateResume(r.data.id, candidateResumeFile.value);
             if (!up2.ok) {
               modalError.value = up2.message;
@@ -684,6 +697,7 @@
       candidateModalMode: candidateModalMode,
       editingCandidateId: editingCandidateId,
       editingCandidateResumeName: editingCandidateResumeName,
+      editingCandidateResumeId: editingCandidateResumeId,
       candidateDetailOpen: candidateDetailOpen,
       candidateDetailRow: candidateDetailRow,
       candidateDetailLoading: candidateDetailLoading,

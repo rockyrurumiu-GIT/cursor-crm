@@ -1,12 +1,12 @@
 /**
  * RMS module page (Phase 2.5 frontend MVP).
- * Requires: Vue 3 CDN, crm-api.js, rms-core.js, rms-jobs.js, rms-candidates.js, rms-applications.js, rms-pipeline.js (optional crm-toast.js).
+ * Requires: Vue 3 CDN, crm-api.js, rms-core.js, rms-jobs.js, rms-candidates.js, rms-applications.js,
+ * rms-pipeline.js, rms-delivery-review.js, rms-roster-conversion.js (optional crm-toast.js).
  */
 (function () {
   "use strict";
 
   const Labels = window.RmsApplicationLabels || {};
-  const CandidateReport = window.RmsCandidateReport || {};
   const Core = window.CrmRmsCore || {};
 
   const rmsRequest = Core.rmsRequest ? Core.rmsRequest.bind(Core) : async function () {
@@ -23,7 +23,7 @@
 
   const EDUCATION_OPTIONS = ["重本", "统本", "专科", "硕士", "留学生", "民教网", "其他"];
   const GENDER_OPTIONS = ["男", "女"];
-  const SOURCE_OPTIONS = ["平台", "Boss", "linkedin", "猎聘", "内推", "挂靠", "外协", "其他"];
+  const SOURCE_OPTIONS = ["内部RMS", "Boss", "linkedin", "猎聘", "内推", "挂靠", "外协", "其他"];
   const MARITAL_OPTIONS = ["未婚", "已婚"];
   const PHONE_RE = /^1\d{10}$/;
 
@@ -115,24 +115,6 @@
       const viewMode = ref(null);
       const me = ref({ user: { id: null }, permissions: [] });
 
-      const deliveryReviewState = reactive({ loading: false, items: [], error: "" });
-      const reviewModal = ref(null);
-      const reviewFailPromptOpen = ref(false);
-      const reviewModalSaving = ref(false);
-      const reviewModalError = ref("");
-      async function rmsRequestWorkflow(method, url, body, endpoint) {
-        const r = await rmsRequest(method, url, body);
-        if (!r.ok && r.status === 404) {
-          return { ok: false, status: 404, message: workflowMessageForStatus(404, "", endpoint) };
-        }
-        return r;
-      }
-      const deliveryReviewApi = CandidateReport.createDeliveryReviewApi
-        ? CandidateReport.createDeliveryReviewApi(function (method, url, body) {
-            return rmsRequestWorkflow(method, url, body, "delivery-review");
-          })
-        : null;
-
       const modal = ref(null);
       const modalError = ref("");
       const modalSaving = ref(false);
@@ -168,161 +150,6 @@
         return perms.indexOf("rms.applications.write") !== -1 &&
           perms.indexOf("delivery.roster.write") !== -1;
       });
-
-      const rosterConvertModal = ref(null);
-      const rosterConvertSaving = ref(false);
-      const rosterConvertError = ref("");
-      const rosterConvertForm = reactive({
-        employment_status: "在职",
-        full_name: "",
-        contact_info: "",
-        customer_name: "",
-        work_location: "",
-        position_title: "",
-        business_line: "",
-        entry_date: "",
-        monthly_quote_tax: "",
-        pre_tax_salary: "",
-        gms: "",
-        gm_pct: "",
-        salary_quote_ratio: "",
-        zntx_onboarding_channel: "RMS",
-        remarks: "",
-      });
-
-      function emptyRosterConvertForm() {
-        rosterConvertForm.employment_status = "在职";
-        rosterConvertForm.full_name = "";
-        rosterConvertForm.contact_info = "";
-        rosterConvertForm.customer_name = "";
-        rosterConvertForm.work_location = "";
-        rosterConvertForm.position_title = "";
-        rosterConvertForm.business_line = "";
-        rosterConvertForm.entry_date = "";
-        rosterConvertForm.monthly_quote_tax = "";
-        rosterConvertForm.pre_tax_salary = "";
-        rosterConvertForm.gms = "";
-        rosterConvertForm.gm_pct = "";
-        rosterConvertForm.salary_quote_ratio = "";
-        rosterConvertForm.zntx_onboarding_channel = "RMS";
-        rosterConvertForm.remarks = "";
-      }
-
-      function normalizeRosterAmountText(val) {
-        return String(val || "").replace(/[,¥￥\s\u00a0]/g, "").trim();
-      }
-
-      function formatGmPctSymbol(val) {
-        var s = String(val || "").trim().replace(/\uff05/g, "%");
-        if (!s) return "";
-        if (s.indexOf("%") === s.length - 1) return s;
-        return s + "%";
-      }
-
-      function validateRosterConvertClientForm() {
-        var required = [
-          ["employment_status", "在职情况"],
-          ["full_name", "姓名"],
-          ["contact_info", "联系方式"],
-          ["customer_name", "客户"],
-          ["work_location", "工作地"],
-          ["position_title", "岗位"],
-          ["business_line", "业务线"],
-          ["entry_date", "入职时间"],
-          ["monthly_quote_tax", "月报价(含税)"],
-          ["pre_tax_salary", "税前工资"],
-          ["gms", "GM$"],
-          ["gm_pct", "GM%"],
-        ];
-        var missing = [];
-        required.forEach(function (pair) {
-          if (!String(rosterConvertForm[pair[0]] || "").trim()) missing.push(pair[1]);
-        });
-        if (missing.length) return "请先完整填写必填项：" + missing.join("、");
-        var phone = String(rosterConvertForm.contact_info || "").trim();
-        if (!/^\d{11}$/.test(phone)) return "联系方式必须为11位数字";
-        return "";
-      }
-
-      function appendGmCalcQueryPart(parts, key, val) {
-        var s = String(val == null ? "" : val).trim();
-        if (!s) return;
-        parts.push(key + "=" + encodeURIComponent(s));
-      }
-
-      function openRosterGmCalculatorFromRms() {
-        if (!rosterConvertModal.value) return;
-        var parts = ["return_to=roster", "roster_add=1"];
-        appendGmCalcQueryPart(parts, "targetClientId", rosterConvertModal.value.clientId);
-        appendGmCalcQueryPart(parts, "full_name", rosterConvertForm.full_name);
-        appendGmCalcQueryPart(parts, "work_location", rosterConvertForm.work_location);
-        appendGmCalcQueryPart(parts, "position", rosterConvertForm.position_title);
-        appendGmCalcQueryPart(parts, "monthly_quote_tax", normalizeRosterAmountText(rosterConvertForm.monthly_quote_tax));
-        appendGmCalcQueryPart(parts, "pre_tax_salary", normalizeRosterAmountText(rosterConvertForm.pre_tax_salary));
-        appendGmCalcQueryPart(parts, "gms", normalizeRosterAmountText(rosterConvertForm.gms));
-        appendGmCalcQueryPart(parts, "gm_pct", rosterConvertForm.gm_pct);
-        window.open("/tools/calc?" + parts.join("&"), "_blank");
-      }
-
-      async function openRosterConvertModal(appRow) {
-        rosterConvertError.value = "";
-        rosterConvertSaving.value = false;
-        emptyRosterConvertForm();
-        rosterConvertModal.value = { applicationId: appRow.id, clientId: appRow.client_id };
-        var r = await rmsRequest("GET", "/api/rms/applications/" + appRow.id + "/roster-draft");
-        if (!r.ok) {
-          rosterConvertError.value = r.message || "加载花名册草稿失败";
-          return;
-        }
-        var data = r.data || {};
-        var payload = data.roster_payload || {};
-        if (data.client_id != null) {
-          rosterConvertModal.value.clientId = data.client_id;
-        }
-        Object.keys(rosterConvertForm).forEach(function (key) {
-          if (payload[key] != null) rosterConvertForm[key] = String(payload[key]);
-        });
-      }
-
-      function closeRosterConvertModal() {
-        rosterConvertModal.value = null;
-        rosterConvertError.value = "";
-        rosterConvertSaving.value = false;
-      }
-
-      function openConvertedRosterEntry(a) {
-        if (!a || !a.client_id || !a.converted_to_roster_entry_id) return;
-        window.location.href = "/customers/roster/" + a.client_id + "?row_id=" + a.converted_to_roster_entry_id;
-      }
-
-      async function submitRosterConvert() {
-        if (!rosterConvertModal.value) return;
-        var clientErr = validateRosterConvertClientForm();
-        if (clientErr) {
-          rosterConvertError.value = clientErr;
-          return;
-        }
-        rosterConvertSaving.value = true;
-        rosterConvertError.value = "";
-        var payload = {};
-        Object.keys(rosterConvertForm).forEach(function (key) {
-          payload[key] = rosterConvertForm[key];
-        });
-        payload.monthly_quote_tax = normalizeRosterAmountText(payload.monthly_quote_tax);
-        payload.pre_tax_salary = normalizeRosterAmountText(payload.pre_tax_salary);
-        payload.gms = normalizeRosterAmountText(payload.gms);
-        payload.gm_pct = formatGmPctSymbol(payload.gm_pct);
-        var appId = rosterConvertModal.value.applicationId;
-        var r = await rmsRequest("POST", "/api/rms/applications/" + appId + "/convert-to-roster", payload);
-        rosterConvertSaving.value = false;
-        if (!r.ok) {
-          rosterConvertError.value = r.message || "转入花名册失败";
-          return;
-        }
-        closeRosterConvertModal();
-        toast("已成功转入花名册", false);
-        await loadApplications();
-      }
 
       const modalTitle = computed(function () {
         if (modal.value === "job") return jobs.jobModalTitle.value;
@@ -400,18 +227,6 @@
         return Labels.formatRmsDate ? Labels.formatRmsDate(value) : (value || "—");
       }
 
-      function receiveLabel(status) {
-        return Labels.receiveLabel ? Labels.receiveLabel(status) : status;
-      }
-
-      function deliveryReviewLabel(status) {
-        return Labels.deliveryReviewLabel ? Labels.deliveryReviewLabel(status) : status;
-      }
-
-      function protectionLabel(status) {
-        return Labels.deriveProtectionStatus ? Labels.deriveProtectionStatus(status) : "—";
-      }
-
       function progressActionBtnClass(status) {
         return Labels.progressActionBtnClass
           ? Labels.progressActionBtnClass(status)
@@ -444,18 +259,6 @@
         }
       }
 
-      async function loadDeliveryReview() {
-        try {
-          if (deliveryReviewApi) {
-            await deliveryReviewApi.loadDeliveryReview(deliveryReviewState);
-          }
-        } finally {
-          if (activeTab.value === "deliveryReview") {
-            scheduleCandidatesTableColumnFit();
-          }
-        }
-      }
-
       function toast(msg, isError) {
         if (window.crmToast) {
           if (isError && window.crmToast.error) window.crmToast.error(msg);
@@ -465,6 +268,8 @@
           alert(msg);
         }
       }
+
+      var loadDeliveryReviewBridge = async function () {};
 
       if (!window.CrmRmsApplications || typeof window.CrmRmsApplications.createApplicationsState !== "function") {
         showRmsBootError("RMS 推荐记录模块未加载，请刷新后重试。");
@@ -481,7 +286,7 @@
         formatRmsDate: formatRmsDate,
         scheduleCandidatesTableColumnFit: scheduleCandidatesTableColumnFit,
         loadCandidates: loadCandidates,
-        loadDeliveryReview: loadDeliveryReview,
+        loadDeliveryReview: function () { return loadDeliveryReviewBridge.apply(null, arguments); },
       });
       const applicationsState = applications.applicationsState;
       const loadApplications = applications.loadApplications;
@@ -510,6 +315,44 @@
         appJobTitle: appJobTitle,
       });
 
+      if (!window.CrmRmsDeliveryReview || typeof window.CrmRmsDeliveryReview.createDeliveryReviewState !== "function") {
+        showRmsBootError("RMS 交付内审模块未加载，请刷新后重试。");
+        return {};
+      }
+      const deliveryReview = window.CrmRmsDeliveryReview.createDeliveryReviewState({
+        ref: ref,
+        reactive: reactive,
+        activeTab: activeTab,
+        scheduleCandidatesTableColumnFit: scheduleCandidatesTableColumnFit,
+        rmsRequest: rmsRequest,
+        workflowMessageForStatus: workflowMessageForStatus,
+        Labels: Labels,
+        toast: toast,
+        loadApplications: loadApplications,
+        RmsCandidateReport: window.RmsCandidateReport || {},
+      });
+      if (!deliveryReview.loadDeliveryReview) {
+        showRmsBootError("RMS 交付内审状态初始化失败，请刷新后重试。");
+        return {};
+      }
+      loadDeliveryReviewBridge = deliveryReview.loadDeliveryReview;
+
+      if (!window.CrmRmsRosterConversion || typeof window.CrmRmsRosterConversion.createRosterConversionState !== "function") {
+        showRmsBootError("RMS 转入花名册模块未加载，请刷新后重试。");
+        return {};
+      }
+      const rosterConversion = window.CrmRmsRosterConversion.createRosterConversionState({
+        ref: ref,
+        reactive: reactive,
+        rmsRequest: rmsRequest,
+        toast: toast,
+        loadApplications: loadApplications,
+      });
+      if (!rosterConversion.submitRosterConvert) {
+        showRmsBootError("RMS 转入花名册状态初始化失败，请刷新后重试。");
+        return {};
+      }
+
       let report = null;
       if (!window.CrmRmsReport || typeof window.CrmRmsReport.createReportState !== "function") {
         showRmsBootError("RMS 推荐报告模块未加载，请刷新后重试。");
@@ -528,7 +371,7 @@
         candidatesState: candidatesState,
         loadApplications: loadApplications,
         loadCandidates: loadCandidates,
-        loadDeliveryReview: loadDeliveryReview,
+        loadDeliveryReview: deliveryReview.loadDeliveryReview,
         clientNameById: clientNameById,
         labelCandidate: labelCandidate,
         displayCandidateContact: displayCandidateContact,
@@ -567,21 +410,11 @@
         return dn || un || String(u.id);
       }
 
-      function openDeliveryReviewModal(app) {
-        reviewModalError.value = "";
-        reviewFailPromptOpen.value = false;
-        reviewModalSaving.value = false;
-        reviewModal.value = app;
-      }
-
-      function closeDeliveryReviewModal() {
-        reviewModal.value = null;
-        reviewFailPromptOpen.value = false;
-        reviewModalError.value = "";
-        if (activeTab.value === "deliveryReview") {
-          scheduleCandidatesTableColumnFit();
-        }
-      }
+      const reviewModal = deliveryReview.reviewModal;
+      const reviewFailPromptOpen = deliveryReview.reviewFailPromptOpen;
+      const reviewModalError = deliveryReview.reviewModalError;
+      const submitDeliveryReview = deliveryReview.submitDeliveryReview;
+      const loadDeliveryReview = deliveryReview.loadDeliveryReview;
 
       async function openDeliveryReviewFailModal() {
         if (!reviewModal.value) return;
@@ -621,33 +454,6 @@
           return;
         }
         await submitDeliveryReview("failed", note);
-      }
-
-      async function submitDeliveryReview(result, note) {
-        if (!reviewModal.value || !deliveryReviewApi) return;
-        const trimmedNote = String(note == null ? "" : note).trim();
-        if (result === "failed" && trimmedNote.length < 2) {
-          reviewModalError.value = "内审失败须填写理由";
-          return;
-        }
-        reviewModalSaving.value = true;
-        reviewModalError.value = "";
-        const r = await deliveryReviewApi.submitDeliveryReview(reviewModal.value.id, result, trimmedNote);
-        reviewModalSaving.value = false;
-        if (!r.ok) {
-          reviewModalError.value = r.message;
-          return;
-        }
-        const warnMsg = r.data && r.data.message;
-        if (warnMsg) {
-          toast(warnMsg, true);
-          closeDeliveryReviewModal();
-          await Promise.all([loadDeliveryReview(), loadApplications()]);
-          return;
-        }
-        toast(result === "passed" ? "内审通过" : "内审失败", false);
-        closeDeliveryReviewModal();
-        await Promise.all([loadDeliveryReview(), loadApplications()]);
       }
 
       function closeModal() {
@@ -709,11 +515,6 @@
         jobModalReadonly: jobs.jobModalReadonly,
         ...candidates,
         ...applications,
-        deliveryReviewState,
-        reviewModal,
-        reviewFailPromptOpen,
-        reviewModalSaving,
-        reviewModalError,
         ...report,
         canWriteJobs,
         canWriteCandidates,
@@ -722,15 +523,6 @@
         canRecommendExistingCandidate,
         canSubmitCandidateReport,
         canConvertToRoster,
-        rosterConvertModal,
-        rosterConvertSaving,
-        rosterConvertError,
-        rosterConvertForm,
-        openRosterConvertModal,
-        closeRosterConvertModal,
-        openRosterGmCalculatorFromRms,
-        openConvertedRosterEntry,
-        submitRosterConvert,
         modal,
         modalTitle,
         modalError,
@@ -738,14 +530,13 @@
         modalCloseLabel,
         modalShowSave,
         ...pipeline,
+        ...deliveryReview,
+        ...rosterConversion,
         educationOptions: EDUCATION_OPTIONS,
         genderOptions: GENDER_OPTIONS,
         sourceOptions: SOURCE_OPTIONS,
         maritalOptions: MARITAL_OPTIONS,
         formatRmsDate,
-        receiveLabel,
-        deliveryReviewLabel,
-        protectionLabel,
         progressActionBtnClass,
         appCandidateName,
         appClientName,
@@ -755,10 +546,7 @@
         appRecommenderLabel,
         userOptionLabel,
         clientNameById,
-        openDeliveryReviewModal,
-        closeDeliveryReviewModal,
         openDeliveryReviewFailModal,
-        submitDeliveryReview,
         closeModal,
         submitModal,
       };

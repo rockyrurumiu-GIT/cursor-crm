@@ -766,6 +766,20 @@ def test_candidate_create_requires_available_date(client_rbac, admin_auth, rms_e
     assert r.json().get("detail") == "请填写到岗时间"
 
 
+def test_candidate_create_allows_missing_target_job(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"nojob_{suffix}")
+    payload = _candidate_json(job_id, name=f"NoJob_{suffix}", phone=_unique_phone())
+    payload["target_job_id"] = None
+    r = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=payload,
+    )
+    assert r.status_code == 200, r.text
+    assert r.json().get("target_job_id") in (None, "")
+
+
 def test_candidate_create_rejects_non_open_job(client_rbac, admin_auth, rms_engine, uniq):
     suffix = uniq
     login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"cls_{suffix}")

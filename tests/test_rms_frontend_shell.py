@@ -22,6 +22,8 @@ RMS_JS_BUNDLE_FILES = (
     "static/js/pages/rms-candidates.js",
     "static/js/pages/rms-applications.js",
     "static/js/pages/rms-pipeline.js",
+    "static/js/pages/rms-delivery-review.js",
+    "static/js/pages/rms-roster-conversion.js",
     "static/js/pages/rms.js",
 )
 
@@ -80,6 +82,8 @@ def test_rms_frontend_js_assets_exist():
     candidates_src = bundle["static/js/pages/rms-candidates.js"]
     applications_src = bundle["static/js/pages/rms-applications.js"]
     pipeline_src = bundle["static/js/pages/rms-pipeline.js"]
+    delivery_review_src = bundle["static/js/pages/rms-delivery-review.js"]
+    roster_src = bundle["static/js/pages/rms-roster-conversion.js"]
     rms_src = bundle["static/js/pages/rms.js"]
     rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
 
@@ -95,11 +99,16 @@ def test_rms_frontend_js_assets_exist():
     assert rms_html.index("rms-jobs.js") < rms_html.index("rms-candidates.js")
     assert rms_html.index("rms-candidates.js") < rms_html.index("rms-applications.js")
     assert rms_html.index("rms-applications.js") < rms_html.index("rms-pipeline.js")
-    assert rms_html.index("rms-pipeline.js") < rms_html.index("rms.js")
+    assert rms_html.index("rms-pipeline.js") < rms_html.index("rms-delivery-review.js")
+    assert rms_html.index("rms-delivery-review.js") < rms_html.index("rms-roster-conversion.js")
+    assert rms_html.index("rms-roster-conversion.js") < rms_html.index("rms.js")
     assert "r2b-20260614" not in rms_html
     assert "r3a-20260614" not in rms_html
-    assert rms_html.count("r3b-20260614") == 8
-    assert "rms-pipeline.js?v=r3b-20260614" in rms_html
+    assert "r3b-20260614" not in rms_html
+    assert "r3c-20260614" not in rms_html
+    assert rms_html.count("r3c2-20260614") == 10
+    assert "rms-delivery-review.js?v=r3c2-20260614" in rms_html
+    assert "rms-roster-conversion.js?v=r3c2-20260614" in rms_html
 
     for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError"):
         assert sym in core_src, f"missing core symbol: {sym}"
@@ -195,9 +204,50 @@ def test_rms_frontend_js_assets_exist():
     assert "...pipeline" in rms_src
     assert "RMS Pipeline 模块未加载" in rms_src
 
+    for sym in (
+        "createDeliveryReviewState",
+        "deliveryReviewState",
+        "loadDeliveryReview",
+        "openDeliveryReviewModal",
+        "submitDeliveryReview",
+        "deliveryReviewLabel",
+        "receiveLabel",
+        "protectionLabel",
+    ):
+        assert sym in delivery_review_src, f"missing delivery review symbol: {sym}"
+    assert "global.CrmRmsDeliveryReview" in delivery_review_src
+    assert "RmsCandidateReport" in delivery_review_src
+    assert "createDeliveryReviewApi" in delivery_review_src
+    assert "CrmRmsReport" not in delivery_review_src
+    assert "CrmRmsDeliveryReview.createDeliveryReviewState" in rms_src
+    assert "...deliveryReview" in rms_src
+    assert "loadDeliveryReviewBridge" in rms_src
+    assert "RMS 交付内审模块未加载" in rms_src
+    assert "RMS 交付内审状态初始化失败" in rms_src
+
+    for sym in (
+        "createRosterConversionState",
+        "resetRosterConvertForm",
+        "validateRosterConvertForm",
+        "submitRosterConvert",
+        "openRosterGmCalculatorFromRms",
+        "openConvertedRosterEntry",
+        "openRosterConvertModal",
+    ):
+        assert sym in roster_src, f"missing roster conversion symbol: {sym}"
+    assert "global.CrmRmsRosterConversion" in roster_src
+    assert "CrmRmsRosterConversion.createRosterConversionState" in rms_src
+    assert "...rosterConversion" in rms_src
+    assert "RMS 转入花名册模块未加载" in rms_src
+    assert "RMS 转入花名册状态初始化失败" in rms_src
+    assert "/roster-draft" in roster_src
+    assert "/convert-to-roster" in roster_src
+
     assert "parseCandidateReportDraft" in report_src
     assert "validateReportForm" in report_src
     assert "validateCandidateCreateForm" in report_src
+    assert "validateCandidateModalForm" in report_src
+    assert "validateCandidateModalForm" in candidates_src
     assert "fieldKeyForValidationMessage" in report_src
     assert "createReportState" in report_src
     assert "global.CrmRmsReport" in report_src
@@ -304,6 +354,7 @@ def test_rms_frontend_js_assets_exist():
     assert "reviewFailPromptOpen" in rms_src
     assert "内审失败须填写理由" in rms_src
     assert "请说明内审未通过原因" in rms_src
+    assert "deliveryReviewLabel" in delivery_review_src
     assert "jobs.userOptions.value" in rms_src or "userOptions" in jobs_src
     assert "jobFormOptions.users" not in rms_src
     assert '"interview_scheduling"' not in labels_src
@@ -596,6 +647,10 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "appCandidateAge" in (REPO_ROOT / "static/js/pages/rms-applications.js").read_text(encoding="utf-8")
     assert "推荐候选人" in html
     assert "推荐库内人选" in html
+    assert "库内候选人简历" in html
+    assert 'data-rms-report-existing-resume' in html
+    assert 'data-rms-report-existing-preview' in html
+    assert "库内候选人简历预览" in html
     assert 'data-rms-action="open-existing-candidate-picker"' in html
     assert "选择库内候选人" in html
     assert "请输入关键词搜索" in html
@@ -652,12 +707,16 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "/static/js/pages/rms-candidates.js" in html
     assert "/static/js/pages/rms-applications.js" in html
     assert "/static/js/pages/rms-pipeline.js" in html
+    assert "/static/js/pages/rms-delivery-review.js" in html
+    assert "/static/js/pages/rms-roster-conversion.js" in html
     assert "/static/js/pages/rms.js" in html
     assert "接收状态" in html
     assert "内审状态" in html
     assert "招聘进展" in html
     assert "保护期状态" in html
-    assert "deliveryReviewLabel" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    assert "deliveryReviewLabel" in (
+        REPO_ROOT / "static/js/pages/rms-delivery-review.js"
+    ).read_text(encoding="utf-8")
 
     rms_js = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
     report_js = (REPO_ROOT / "static/js/pages/rms-candidate-report.js").read_text(encoding="utf-8")
@@ -666,6 +725,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "人选已存在系统中" in rms_js
     assert "duplicate_detected" in report_js
     assert "/api/rms/candidates/check-duplicate" in report_js
+    assert "resume_file_name" in report_js
+    assert "Object.assign({}, selectedExistingCandidate.value, r.data)" in report_js
     assert "10000" in rms_js
     assert "showCandidateDuplicateDialog" in rms_js
     assert 'window.confirm("人选已存在系统中")' not in rms_js
@@ -716,15 +777,14 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "openRosterConvertModal" in apps_region
     assert "data-rms-roster-required" in html
     assert "月报价(含税)" in html
-    assert "submitRosterConvert" in rms_src
-    assert "openRosterGmCalculatorFromRms" in rms_src
-    assert "/tools/calc" in rms_src
-    assert "毛利测算器" in html
+    roster_js = (REPO_ROOT / "static/js/pages/rms-roster-conversion.js").read_text(encoding="utf-8")
+    assert "submitRosterConvert" in roster_js
+    assert "openRosterGmCalculatorFromRms" in roster_js
     assert "openRosterGmCalculatorFromRms" in html
-    assert "/roster-draft" in rms_src
-    assert "/convert-to-roster" in rms_src
+    assert "/tools/calc" in roster_js
+    assert "毛利测算器" in html
+    assert "openConvertedRosterEntry" in roster_js
     assert "canConvertToRoster" in rms_src
-    assert "openConvertedRosterEntry" in rms_src
     assert ">简历</a>" in apps_region
     assert "hired_unconverted_only" in applications_js
     assert "applicationsFilter" in applications_js

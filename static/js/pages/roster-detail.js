@@ -26,6 +26,7 @@ const STANDARD_FORM_FIELDS = [
     { key: 'gms', label: 'GM$' },
     { key: 'gm_pct', label: 'GM%' },
     { key: 'employee_plus1', label: '员工+1' },
+    { key: 'zntx_onboarding_channel', label: '入职渠道' },
     { key: 'employee_plus2', label: '员工+2' },
     { key: 'interface_contact', label: '接口' },
     { key: 'project_release_date', label: '项目释放日期' },
@@ -66,7 +67,6 @@ const DETAIL_TEXTAREA_KEYS = new Set(['remarks', 'leave_reason']);
 const FORM_FIELDS = [
     ...STANDARD_FORM_FIELDS,
     { key: 'zntx_staff_no', label: '工号' },
-    { key: 'zntx_onboarding_channel', label: '入职渠道' },
     { key: 'zntx_attendance_checkin', label: '打卡' },
     { key: 'zntx_attendance_makeup', label: '补卡' },
     { key: 'zntx_separation_type', label: '离职类型' },
@@ -95,6 +95,7 @@ const DATE_FIELD_KEYS = new Set([
 function emptyForm() {
     const o = {};
     FORM_FIELDS.forEach((f) => { o[f.key] = ''; });
+    o.zntx_onboarding_channel_other = '';
     return o;
 }
 /** 从单元格文本解析金额（¥、千分位、空格等） */
@@ -203,6 +204,24 @@ function formatGmPctWithSymbol(raw) {
     return digits + '%';
 }
 const GM_PCT_COMPLETE_RE = /^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)$/;
+const ONBOARDING_CHANNEL_OPTIONS = ['内部RMS', 'Boss', 'linkedin', '猎聘', '内推', '挂靠', '外协', '其他'];
+const ONBOARDING_CHANNEL_LEGACY = { 平台: '内部RMS' };
+const ONBOARDING_CHANNEL_PRESETS = new Set(
+    ONBOARDING_CHANNEL_OPTIONS.filter((s) => s !== '其他'),
+);
+function resolveOnboardingChannelForForm(storedChannel) {
+    const s = String(storedChannel || '').trim();
+    if (!s) return { channel: '', channel_other: '' };
+    if (ONBOARDING_CHANNEL_LEGACY[s]) return { channel: ONBOARDING_CHANNEL_LEGACY[s], channel_other: '' };
+    if (ONBOARDING_CHANNEL_PRESETS.has(s)) return { channel: s, channel_other: '' };
+    return { channel: '其他', channel_other: s };
+}
+function resolveOnboardingChannelForSave(channel, channelOther) {
+    const sel = String(channel || '').trim();
+    if (!sel) return '';
+    if (sel === '其他') return String(channelOther || '').trim();
+    return sel;
+}
 /** 比率转百分比展示，与行内「79.55%」形式一致 */
 function formatRatioAsPercent(ratio) {
     if (!Number.isFinite(ratio)) return '—';
@@ -299,7 +318,7 @@ const rosterDetailApp = createApp({
         const showStdReleaseLeaveCols = computed(() => !isZNTX.value && !hideReleaseLeaveCols.value);
         const emptyRowColspan = computed(() => {
             if (isZNTX.value) return 23;
-            return hideReleaseLeaveCols.value ? 20 : 23;
+            return hideReleaseLeaveCols.value ? 21 : 24;
         });
         const isRowChecked = (rowId) => !!checkedRowIds[String(rowId)];
         const setRowChecked = (rowId, checked) => {
@@ -684,6 +703,7 @@ const rosterDetailApp = createApp({
             formReadonly.value = false;
             FORM_FIELDS.forEach((f) => {
                 const raw = row[f.key] != null ? String(row[f.key]) : '';
+                if (f.key === 'zntx_onboarding_channel') return;
                 if (DATE_FIELD_KEYS.has(f.key)) {
                     form[f.key] = normalizeDateForInput(raw, false);
                 } else if (ROSTER_AMOUNT_FIELD_KEYS.has(f.key)) {
@@ -694,6 +714,9 @@ const rosterDetailApp = createApp({
                     form[f.key] = raw;
                 }
             });
+            const channelParts = resolveOnboardingChannelForForm(row.zntx_onboarding_channel || '');
+            form.zntx_onboarding_channel = channelParts.channel;
+            form.zntx_onboarding_channel_other = channelParts.channel_other;
             clearTouched();
             showForm.value = true;
         };
@@ -717,8 +740,17 @@ const rosterDetailApp = createApp({
                 alert(bizError);
                 return;
             }
+            if (form.zntx_onboarding_channel === '其他' &&
+                !String(form.zntx_onboarding_channel_other || '').trim()) {
+                alert('请填写具体入职渠道');
+                return;
+            }
             const payload = {};
             FORM_FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
+            payload.zntx_onboarding_channel = resolveOnboardingChannelForSave(
+                form.zntx_onboarding_channel,
+                form.zntx_onboarding_channel_other,
+            );
             // 提交前规范化金额文本，兼容用户输入千分位/货币符号
             payload.monthly_quote_tax = normalizeAmountText(payload.monthly_quote_tax);
             payload.pre_tax_salary = normalizeAmountText(payload.pre_tax_salary);
@@ -1051,6 +1083,7 @@ const rosterDetailApp = createApp({
             showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors, showOnlyChecked, displayCountHint, emptyStateText,
             IS_GLOBAL_ROSTER,
             rosterCustomerSelectOptions,
+            onboardingChannelOptions: ONBOARDING_CHANNEL_OPTIONS,
             openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, saveForm, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
             showRosterValidation,

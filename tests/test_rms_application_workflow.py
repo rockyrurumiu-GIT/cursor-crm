@@ -88,7 +88,7 @@ def _full_candidate_report(job_id: int, client_id: int, **overrides) -> dict:
         "major": "仪器仪表工程",
         "gender": "男",
         "marital_status": "未婚",
-        "source": "其他",
+        "source": "朋友介绍",
     }
     payload.update(overrides)
     return payload

@@ -297,7 +297,7 @@
                             <th class="crm-th min-w-[6.5rem] crm-currency-cell">GM$</th>
                             <th class="crm-th min-w-[5rem] crm-percent-cell">GM%</th>
                             <th class="crm-th min-w-[5.5rem]">员工+1</th>
-                            <th v-if="isZNTX" class="crm-th min-w-[6rem]">入职渠道</th>
+                            <th class="crm-th min-w-[6rem]">入职渠道</th>
                             <th v-if="isZNTX" class="crm-th min-w-[5rem] max-w-[8rem] roster-col-checkin">打卡</th>
                             <th class="crm-th min-w-[5.5rem]">员工+2</th>
                             <th class="crm-th min-w-[4.5rem]">接口</th>
@@ -337,7 +337,7 @@
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-currency-cell">{{ displayAmountInteger(row.gms) }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums crm-percent-cell">{{ row.gm_pct }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.employee_plus1 }}</td>
-                            <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_onboarding_channel }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.zntx_onboarding_channel }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 text-gray-700 align-top roster-col-checkin">
                                 <div class="crm-cell-clip" :title="row.zntx_attendance_checkin || ''">{{ row.zntx_attendance_checkin || '—' }}</div>
                             </td>
@@ -377,7 +377,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.salaryRatio }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
-                                <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td :colspan="rosterFooterRemarkColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
@@ -390,7 +390,7 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgSalaryRatio }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgGms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgGmPct }}</td>
-                                <td colspan="3" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td :colspan="rosterFooterRemarkColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
@@ -466,6 +466,19 @@
                             <option value="离职">离职</option>
                         </select>
                         <select
+                            v-else-if="f.key === 'zntx_onboarding_channel'"
+                            v-model="form.zntx_onboarding_channel"
+                            :disabled="formReadonly"
+                            @change="markTouched(f.key)"
+                            :class="[
+                                'crm-form-control',
+                                getFieldError(f.key) ? 'crm-form-control--error' : '',
+                            ]"
+                        >
+                            <option value="">请选择</option>
+                            <option v-for="s in onboardingChannelOptions" :key="'ob'+s" :value="s">{{ s }}</option>
+                        </select>
+                        <select
                             v-else-if="f.key === 'customer_name'"
                             v-model="form[f.key]"
                             :disabled="formReadonly"
@@ -538,6 +551,20 @@
                             ]"
                         />
                         <span v-if="getFieldError(f.key)" class="text-xs text-red-500">{{ getFieldError(f.key) }}</span>
+                    </label>
+                    <label
+                        v-if="form.zntx_onboarding_channel === '其他'"
+                        class="flex flex-col gap-1 min-w-0 sm:col-span-2 lg:col-span-5"
+                    >
+                        <span class="roster-detail-modal-label">具体入职渠道</span>
+                        <input
+                            v-model.trim="form.zntx_onboarding_channel_other"
+                            type="text"
+                            :disabled="formReadonly"
+                            @input="markTouched('zntx_onboarding_channel')"
+                            placeholder="请填写具体入职渠道"
+                            class="crm-form-control"
+                        />
                     </label>
                 </div>
                 <div v-if="detailTextareaFields.length" class="mt-3 space-y-2.5">
@@ -615,5 +642,5 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/roster-detail.js?v=16"></script>
+<script src="/static/js/pages/roster-detail.js?v=17"></script>
 {% endblock %}
