@@ -90,10 +90,12 @@ def test_rms_frontend_js_assets_exist():
     for rel in RMS_JS_BUNDLE_FILES:
         assert (REPO_ROOT / rel).is_file(), f"missing {rel}"
 
+    assert "/static/js/pages/rms-application-labels.js" in rms_html
     assert "/static/js/pages/rms-core.js" in rms_html
     assert "/static/js/pages/rms-jobs.js" in rms_html
     assert "/static/js/pages/rms-candidates.js" in rms_html
     assert "/static/js/pages/rms-applications.js" in rms_html
+    assert rms_html.index("rms-application-labels.js") < rms_html.index("rms-core.js")
     assert rms_html.index("rms-core.js") < rms_html.index("rms-candidate-report.js")
     assert rms_html.index("rms-candidate-report.js") < rms_html.index("rms-jobs.js")
     assert rms_html.index("rms-jobs.js") < rms_html.index("rms-candidates.js")
@@ -132,6 +134,17 @@ def test_rms_frontend_js_assets_exist():
     assert "modalTitle" not in jobs_return
 
     assert "CrmRmsCore" in rms_src
+    for sym in (
+        "createJobsState",
+        "createCandidatesState",
+        "createApplicationsState",
+        "createPipelineState",
+        "createDeliveryReviewState",
+        "createRosterConversionState",
+        "createReportState",
+    ):
+        assert sym in rms_src
+    assert len(rms_src.splitlines()) < 900
     assert "CrmRmsJobs.createJobsState" in rms_src
     assert "...jobs" in rms_src
     assert "canWriteJobs" in rms_src

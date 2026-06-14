@@ -1,7 +1,9 @@
 /**
- * RMS module page (Phase 2.5 frontend MVP).
- * Requires: Vue 3 CDN, crm-api.js, rms-core.js, rms-jobs.js, rms-candidates.js, rms-applications.js,
- * rms-pipeline.js, rms-delivery-review.js, rms-roster-conversion.js (optional crm-toast.js).
+ * RMS module page shell.
+ * Requires: Vue 3 CDN, crm-api.js, rms-core.js, rms-application-labels.js,
+ * rms-candidate-report.js, rms-jobs.js, rms-candidates.js,
+ * rms-applications.js, rms-pipeline.js, rms-delivery-review.js,
+ * rms-roster-conversion.js.
  */
 (function () {
   "use strict";
