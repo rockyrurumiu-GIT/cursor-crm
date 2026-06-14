@@ -23,6 +23,7 @@
     interviewed: "#9389AE",
     passed: "#5B8A72",
     pendingClient: "#B4C4D8",
+    scheduling: "#A8B8C8",
     pendingInterview: "#C2D4C8",
     abandoned: "#CD9180",
   };
@@ -91,8 +92,15 @@
     }
     return fetch(path, opts).then(function (r) {
       if (!r.ok) {
-        return r.json().then(function (b) {
-          throw new Error((b && b.detail) || r.statusText || "请求失败");
+        return r.text().then(function (text) {
+          var detail = "";
+          try {
+            var b = JSON.parse(text || "{}");
+            detail = b && b.detail ? b.detail : "";
+          } catch (_) {
+            detail = text || "";
+          }
+          throw new Error(detail || r.statusText || "请求失败");
         });
       }
       if (r.status === 204) return null;
@@ -119,6 +127,7 @@
       job_ids_text: src.job_ids_text != null ? String(src.job_ids_text) : "",
       delivery_user_id: src.delivery_user_id != null ? String(src.delivery_user_id) : "",
       recruiter_user_id: src.recruiter_user_id != null ? String(src.recruiter_user_id) : "",
+      city: src.city != null ? String(src.city) : "",
       date_from: src.date_from != null ? String(src.date_from) : "",
       date_to: src.date_to != null ? String(src.date_to) : "",
     };
@@ -418,6 +427,20 @@
           return jobs.filter(function (j) { return Number(j.client_id) === want; });
         });
 
+        var cityOptions = computed(function () {
+          var jobs = jobOptions.value || [];
+          var seen = {};
+          var out = [];
+          jobs.forEach(function (j) {
+            var loc = String(j.location || "").trim();
+            if (!loc || seen[loc]) return;
+            seen[loc] = true;
+            out.push(loc);
+          });
+          out.sort(function (a, b) { return a.localeCompare(b, "zh-CN"); });
+          return out;
+        });
+
         var jobFilterSummary = computed(function () {
           var selected = jobFilterDropdownOpen.value
             ? jobIdsDraft.value
@@ -474,6 +497,7 @@
           target.job_ids_text = next.job_ids_text;
           target.delivery_user_id = next.delivery_user_id;
           target.recruiter_user_id = next.recruiter_user_id;
+          target.city = next.city;
           target.date_from = next.date_from;
           target.date_to = next.date_to;
         }
@@ -532,6 +556,7 @@
             job_ids: "岗位",
             delivery_user_id: "交付用户ID",
             recruiter_user_id: "推荐人用户ID",
+            city: "城市",
             date_from: "统计周期起",
             date_to: "统计周期止",
           };
@@ -877,7 +902,7 @@
           table_history: { w: 12, h: 5, title: "阶段明细" },
           chart_recruiter: { w: 12, h: 6, title: "当月入职排名" },
           table_recruiter: { w: 12, h: 6, title: "人效明细" },
-          table_client_job_stage: { w: 12, h: 7, title: "历史数据" },
+          table_client_job_stage: { w: 12, h: 7, title: "客户岗位阶段统计" },
           chart_client_job_stage_grouped: { w: 12, h: 7, title: "岗位阶段（分组柱）" },
           chart_client_job_stage_stacked: { w: 12, h: 7, title: "岗位阶段（堆叠柱）" },
           chart_client_job_stage_funnel: { w: 12, h: 6, title: "岗位阶段（漏斗）" },
@@ -1235,6 +1260,7 @@
                 labels: labels,
                 datasets: [
                   { label: "待客户筛选", data: rows.map(function (r) { return r.pending_client_screen || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.pendingClient },
+                  { label: "约面中", data: rows.map(function (r) { return r.scheduling_interview_count || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.scheduling },
                   { label: "待面试", data: rows.map(function (r) { return r.pending_interview || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.pendingInterview },
                   { label: "面试通过", data: rows.map(function (r) { return r.interview_passed || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.passed },
                   { label: "放弃面试", data: rows.map(function (r) { return r.interview_abandoned || 0; }), backgroundColor: JOB_STAGE_CHART_COLORS.abandoned },
@@ -2283,6 +2309,7 @@
           clientOptions,
           jobOptions,
           filteredJobOptions,
+          cityOptions,
           userOptions,
           jobFilterRef,
           jobFilterDropdownOpen,

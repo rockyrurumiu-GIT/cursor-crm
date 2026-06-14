@@ -1430,6 +1430,7 @@ def create_dashboard(
     scope: str = "crm",
     seed_rms_tabs: bool = False,
     DashboardTab=None,
+    DashboardWidget=None,
 ) -> dict:
     name = (body.get("name") or "").strip()
     if not name:
@@ -1447,7 +1448,7 @@ def create_dashboard(
     db.add(d)
     db.commit()
     db.refresh(d)
-    if seed_rms_tabs and DashboardTab is not None and d.scope == "rms":
+    if seed_rms_tabs and DashboardTab is not None and DashboardWidget is not None and d.scope == "rms":
         _add_rms_default_tabs(db, d.id, DashboardTab, DashboardWidget, now)
         db.commit()
     if DashboardTab is not None and DashboardWidget is not None:
@@ -1746,7 +1747,8 @@ def seed_default_dashboards(
     _seed_rms_recruitment(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_test_tab(db, DashboardDashboard, DashboardTab, DashboardWidget)
-    _sync_rms_client_job_stage_title(db, DashboardWidget)
+    _sync_rms_client_job_stage_title(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _sync_rms_filter_block_height(db, DashboardDashboard, DashboardTab, DashboardWidget)
 
 
 _RMS_DEFAULT_TABS = (
@@ -1789,7 +1791,7 @@ _RMS_TEMPLATE_WIDGETS = {
         {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
         {"title": "阶段通过率", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_history_pass"}, "x": 0, "y": 2, "w": 12, "h": 6},
         {"title": "阶段明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_history"}, "x": 0, "y": 8, "w": 12, "h": 5},
-        {"title": "历史数据", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_client_job_stage"}, "x": 0, "y": 13, "w": 12, "h": 6},
+        {"title": "客户岗位阶段统计", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_client_job_stage"}, "x": 0, "y": 13, "w": 12, "h": 6},
     ],
     "recruiter": [
         {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
@@ -1860,19 +1862,97 @@ def _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidg
         db.commit()
 
 
-def _sync_rms_client_job_stage_title(db, DashboardWidget) -> None:
-    """Rename legacy table_client_job_stage widget title to 历史数据."""
+def _sync_rms_client_job_stage_title(
+    db,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+) -> None:
+    """Rename RMS table_client_job_stage widget title to 客户岗位阶段统计."""
+    rms_dashboard_ids = {
+        int(row[0])
+        for row in db.query(DashboardDashboard.id)
+        .filter(DashboardDashboard.scope == "rms")
+        .all()
+    }
+    if not rms_dashboard_ids:
+        return
+    rms_tab_ids = {
+        int(row[0])
+        for row in db.query(DashboardTab.id)
+        .filter(DashboardTab.dashboard_id.in_(rms_dashboard_ids))
+        .all()
+    }
+    if not rms_tab_ids:
+        return
     changed = False
     now = _now()
-    for w in db.query(DashboardWidget).filter(DashboardWidget.widget_type == "rms_block").all():
-        if (w.title or "").strip() != "客户岗位阶段统计":
+    for w in db.query(DashboardWidget).filter(
+        DashboardWidget.tab_id.in_(rms_tab_ids),
+        DashboardWidget.widget_type == "rms_block",
+    ).all():
+        if (w.title or "").strip() != "历史数据":
             continue
         cfg = _parse_json(w.config_json or "{}", {})
         if (cfg.get("block") or "").strip() != "table_client_job_stage":
             continue
-        w.title = "历史数据"
+        w.title = "客户岗位阶段统计"
         w.updated_at = now
         changed = True
+    if changed:
+        db.commit()
+
+
+def _sync_rms_filter_block_height(
+    db,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+) -> None:
+    """Shrink RMS filter block from h=3 to h=2 and pull widgets below up (single-row filter)."""
+    rms_dashboard_ids = {
+        int(row[0])
+        for row in db.query(DashboardDashboard.id)
+        .filter(DashboardDashboard.scope == "rms")
+        .all()
+    }
+    if not rms_dashboard_ids:
+        return
+    changed = False
+    now = _now()
+    tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id.in_(rms_dashboard_ids)).all()
+    for tab in tabs:
+        widgets = (
+            db.query(DashboardWidget)
+            .filter(DashboardWidget.tab_id == tab.id)
+            .all()
+        )
+        filter_widgets = []
+        for w in widgets:
+            if w.widget_type != "rms_block":
+                continue
+            cfg = _parse_json(w.config_json or "{}", {})
+            if (cfg.get("block") or "").strip() != "filter":
+                continue
+            if int(w.h or 0) != 3:
+                continue
+            filter_widgets.append(w)
+        if not filter_widgets:
+            continue
+        for fw in filter_widgets:
+            fy = int(fw.y or 0)
+            shift_from = fy + 3
+            fw.h = 2
+            fw.updated_at = now
+            changed = True
+            for w in widgets:
+                if w.id == fw.id:
+                    continue
+                wy = int(w.y or 0)
+                if wy >= shift_from:
+                    w.y = wy - 1
+                    w.updated_at = now
+                    changed = True
     if changed:
         db.commit()
 

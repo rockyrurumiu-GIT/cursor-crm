@@ -119,6 +119,29 @@ def test_rms_dashboard_boards_seeded(client_rbac, admin_auth, rms_engine, uniq):
     assert "chart_pipeline" in blocks
 
 
+def test_rms_dashboard_create_board_seeds_default_tabs(client_rbac, admin_auth, rms_engine, uniq):
+    login = _admin_login(client_rbac, admin_auth)
+    r = client_rbac.post(
+        "/api/rms/dashboard-boards",
+        cookies=login.cookies,
+        json={"name": f"总看板_{uniq}", "description": ""},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["scope"] == "rms"
+    assert body["name"] == f"总看板_{uniq}"
+    tab_names = [t["name"] for t in body["tabs"]]
+    assert "总览" in tab_names
+    assert "历史转化" in tab_names
+    assert "招聘人效" in tab_names
+    assert "花名册核对" in tab_names
+    overview = next(t for t in body["tabs"] if t["name"] == "总览")
+    assert len(overview["widgets"]) >= 4
+    blocks = {(w.get("config") or {}).get("block") for w in overview["widgets"]}
+    assert "kpi_jobs" in blocks
+    assert "chart_pipeline" in blocks
+
+
 def test_rms_dashboard_widget_crud(client_rbac, admin_auth, rms_engine, uniq):
     user, pwd = admin_auth
     login = _login(client_rbac, user, pwd)
@@ -350,7 +373,7 @@ def test_dashboard_client_job_stage_date_filter(client_rbac, admin_auth, rms_eng
 def test_dashboard_period_event_pass_without_push_in_range(
     client_rbac, admin_auth, rms_engine, uniq
 ):
-    """Push before period, first-interview pass inside period — pass counts, push does not."""
+    """Push before period; snapshot at date_to shows 已面试, push count excludes pre-period."""
     from sqlalchemy import text
     from tests.test_rms_phase2_mvp import _app_for_status
 
@@ -378,9 +401,9 @@ def test_dashboard_period_event_pass_without_push_in_range(
         conn.execute(
             text(
                 "UPDATE rms_application_status_history "
-                "SET changed_at = :d WHERE application_id = :id AND to_status = :st"
+                "SET changed_at = :d WHERE application_id = :id"
             ),
-            {"d": "2026-06-09", "id": app_id, "st": "first_interview_passed"},
+            {"d": "2026-06-09", "id": app_id},
         )
     r = client_rbac.get(
         f"/api/rms/dashboard?job_ids={job_id}&date_from=2026-06-08&date_to=2026-06-10",
@@ -389,7 +412,8 @@ def test_dashboard_period_event_pass_without_push_in_range(
     assert r.status_code == 200, r.text
     row = _job_row(r.json()["client_job_stage_summary"], job_id)
     assert row["pushed_resume_count"] == 0
-    assert row["interview_passed"] == 1
+    assert row["interview_passed"] == 0
+    assert row["interviewed"] == 1
 
 
 def test_dashboard_period_push_and_pass_same_range(
@@ -422,9 +446,9 @@ def test_dashboard_period_push_and_pass_same_range(
         conn.execute(
             text(
                 "UPDATE rms_application_status_history "
-                "SET changed_at = :d WHERE application_id = :id AND to_status = :st"
+                "SET changed_at = :d WHERE application_id = :id"
             ),
-            {"d": "2026-06-09", "id": app_id, "st": "first_interview_passed"},
+            {"d": "2026-06-09", "id": app_id},
         )
     r = client_rbac.get(
         f"/api/rms/dashboard?job_ids={job_id}&date_from=2026-06-08&date_to=2026-06-10",
@@ -433,7 +457,8 @@ def test_dashboard_period_push_and_pass_same_range(
     assert r.status_code == 200, r.text
     row = _job_row(r.json()["client_job_stage_summary"], job_id)
     assert row["pushed_resume_count"] == 1
-    assert row["interview_passed"] == 1
+    assert row["interview_passed"] == 0
+    assert row["interviewed"] == 1
 
 
 def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine, uniq):
@@ -464,10 +489,10 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
     assert row["client_screen_passed"] == 1
     assert row["pending_interview"] == 0
     assert row["interviewed"] == 1
-    assert row["interview_passed"] == 1
+    assert row["interview_passed"] == 0
     assert row["internal_screen_passed_rate"] == "100%"
     assert row["client_screen_passed_rate"] == "100%"
-    assert row["interview_passed_rate"] == "100%"
+    assert row["interview_passed_rate"] == "0%"
     assert row["interview_abandoned_rate"] == "0%"
 
     for to_status in ("second_interview_passed", "pending_offer"):
@@ -480,6 +505,8 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
 
     row = dash_row()
     assert row["pending_offer_count"] == 1
+    assert row["interview_passed"] == 0
+    assert row["interviewed"] == 0
     assert row["offer_dropped_count"] == 0
     assert row["onboarding_count"] == 0
     assert row["onboarding_lost_count"] == 0
@@ -505,8 +532,180 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
     assert tr.status_code == 200, tr.text
 
     row = dash_row()
-    assert row["onboarding_count"] == 1
+    assert row["onboarding_count"] == 0
     assert row["hired_count"] == 1
+
+
+def test_client_job_stage_row_fields(client_rbac, admin_auth, rms_engine, uniq):
+    from services.rms_dashboard import _SUMMARY_METRIC_KEYS
+
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"row_{uniq}")
+    job = client_rbac.get(f"/api/rms/jobs/{job_id}", cookies=login.cookies).json()
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login.cookies,
+        json=_candidate_json(job_id, name="Row Fields"),
+    )
+    assert cand.status_code == 200
+    app = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+    )
+    assert app.status_code == 200
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["client_id"] == job["client_id"]
+    assert row["client_name"]
+    assert row["job_title"]
+    assert row["location"] is not None
+    for key in _SUMMARY_METRIC_KEYS:
+        assert key in row
+
+
+def test_client_job_stage_total_equals_rows(client_rbac, admin_auth, rms_engine, uniq):
+    from services.rms_dashboard import _SUMMARY_METRIC_KEYS
+
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"tot_{uniq}")
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    summary = r.json()["client_job_stage_summary"]
+    total = summary["total"]
+    rows = summary["rows"]
+    for key in _SUMMARY_METRIC_KEYS:
+        row_sum = sum(int(row.get(key) or 0) for row in rows)
+        assert int(total.get(key) or 0) == row_sum, key
+
+
+def test_client_job_stage_snapshot_scheduling_and_onboarding(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"snap_{uniq}")
+    job_id = client_rbac.get(f"/api/rms/applications/{app_id}", cookies=login.cookies).json()["job_id"]
+
+    def dash_row():
+        r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+        assert r.status_code == 200, r.text
+        return _job_row(r.json()["client_job_stage_summary"], job_id)
+
+    tr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "scheduling_interview", "reason": "ok"},
+    )
+    assert tr.status_code == 200, tr.text
+    row = dash_row()
+    assert row["scheduling_interview_count"] == 1
+    assert row["pending_client_screen"] == 0
+
+    for to_status in (
+        "pending_first_interview",
+        "first_interview_passed",
+        "second_interview_passed",
+        "pending_offer",
+        "onboarding",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": to_status, "reason": "ok"},
+        )
+        assert tr.status_code == 200, tr.text
+
+    row = dash_row()
+    assert row["scheduling_interview_count"] == 0
+    assert row["pending_interview"] == 0
+    assert row["interviewed"] == 0
+    assert row["interview_passed"] == 0
+    assert row["pending_offer_count"] == 0
+    assert row["onboarding_count"] == 1
+
+
+def test_dashboard_client_job_stage_city_filter(client_rbac, admin_auth, rms_engine, uniq):
+    login, job_a = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"sh_{uniq}")
+    job_a_body = client_rbac.get(f"/api/rms/jobs/{job_a}", cookies=login.cookies).json()
+    patch_a = client_rbac.patch(
+        f"/api/rms/jobs/{job_a}",
+        cookies=login.cookies,
+        json={"location": "上海"},
+    )
+    assert patch_a.status_code == 200, patch_a.text
+    admin_user, admin_pwd = admin_auth
+    job_b = client_rbac.post(
+        "/api/rms/jobs",
+        headers=auth_header(admin_user, admin_pwd),
+        json={
+            "client_id": job_a_body["client_id"],
+            "title": f"Job BJ {uniq}",
+            "owner_user_id": job_a_body["owner_user_id"],
+            "delivery_owner_user_id": job_a_body["delivery_owner_user_id"],
+            "location": "北京",
+        },
+    )
+    assert job_b.status_code == 200, job_b.text
+    job_b_id = job_b.json()["id"]
+    r = client_rbac.get("/api/rms/dashboard?city=上海", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row_ids = {int(row["job_id"]) for row in r.json()["client_job_stage_summary"]["rows"]}
+    assert int(job_a) in row_ids
+    assert int(job_b_id) not in row_ids
+
+
+def test_dashboard_forbidden_without_analytics_read(
+    client_rbac, admin_auth, rms_engine, uniq, monkeypatch
+):
+    import main as crm_main
+    from auth import policy
+    from auth import service as auth_svc
+    from auth.permissions import ALL_PERMISSION_CODES
+    from auth.service import AuthContext
+
+    suffix = uniq
+    monkeypatch.setattr(
+        policy, "generate_custom_role_code", lambda: f"CUSTOM_{suffix}_noana"
+    )
+    db = crm_main.SessionLocal()
+    try:
+        admin_user, _ = admin_auth
+        super_ctx = AuthContext(
+            username=admin_user,
+            user_id=1,
+            roles=["SUPER_ADMIN"],
+            permissions=sorted(ALL_PERMISSION_CODES),
+            dept_ids=[],
+            role_data_scopes={},
+            is_super=True,
+        )
+        role = auth_svc.create_custom_role(
+            db, name=f"No Analytics {suffix}", description="test", actor=admin_user
+        )
+        perms = [p for p in ALL_PERMISSION_CODES if p != "rms.analytics.read"]
+        auth_svc.set_role_permissions(
+            db, role["id"], perms, actor=admin_user, actor_ctx=super_ctx
+        )
+        username = f"rms_noana_{suffix}"
+        auth_svc.create_user(
+            db,
+            username=username,
+            password="noana1",
+            display_name="No Analytics",
+            role_codes=[role["code"]],
+            actor=admin_user,
+            actor_ctx=super_ctx,
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    login = _login(client_rbac, username, "noana1")
+    assert login.status_code == 200
+    api_r = client_rbac.get("/api/rms/dashboard", cookies=login.cookies)
+    assert api_r.status_code == 403
+    page_r = client_rbac.get("/rms/dashboard", cookies=login.cookies)
+    assert page_r.status_code == 403
 
 
 def test_rms_dashboard_widget_create_client_job_stage_block(client_rbac, admin_auth, rms_engine, uniq):

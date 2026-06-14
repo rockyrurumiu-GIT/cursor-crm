@@ -44,9 +44,9 @@
   display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 52px;
   gap: 12px; max-width: 1280px; margin: 0 auto;
 }
-.dash-card.dash-card--filter { overflow: visible; z-index: 6; }
+.dash-card.dash-card--filter { overflow: visible; z-index: 6; max-height: none; }
 .dash-card.dash-card--filter.dash-card--filter-open { z-index: 30; }
-.dash-card.dash-card--filter .card-body { overflow: visible; }
+.dash-card.dash-card--filter .card-body { overflow: visible; flex: 0 1 auto; min-height: 0; }
 .dash-card {
   background: #fff; border: 1px solid #eceef1; border-radius: 10px; padding: 0.75rem 0.9rem;
   display: flex; flex-direction: column; min-height: 0; max-height: 100%; overflow: hidden;
@@ -98,9 +98,18 @@
   box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.35);
 }
 .rms-dash-filter-row {
-  display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: flex-end; width: 100%;
+  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; width: 100%;
 }
 .rms-dash-filter-row .field { flex: 0 1 9.5rem; min-width: 9.5rem; max-width: 9.5rem; }
+.rms-dash-filter-row .field.field-compact {
+  flex: 0 1 6.5rem; min-width: 6.5rem; max-width: 6.5rem;
+}
+.rms-dash-filter-row .field.field-date {
+  flex: 0 1 8rem; min-width: 8rem; max-width: 8rem;
+}
+.rms-dash-filter-row .field.field-job-dropdown {
+  flex: 1 1 10rem; min-width: 10rem; max-width: 12.5rem; position: relative;
+}
 .rms-stage-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 .rms-stage-table thead th {
   text-align: left; font-weight: 500; color: #98a2b3; padding: 0.35rem 0.5rem;
@@ -130,7 +139,11 @@
   padding-bottom: 9px;
 }
 .rms-job-stage-table .metric-with-rate { cursor: help; }
-.rms-dash-filter-row .field-job-dropdown { position: relative; }
+.rms-job-stage-table th.col-compact,
+.rms-job-stage-table td.col-compact {
+  width: 2.6rem; min-width: 2.6rem; max-width: 3rem;
+  text-align: center; padding-left: 0.3rem; padding-right: 0.3rem;
+}
 .rms-job-filter-control {
   position: relative; display: block; padding: 0; cursor: pointer;
   background-repeat: no-repeat;
@@ -182,7 +195,7 @@
 .rms-dash-filter-actions { display: flex; flex-direction: column; align-items: flex-start; }
 .rms-dash-filter-actions-btns { display: flex; gap: 0.4rem; align-items: center; height: 2.5rem; }
 .rms-dash-filter-actions-btns .tbtn {
-  min-width: 4.5rem; height: 2.5rem; padding: 0 0.85rem; flex: 0 0 auto;
+  min-width: 3.75rem; height: 2.5rem; padding: 0 0.65rem; flex: 0 0 auto;
 }
 .rms-filter-summary { font-size: 0.78rem; color: #6b7280; line-height: 1.6; }
 .rms-filter-summary dt { color: #98a2b3; display: inline; }
@@ -411,7 +424,7 @@
                     <template v-if="item.widget.widget_type === 'rms_block'">
                     <template v-if="item.block === 'filter'">
                         <div class="rms-dash-filter-row">
-                            <div class="field">
+                            <div class="field field-compact">
                                 <label>{{ clientFieldLabel }}</label>
                                 <select v-if="clientOptions.length" v-model="filters.client_id">
                                     <option value="">全部</option>
@@ -450,7 +463,15 @@
                                 </template>
                                 <input v-else v-model="filters.job_ids_text" placeholder="岗位ID，逗号分隔" />
                             </div>
-                            <div class="field">
+                            <div class="field field-compact">
+                                <label>城市</label>
+                                <select v-if="cityOptions.length" v-model="filters.city">
+                                    <option value="">全部</option>
+                                    <option v-for="c in cityOptions" :key="c" :value="c">{{ c }}</option>
+                                </select>
+                                <input v-else v-model="filters.city" placeholder="城市" />
+                            </div>
+                            <div class="field field-compact">
                                 <label>{{ deliveryFieldLabel }}</label>
                                 <select v-if="userOptions.length" v-model="filters.delivery_user_id">
                                     <option value="">全部</option>
@@ -458,7 +479,7 @@
                                 </select>
                                 <input v-else v-model="filters.delivery_user_id" type="number" placeholder="ID" />
                             </div>
-                            <div class="field">
+                            <div class="field field-compact">
                                 <label>{{ recruiterFieldLabel }}</label>
                                 <select v-if="userOptions.length" v-model="filters.recruiter_user_id">
                                     <option value="">全部</option>
@@ -466,8 +487,8 @@
                                 </select>
                                 <input v-else v-model="filters.recruiter_user_id" type="number" placeholder="ID" />
                             </div>
-                            <div class="field"><label>统计周期起</label><input v-model="filters.date_from" type="date" /></div>
-                            <div class="field"><label>统计周期止</label><input v-model="filters.date_to" type="date" /></div>
+                            <div class="field field-date"><label>统计周期起</label><input v-model="filters.date_from" type="date" /></div>
+                            <div class="field field-date"><label>统计周期止</label><input v-model="filters.date_to" type="date" /></div>
                             <div class="field rms-dash-filter-actions">
                                 <span class="rms-dash-filter-actions-spacer" aria-hidden="true">占位</span>
                                 <div class="rms-dash-filter-actions-btns">
@@ -568,27 +589,29 @@
                         <p v-else class="state-msg">暂无数据</p>
                     </template>
 
-                    <!-- 历史数据 -->
+                    <!-- 客户岗位阶段统计 -->
                     <template v-else-if="item.block === 'table_client_job_stage'">
                         <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
                         <div v-else class="rms-job-stage-scroll">
                             <table class="rms-job-stage-table">
                                 <thead><tr>
-                                    <th>时间</th><th>岗位</th><th>需求数量</th><th>地点</th>
-                                    <th>推送简历量</th><th>内筛通过</th><th>重复</th><th>待客户筛选</th>
-                                    <th>客筛通过</th><th>放弃面试</th><th>待面试</th><th>已面试</th><th>面试通过</th>
-                                    <th>offer在谈</th><th>弃offer</th><th>在途数</th><th>在途流失</th><th>入职数</th>
+                                    <th>时间</th><th>客户</th><th>岗位</th><th class="col-compact">HC</th><th>地点</th>
+                                    <th class="col-compact">简历数</th><th>内筛通过</th><th>重复</th><th class="col-compact">待客筛</th>
+                                    <th>约面中</th><th>客筛通过</th><th>放弃面试</th><th>待面试</th><th>已面试</th><th>面试通过</th>
+                                    <th>待offer</th><th>弃offer</th><th>在途</th><th>在途流失</th><th>已入职</th>
                                 </tr></thead>
                                 <tbody v-if="clientJobStageRows.length">
                                     <tr v-for="row in clientJobStageRows" :key="row.job_id">
                                         <td>{{ clientJobStagePeriodLabel }}</td>
+                                        <td>{{ row.client_name || '—' }}</td>
                                         <td>{{ row.job_title }}</td>
-                                        <td>{{ row.headcount }}</td>
+                                        <td class="col-compact">{{ row.headcount }}</td>
                                         <td>{{ row.location || '—' }}</td>
-                                        <td>{{ row.pushed_resume_count }}</td>
+                                        <td class="col-compact">{{ row.pushed_resume_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'internal_screen_passed', 'pushed_resume_count', '内筛通过')">{{ jobStageMetricText(row, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(row, 'duplicate_count', 'duplicate_count_rate') }}</td>
-                                        <td>{{ row.pending_client_screen }}</td>
+                                        <td class="col-compact">{{ row.pending_client_screen }}</td>
+                                        <td>{{ row.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(row, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(row, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
                                         <td>{{ row.pending_interview }}</td>
@@ -604,11 +627,13 @@
                                         <td>{{ clientJobStagePeriodLabel }}</td>
                                         <td>合计</td>
                                         <td>—</td>
+                                        <td class="col-compact">—</td>
                                         <td>—</td>
-                                        <td>{{ clientJobStageTotal.pushed_resume_count }}</td>
+                                        <td class="col-compact">{{ clientJobStageTotal.pushed_resume_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'internal_screen_passed', 'pushed_resume_count', '内筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(clientJobStageTotal, 'duplicate_count', 'duplicate_count_rate') }}</td>
-                                        <td>{{ clientJobStageTotal.pending_client_screen }}</td>
+                                        <td class="col-compact">{{ clientJobStageTotal.pending_client_screen }}</td>
+                                        <td>{{ clientJobStageTotal.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(clientJobStageTotal, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
                                         <td>{{ clientJobStageTotal.pending_interview }}</td>
@@ -622,7 +647,7 @@
                                     </tr>
                                 </tbody>
                                 <tbody v-else>
-                                    <tr><td colspan="18" class="state-msg">暂无数据</td></tr>
+                                    <tr><td colspan="20" class="state-msg">暂无数据</td></tr>
                                 </tbody>
                             </table>
                         </div>
