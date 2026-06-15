@@ -877,7 +877,7 @@ def test_rms_dashboard_twenty_shell():
         "花名册核对",
         "table_lifecycle_detail",
         "/static/js/pages/rms-dashboard.js",
-        "rms-dashboard-twenty-12",
+        "rms-dashboard-job-filter-apply-20260615",
         "dashboard-widget-kit.js",
         "inspector-section",
         "inspector-row",
@@ -961,6 +961,8 @@ def test_rms_dashboard_twenty_shell():
         "renderClientJobStageFunnelChart",
         "lifecycleRows",
         "lifecycleFunnel",
+        "confirmJobFilter",
+        "appliedFilters.job_ids",
         "resumeCount",
         "renderPendingBacklogChart",
         "renderLifecycleFunnelChart",
@@ -970,6 +972,8 @@ def test_rms_dashboard_twenty_shell():
         "activeWidgetId",
     ):
         assert js_required in js, f"missing {js_required!r} in rms-dashboard.js"
+
+    assert "function confirmJobFilter() {\n          return applyFilters();" in js
 
     for js_forbidden in (
         "entered - passed - failed",

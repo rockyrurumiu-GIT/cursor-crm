@@ -294,6 +294,66 @@ def test_dashboard_job_ids_multi_select(client_rbac, admin_auth, rms_engine, uni
     assert row_ids == {int(job_a), int(job_b_id)}
 
 
+def test_dashboard_lifecycle_funnel_respects_job_ids(client_rbac, admin_auth, rms_engine, uniq):
+    login, job_a = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"lfa_{uniq}")
+    job_a_body = client_rbac.get(f"/api/rms/jobs/{job_a}", cookies=login.cookies).json()
+    admin_user, admin_pwd = admin_auth
+    job_b = client_rbac.post(
+        "/api/rms/jobs",
+        headers=auth_header(admin_user, admin_pwd),
+        json={
+            "client_id": job_a_body["client_id"],
+            "title": f"Job B {uniq}",
+            "owner_user_id": job_a_body["owner_user_id"],
+            "delivery_owner_user_id": job_a_body["delivery_owner_user_id"],
+        },
+    )
+    assert job_b.status_code == 200, job_b.text
+    job_b_id = job_b.json()["id"]
+    job_c = client_rbac.post(
+        "/api/rms/jobs",
+        headers=auth_header(admin_user, admin_pwd),
+        json={
+            "client_id": job_a_body["client_id"],
+            "title": f"Job C {uniq}",
+            "owner_user_id": job_a_body["owner_user_id"],
+            "delivery_owner_user_id": job_a_body["delivery_owner_user_id"],
+        },
+    )
+    assert job_c.status_code == 200, job_c.text
+    job_c_id = job_c.json()["id"]
+    for job_id, name in (
+        (job_a, "Cand A"),
+        (job_b_id, "Cand B"),
+        (job_c_id, "Cand C"),
+    ):
+        cand = client_rbac.post(
+            "/api/rms/candidates",
+            cookies=login.cookies,
+            json=_candidate_json(job_id, name=name),
+        )
+        assert cand.status_code == 200, cand.text
+        app = client_rbac.post(
+            "/api/rms/applications",
+            cookies=login.cookies,
+            json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+        )
+        assert app.status_code == 200, app.text
+
+    all_r = client_rbac.get("/api/rms/dashboard", cookies=login.cookies)
+    assert all_r.status_code == 200, all_r.text
+    all_base = all_r.json()["lifecycle_funnel"]["base_count"]
+
+    filtered_r = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_a},{job_b_id}",
+        cookies=login.cookies,
+    )
+    assert filtered_r.status_code == 200, filtered_r.text
+    filtered_base = filtered_r.json()["lifecycle_funnel"]["base_count"]
+    assert filtered_base == 2
+    assert filtered_base < all_base
+
+
 def test_dashboard_client_job_stage_client_filter(client_rbac, admin_auth, rms_engine, uniq):
     login_a, job_a = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"ca_{uniq}")
     login_b, job_b = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"cb_{uniq}")
@@ -1435,6 +1495,83 @@ def test_rms_dashboard_lifecycle_funnel_rates(client_rbac, admin_auth, rms_engin
         assert row["processed"] == row["entered"] - row["pending"]
 
 
+def test_lifecycle_funnel_internal_screen_entered_matches_resume_count(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """内审路径跳过 pending_internal_screen；漏斗「进入」应链式等于简历数。"""
+    from sqlalchemy import text
+
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"lfis_{uniq}")
+    app_ids: list[int] = []
+    for i in range(4):
+        cand = client_rbac.post(
+            "/api/rms/candidates",
+            cookies=login.cookies,
+            json=_candidate_json(job_id, name=f"Lfis {i} {uniq}"),
+        )
+        assert cand.status_code == 200, cand.text
+        app = client_rbac.post(
+            "/api/rms/applications",
+            cookies=login.cookies,
+            json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+        )
+        assert app.status_code == 200, app.text
+        app_ids.append(int(app.json()["id"]))
+
+    period_day = "2026-06-14"
+    with rms_engine.begin() as conn:
+        for app_id in app_ids:
+            conn.execute(
+                text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+                {"d": period_day, "id": app_id},
+            )
+
+    for app_id in app_ids[:2]:
+        r = client_rbac.post(
+            f"/api/rms/applications/{app_id}/delivery-review",
+            cookies=login.cookies,
+            json={"result": "passed", "note": ""},
+        )
+        assert r.status_code == 200, r.text
+    for app_id in app_ids[2:]:
+        r = client_rbac.post(
+            f"/api/rms/applications/{app_id}/delivery-review",
+            cookies=login.cookies,
+            json={"result": "failed", "note": "不符"},
+        )
+        assert r.status_code == 200, r.text
+
+    with rms_engine.begin() as conn:
+        for app_id in app_ids:
+            conn.execute(
+                text(
+                    "UPDATE rms_application_status_history "
+                    "SET changed_at = :d WHERE application_id = :id"
+                ),
+                {"d": period_day, "id": app_id},
+            )
+
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    lf = dash.json()["lifecycle_funnel"]
+    assert lf["base_count"] == 4
+    internal = next(row for row in lf["rows"] if row["key"] == "internal_screen")
+    assert internal["entered"] == 4
+    assert internal["passed"] == 2
+    assert internal["failed"] == 2
+    assert internal["processed"] == 4
+    assert internal["pass_rate"] == "50.0%"
+
+    hist_internal = next(
+        s for s in dash.json()["historical_overview"][0]["stages"]
+        if s["stage"] == "internal_screen"
+    )
+    assert hist_internal["entered"] == 0
+
+
 def test_rms_dashboard_recruiter_recommended_count(client_rbac, admin_auth, rms_engine, uniq):
     login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"rec_{uniq}")
     cand = client_rbac.post(
@@ -1603,6 +1740,10 @@ def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(
     row = _job_row(r.json()["client_job_stage_summary"], job_id)
     assert row["interviewed"] == 1
     assert row["interview_passed"] == 1
+    first_before = next(
+        s for s in r.json()["lifecycle_funnel"]["rows"] if s["key"] == "first_interview"
+    )
+    assert first_before["passed"] == 1
 
     corr = client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
@@ -1621,6 +1762,12 @@ def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(
     assert row["interviewed"] == 0
     assert row["interview_passed"] == 0
     assert row["pending_interview"] == 1
+
+    first_interview = next(
+        s for s in r.json()["lifecycle_funnel"]["rows"] if s["key"] == "first_interview"
+    )
+    assert first_interview["passed"] == 0
+    assert first_interview["pass_rate_value"] is None or first_interview["pass_rate_value"] <= 100
 
 
 def test_rms_dashboard_metrics_6a2b(client_rbac, admin_auth, rms_engine, uniq):

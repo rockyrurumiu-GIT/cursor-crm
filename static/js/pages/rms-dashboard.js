@@ -530,7 +530,7 @@
         var jobFilterSummary = computed(function () {
           var selected = jobFilterDropdownOpen.value
             ? jobIdsDraft.value
-            : (Array.isArray(filters.job_ids) ? filters.job_ids : []);
+            : (Array.isArray(appliedFilters.job_ids) ? appliedFilters.job_ids : []);
           if (!selected.length) return "全部";
           if (selected.length === 1) {
             var job = jobOptions.value.find(function (j) { return String(j.id) === String(selected[0]); });
@@ -562,8 +562,7 @@
         }
 
         function confirmJobFilter() {
-          filters.job_ids = jobIdsDraft.value.slice();
-          jobFilterDropdownOpen.value = false;
+          return applyFilters();
         }
 
         function jobFilterRootContains(target) {

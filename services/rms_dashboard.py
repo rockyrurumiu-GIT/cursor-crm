@@ -130,6 +130,12 @@ _CLIENT_SCREEN_PASSED_STATUSES = _statuses_from("scheduling_interview")
 _INTERVIEWED_CURRENT_STATUSES = _statuses_from("first_interview_passed") | frozenset({
     "first_interview_failed",
 })
+# 生命周期/历史各面试阶段「通过」：周期内曾到达该阶段 pass 节点，且当前仍在该 pass 节点之后。
+_STAGE_PASS_CURRENT_GUARD = {
+    "first_interview": _statuses_from("first_interview_passed"),
+    "second_interview": _statuses_from("second_interview_passed"),
+    "final_interview": _statuses_from("pending_offer"),
+}
 
 
 def _utc_today() -> date:
@@ -262,6 +268,23 @@ def _app_counts_as_interview_passed(
     ):
         return False
     return _status_at(app, histories, snapshot_as_of) in _INTERVIEW_PASSED_STATUSES
+
+
+def _app_counts_as_stage_passed(
+    app: Any,
+    histories: List[Any],
+    stage_key: str,
+    pass_status: str,
+    date_from: str,
+    date_to: str,
+    snapshot_as_of: Optional[str],
+) -> bool:
+    if not _app_had_transition_to_in_period(histories, pass_status, date_from, date_to):
+        return False
+    guard = _STAGE_PASS_CURRENT_GUARD.get(stage_key)
+    if guard is None:
+        return True
+    return _status_at(app, histories, snapshot_as_of) in guard
 
 
 def _filter_applications_query(
@@ -429,7 +452,9 @@ def _historical_overview(
             histories = hist_map.get(app.id, [])
             if _app_had_transition_to_in_period(histories, enter_status, date_from, date_to):
                 entered += 1
-            if _app_had_transition_to_in_period(histories, pass_status, date_from, date_to):
+            if _app_counts_as_stage_passed(
+                app, histories, stage_key, pass_status, date_from, date_to, snapshot_as_of
+            ):
                 passed += 1
             if _app_had_transition_in_period(histories, fail_set, date_from, date_to):
                 failed += 1
@@ -705,6 +730,7 @@ def _lifecycle_funnel(
     stage_by_key = {str(s.get("stage") or ""): s for s in (block.get("stages") or [])}
 
     rows: List[Dict[str, Any]] = []
+    prev_entered = resume_count
     for stage_key, label in _LIFECYCLE_FUNNEL_SPECS:
         if stage_key == "resume":
             rows.append({
@@ -719,14 +745,15 @@ def _lifecycle_funnel(
                 "pass_rate_value": None,
                 "funnel_count": resume_count,
             })
+            prev_entered = resume_count
             continue
         stage = stage_by_key.get(stage_key) or {}
-        entered = int(stage.get("entered") or 0)
         passed = int(stage.get("passed") or 0)
         failed = int(stage.get("failed") or 0)
         pending = int(stage.get("pending_count") or 0)
-        processed = int(stage.get("denominator") or 0)
-        pass_rate = str(stage.get("pass_rate") or "—")
+        entered = prev_entered
+        processed = entered - pending
+        pass_rate = _rate(passed, processed)
         rows.append({
             "key": stage_key,
             "label": label,
@@ -739,6 +766,7 @@ def _lifecycle_funnel(
             "pass_rate_value": _parse_rate_value(pass_rate),
             "funnel_count": passed,
         })
+        prev_entered = passed
 
     hired_stage = stage_by_key.get("hired_summary") or {}
     hired_count = int(hired_stage.get("passed") or 0)
