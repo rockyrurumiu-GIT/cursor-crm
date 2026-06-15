@@ -34,6 +34,22 @@
     abandoned: "#CD9180",
   };
 
+  var RMS_CHART_GRID_COLOR = "rgba(208, 215, 222, 0.45)";
+  var RMS_CHART_TICK_COLOR = "#8c959f";
+  var RMS_CHART_LABEL_COLOR = "#24292f";
+  var RMS_CHART_BAR_RADIUS = 8;
+  var RMS_CHART_BAR_THICKNESS = 28;
+  var RMS_PRESET_PALETTE = [
+    "#8EA4C1",
+    "#9AB39F",
+    "#D2AA6A",
+    "#C69383",
+    "#9B93B7",
+    "#A8B5C6",
+    "#A3B8A8",
+    "#D8C08A",
+  ];
+
   function truncateJobLabel(title, maxLen) {
     var t = String(title || "").trim() || "—";
     maxLen = maxLen || 10;
@@ -204,7 +220,7 @@
   }
 
   function rmsShadeRamp(n) {
-    return ["#7B96B8", "#88A992", "#D6A461", "#CD9180", "#9389AE", "#9AA0A6", "#B4C4D8", "#C2D4C8"].slice(0, Math.max(1, n)).concat();
+    return RMS_PRESET_PALETTE.slice(0, Math.max(1, n)).concat();
   }
 
   function parsePassRate(rateStr) {
@@ -213,27 +229,32 @@
     return Number.isFinite(n) ? n : 0;
   }
 
-  function horizontalBarOptions(prefix) {
+  function horizontalBarOptions(prefix, suffix) {
+    prefix = prefix != null ? String(prefix) : "";
+    suffix = suffix != null ? String(suffix) : "";
     return {
       responsive: true,
       maintainAspectRatio: false,
       indexAxis: "y",
+      animation: { duration: 250 },
       plugins: {
         legend: { display: false },
         datalabels: { display: false },
-        tooltip: whiteTooltip(function (c) { return prefix + String(c.parsed.x); }),
+        tooltip: whiteTooltip(function (c) {
+          return prefix + String(c.parsed.x) + suffix;
+        }),
       },
       scales: {
         x: {
           beginAtZero: true,
-          grid: { color: "#f2f3f5" },
+          grid: { color: RMS_CHART_GRID_COLOR, drawBorder: false },
           border: { display: false },
-          ticks: { color: "#8f949b", font: { size: 10 }, precision: 0 },
+          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 }, precision: 0 },
         },
         y: {
-          grid: { display: false },
+          grid: { display: false, drawBorder: false },
           border: { display: false },
-          ticks: { color: "#8f949b", font: { size: 10 } },
+          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 } },
         },
       },
     };
@@ -1250,8 +1271,10 @@
                 datasets: [{
                   data: items.map(function (x) { return x.count; }),
                   backgroundColor: rmsShadeRamp(items.length),
-                  borderRadius: 6,
+                  borderRadius: RMS_CHART_BAR_RADIUS,
+                  maxBarThickness: 34,
                   barPercentage: 0.72,
+                  categoryPercentage: 0.68,
                 }],
               },
               options: horizontalBarOptions(""),
@@ -1276,7 +1299,7 @@
                   barPercentage: 0.72,
                 }],
               },
-              options: horizontalBarOptions("%"),
+              options: horizontalBarOptions("", "%"),
             });
           });
         }
@@ -1471,8 +1494,10 @@
                 datasets: [{
                   data: rows.map(function (r) { return r.count || 0; }),
                   backgroundColor: rmsShadeRamp(rows.length),
-                  borderRadius: 6,
+                  borderRadius: RMS_CHART_BAR_RADIUS,
+                  maxBarThickness: 34,
                   barPercentage: 0.72,
+                  categoryPercentage: 0.68,
                 }],
               },
               options: horizontalBarOptions(emptyLabel || ""),
@@ -1523,11 +1548,13 @@
                 datasets: [{
                   data: rows.map(function (r) { return r.pass_rate_value; }),
                   backgroundColor: rmsShadeRamp(rows.length),
-                  borderRadius: 6,
-                  barPercentage: 0.62,
+                  borderRadius: RMS_CHART_BAR_RADIUS,
+                  maxBarThickness: 34,
+                  barPercentage: 0.72,
+                  categoryPercentage: 0.68,
                 }],
               },
-              options: groupedBarOptions("%"),
+              options: horizontalBarOptions("", "%"),
             });
           });
         }
@@ -1557,18 +1584,22 @@
                   {
                     label: "推荐量",
                     data: rows.map(function (r) { return r.recommended_count || 0; }),
-                    backgroundColor: "#7B96B8",
-                    borderRadius: 4,
+                    backgroundColor: RMS_PRESET_PALETTE[0],
+                    borderRadius: 6,
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.68,
                   },
                   {
                     label: "入职数",
                     data: rows.map(function (r) { return r.hired_count != null ? r.hired_count : (r.hired_this_month || 0); }),
-                    backgroundColor: "#5B8A72",
-                    borderRadius: 4,
+                    backgroundColor: RMS_PRESET_PALETTE[1],
+                    borderRadius: 6,
+                    barPercentage: 0.72,
+                    categoryPercentage: 0.68,
                   },
                 ],
               },
-              options: groupedBarOptions(""),
+              options: groupedBarOptions(),
             });
           });
         }

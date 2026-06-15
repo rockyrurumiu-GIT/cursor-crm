@@ -856,6 +856,10 @@ def test_rms_dashboard_twenty_shell():
     html = (REPO_ROOT / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
     js = (REPO_ROOT / "static/js/pages/rms-dashboard.js").read_text(encoding="utf-8")
 
+    assert "RMS_PRESET_PALETTE" in js
+    assert "RMS_CHART_BAR_RADIUS" in js
+    assert "RMS_CHART_GRID_COLOR" in js
+
     for required in (
         "dash-root",
         "dash-top-bar",
