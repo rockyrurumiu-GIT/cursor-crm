@@ -108,9 +108,9 @@ def test_rms_frontend_js_assets_exist():
     assert "r3a-20260614" not in rms_html
     assert "r3b-20260614" not in rms_html
     assert "r3c-20260614" not in rms_html
-    assert rms_html.count("r3c2-20260614") == 10
-    assert "rms-delivery-review.js?v=r3c2-20260614" in rms_html
-    assert "rms-roster-conversion.js?v=r3c2-20260614" in rms_html
+    assert rms_html.count("r3c3-pipeline-terminal-20260615") == 10
+    assert "rms-delivery-review.js?v=r3c3-pipeline-terminal-20260615" in rms_html
+    assert "rms-roster-conversion.js?v=r3c3-pipeline-terminal-20260615" in rms_html
 
     for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError"):
         assert sym in core_src, f"missing core symbol: {sym}"
@@ -215,6 +215,7 @@ def test_rms_frontend_js_assets_exist():
     assert "createPipelineState" in pipeline_src
     assert "CrmRmsPipeline.createPipelineState" in rms_src
     assert "...pipeline" in rms_src
+    assert "pipelineRowIsTerminal: pipeline.pipelineRowIsTerminal || function" in rms_src
     assert "RMS Pipeline 模块未加载" in rms_src
 
     for sym in (
@@ -551,6 +552,30 @@ if (withTerminal.length !== 2) {{
   console.error("include terminal: got " + withTerminal.length);
   process.exit(1);
 }}
+const drFail = {{ receive_status: "pending", delivery_review_status: "failed", status: "internal_screen_failed", job_id: 1, client_id: 10, recommended_at: "2026-06-07" }};
+const manualFail = {{ receive_status: "accepted", delivery_review_status: "passed", status: "internal_screen_failed", job_id: 1, client_id: 10, recommended_at: "2026-06-08" }};
+const activeOnlyRows = L.filterPipelineApplications([ok, drFail, manualFail], {{
+  filters: {{ activeOnly: true }},
+  getJobs: () => [{{ id: 1, location: "上海", client_id: 10 }}],
+  getCandidates: () => [],
+  getUsers: () => [],
+  clientNameById: () => "ACME",
+}});
+if (activeOnlyRows.length !== 1 || activeOnlyRows[0].status !== "pending_client_screen") {{
+  console.error("activeOnly excludes terminal fails: got " + JSON.stringify(activeOnlyRows.map(r => r.status)));
+  process.exit(1);
+}}
+const includeFails = L.filterPipelineApplications([ok, drFail, manualFail], {{
+  filters: {{ activeOnly: false }},
+  getJobs: () => [{{ id: 1, location: "上海", client_id: 10 }}],
+  getCandidates: () => [],
+  getUsers: () => [],
+  clientNameById: () => "ACME",
+}});
+if (includeFails.length !== 3) {{
+  console.error("activeOnly false includes terminal fails: got " + JSON.stringify(includeFails.map(r => r.status)));
+  process.exit(1);
+}}
 const opts = L.progressOptionsForCorrection("first_interview_passed");
 if (opts.some(o => o.value === "rejected" || o.value === "withdrawn")) {{
   console.error("correction options must not include rejected/withdrawn");
@@ -757,8 +782,11 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert ">修改</button>" in pipe_region
     assert ">历史</button>" in pipe_region
     assert "只看活动状态" in pipe_region
+    assert "rms-pipeline-row--terminal" in pipe_region
     rms_src = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
     pipeline_js = (REPO_ROOT / "static/js/pages/rms-pipeline.js").read_text(encoding="utf-8")
+    assert "pipelineRowIsTerminal" in pipeline_js
+    assert "pipelineRowIsTerminal: pipeline.pipelineRowIsTerminal || function" in rms_src
     applications_js = (REPO_ROOT / "static/js/pages/rms-applications.js").read_text(encoding="utf-8")
     assert "openProgressConfirmModal" in pipeline_js
     assert "progressOptionsForCorrection" in pipeline_js
@@ -773,6 +801,7 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "pipelineStatusMatches" in pipeline_js
     labels_src = (REPO_ROOT / "static/js/pages/rms-application-labels.js").read_text(encoding="utf-8")
     assert "statusMatchesFilter" in labels_src
+    assert "isPipelineListRow" in labels_src
     assert ">确定</button>" in pipe_region
     base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
     assert "crmConfirmActionDialog" in base_html

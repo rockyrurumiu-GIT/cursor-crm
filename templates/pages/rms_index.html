@@ -411,6 +411,10 @@
         justify-content: flex-start;
         overflow: visible;
     }
+    .crm-table[data-table-id="rms-pipeline"] tbody tr.rms-pipeline-row--terminal td {
+        background: #f6f8fa;
+        color: #57606a;
+    }
     .rms-progress-btn {
         display: inline-flex;
         align-items: center;
@@ -1221,7 +1225,8 @@
                     合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredPipelineApplications.length }}</span> 条
                 </p>
                 <div class="flex flex-wrap items-center gap-2">
-                    <label class="crm-filter-item crm-filter-reset inline-flex items-center gap-1.5 cursor-pointer">
+                    <label class="crm-filter-item crm-filter-reset inline-flex items-center gap-1.5 cursor-pointer"
+                           title="默认仅显示活动态；取消勾选后包含内筛 fail、客筛 fail 等终态">
                         <input v-model="pipelineFilter.activeOnly" type="checkbox" class="rounded border-[#d0d7de]" />
                         <span>只看活动状态</span>
                     </label>
@@ -1312,7 +1317,8 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="a in filteredPipelineApplications" :key="'pl'+a.id">
+                    <tr v-for="a in filteredPipelineApplications" :key="'pl'+a.id"
+                        :class="{ 'rms-pipeline-row--terminal': pipelineRowIsTerminal(a.status) }">
                         <td class="crm-td crm-name-cell rms-candidate-sticky-name">{{ appCandidateName(a) }}</td>
                         <td class="crm-td">{{ appClientName(a) }}</td>
                         <td class="crm-td">{{ appJobTitle(a) }}</td>
@@ -1934,14 +1940,14 @@
 <script src="/static/js/vendor/vue.global.prod.js"></script>
 <script src="/static/js/core/crm-api.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
-<script src="/static/js/pages/rms-application-labels.js?v=r3c2-20260614"></script>
-<script src="/static/js/pages/rms-core.js?v=r3c2-20260614"></script>
-<script src="/static/js/pages/rms-candidate-report.js?v=r3c2-20260614"></script>
-<script src="/static/js/pages/rms-jobs.js?v=r3c2-20260614"></script>
-<script src="/static/js/pages/rms-candidates.js?v=r3c2-20260614"></script>
-<script src="/static/js/pages/rms-applications.js?v=r3c2-20260614"></script>
-<script src="/static/js/pages/rms-pipeline.js?v=r3c2-20260614"></script>
-<script src="/static/js/pages/rms-delivery-review.js?v=r3c2-20260614"></script>
-<script src="/static/js/pages/rms-roster-conversion.js?v=r3c2-20260614"></script>
-<script src="/static/js/pages/rms.js?v=r3c2-20260614"></script>
+<script src="/static/js/pages/rms-application-labels.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-core.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-candidate-report.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-jobs.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-candidates.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-applications.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-pipeline.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-delivery-review.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-roster-conversion.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms.js?v=r3c3-pipeline-terminal-20260615"></script>
 {% endblock %}

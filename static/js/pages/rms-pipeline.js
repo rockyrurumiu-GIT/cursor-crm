@@ -314,6 +314,9 @@
       submitProgressConfirm: submitProgressConfirm,
       progressLabel: progressLabel,
       progressTransitionsFor: progressTransitionsFor,
+      pipelineRowIsTerminal: function (status) {
+        return Labels.isApplicationTerminal ? Labels.isApplicationTerminal(status) : false;
+      },
     };
   }
 

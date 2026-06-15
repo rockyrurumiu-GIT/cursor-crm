@@ -200,6 +200,17 @@
     return !!PROGRESS_TERMINAL[s] || s === "rejected" || s === "withdrawn";
   }
 
+  /** Pipeline 列表是否展示该推荐（activeOnly 时仅活动态；否则含终态）。 */
+  function isPipelineListRow(app, activeOnly) {
+    if (!app) return false;
+    if (isPipelineEligible(app)) {
+      if (activeOnly && isApplicationTerminal(app.status)) return false;
+      return true;
+    }
+    if (activeOnly) return false;
+    return filterProgressStatus(app.status) === "internal_screen_failed";
+  }
+
   function matchTextFilter(label, query) {
     var q = (query || "").trim().toLowerCase();
     if (!q) return true;
@@ -240,21 +251,9 @@
     var list = Array.isArray(items) ? items : [];
     var out = [];
     var activeOnly = filters.activeOnly !== false;
-    var statusListEarly = filters.statuses;
-    if (!Array.isArray(statusListEarly)) {
-      statusListEarly = filters.status !== "" && filters.status != null ? [filters.status] : [];
-    }
-    var hasStatusFilter = false;
-    for (var se = 0; se < statusListEarly.length; se++) {
-      if (String(statusListEarly[se] == null ? "" : statusListEarly[se]).trim()) {
-        hasStatusFilter = true;
-        break;
-      }
-    }
     for (var i = 0; i < list.length; i++) {
       var a = list[i];
-      if (!isPipelineEligible(a)) continue;
-      if (activeOnly && !hasStatusFilter && isApplicationTerminal(a.status)) continue;
+      if (!isPipelineListRow(a, activeOnly)) continue;
       if (filters.client_id !== "" && filters.client_id != null) {
         var wantClient = Number(filters.client_id);
         var appClient = resolveApplicationClientId(a, getJobs);
@@ -424,6 +423,7 @@
     userLabelById: userLabelById,
     createAppDisplayHelpers: createAppDisplayHelpers,
     isPipelineEligible: isPipelineEligible,
+    isPipelineListRow: isPipelineListRow,
     isApplicationTerminal: isApplicationTerminal,
     filterPipelineApplications: filterPipelineApplications,
     filterProgressStatus: filterProgressStatus,

@@ -532,6 +532,9 @@
         modalCloseLabel,
         modalShowSave,
         ...pipeline,
+        pipelineRowIsTerminal: pipeline.pipelineRowIsTerminal || function (status) {
+          return Labels.isApplicationTerminal ? Labels.isApplicationTerminal(status) : false;
+        },
         ...deliveryReview,
         ...rosterConversion,
         educationOptions: EDUCATION_OPTIONS,
