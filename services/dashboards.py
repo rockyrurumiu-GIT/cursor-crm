@@ -323,6 +323,59 @@ def _axis_labels(source_key: str, config: dict) -> Tuple[str, str]:
     return x_label, y_label
 
 
+RMS_PRESET_STYLE_BLOCKS: FrozenSet[str] = frozenset({
+    "chart_pipeline",
+    "chart_pending_backlog",
+    "chart_lifecycle_pass_rate",
+    "chart_job_pending_backlog",
+    "chart_client_hired_ranking",
+    "chart_recruiter_recommend_vs_hired",
+})
+RMS_PRESET_STYLE_KEYS: FrozenSet[str] = frozenset({
+    "color", "color_shade", "sort", "show_grid", "bar_radius", "max_items", "show_values", "palette",
+})
+RMS_LEGACY_PRESET_PALETTE: Dict[str, str] = {
+    "green_3": "green",
+    "blue_3": "blue",
+    "orange_3": "orange",
+    "gray_3": "gray",
+}
+RMS_PRESET_SORT_VALUES: FrozenSet[str] = frozenset({"value_desc", "value_asc", "original"})
+
+
+def _clamp_int(value: Any, lo: int, hi: int, default: int) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    if n < lo or n > hi:
+        return default
+    return n
+
+
+def _sanitize_rms_preset_style(raw: dict) -> dict:
+    if not isinstance(raw, dict):
+        raw = {}
+    color = raw.get("color")
+    if not color or color not in CHART_COLORS:
+        color = RMS_LEGACY_PRESET_PALETTE.get(raw.get("palette"), DEFAULT_COLOR)
+        if color not in CHART_COLORS:
+            color = DEFAULT_COLOR
+    color_shade = _clamp_int(raw.get("color_shade"), 0, 4, DEFAULT_COLOR_SHADE)
+    sort = raw.get("sort", "value_desc")
+    if sort not in RMS_PRESET_SORT_VALUES:
+        sort = "value_desc"
+    return {
+        "color": color,
+        "color_shade": color_shade,
+        "sort": sort,
+        "show_grid": bool(raw.get("show_grid", True)),
+        "show_values": bool(raw.get("show_values", False)),
+        "bar_radius": _clamp_int(raw.get("bar_radius"), 4, 16, 8),
+        "max_items": _clamp_int(raw.get("max_items"), 3, 20, 8),
+    }
+
+
 def validate_widget_config(
     widget_type: str,
     source_key: str,
@@ -354,7 +407,10 @@ def validate_widget_config(
         block = (config.get("block") or "").strip()
         if block not in RMS_BLOCK_KEYS:
             raise HTTPException(status_code=400, detail=f"未知 RMS 组件: {block}")
-        return {"block": block}
+        out: dict = {"block": block}
+        if block in RMS_PRESET_STYLE_BLOCKS and isinstance(config.get("style"), dict):
+            out["style"] = _sanitize_rms_preset_style(config["style"])
+        return out
 
     if widget_type not in DATA_WIDGET_TYPES:
         raise HTTPException(status_code=400, detail=f"widget 类型不支持数据配置: {widget_type}")
@@ -1748,6 +1804,7 @@ def seed_default_dashboards(
     _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _cleanup_rms_obsolete_seed_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_tab_ia_v2(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _backfill_missing_rms_tab_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_client_job_stage_title(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_filter_block_height(db, DashboardDashboard, DashboardTab, DashboardWidget)
 
@@ -2028,6 +2085,54 @@ def _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidg
                 continue
             _seed_rms_tab_widgets(db, t.id, template, DashboardWidget, now)
             changed = True
+    if changed:
+        db.commit()
+
+
+def _backfill_missing_rms_tab_widgets(
+    db,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+) -> None:
+    """Add missing template widgets to system RMS tabs without removing user widgets."""
+    changed = False
+    now = _now()
+    dashboards = db.query(DashboardDashboard).filter(DashboardDashboard.scope == "rms").all()
+    for d in dashboards:
+        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
+        for tab in tabs:
+            if not _is_rms_system_tab(tab):
+                continue
+            template = _rms_tab_template(tab)
+            specs = _RMS_TEMPLATE_WIDGETS.get(template) or []
+            if not specs:
+                continue
+            widgets = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).all()
+            existing_blocks = {_widget_block(w) for w in widgets}
+            sort_base = max((int(w.sort_order or 0) for w in widgets), default=-1) + 1
+            add_idx = 0
+            for spec in specs:
+                block = (spec.get("config") or {}).get("block") or ""
+                if not block or block in existing_blocks:
+                    continue
+                db.add(DashboardWidget(
+                    tab_id=tab.id,
+                    title=spec["title"],
+                    widget_type=spec["widget_type"],
+                    source_key=spec.get("source_key") or "",
+                    config_json=_dump_json(spec.get("config") or {}),
+                    x=spec["x"],
+                    y=spec["y"],
+                    w=spec["w"],
+                    h=spec["h"],
+                    sort_order=sort_base + add_idx,
+                    created_at=now,
+                    updated_at=now,
+                ))
+                existing_blocks.add(block)
+                add_idx += 1
+                changed = True
     if changed:
         db.commit()
 

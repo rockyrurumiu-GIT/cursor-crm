@@ -50,6 +50,101 @@
     "#D8C08A",
   ];
 
+  var RMS_PRESET_STYLE_BLOCKS = {
+    chart_pipeline: true,
+    chart_pending_backlog: true,
+    chart_lifecycle_pass_rate: true,
+    chart_job_pending_backlog: true,
+    chart_client_hired_ranking: true,
+    chart_recruiter_recommend_vs_hired: true,
+  };
+
+  var RMS_LEGACY_PALETTE_MAP = {
+    green_3: { color: "green", color_shade: 2 },
+    blue_3: { color: "blue", color_shade: 2 },
+    orange_3: { color: "orange", color_shade: 2 },
+    gray_3: { color: "gray", color_shade: 2 },
+  };
+
+  function isRmsPresetStyleBlock(block) {
+    return !!RMS_PRESET_STYLE_BLOCKS[block];
+  }
+
+  function migrateLegacyPresetStyle(saved) {
+    var out = Object.assign({}, saved || {});
+    if (!out.color && out.palette && RMS_LEGACY_PALETTE_MAP[out.palette]) {
+      out.color = RMS_LEGACY_PALETTE_MAP[out.palette].color;
+      out.color_shade = RMS_LEGACY_PALETTE_MAP[out.palette].color_shade;
+    }
+    delete out.palette;
+    return out;
+  }
+
+  function defaultRmsPresetStyle(block) {
+    return {
+      color: "green",
+      color_shade: 2,
+      sort: "value_desc",
+      show_values: false,
+      show_grid: true,
+      bar_radius: RMS_CHART_BAR_RADIUS,
+      max_items: 8,
+    };
+  }
+
+  function rmsPresetStyle(config, block) {
+    var base = defaultRmsPresetStyle(block);
+    var saved = (config && config.style && typeof config.style === "object") ? config.style : {};
+    return Object.assign({}, base, migrateLegacyPresetStyle(saved));
+  }
+
+  function presetStyleColorCfg(style) {
+    return {
+      color: (style && style.color) || "green",
+      color_shade: style && style.color_shade != null ? style.color_shade : 2,
+    };
+  }
+
+  function paletteForStyle(style) {
+    return KIT.widgetPalette(presetStyleColorCfg(style));
+  }
+
+  function presetBarColorsFromStyle(style, n) {
+    return KIT.shadeRamp(presetStyleColorCfg(style), n);
+  }
+
+  function presetRowValue(row) {
+    if (row && row.count != null) return Number(row.count) || 0;
+    if (row && row.value != null) return Number(row.value) || 0;
+    return 0;
+  }
+
+  function applyPresetStyleRows(rows, style) {
+    var out = (rows || []).slice();
+    if (style.sort === "value_asc") {
+      out.sort(function (a, b) { return presetRowValue(a) - presetRowValue(b); });
+    } else if (style.sort === "value_desc") {
+      out.sort(function (a, b) { return presetRowValue(b) - presetRowValue(a); });
+    }
+    var max = Number(style.max_items || 0);
+    if (max > 0) out = out.slice(0, max);
+    return out;
+  }
+
+  function presetBarColors(palette, n) {
+    var out = [];
+    for (var i = 0; i < n; i++) out.push(palette[i % palette.length]);
+    return out;
+  }
+
+  function horizontalBarOptionsForStyle(prefix, suffix, style) {
+    var opts = horizontalBarOptions(prefix, suffix);
+    if (opts.scales && opts.scales.x && opts.scales.x.grid) {
+      opts.scales.x.grid.display = style.show_grid !== false;
+    }
+    return opts;
+  }
+
   function truncateJobLabel(title, maxLen) {
     var t = String(title || "").trim() || "—";
     maxLen = maxLen || 10;
@@ -481,9 +576,7 @@
                 count: jobPendingTotal(r),
               };
             })
-            .filter(function (r) { return r.count > 0; })
-            .sort(function (a, b) { return b.count - a.count; })
-            .slice(0, 12);
+            .filter(function (r) { return r.count > 0; });
         });
 
         var clientHiredRankingRows = computed(function () {
@@ -497,9 +590,7 @@
           });
           return Object.keys(byClient)
             .map(function (k) { return byClient[k]; })
-            .filter(function (r) { return r.count > 0; })
-            .sort(function (a, b) { return b.count - a.count; })
-            .slice(0, 12);
+            .filter(function (r) { return r.count > 0; });
         });
 
         var recruiterRecommendVsHiredRows = computed(function () {
@@ -905,15 +996,38 @@
           var si = KIT.selectedShade(widgetForm.value.config || {});
           return row.label + " · " + (si + 1);
         });
+        var selectedPresetStyleColorLabel = computed(function () {
+          var style = widgetForm.value.config && widgetForm.value.config.style;
+          var row = KIT.colorRowOf(style && style.color);
+          var si = KIT.selectedShade(presetStyleColorCfg(style || {}));
+          return row.label + " · " + (si + 1);
+        });
 
         function isColorSwatchActive(row, shadeIndex) {
           var cfg = widgetForm.value.config || {};
+          return cfg.color === row.key && KIT.selectedShade(cfg) === shadeIndex;
+        }
+        function isPresetStyleColorSwatchActive(row, shadeIndex) {
+          var style = widgetForm.value.config && widgetForm.value.config.style;
+          var cfg = presetStyleColorCfg(style || {});
           return cfg.color === row.key && KIT.selectedShade(cfg) === shadeIndex;
         }
         function pickColor(key, shadeIndex) {
           if (!widgetForm.value.config) widgetForm.value.config = {};
           widgetForm.value.config.color = key;
           widgetForm.value.config.color_shade = shadeIndex;
+          flushPersistWidget();
+        }
+        function pickPresetStyleColor(key, shadeIndex) {
+          if (!widgetForm.value.config) widgetForm.value.config = {};
+          if (!widgetForm.value.config.style) {
+            widgetForm.value.config.style = defaultRmsPresetStyle(
+              widgetForm.value.config.block || "chart_pipeline"
+            );
+          }
+          widgetForm.value.config.style.color = key;
+          widgetForm.value.config.style.color_shade = shadeIndex;
+          panelUserEdited.value = true;
           flushPersistWidget();
         }
         function closeColorPicker() {
@@ -1077,6 +1191,11 @@
           if (!block || !widgetForm.value) return;
           if (!widgetForm.value.config) widgetForm.value.config = {};
           widgetForm.value.config.block = block;
+          if (isRmsPresetStyleBlock(block)) {
+            widgetForm.value.config.style = rmsPresetStyle(widgetForm.value.config, block);
+          } else if (widgetForm.value.config.style) {
+            delete widgetForm.value.config.style;
+          }
           panelUserEdited.value = true;
           applyRmsBlockLayout(block);
           flushPersistWidget().then(function () {
@@ -1257,27 +1376,45 @@
           openWidgetPanel(item.widget);
         }
 
-        function renderPipelineChart(canvasId) {
+        function groupedBarOptionsForStyle(style) {
+          var opts = groupedBarOptions();
+          if (opts.scales && opts.scales.y && opts.scales.y.grid) {
+            opts.scales.y.grid.display = style.show_grid !== false;
+            opts.scales.y.grid.color = RMS_CHART_GRID_COLOR;
+          }
+          return opts;
+        }
+
+        function renderPipelineChart(canvasId, w) {
           if (!data.value) return;
+          var block = "chart_pipeline";
+          var style = rmsPresetStyle(w && w.config, block);
+          var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
           safeRenderChart(canvasId, function () {
             var canvas = document.getElementById(canvasId);
             if (!canvas) return;
             destroyChartKey(canvasId);
-            var items = data.value.pipeline_overview || [];
+            var items = applyPresetStyleRows(
+              (data.value.pipeline_overview || []).map(function (x) {
+                return { label: x.label, count: x.count != null ? x.count : 0 };
+              }),
+              style
+            );
+            if (!items.length) return;
             chartInstances[canvasId] = new Chart(canvas, {
               type: "bar",
               data: {
                 labels: items.map(function (x) { return x.label; }),
                 datasets: [{
-                  data: items.map(function (x) { return x.count; }),
-                  backgroundColor: rmsShadeRamp(items.length),
-                  borderRadius: RMS_CHART_BAR_RADIUS,
+                  data: items.map(presetRowValue),
+                  backgroundColor: presetBarColorsFromStyle(style, items.length),
+                  borderRadius: radius,
                   maxBarThickness: 34,
                   barPercentage: 0.72,
                   categoryPercentage: 0.68,
                 }],
               },
-              options: horizontalBarOptions(""),
+              options: horizontalBarOptionsForStyle("", "", style),
             });
           });
         }
@@ -1481,7 +1618,8 @@
           });
         }
 
-        function renderHorizontalCountChart(canvasId, rows, emptyLabel) {
+        function renderHorizontalCountChart(canvasId, rows, emptyLabel, style) {
+          var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
           safeRenderChart(canvasId, function () {
             var canvas = document.getElementById(canvasId);
             if (!canvas) return;
@@ -1492,21 +1630,28 @@
               data: {
                 labels: rows.map(function (r) { return r.label; }),
                 datasets: [{
-                  data: rows.map(function (r) { return r.count || 0; }),
-                  backgroundColor: rmsShadeRamp(rows.length),
-                  borderRadius: RMS_CHART_BAR_RADIUS,
+                  data: rows.map(presetRowValue),
+                  backgroundColor: presetBarColorsFromStyle(style, rows.length),
+                  borderRadius: radius,
                   maxBarThickness: 34,
                   barPercentage: 0.72,
                   categoryPercentage: 0.68,
                 }],
               },
-              options: horizontalBarOptions(emptyLabel || ""),
+              options: horizontalBarOptionsForStyle(emptyLabel || "", "", style),
             });
           });
         }
 
-        function renderPendingBacklogChart(canvasId) {
-          renderHorizontalCountChart(canvasId, pendingBacklogRows.value, "人数");
+        function renderPendingBacklogChart(canvasId, w) {
+          var block = "chart_pending_backlog";
+          var style = rmsPresetStyle(w && w.config, block);
+          renderHorizontalCountChart(
+            canvasId,
+            applyPresetStyleRows(pendingBacklogRows.value, style),
+            "人数",
+            style
+          );
         }
 
         function renderLifecycleFunnelChart(canvasId) {
@@ -1532,74 +1677,114 @@
           });
         }
 
-        function renderLifecyclePassRateChart(canvasId) {
+        function renderLifecyclePassRateChart(canvasId, w) {
+          var block = "chart_lifecycle_pass_rate";
+          var style = rmsPresetStyle(w && w.config, block);
+          var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
           safeRenderChart(canvasId, function () {
             var canvas = document.getElementById(canvasId);
             if (!canvas) return;
             destroyChartKey(canvasId);
-            var rows = lifecycleRows.value.filter(function (r) {
-              return r.key !== "resume" && r.pass_rate_value != null;
-            });
+            var rows = lifecycleRows.value
+              .filter(function (r) { return r.key !== "resume" && r.pass_rate_value != null; })
+              .map(function (r) {
+                return {
+                  label: r.label,
+                  value: r.pass_rate_value != null ? r.pass_rate_value : 0,
+                };
+              });
+            rows = applyPresetStyleRows(rows, style);
             if (!rows.length) return;
             chartInstances[canvasId] = new Chart(canvas, {
               type: "bar",
               data: {
                 labels: rows.map(function (r) { return r.label; }),
                 datasets: [{
-                  data: rows.map(function (r) { return r.pass_rate_value; }),
-                  backgroundColor: rmsShadeRamp(rows.length),
-                  borderRadius: RMS_CHART_BAR_RADIUS,
+                  data: rows.map(presetRowValue),
+                  backgroundColor: presetBarColorsFromStyle(style, rows.length),
+                  borderRadius: radius,
                   maxBarThickness: 34,
                   barPercentage: 0.72,
                   categoryPercentage: 0.68,
                 }],
               },
-              options: horizontalBarOptions("", "%"),
+              options: horizontalBarOptionsForStyle("", "%", style),
             });
           });
         }
 
-        function renderJobPendingBacklogChart(canvasId) {
-          renderHorizontalCountChart(canvasId, jobPendingBacklogRows.value, "积压");
+        function renderJobPendingBacklogChart(canvasId, w) {
+          var block = "chart_job_pending_backlog";
+          var style = rmsPresetStyle(w && w.config, block);
+          renderHorizontalCountChart(
+            canvasId,
+            applyPresetStyleRows(jobPendingBacklogRows.value, style),
+            "积压",
+            style
+          );
         }
 
-        function renderClientHiredRankingChart(canvasId) {
-          renderHorizontalCountChart(canvasId, clientHiredRankingRows.value, "入职");
+        function renderClientHiredRankingChart(canvasId, w) {
+          var block = "chart_client_hired_ranking";
+          var style = rmsPresetStyle(w && w.config, block);
+          renderHorizontalCountChart(
+            canvasId,
+            applyPresetStyleRows(clientHiredRankingRows.value, style),
+            "入职",
+            style
+          );
         }
 
-        function renderRecruiterRecommendVsHiredChart(canvasId) {
+        function renderRecruiterRecommendVsHiredChart(canvasId, w) {
+          var block = "chart_recruiter_recommend_vs_hired";
+          var style = rmsPresetStyle(w && w.config, block);
+          var palette = paletteForStyle(style);
+          var si = KIT.selectedShade(presetStyleColorCfg(style));
+          var radius = Number(style.bar_radius) || 6;
           safeRenderChart(canvasId, function () {
             var canvas = document.getElementById(canvasId);
             if (!canvas) return;
             destroyChartKey(canvasId);
-            var rows = recruiterRecommendVsHiredRows.value.slice(0, 10);
+            var rows = applyPresetStyleRows(
+              recruiterRecommendVsHiredRows.value.map(function (r) {
+                return {
+                  recruiter_user_id: r.recruiter_user_id,
+                  recommended_count: r.recommended_count,
+                  hired_count: r.hired_count,
+                  hired_this_month: r.hired_this_month,
+                  label: r.recruiter_user_id != null ? "ID " + r.recruiter_user_id : "—",
+                  value: r.recommended_count != null ? r.recommended_count : 0,
+                };
+              }),
+              style
+            );
             if (!rows.length) return;
             chartInstances[canvasId] = new Chart(canvas, {
               type: "bar",
               data: {
-                labels: rows.map(function (r) {
-                  return r.recruiter_user_id != null ? "ID " + r.recruiter_user_id : "—";
-                }),
+                labels: rows.map(function (r) { return r.label; }),
                 datasets: [
                   {
                     label: "推荐量",
-                    data: rows.map(function (r) { return r.recommended_count || 0; }),
-                    backgroundColor: RMS_PRESET_PALETTE[0],
-                    borderRadius: 6,
+                    data: rows.map(function (r) { return r.recommended_count != null ? r.recommended_count : 0; }),
+                    backgroundColor: palette[si],
+                    borderRadius: radius,
                     barPercentage: 0.72,
                     categoryPercentage: 0.68,
                   },
                   {
                     label: "入职数",
-                    data: rows.map(function (r) { return r.hired_count != null ? r.hired_count : (r.hired_this_month || 0); }),
-                    backgroundColor: RMS_PRESET_PALETTE[1],
-                    borderRadius: 6,
+                    data: rows.map(function (r) {
+                      return r.hired_count != null ? r.hired_count : (r.hired_this_month != null ? r.hired_this_month : 0);
+                    }),
+                    backgroundColor: palette[(si + 2) % palette.length],
+                    borderRadius: radius,
                     barPercentage: 0.72,
                     categoryPercentage: 0.68,
                   },
                 ],
               },
-              options: groupedBarOptions(),
+              options: groupedBarOptionsForStyle(style),
             });
           });
         }
@@ -1611,7 +1796,7 @@
           var rmsId = chartCanvasId(w);
 
           if (block === "chart_pipeline") {
-            renderPipelineChart(rmsId);
+            renderPipelineChart(rmsId, w);
             return;
           }
           if (block === "chart_history_pass") {
@@ -1635,7 +1820,7 @@
             return;
           }
           if (block === "chart_pending_backlog") {
-            renderPendingBacklogChart(rmsId);
+            renderPendingBacklogChart(rmsId, w);
             return;
           }
           if (block === "lifecycle_funnel") {
@@ -1643,19 +1828,19 @@
             return;
           }
           if (block === "chart_lifecycle_pass_rate") {
-            renderLifecyclePassRateChart(rmsId);
+            renderLifecyclePassRateChart(rmsId, w);
             return;
           }
           if (block === "chart_job_pending_backlog") {
-            renderJobPendingBacklogChart(rmsId);
+            renderJobPendingBacklogChart(rmsId, w);
             return;
           }
           if (block === "chart_client_hired_ranking") {
-            renderClientHiredRankingChart(rmsId);
+            renderClientHiredRankingChart(rmsId, w);
             return;
           }
           if (block === "chart_recruiter_recommend_vs_hired") {
-            renderRecruiterRecommendVsHiredChart(rmsId);
+            renderRecruiterRecommendVsHiredChart(rmsId, w);
             return;
           }
 
@@ -1842,16 +2027,18 @@
           return apiGet("/api/rms/dashboard" + buildQuery(appliedFilters))
             .then(function (res) {
               data.value = res;
-              return nextTick();
-            })
-            .then(function () {
-              renderVisibleCharts({ animate: false });
             })
             .catch(function (e) {
               error.value = e.message || String(e);
             })
             .finally(function () {
               loading.value = false;
+            })
+            .then(function () {
+              return nextTick();
+            })
+            .then(function () {
+              renderVisibleCharts({ animate: false });
             });
         }
 
@@ -2004,8 +2191,17 @@
           }, delayMs == null ? 420 : delayMs);
         }
         function buildConfig() {
+          var f = widgetForm.value;
+          if (f.widget_type === "rms_block") {
+            var block = (f.config && f.config.block) || "kpi_jobs";
+            var cfg = { block: block };
+            if (isRmsPresetStyleBlock(block)) {
+              cfg.style = rmsPresetStyle(f.config, block);
+            }
+            return cfg;
+          }
           return KIT.buildConfig(
-            widgetForm.value,
+            f,
             rosterScope.value,
             function () { return isDateGroup.value; },
             function () { return isChart.value; }
@@ -2090,6 +2286,9 @@
               extra_views: (w.config && w.config.extra_views) ? w.config.extra_views.map(function (ev) { return Object.assign({}, ev); }) : [],
             }));
             if (!mergedCfg.block) mergedCfg.block = "kpi_jobs";
+            if (isRmsPresetStyleBlock(mergedCfg.block)) {
+              mergedCfg.style = rmsPresetStyle(w.config || {}, mergedCfg.block);
+            }
             widgetForm.value = {
               id: w.id,
               title: w.title,
@@ -2692,6 +2891,9 @@
           isChart,
           isRosterSummary,
           isRmsBlock,
+          isRmsPresetStyleBlock,
+          paletteForStyle,
+          presetStyleColorCfg,
           sourceFields,
           numericFields,
           groupByFields,
@@ -2701,6 +2903,9 @@
           pickerOptions,
           filteredColorRows,
           selectedColorRowLabel,
+          selectedPresetStyleColorLabel,
+          isPresetStyleColorSwatchActive,
+          pickPresetStyleColor,
           isColorSwatchActive,
           pickColor,
           closeColorPicker,

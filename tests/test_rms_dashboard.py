@@ -184,6 +184,168 @@ def test_rms_dashboard_widget_crud(client_rbac, admin_auth, rms_engine, uniq):
     assert deleted.status_code == 200, deleted.text
 
 
+def test_rms_preset_style_config_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    overview = next(t for t in boards[0]["tabs"] if t["name"] == "总览")
+    tab_id = overview["id"]
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab_id}/widgets",
+        json={
+            "title": "待处理积压",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "chart_pending_backlog",
+                "style": {
+                    "color": "blue",
+                    "color_shade": 2,
+                    "sort": "value_asc",
+                    "show_grid": False,
+                    "bar_radius": 8,
+                    "max_items": 6,
+                },
+            },
+            "x": 0,
+            "y": 30,
+            "w": 4,
+            "h": 6,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    wid = body["id"]
+    assert body["config"]["block"] == "chart_pending_backlog"
+    assert body["config"]["style"]["color"] == "blue"
+    assert body["config"]["style"]["color_shade"] == 2
+    assert body["config"]["style"]["sort"] == "value_asc"
+    assert body["config"]["style"]["show_grid"] is False
+    assert body["config"]["style"]["bar_radius"] == 8
+    assert body["config"]["style"]["max_items"] == 6
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    overview = next(t for t in boards[0]["tabs"] if t["name"] == "总览")
+    saved = next(w for w in overview["widgets"] if w["id"] == wid)
+    assert saved["config"]["style"]["color"] == "blue"
+    assert saved["config"]["style"]["max_items"] == 6
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_preset_style_stripped_for_non_preset_block(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    tab = _lifecycle_tab(client_rbac, login.cookies)
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab['id']}/widgets",
+        json={
+            "title": "历史数据",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "table_client_job_stage",
+                "style": {
+                    "color": "blue",
+                    "color_shade": 2,
+                    "sort": "value_asc",
+                    "show_grid": False,
+                    "bar_radius": 99,
+                    "max_items": 0,
+                },
+                "extra_junk": "drop-me",
+            },
+            "x": 0,
+            "y": 30,
+            "w": 12,
+            "h": 6,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    history = next(t for t in boards[0]["tabs"] if t["id"] == tab["id"])
+    saved = next(w for w in history["widgets"] if w["id"] == wid)
+    assert saved["config"] == {"block": "table_client_job_stage"}
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_preset_style_clamps_invalid_values(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    overview = next(t for t in boards[0]["tabs"] if t["name"] == "总览")
+    tab_id = overview["id"]
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab_id}/widgets",
+        json={
+            "title": "招聘管道",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "chart_pipeline",
+                "style": {
+                    "color": "not_a_color",
+                    "palette": "not_a_palette",
+                    "sort": "bad_sort",
+                    "bar_radius": 999,
+                    "max_items": 0,
+                },
+            },
+            "x": 0,
+            "y": 40,
+            "w": 8,
+            "h": 6,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    style = created.json()["config"]["style"]
+    assert style["color"] == "blue"
+    assert style["sort"] == "value_desc"
+    assert style["bar_radius"] == 8
+    assert style["max_items"] == 8
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{created.json()['id']}", cookies=login.cookies)
+
+
+def test_rms_backfill_missing_client_job_table(client_rbac, admin_auth, rms_engine, uniq):
+    import main as crm_main
+    from services.dashboards import seed_default_dashboards
+
+    login = _admin_login(client_rbac, admin_auth)
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    client_job_tab = next(t for t in boards[0]["tabs"] if t["name"] == "客户岗位分析")
+    table_w = next(
+        (w for w in client_job_tab["widgets"] if (w.get("config") or {}).get("block") == "table_client_job_stage"),
+        None,
+    )
+    assert table_w is not None, "seed should include table_client_job_stage"
+    wid = table_w["id"]
+    deleted = client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+    assert deleted.status_code == 200, deleted.text
+
+    db = crm_main.SessionLocal()
+    try:
+        seed_default_dashboards(
+            db,
+            crm_main.DashboardDashboard,
+            crm_main.DashboardTab,
+            crm_main.DashboardWidget,
+        )
+    finally:
+        db.close()
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    client_job_tab = next(t for t in boards[0]["tabs"] if t["name"] == "客户岗位分析")
+    blocks = {(w.get("config") or {}).get("block") for w in client_job_tab["widgets"]}
+    assert "table_client_job_stage" in blocks
+
+
 def _admin_login(client, admin_auth):
     user, pwd = admin_auth
     login = _login(client, user, pwd)

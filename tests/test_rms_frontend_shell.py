@@ -859,6 +859,14 @@ def test_rms_dashboard_twenty_shell():
     assert "RMS_PRESET_PALETTE" in js
     assert "RMS_CHART_BAR_RADIUS" in js
     assert "RMS_CHART_GRID_COLOR" in js
+    assert "RMS_PRESET_STYLE_BLOCKS" in js
+    assert "defaultRmsPresetStyle" in js
+    assert "rmsPresetStyle" in js
+    assert "paletteForStyle" in js
+    assert "presetBarColorsFromStyle" in js
+    assert "STYLE" in html
+    assert "搜索颜色" in html
+    assert "数值降序" in html
 
     for required in (
         "dash-root",
