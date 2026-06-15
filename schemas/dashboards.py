@@ -29,32 +29,54 @@ WIDGET_TYPES: FrozenSet[str] = frozenset({
 })
 
 # Preset recruitment-dashboard blocks (stored as widget_type=rms_block, config.block=…).
-RMS_BLOCK_KEYS: FrozenSet[str] = frozenset({
-    "filter",
-    "kpi_clients", "kpi_jobs", "kpi_hc",
-    "chart_pipeline", "filter_summary",
-    "chart_history_pass", "table_history",
-    "chart_recruiter", "table_recruiter",
-    "roster_header",
-    "roster_kpi_matched", "roster_kpi_missing", "roster_kpi_mismatch", "roster_kpi_ambiguous",
-    "table_roster",
-    "table_client_job_stage",
+RMS_BLOCK_KEYS_LEGACY: FrozenSet[str] = frozenset({
+    "chart_history_pass",
+    "table_history",
     "chart_client_job_stage_grouped",
     "chart_client_job_stage_stacked",
     "chart_client_job_stage_funnel",
 })
+
+RMS_BLOCK_KEYS_NEW: FrozenSet[str] = frozenset({
+    "filter",
+    "kpi_clients", "kpi_jobs", "kpi_hc",
+    "kpi_resume_count", "kpi_hired_count", "kpi_resume_to_hire_rate",
+    "chart_pipeline", "filter_summary",
+    "chart_pending_backlog",
+    "lifecycle_funnel", "chart_lifecycle_pass_rate", "table_lifecycle_detail",
+    "chart_recruiter", "table_recruiter",
+    "chart_job_pending_backlog", "chart_client_hired_ranking",
+    "chart_recruiter_recommend_vs_hired",
+    "roster_header",
+    "roster_kpi_matched", "roster_kpi_missing", "roster_kpi_mismatch", "roster_kpi_ambiguous",
+    "table_roster",
+    "table_client_job_stage",
+})
+
+RMS_BLOCK_KEYS: FrozenSet[str] = RMS_BLOCK_KEYS_LEGACY | RMS_BLOCK_KEYS_NEW
+RMS_BLOCK_KEYS_ADDABLE: FrozenSet[str] = RMS_BLOCK_KEYS_NEW
 
 RMS_BLOCK_LABELS: Dict[str, str] = {
     "filter": "筛选",
     "kpi_clients": "KPI · 有需求客户数",
     "kpi_jobs": "KPI · 需求总数",
     "kpi_hc": "KPI · HC 总数",
+    "kpi_resume_count": "KPI · 简历数",
+    "kpi_hired_count": "KPI · 入职数",
+    "kpi_resume_to_hire_rate": "KPI · 百简历入职转化率",
     "chart_pipeline": "图表 · 招聘管道",
     "filter_summary": "当前筛选摘要",
+    "chart_pending_backlog": "图表 · 待处理积压",
+    "lifecycle_funnel": "图表 · 招聘生命周期漏斗",
+    "chart_lifecycle_pass_rate": "图表 · 阶段通过率",
+    "table_lifecycle_detail": "表格 · 生命周期明细",
     "chart_history_pass": "图表 · 阶段通过率",
     "table_history": "表格 · 阶段明细",
     "chart_recruiter": "图表 · 当月入职排名",
     "table_recruiter": "表格 · 人效明细",
+    "chart_job_pending_backlog": "图表 · 岗位待处理积压",
+    "chart_client_hired_ranking": "图表 · 客户入职量排行",
+    "chart_recruiter_recommend_vs_hired": "图表 · 推荐量 vs 入职量",
     "roster_header": "花名册核对操作",
     "roster_kpi_matched": "KPI · 一致",
     "roster_kpi_missing": "KPI · 缺失",
@@ -390,7 +412,7 @@ def build_rms_metadata() -> dict:
     meta["widget_types"] = list(WIDGET_TYPE_DISPLAY_ORDER) + ["rms_block"]
     meta["rms_blocks"] = [
         {"key": k, "label": RMS_BLOCK_LABELS.get(k, k)}
-        for k in sorted(RMS_BLOCK_KEYS)
+        for k in sorted(RMS_BLOCK_KEYS_ADDABLE)
     ]
     return meta
 

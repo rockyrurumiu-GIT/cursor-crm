@@ -14,6 +14,12 @@
     chart_client_job_stage_grouped: true,
     chart_client_job_stage_stacked: true,
     chart_client_job_stage_funnel: true,
+    chart_pending_backlog: true,
+    lifecycle_funnel: true,
+    chart_lifecycle_pass_rate: true,
+    chart_job_pending_backlog: true,
+    chart_client_hired_ranking: true,
+    chart_recruiter_recommend_vs_hired: true,
   };
 
   var JOB_STAGE_CHART_COLORS = {
@@ -399,6 +405,86 @@
           return (summary && summary.period_label) || "全量";
         });
 
+        var lifecycleFunnel = computed(function () {
+          return (data.value && data.value.lifecycle_funnel) || null;
+        });
+        var lifecycleRows = computed(function () {
+          var lf = lifecycleFunnel.value;
+          return lf && lf.rows ? lf.rows : [];
+        });
+        var resumeCount = computed(function () {
+          var lf = lifecycleFunnel.value;
+          return lf ? (lf.base_count || 0) : 0;
+        });
+        var hiredCount = computed(function () {
+          var lf = lifecycleFunnel.value;
+          return lf ? (lf.hired_count || 0) : 0;
+        });
+        var resumeToHireRate = computed(function () {
+          var lf = lifecycleFunnel.value;
+          return (lf && lf.resume_to_hire_rate) || "—";
+        });
+
+        function jobPendingTotal(row) {
+          if (!row) return 0;
+          return (
+            (row.pending_internal_screen || 0)
+            + (row.pending_client_screen || 0)
+            + (row.scheduling_interview_count || 0)
+            + (row.pending_interview || 0)
+            + (row.pending_second_interview || 0)
+            + (row.pending_final_interview || 0)
+            + (row.pending_offer_count || 0)
+            + (row.onboarding_count || 0)
+            + (row.pending_roster_conversion_count || 0)
+          );
+        }
+
+        var pendingBacklogRows = computed(function () {
+          var rows = (data.value && data.value.pipeline_overview) || [];
+          var out = rows.map(function (p) {
+            return { label: p.label || p.status, count: p.count || 0 };
+          });
+          var total = clientJobStageTotal.value;
+          if (total && total.pending_roster_conversion_count) {
+            out.push({ label: "待转花名册", count: total.pending_roster_conversion_count });
+          }
+          return out;
+        });
+
+        var jobPendingBacklogRows = computed(function () {
+          return clientJobStageRows.value
+            .map(function (r) {
+              return {
+                label: truncateJobLabel(r.job_title, 12),
+                count: jobPendingTotal(r),
+              };
+            })
+            .filter(function (r) { return r.count > 0; })
+            .sort(function (a, b) { return b.count - a.count; })
+            .slice(0, 12);
+        });
+
+        var clientHiredRankingRows = computed(function () {
+          var byClient = {};
+          clientJobStageRows.value.forEach(function (r) {
+            var key = String(r.client_id || r.client_name || "—");
+            if (!byClient[key]) {
+              byClient[key] = { label: r.client_name || ("客户#" + r.client_id), count: 0 };
+            }
+            byClient[key].count += (r.hired_count || 0);
+          });
+          return Object.keys(byClient)
+            .map(function (k) { return byClient[k]; })
+            .filter(function (r) { return r.count > 0; })
+            .sort(function (a, b) { return b.count - a.count; })
+            .slice(0, 12);
+        });
+
+        var recruiterRecommendVsHiredRows = computed(function () {
+          return (data.value && data.value.recruiter_performance) || [];
+        });
+
         function jobStageMetricText(row, countKey, rateKey) {
           if (!row) return "—";
           var count = row[countKey];
@@ -547,6 +633,26 @@
           ) {
             return clientJobStageRows.value.length > 0;
           }
+          if (block === "chart_pending_backlog") {
+            return pendingBacklogRows.value.length > 0;
+          }
+          if (block === "lifecycle_funnel") {
+            return lifecycleRows.value.length > 0;
+          }
+          if (block === "chart_lifecycle_pass_rate") {
+            return lifecycleRows.value.some(function (r) {
+              return r.pass_rate_value != null && r.key !== "resume";
+            });
+          }
+          if (block === "chart_job_pending_backlog") {
+            return jobPendingBacklogRows.value.length > 0;
+          }
+          if (block === "chart_client_hired_ranking") {
+            return clientHiredRankingRows.value.length > 0;
+          }
+          if (block === "chart_recruiter_recommend_vs_hired") {
+            return recruiterRecommendVsHiredRows.value.length > 0;
+          }
           return false;
         }
 
@@ -590,12 +696,22 @@
           kpi_clients: true,
           kpi_jobs: true,
           kpi_hc: true,
+          kpi_resume_count: true,
+          kpi_hired_count: true,
+          kpi_resume_to_hire_rate: true,
           chart_pipeline: true,
           filter_summary: true,
+          chart_pending_backlog: true,
+          lifecycle_funnel: true,
+          chart_lifecycle_pass_rate: true,
+          table_lifecycle_detail: true,
           chart_history_pass: true,
           table_history: true,
           chart_recruiter: true,
+          chart_recruiter_recommend_vs_hired: true,
           table_recruiter: true,
+          chart_job_pending_backlog: true,
+          chart_client_hired_ranking: true,
           table_client_job_stage: true,
           chart_client_job_stage_grouped: true,
           chart_client_job_stage_stacked: true,
@@ -892,16 +1008,26 @@
         }
 
         var RMS_BLOCK_LAYOUT_PRESETS = {
-          filter: { w: 12, h: 2, title: "筛选" },
+          filter: { w: 12, h: 3, title: "筛选" },
           kpi_clients: { w: 4, h: 3, title: "有需求客户数" },
           kpi_jobs: { w: 4, h: 3, title: "需求总数" },
           kpi_hc: { w: 4, h: 3, title: "HC 总数" },
+          kpi_resume_count: { w: 4, h: 3, title: "简历数" },
+          kpi_hired_count: { w: 4, h: 3, title: "入职数" },
+          kpi_resume_to_hire_rate: { w: 4, h: 3, title: "百简历入职转化率" },
           chart_pipeline: { w: 8, h: 6, title: "招聘管道（活动态）" },
+          chart_pending_backlog: { w: 4, h: 6, title: "待处理积压" },
           filter_summary: { w: 4, h: 6, title: "当前筛选" },
+          lifecycle_funnel: { w: 12, h: 6, title: "招聘生命周期漏斗" },
+          chart_lifecycle_pass_rate: { w: 12, h: 5, title: "阶段通过率" },
+          table_lifecycle_detail: { w: 12, h: 5, title: "生命周期明细" },
           chart_history_pass: { w: 12, h: 6, title: "阶段通过率" },
           table_history: { w: 12, h: 5, title: "阶段明细" },
           chart_recruiter: { w: 12, h: 6, title: "当月入职排名" },
+          chart_recruiter_recommend_vs_hired: { w: 12, h: 6, title: "推荐量 vs 入职量" },
           table_recruiter: { w: 12, h: 6, title: "人效明细" },
+          chart_job_pending_backlog: { w: 6, h: 6, title: "岗位待处理积压" },
+          chart_client_hired_ranking: { w: 6, h: 6, title: "客户入职量排行" },
           table_client_job_stage: { w: 12, h: 7, title: "客户岗位阶段统计" },
           chart_client_job_stage_grouped: { w: 12, h: 7, title: "岗位阶段（分组柱）" },
           chart_client_job_stage_stacked: { w: 12, h: 7, title: "岗位阶段（堆叠柱）" },
@@ -1329,6 +1455,121 @@
           });
         }
 
+        function renderHorizontalCountChart(canvasId, rows, emptyLabel) {
+          safeRenderChart(canvasId, function () {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            destroyChartKey(canvasId);
+            if (!rows.length) return;
+            chartInstances[canvasId] = new Chart(canvas, {
+              type: "bar",
+              data: {
+                labels: rows.map(function (r) { return r.label; }),
+                datasets: [{
+                  data: rows.map(function (r) { return r.count || 0; }),
+                  backgroundColor: rmsShadeRamp(rows.length),
+                  borderRadius: 6,
+                  barPercentage: 0.72,
+                }],
+              },
+              options: horizontalBarOptions(emptyLabel || ""),
+            });
+          });
+        }
+
+        function renderPendingBacklogChart(canvasId) {
+          renderHorizontalCountChart(canvasId, pendingBacklogRows.value, "人数");
+        }
+
+        function renderLifecycleFunnelChart(canvasId) {
+          safeRenderChart(canvasId, function () {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            destroyChartKey(canvasId);
+            var rows = lifecycleRows.value.filter(function (r) { return r.key !== "resume"; });
+            if (!rows.length) return;
+            chartInstances[canvasId] = new Chart(canvas, {
+              type: "bar",
+              data: {
+                labels: rows.map(function (r) { return r.label; }),
+                datasets: [{
+                  data: rows.map(function (r) { return r.funnel_count || 0; }),
+                  backgroundColor: rmsShadeRamp(rows.length),
+                  borderRadius: 6,
+                  barPercentage: 0.72,
+                }],
+              },
+              options: horizontalBarOptions("人数"),
+            });
+          });
+        }
+
+        function renderLifecyclePassRateChart(canvasId) {
+          safeRenderChart(canvasId, function () {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            destroyChartKey(canvasId);
+            var rows = lifecycleRows.value.filter(function (r) {
+              return r.key !== "resume" && r.pass_rate_value != null;
+            });
+            if (!rows.length) return;
+            chartInstances[canvasId] = new Chart(canvas, {
+              type: "bar",
+              data: {
+                labels: rows.map(function (r) { return r.label; }),
+                datasets: [{
+                  data: rows.map(function (r) { return r.pass_rate_value; }),
+                  backgroundColor: rmsShadeRamp(rows.length),
+                  borderRadius: 6,
+                  barPercentage: 0.62,
+                }],
+              },
+              options: groupedBarOptions("%"),
+            });
+          });
+        }
+
+        function renderJobPendingBacklogChart(canvasId) {
+          renderHorizontalCountChart(canvasId, jobPendingBacklogRows.value, "积压");
+        }
+
+        function renderClientHiredRankingChart(canvasId) {
+          renderHorizontalCountChart(canvasId, clientHiredRankingRows.value, "入职");
+        }
+
+        function renderRecruiterRecommendVsHiredChart(canvasId) {
+          safeRenderChart(canvasId, function () {
+            var canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            destroyChartKey(canvasId);
+            var rows = recruiterRecommendVsHiredRows.value.slice(0, 10);
+            if (!rows.length) return;
+            chartInstances[canvasId] = new Chart(canvas, {
+              type: "bar",
+              data: {
+                labels: rows.map(function (r) {
+                  return r.recruiter_user_id != null ? "ID " + r.recruiter_user_id : "—";
+                }),
+                datasets: [
+                  {
+                    label: "推荐量",
+                    data: rows.map(function (r) { return r.recommended_count || 0; }),
+                    backgroundColor: "#7B96B8",
+                    borderRadius: 4,
+                  },
+                  {
+                    label: "入职数",
+                    data: rows.map(function (r) { return r.hired_count != null ? r.hired_count : (r.hired_this_month || 0); }),
+                    backgroundColor: "#5B8A72",
+                    borderRadius: 4,
+                  },
+                ],
+              },
+              options: groupedBarOptions(""),
+            });
+          });
+        }
+
         function renderSingleWidget(w, opts) {
           opts = opts || {};
           if (!chartsAvailable() || !w) return;
@@ -1357,6 +1598,30 @@
           }
           if (block === "chart_client_job_stage_funnel") {
             renderClientJobStageFunnelChart(rmsId);
+            return;
+          }
+          if (block === "chart_pending_backlog") {
+            renderPendingBacklogChart(rmsId);
+            return;
+          }
+          if (block === "lifecycle_funnel") {
+            renderLifecycleFunnelChart(rmsId);
+            return;
+          }
+          if (block === "chart_lifecycle_pass_rate") {
+            renderLifecyclePassRateChart(rmsId);
+            return;
+          }
+          if (block === "chart_job_pending_backlog") {
+            renderJobPendingBacklogChart(rmsId);
+            return;
+          }
+          if (block === "chart_client_hired_ranking") {
+            renderClientHiredRankingChart(rmsId);
+            return;
+          }
+          if (block === "chart_recruiter_recommend_vs_hired") {
+            renderRecruiterRecommendVsHiredChart(rmsId);
             return;
           }
 
@@ -2325,6 +2590,11 @@
           deliveryFieldLabel,
           recruiterFieldLabel,
           historicalStages,
+          lifecycleFunnel,
+          lifecycleRows,
+          resumeCount,
+          hiredCount,
+          resumeToHireRate,
           clientJobStageRows,
           clientJobStageTotal,
           clientJobStagePeriodLabel,

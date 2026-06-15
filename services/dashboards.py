@@ -1746,20 +1746,42 @@ def seed_default_dashboards(
     _sync_roster_margin_preset_layout(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _seed_rms_recruitment(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
-    _sync_rms_test_tab(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _cleanup_rms_obsolete_seed_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _sync_rms_tab_ia_v2(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_client_job_stage_title(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_filter_block_height(db, DashboardDashboard, DashboardTab, DashboardWidget)
 
 
 _RMS_DEFAULT_TABS = (
     ("总览", "overview", 0),
-    ("历史转化", "history", 1),
-    ("招聘人效", "recruiter", 2),
-    ("花名册核对", "roster", 3),
-    ("Test", "test", 4),
+    ("生命周期转化", "lifecycle", 1),
+    ("客户岗位分析", "client_job", 2),
+    ("招聘人效", "recruiter", 3),
+    ("花名册核对", "roster", 4),
 )
 _RMS_TEST_TAB_NAME = "Test"
 _RMS_SEED_NAME = "招聘总览"
+_RMS_TAB_SORT = {
+    "总览": 0,
+    "生命周期转化": 1,
+    "历史转化": 1,
+    "客户岗位分析": 2,
+    "招聘人效": 3,
+    "花名册核对": 4,
+}
+_RMS_SYSTEM_TAB_TEMPLATES = frozenset({
+    "overview", "lifecycle", "history", "client_job", "recruiter", "roster", "test",
+})
+_RMS_SYSTEM_TAB_NAMES = frozenset({
+    "总览", "生命周期转化", "历史转化", "客户岗位分析", "招聘人效", "花名册核对", "Test",
+})
+_RMS_OBSOLETE_BLOCKS = frozenset({
+    "chart_history_pass",
+    "table_history",
+    "chart_client_job_stage_grouped",
+    "chart_client_job_stage_stacked",
+    "chart_client_job_stage_funnel",
+})
 
 
 def _add_rms_default_tabs(db: Session, dashboard_id: int, DashboardTab, DashboardWidget, now) -> None:
@@ -1780,23 +1802,30 @@ def _add_rms_default_tabs(db: Session, dashboard_id: int, DashboardTab, Dashboar
 
 _RMS_TEMPLATE_WIDGETS = {
     "overview": [
-        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
-        {"title": "有需求客户数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_clients"}, "x": 0, "y": 2, "w": 4, "h": 3},
-        {"title": "需求总数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_jobs"}, "x": 4, "y": 2, "w": 4, "h": 3},
-        {"title": "HC 总数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_hc"}, "x": 8, "y": 2, "w": 4, "h": 3},
-        {"title": "招聘管道（活动态）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_pipeline"}, "x": 0, "y": 5, "w": 8, "h": 6},
-        {"title": "当前筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter_summary"}, "x": 8, "y": 5, "w": 4, "h": 6},
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 3},
+        {"title": "简历数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_resume_count"}, "x": 0, "y": 3, "w": 4, "h": 3},
+        {"title": "入职数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_hired_count"}, "x": 4, "y": 3, "w": 4, "h": 3},
+        {"title": "百简历入职转化率", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_resume_to_hire_rate"}, "x": 8, "y": 3, "w": 4, "h": 3},
+        {"title": "招聘管道（活动态）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_pipeline"}, "x": 0, "y": 6, "w": 8, "h": 6},
+        {"title": "待处理积压", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_pending_backlog"}, "x": 8, "y": 6, "w": 4, "h": 6},
     ],
-    "history": [
-        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
-        {"title": "阶段通过率", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_history_pass"}, "x": 0, "y": 2, "w": 12, "h": 6},
-        {"title": "阶段明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_history"}, "x": 0, "y": 8, "w": 12, "h": 5},
-        {"title": "客户岗位阶段统计", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_client_job_stage"}, "x": 0, "y": 13, "w": 12, "h": 6},
+    "lifecycle": [
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 3},
+        {"title": "招聘生命周期漏斗", "widget_type": "rms_block", "source_key": "", "config": {"block": "lifecycle_funnel"}, "x": 0, "y": 3, "w": 12, "h": 6},
+        {"title": "阶段通过率", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_lifecycle_pass_rate"}, "x": 0, "y": 9, "w": 12, "h": 5},
+        {"title": "生命周期明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_lifecycle_detail"}, "x": 0, "y": 14, "w": 12, "h": 5},
+    ],
+    "client_job": [
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 3},
+        {"title": "岗位待处理积压", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_job_pending_backlog"}, "x": 0, "y": 3, "w": 6, "h": 6},
+        {"title": "客户入职量排行", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_hired_ranking"}, "x": 6, "y": 3, "w": 6, "h": 6},
+        {"title": "客户岗位阶段统计", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_client_job_stage"}, "x": 0, "y": 9, "w": 12, "h": 6},
     ],
     "recruiter": [
-        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
-        {"title": "当月入职排名", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_recruiter"}, "x": 0, "y": 2, "w": 12, "h": 6},
-        {"title": "人效明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_recruiter"}, "x": 0, "y": 8, "w": 12, "h": 6},
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 3},
+        {"title": "当月入职排名", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_recruiter"}, "x": 0, "y": 3, "w": 12, "h": 6},
+        {"title": "推荐量 vs 入职量", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_recruiter_recommend_vs_hired"}, "x": 0, "y": 9, "w": 12, "h": 6},
+        {"title": "人效明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_recruiter"}, "x": 0, "y": 15, "w": 12, "h": 6},
     ],
     "roster": [
         {"title": "已入职与花名册一致性核对", "widget_type": "rms_block", "source_key": "", "config": {"block": "roster_header"}, "x": 0, "y": 0, "w": 12, "h": 2},
@@ -1839,6 +1868,147 @@ def seed_rms_tab_widgets(db: Session, tab_id: int, template: str, DashboardWidge
     now = _now()
     _seed_rms_tab_widgets(db, tab_id, template, DashboardWidget, now)
     db.commit()
+
+
+def _rms_tab_template(tab) -> str:
+    layout = _parse_json(getattr(tab, "layout_json", None) or "{}", {})
+    return (layout.get("rms_template") or "").strip()
+
+
+def _is_rms_system_tab(tab) -> bool:
+    name = (tab.name or "").strip()
+    template = _rms_tab_template(tab)
+    return template in _RMS_SYSTEM_TAB_TEMPLATES or name in _RMS_SYSTEM_TAB_NAMES
+
+
+def _widget_block(widget) -> str:
+    cfg = _parse_json(getattr(widget, "config_json", None) or "{}", {})
+    return (cfg.get("block") or "").strip()
+
+
+def _tab_has_block(db, tab_id: int, block: str, DashboardWidget) -> bool:
+    for w in db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab_id).all():
+        if _widget_block(w) == block:
+            return True
+    return False
+
+
+def _cleanup_rms_obsolete_seed_widgets(
+    db,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+) -> None:
+    """Remove Test tab and obsolete blocks from RMS system tabs only (HC-2)."""
+    changed = False
+    dashboards = db.query(DashboardDashboard).filter(DashboardDashboard.scope == "rms").all()
+    for d in dashboards:
+        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
+        for tab in list(tabs):
+            if (tab.name or "").strip() == _RMS_TEST_TAB_NAME:
+                db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).delete(
+                    synchronize_session=False
+                )
+                db.query(DashboardTab).filter(DashboardTab.id == tab.id).delete(
+                    synchronize_session=False
+                )
+                changed = True
+                continue
+            if not _is_rms_system_tab(tab):
+                continue
+            widgets = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).all()
+            for w in widgets:
+                if _widget_block(w) not in _RMS_OBSOLETE_BLOCKS:
+                    continue
+                db.query(DashboardWidget).filter(DashboardWidget.id == w.id).delete(
+                    synchronize_session=False
+                )
+                changed = True
+    if changed:
+        db.commit()
+
+
+def _sync_rms_tab_ia_v2(
+    db,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+) -> None:
+    """Rename/migrate RMS tabs to v2 IA; idempotent (HC-5)."""
+    changed = False
+    now = _now()
+    dashboards = db.query(DashboardDashboard).filter(DashboardDashboard.scope == "rms").all()
+    for d in dashboards:
+        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
+        by_name = {(t.name or "").strip(): t for t in tabs}
+
+        lifecycle_tab = by_name.get("生命周期转化")
+        history_tab = by_name.get("历史转化")
+        if lifecycle_tab is None and history_tab is not None:
+            history_tab.name = "生命周期转化"
+            layout = _parse_json(history_tab.layout_json or "{}", {})
+            layout["rms_template"] = "lifecycle"
+            history_tab.layout_json = _dump_json(layout)
+            history_tab.updated_at = now
+            lifecycle_tab = history_tab
+            changed = True
+
+        client_job_tab = by_name.get("客户岗位分析")
+        if client_job_tab is None:
+            max_sort = max((int(t.sort_order or 0) for t in tabs), default=-1)
+            client_job_tab = DashboardTab(
+                dashboard_id=d.id,
+                name="客户岗位分析",
+                sort_order=min(2, max_sort + 1),
+                layout_json=_dump_json({"rms_template": "client_job"}),
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(client_job_tab)
+            db.flush()
+            tabs.append(client_job_tab)
+            by_name["客户岗位分析"] = client_job_tab
+            changed = True
+
+        if lifecycle_tab and client_job_tab:
+            lifecycle_widgets = db.query(DashboardWidget).filter(
+                DashboardWidget.tab_id == lifecycle_tab.id
+            ).all()
+            client_has_table = _tab_has_block(
+                db, client_job_tab.id, "table_client_job_stage", DashboardWidget
+            )
+            for w in lifecycle_widgets:
+                if _widget_block(w) != "table_client_job_stage":
+                    continue
+                if client_has_table:
+                    db.query(DashboardWidget).filter(DashboardWidget.id == w.id).delete(
+                        synchronize_session=False
+                    )
+                else:
+                    w.tab_id = client_job_tab.id
+                    w.updated_at = now
+                    client_has_table = True
+                changed = True
+
+        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
+        for tab in tabs:
+            name = (tab.name or "").strip()
+            if name in _RMS_TAB_SORT and int(tab.sort_order or 0) != _RMS_TAB_SORT[name]:
+                tab.sort_order = _RMS_TAB_SORT[name]
+                tab.updated_at = now
+                changed = True
+
+        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
+        for tab in tabs:
+            template = _rms_tab_template(tab)
+            if template in ("lifecycle", "client_job"):
+                count = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).count()
+                if count == 0:
+                    _seed_rms_tab_widgets(db, tab.id, template, DashboardWidget, now)
+                    changed = True
+
+    if changed:
+        db.commit()
 
 
 def _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget) -> None:

@@ -59,9 +59,21 @@ _ABANDONED_STATUSES = frozenset({"second_interview_abandoned", "final_interview_
 
 _SCHEDULING_INTERVIEW_SNAPSHOT_STATUSES = frozenset({"scheduling_interview"})
 _PENDING_INTERVIEW_SNAPSHOT_STATUSES = frozenset({"pending_first_interview"})
-_INTERVIEWED_SNAPSHOT_STATUSES = frozenset({"first_interview_passed"})
-_INTERVIEW_PASS_SNAPSHOT_STATUSES = frozenset({"second_interview_passed"})
+_PENDING_SECOND_INTERVIEW_SNAPSHOT_STATUSES = frozenset({"first_interview_passed"})
+_PENDING_FINAL_INTERVIEW_SNAPSHOT_STATUSES = frozenset({"second_interview_passed"})
 _ONBOARDING_SNAPSHOT_STATUSES = frozenset({"onboarding"})
+
+_FIRST_INTERVIEW_OUTCOME_STATUSES = frozenset({
+    "first_interview_passed",
+    "first_interview_failed",
+})
+_INTERVIEW_PASSED_STATUSES = frozenset({
+    "first_interview_passed",
+    "second_interview_passed",
+    "pending_offer",
+    "onboarding",
+    "hired",
+})
 
 _OFFER_DROPPED_STATUSES = frozenset({"offer_dropped"})
 _ONBOARDING_LOST_STATUSES = frozenset({"onboarding_lost"})
@@ -71,11 +83,14 @@ _SUMMARY_METRIC_KEYS = (
     "pushed_resume_count",
     "internal_screen_passed",
     "duplicate_count",
+    "pending_internal_screen",
     "pending_client_screen",
     "scheduling_interview_count",
     "client_screen_passed",
     "interview_abandoned",
     "pending_interview",
+    "pending_second_interview",
+    "pending_final_interview",
     "interviewed",
     "interview_passed",
     "pending_offer_count",
@@ -83,6 +98,7 @@ _SUMMARY_METRIC_KEYS = (
     "onboarding_count",
     "onboarding_lost_count",
     "hired_count",
+    "pending_roster_conversion_count",
 )
 
 
@@ -109,6 +125,11 @@ def _statuses_from(anchor: str) -> Set[str]:
 
 
 _CLIENT_SCREEN_PASSED_STATUSES = _statuses_from("scheduling_interview")
+# 已面试/面试通过：周期内曾到达对应节点，且当前（或 date_to 快照）仍在一面结果之后；
+# 误操作改回「待一面」等前置状态时不计入。
+_INTERVIEWED_CURRENT_STATUSES = _statuses_from("first_interview_passed") | frozenset({
+    "first_interview_failed",
+})
 
 
 def _utc_today() -> date:
@@ -213,6 +234,34 @@ def _app_had_transition_to_in_period(
     date_to: str,
 ) -> bool:
     return _app_had_transition_in_period(histories, {to_status}, date_from, date_to)
+
+
+def _app_counts_as_interviewed(
+    app: Any,
+    histories: List[Any],
+    date_from: str,
+    date_to: str,
+    snapshot_as_of: Optional[str],
+) -> bool:
+    if not _app_had_transition_in_period(
+        histories, _FIRST_INTERVIEW_OUTCOME_STATUSES, date_from, date_to
+    ):
+        return False
+    return _status_at(app, histories, snapshot_as_of) in _INTERVIEWED_CURRENT_STATUSES
+
+
+def _app_counts_as_interview_passed(
+    app: Any,
+    histories: List[Any],
+    date_from: str,
+    date_to: str,
+    snapshot_as_of: Optional[str],
+) -> bool:
+    if not _app_had_transition_in_period(
+        histories, _INTERVIEW_PASSED_STATUSES, date_from, date_to
+    ):
+        return False
+    return _status_at(app, histories, snapshot_as_of) in _INTERVIEW_PASSED_STATUSES
 
 
 def _filter_applications_query(
@@ -451,6 +500,8 @@ def _recruiter_performance(
     month_start = today.replace(day=1).strftime("%Y-%m-%d")
     month_end = today.strftime("%Y-%m-%d")
 
+    date_from, date_to = _period_bounds(filters)
+
     by_rec: Dict[Optional[int], List[Any]] = defaultdict(list)
     for a in apps:
         by_rec[a.recommended_by].append(a)
@@ -467,12 +518,15 @@ def _recruiter_performance(
         jids: Set[int] = set()
         hc = 0
         hired_month = 0
+        recommended_count = 0
         for a in rec_apps:
             clients.add(int(a.client_id))
             jids.add(int(a.job_id))
             job = jobs.get(a.job_id)
             if job:
                 hc += int(job.headcount or 0)
+            if _recommended_in_period(a, date_from, date_to):
+                recommended_count += 1
             if (
                 (a.status or "") == "hired"
                 and (a.hired_at or "") >= month_start
@@ -495,6 +549,7 @@ def _recruiter_performance(
             "client_count": len(clients),
             "job_count": len(jids),
             "hc_total": hc,
+            "recommended_count": recommended_count,
             "hired_this_month": hired_month,
             "internal_screen_rate": _stage_rate("internal_screen"),
             "client_screen_rate": _stage_rate("client_screen"),
@@ -536,6 +591,7 @@ def _metrics_for_apps(
 
     for app in apps:
         histories = hist_map.get(app.id, [])
+        status_snapshot = _status_at(app, histories, snapshot_as_of)
         if _recommended_in_period(app, date_from, date_to):
             metrics["pushed_resume_count"] += 1
         if _app_had_transition_to_in_period(
@@ -546,7 +602,8 @@ def _metrics_for_apps(
             histories, "client_screen_duplicate", date_from, date_to
         ):
             metrics["duplicate_count"] += 1
-        status_snapshot = _status_at(app, histories, snapshot_as_of)
+        if status_snapshot == "pending_internal_screen":
+            metrics["pending_internal_screen"] += 1
         if status_snapshot == "pending_client_screen":
             metrics["pending_client_screen"] += 1
         if status_snapshot in _SCHEDULING_INTERVIEW_SNAPSHOT_STATUSES:
@@ -559,9 +616,17 @@ def _metrics_for_apps(
             metrics["interview_abandoned"] += 1
         if status_snapshot in _PENDING_INTERVIEW_SNAPSHOT_STATUSES:
             metrics["pending_interview"] += 1
-        if status_snapshot in _INTERVIEWED_SNAPSHOT_STATUSES:
+        if status_snapshot in _PENDING_SECOND_INTERVIEW_SNAPSHOT_STATUSES:
+            metrics["pending_second_interview"] += 1
+        if status_snapshot in _PENDING_FINAL_INTERVIEW_SNAPSHOT_STATUSES:
+            metrics["pending_final_interview"] += 1
+        if _app_counts_as_interviewed(
+            app, histories, date_from, date_to, snapshot_as_of
+        ):
             metrics["interviewed"] += 1
-        if status_snapshot in _INTERVIEW_PASS_SNAPSHOT_STATUSES:
+        if _app_counts_as_interview_passed(
+            app, histories, date_from, date_to, snapshot_as_of
+        ):
             metrics["interview_passed"] += 1
         if status_snapshot == "pending_offer":
             metrics["pending_offer_count"] += 1
@@ -577,6 +642,8 @@ def _metrics_for_apps(
             metrics["onboarding_lost_count"] += 1
         if _app_had_transition_in_period(histories, _HIRED_STATUSES, date_from, date_to):
             metrics["hired_count"] += 1
+        if status_snapshot == "hired" and not getattr(app, "converted_to_roster_entry_id", None):
+            metrics["pending_roster_conversion_count"] += 1
     return metrics
 
 
@@ -594,16 +661,93 @@ _JOB_STAGE_RATE_SPECS = (
 def _attach_job_stage_rates(metrics: Dict[str, int]) -> Dict[str, Any]:
     out: Dict[str, Any] = dict(metrics)
     for num_key, rate_key, denom_key in _JOB_STAGE_RATE_SPECS:
-        if rate_key == "interview_passed_rate":
-            denominator = int(metrics.get("interviewed", 0)) + int(metrics.get("interview_passed", 0))
-        else:
-            denominator = int(metrics.get(denom_key, 0))
         out[rate_key] = _rate(
             int(metrics.get(num_key, 0)),
-            denominator,
+            int(metrics.get(denom_key, 0)),
             decimals=0,
         )
     return out
+
+
+def _parse_rate_value(rate_str: str) -> Optional[float]:
+    text = (rate_str or "").strip()
+    if not text or text == "—":
+        return None
+    if text.endswith("%"):
+        text = text[:-1]
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+_LIFECYCLE_FUNNEL_SPECS = (
+    ("resume", "简历数"),
+    ("internal_screen", "内筛通过"),
+    ("client_screen", "客筛通过"),
+    ("scheduling", "约面成功"),
+    ("first_interview", "一面通过"),
+    ("second_interview", "二面通过"),
+    ("final_interview", "终面通过"),
+    ("offer", "接offer"),
+    ("hired_summary", "已入职"),
+)
+
+
+def _lifecycle_funnel(
+    apps: List[Any],
+    hist_map: Dict[int, List[Any]],
+    filters: Dict[str, Any],
+) -> Dict[str, Any]:
+    hist_block = _historical_overview(apps, hist_map, filters)
+    block = hist_block[0] if hist_block else {"resume_count": 0, "stages": []}
+    resume_count = int(block.get("resume_count") or 0)
+    stage_by_key = {str(s.get("stage") or ""): s for s in (block.get("stages") or [])}
+
+    rows: List[Dict[str, Any]] = []
+    for stage_key, label in _LIFECYCLE_FUNNEL_SPECS:
+        if stage_key == "resume":
+            rows.append({
+                "key": stage_key,
+                "label": label,
+                "entered": resume_count,
+                "passed": resume_count,
+                "failed": 0,
+                "pending": 0,
+                "processed": resume_count,
+                "pass_rate": "—",
+                "pass_rate_value": None,
+                "funnel_count": resume_count,
+            })
+            continue
+        stage = stage_by_key.get(stage_key) or {}
+        entered = int(stage.get("entered") or 0)
+        passed = int(stage.get("passed") or 0)
+        failed = int(stage.get("failed") or 0)
+        pending = int(stage.get("pending_count") or 0)
+        processed = int(stage.get("denominator") or 0)
+        pass_rate = str(stage.get("pass_rate") or "—")
+        rows.append({
+            "key": stage_key,
+            "label": label,
+            "entered": entered,
+            "passed": passed,
+            "failed": failed,
+            "pending": pending,
+            "processed": processed,
+            "pass_rate": pass_rate,
+            "pass_rate_value": _parse_rate_value(pass_rate),
+            "funnel_count": passed,
+        })
+
+    hired_stage = stage_by_key.get("hired_summary") or {}
+    hired_count = int(hired_stage.get("passed") or 0)
+    return {
+        "base_count": resume_count,
+        "hired_count": hired_count,
+        "resume_to_hire_rate": _rate(hired_count, resume_count, decimals=1),
+        "rows": rows,
+    }
 
 
 def _client_job_stage_summary(
@@ -638,7 +782,7 @@ def _client_job_stage_summary(
             "job_title": (job.title or "").strip() or f"岗位#{job.id}",
             "client_id": cid,
             "client_name": client_names.get(cid, "") if cid is not None else "",
-            "headcount": int(job.headcount or 0),
+            "headcount": int(job.headcount or 0) if (job.status or "").strip() == "open" else 0,
             "location": (job.location or "").strip(),
             **_attach_job_stage_rates(metrics),
         }
@@ -704,5 +848,6 @@ def compute_rms_dashboard(
         "client_job_stage_summary": _client_job_stage_summary(
             db, ctx, scoped_apps, hist_map, RmsJob, Client, filters
         ),
+        "lifecycle_funnel": _lifecycle_funnel(scoped_apps, hist_map, filters),
     }
 

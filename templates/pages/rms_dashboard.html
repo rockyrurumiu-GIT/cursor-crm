@@ -518,9 +518,27 @@
                             <span class="num-sub">HC 总数</span>
                         </div>
                     </template>
+                    <template v-else-if="item.block === 'kpi_resume_count'">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ resumeCount }}</span>
+                            <span class="num-sub">简历数</span>
+                        </div>
+                    </template>
+                    <template v-else-if="item.block === 'kpi_hired_count'">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ hiredCount }}</span>
+                            <span class="num-sub">入职数</span>
+                        </div>
+                    </template>
+                    <template v-else-if="item.block === 'kpi_resume_to_hire_rate'">
+                        <div class="num-wrap">
+                            <span class="num-value">{{ resumeToHireRate }}</span>
+                            <span class="num-sub">百简历入职转化率</span>
+                        </div>
+                    </template>
 
                     <!-- 图表 -->
-                    <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter' || item.block === 'chart_client_job_stage_grouped' || item.block === 'chart_client_job_stage_stacked' || item.block === 'chart_client_job_stage_funnel'">
+                    <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter' || item.block === 'chart_pending_backlog' || item.block === 'lifecycle_funnel' || item.block === 'chart_lifecycle_pass_rate' || item.block === 'chart_job_pending_backlog' || item.block === 'chart_client_hired_ranking' || item.block === 'chart_recruiter_recommend_vs_hired' || item.block === 'chart_client_job_stage_grouped' || item.block === 'chart_client_job_stage_stacked' || item.block === 'chart_client_job_stage_funnel'">
                         <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
                         <p v-else-if="!rmsChartHasData(item.block)" class="state-msg">暂无数据</p>
                         <div v-else class="chart-area">
@@ -567,16 +585,39 @@
                         <p v-else class="state-msg">暂无数据</p>
                     </template>
 
+                    <!-- 生命周期明细 -->
+                    <template v-else-if="item.block === 'table_lifecycle_detail'">
+                        <table class="rms-stage-table" v-if="lifecycleRows.length">
+                            <thead><tr>
+                                <th>阶段</th><th>进入</th><th>通过</th><th>失败</th>
+                                <th>待处理</th><th>分母</th><th>通过率</th>
+                            </tr></thead>
+                            <tbody>
+                                <tr v-for="s in lifecycleRows" :key="s.key">
+                                    <td>{{ s.label }}</td>
+                                    <td>{{ s.entered }}</td>
+                                    <td>{{ s.passed }}</td>
+                                    <td>{{ s.failed }}</td>
+                                    <td>{{ s.pending }}</td>
+                                    <td>{{ s.processed }}</td>
+                                    <td>{{ s.pass_rate }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p v-else class="state-msg">暂无数据</p>
+                    </template>
+
                     <!-- 人效明细 -->
                     <template v-else-if="item.block === 'table_recruiter'">
                         <table class="rms-stage-table" v-if="data && data.recruiter_performance.length">
                             <thead><tr>
-                                <th>推荐人ID</th><th>客户数</th><th>岗位数</th><th>HC</th>
+                                <th>推荐人ID</th><th>推荐量</th><th>客户数</th><th>岗位数</th><th>HC</th>
                                 <th>当月入职</th><th>客筛率</th><th>入职率</th>
                             </tr></thead>
                             <tbody>
                                 <tr v-for="r in data.recruiter_performance" :key="r.recruiter_user_id">
                                     <td>{{ r.recruiter_user_id || '—' }}</td>
+                                    <td>{{ r.recommended_count != null ? r.recommended_count : '—' }}</td>
                                     <td>{{ r.client_count }}</td>
                                     <td>{{ r.job_count }}</td>
                                     <td>{{ r.hc_total }}</td>
@@ -597,7 +638,7 @@
                                 <thead><tr>
                                     <th>时间</th><th>客户</th><th>岗位</th><th class="col-compact">HC</th><th>地点</th>
                                     <th class="col-compact">简历数</th><th>内筛通过</th><th>重复</th><th class="col-compact">待客筛</th>
-                                    <th>约面中</th><th>客筛通过</th><th>放弃面试</th><th>待面试</th><th>已面试</th><th>面试通过</th>
+                                    <th>客筛通过</th><th>约面中</th><th>放弃面试</th><th>待面试</th><th>已面试</th><th>面试通过</th>
                                     <th>待offer</th><th>弃offer</th><th>在途</th><th>在途流失</th><th>已入职</th>
                                 </tr></thead>
                                 <tbody v-if="clientJobStageRows.length">
@@ -611,8 +652,8 @@
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'internal_screen_passed', 'pushed_resume_count', '内筛通过')">{{ jobStageMetricText(row, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(row, 'duplicate_count', 'duplicate_count_rate') }}</td>
                                         <td class="col-compact">{{ row.pending_client_screen }}</td>
-                                        <td>{{ row.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(row, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
+                                        <td>{{ row.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(row, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
                                         <td>{{ row.pending_interview }}</td>
                                         <td>{{ row.interviewed }}</td>
@@ -633,8 +674,8 @@
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'internal_screen_passed', 'pushed_resume_count', '内筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(clientJobStageTotal, 'duplicate_count', 'duplicate_count_rate') }}</td>
                                         <td class="col-compact">{{ clientJobStageTotal.pending_client_screen }}</td>
-                                        <td>{{ clientJobStageTotal.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
+                                        <td>{{ clientJobStageTotal.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(clientJobStageTotal, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
                                         <td>{{ clientJobStageTotal.pending_interview }}</td>
                                         <td>{{ clientJobStageTotal.interviewed }}</td>
@@ -1034,7 +1075,7 @@
             <h3 class="font-bold mb-3">新建看板</h3>
             <div class="field"><label>名称</label><input v-model="dashboardForm.name" /></div>
             <div class="field"><label>描述</label><textarea v-model="dashboardForm.description" rows="2"></textarea></div>
-            <p class="text-xs text-[#98a2b3] mt-1">将自动创建总览 / 历史转化 / 招聘人效 / 花名册核对四个标签页。</p>
+            <p class="text-xs text-[#98a2b3] mt-1">将自动创建总览 / 生命周期转化 / 客户岗位分析 / 招聘人效 / 花名册核对五个标签页。</p>
             <div class="flex justify-end gap-2 mt-3">
                 <button type="button" class="tbtn" @click="showDashboardModal = false">取消</button>
                 <button type="button" class="tbtn tbtn-primary" @click="saveDashboard">保存</button>
@@ -1049,7 +1090,8 @@
             <div class="field"><label>内容类型</label>
                 <select v-model="tabForm.rms_template">
                     <option value="overview">总览</option>
-                    <option value="history">历史转化</option>
+                    <option value="lifecycle">生命周期转化</option>
+                    <option value="client_job">客户岗位分析</option>
                     <option value="recruiter">招聘人效</option>
                     <option value="roster">花名册核对</option>
                     <option value="empty">空白</option>

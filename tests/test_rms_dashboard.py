@@ -68,6 +68,7 @@ def test_dashboard_returns_structure(client_rbac, admin_auth, rms_engine, uniq):
     assert "total" in summary
     assert "period_label" in summary
     assert "open_job_count" in body["demand_overview"]
+    assert "lifecycle_funnel" in body
     stages = body["historical_overview"][0]["stages"]
     assert stages, "expected at least one historical stage"
     for stage in stages:
@@ -103,20 +104,17 @@ def test_rms_dashboard_boards_seeded(client_rbac, admin_auth, rms_engine, uniq):
     assert boards[0]["scope"] == "rms"
     tab_names = [t["name"] for t in boards[0]["tabs"]]
     assert "总览" in tab_names
-    assert "历史转化" in tab_names
-    assert "Test" in tab_names
-    test_tab = next(t for t in boards[0]["tabs"] if t["name"] == "Test")
-    test_blocks = {(w.get("config") or {}).get("block") for w in test_tab["widgets"]}
-    assert {
-        "chart_client_job_stage_grouped",
-        "chart_client_job_stage_stacked",
-        "chart_client_job_stage_funnel",
-    }.issubset(test_blocks)
+    assert "生命周期转化" in tab_names
+    assert "客户岗位分析" in tab_names
+    assert "招聘人效" in tab_names
+    assert "花名册核对" in tab_names
+    assert "Test" not in tab_names
     overview = next(t for t in boards[0]["tabs"] if t["name"] == "总览")
     assert len(overview["widgets"]) >= 4
     blocks = {(w.get("config") or {}).get("block") for w in overview["widgets"]}
-    assert "kpi_jobs" in blocks
+    assert "kpi_resume_count" in blocks
     assert "chart_pipeline" in blocks
+    assert "chart_pending_backlog" in blocks
 
 
 def test_rms_dashboard_create_board_seeds_default_tabs(client_rbac, admin_auth, rms_engine, uniq):
@@ -132,13 +130,15 @@ def test_rms_dashboard_create_board_seeds_default_tabs(client_rbac, admin_auth, 
     assert body["name"] == f"总看板_{uniq}"
     tab_names = [t["name"] for t in body["tabs"]]
     assert "总览" in tab_names
-    assert "历史转化" in tab_names
+    assert "生命周期转化" in tab_names
+    assert "客户岗位分析" in tab_names
     assert "招聘人效" in tab_names
     assert "花名册核对" in tab_names
+    assert "Test" not in tab_names
     overview = next(t for t in body["tabs"] if t["name"] == "总览")
     assert len(overview["widgets"]) >= 4
     blocks = {(w.get("config") or {}).get("block") for w in overview["widgets"]}
-    assert "kpi_jobs" in blocks
+    assert "kpi_resume_count" in blocks
     assert "chart_pipeline" in blocks
 
 
@@ -229,17 +229,21 @@ def test_rms_dashboard_metadata(client_rbac, admin_auth, rms_engine, uniq):
         assert len(src.get("fields") or []) > 0
     assert any(b["key"] == "kpi_jobs" for b in body["rms_blocks"])
     assert any(b["key"] == "table_client_job_stage" for b in body["rms_blocks"])
-    for chart_key in (
+    assert any(b["key"] == "lifecycle_funnel" for b in body["rms_blocks"])
+    addable_keys = {b["key"] for b in body["rms_blocks"]}
+    for legacy_key in (
         "chart_client_job_stage_grouped",
         "chart_client_job_stage_stacked",
         "chart_client_job_stage_funnel",
+        "chart_history_pass",
+        "table_history",
     ):
-        assert any(b["key"] == chart_key for b in body["rms_blocks"])
+        assert legacy_key not in addable_keys
 
 
-def _history_tab(client, cookies):
+def _lifecycle_tab(client, cookies):
     boards = client.get("/api/rms/dashboard-boards", cookies=cookies).json()
-    return next(t for t in boards[0]["tabs"] if t["name"] == "历史转化")
+    return next(t for t in boards[0]["tabs"] if t["name"] == "生命周期转化")
 
 
 def _job_row(summary: dict, job_id: int) -> dict:
@@ -412,7 +416,7 @@ def test_dashboard_period_event_pass_without_push_in_range(
     assert r.status_code == 200, r.text
     row = _job_row(r.json()["client_job_stage_summary"], job_id)
     assert row["pushed_resume_count"] == 0
-    assert row["interview_passed"] == 0
+    assert row["interview_passed"] == 1
     assert row["interviewed"] == 1
 
 
@@ -457,7 +461,7 @@ def test_dashboard_period_push_and_pass_same_range(
     assert r.status_code == 200, r.text
     row = _job_row(r.json()["client_job_stage_summary"], job_id)
     assert row["pushed_resume_count"] == 1
-    assert row["interview_passed"] == 0
+    assert row["interview_passed"] == 1
     assert row["interviewed"] == 1
 
 
@@ -489,10 +493,10 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
     assert row["client_screen_passed"] == 1
     assert row["pending_interview"] == 0
     assert row["interviewed"] == 1
-    assert row["interview_passed"] == 0
+    assert row["interview_passed"] == 1
     assert row["internal_screen_passed_rate"] == "100%"
     assert row["client_screen_passed_rate"] == "100%"
-    assert row["interview_passed_rate"] == "0%"
+    assert row["interview_passed_rate"] == "100%"
     assert row["interview_abandoned_rate"] == "0%"
 
     for to_status in ("second_interview_passed", "pending_offer"):
@@ -505,8 +509,8 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
 
     row = dash_row()
     assert row["pending_offer_count"] == 1
-    assert row["interview_passed"] == 0
-    assert row["interviewed"] == 0
+    assert row["interview_passed"] == 1
+    assert row["interviewed"] == 1
     assert row["offer_dropped_count"] == 0
     assert row["onboarding_count"] == 0
     assert row["onboarding_lost_count"] == 0
@@ -618,8 +622,8 @@ def test_client_job_stage_snapshot_scheduling_and_onboarding(
     row = dash_row()
     assert row["scheduling_interview_count"] == 0
     assert row["pending_interview"] == 0
-    assert row["interviewed"] == 0
-    assert row["interview_passed"] == 0
+    assert row["interviewed"] == 1
+    assert row["interview_passed"] == 1
     assert row["pending_offer_count"] == 0
     assert row["onboarding_count"] == 1
 
@@ -711,7 +715,7 @@ def test_dashboard_forbidden_without_analytics_read(
 def test_rms_dashboard_widget_create_client_job_stage_block(client_rbac, admin_auth, rms_engine, uniq):
     user, pwd = admin_auth
     login = _login(client_rbac, user, pwd)
-    tab = _history_tab(client_rbac, login.cookies)
+    tab = _lifecycle_tab(client_rbac, login.cookies)
     created = client_rbac.post(
         f"/api/rms/dashboard-tabs/{tab['id']}/widgets",
         json={
@@ -1401,3 +1405,244 @@ def test_rms_fk_group_labels_in_widget_data(client_rbac, admin_auth, rms_engine,
     assert labels
     assert not any(lb.isdigit() for lb in labels if lb and lb != "(空)")
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_dashboard_default_tabs_without_test(client_rbac, admin_auth, rms_engine, uniq):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    r = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    tab_names = [t["name"] for t in r.json()[0]["tabs"]]
+    assert "Test" not in tab_names
+    assert "生命周期转化" in tab_names
+    assert "客户岗位分析" in tab_names
+
+
+def test_rms_dashboard_lifecycle_funnel_rates(client_rbac, admin_auth, rms_engine, uniq):
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+    r = client_rbac.get("/api/rms/dashboard", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    lf = r.json()["lifecycle_funnel"]
+    assert "base_count" in lf
+    assert "hired_count" in lf
+    assert "resume_to_hire_rate" in lf
+    assert lf["rows"]
+    required = {
+        "key", "label", "entered", "passed", "failed", "pending",
+        "processed", "pass_rate", "pass_rate_value", "funnel_count",
+    }
+    for row in lf["rows"]:
+        assert required.issubset(row.keys())
+        assert row["processed"] == row["entered"] - row["pending"]
+
+
+def test_rms_dashboard_recruiter_recommended_count(client_rbac, admin_auth, rms_engine, uniq):
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"rec_{uniq}")
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id),
+    )
+    assert cand.status_code == 200, cand.text
+    app = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+    )
+    assert app.status_code == 200, app.text
+    r = client_rbac.get("/api/rms/dashboard", cookies=login_del.cookies)
+    assert r.status_code == 200, r.text
+    perf = r.json()["recruiter_performance"]
+    assert perf
+    assert perf[0]["recommended_count"] >= 1
+
+
+def test_rms_block_keys_legacy_still_valid(client_rbac, admin_auth, rms_engine, uniq):
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{overview['id']}/widgets",
+        json={
+            "title": "Legacy funnel",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {"block": "chart_client_job_stage_funnel"},
+            "x": 0,
+            "y": 99,
+            "w": 12,
+            "h": 6,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    client_rbac.delete(
+        f"/api/rms/dashboard-widgets/{created.json()['id']}",
+        cookies=login.cookies,
+    )
+
+
+def test_rms_dashboard_obsolete_seed_widgets_cleaned(client_rbac, admin_auth, rms_engine, uniq):
+    import main as crm_main
+    from services.dashboards import seed_default_dashboards
+
+    login = _admin_login(client_rbac, admin_auth)
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    dash_id = boards[0]["id"]
+    custom_tab = client_rbac.post(
+        f"/api/rms/dashboard-boards/{dash_id}/tabs",
+        cookies=login.cookies,
+        json={"name": f"自定义_{uniq}", "rms_template": "empty"},
+    )
+    assert custom_tab.status_code == 200, custom_tab.text
+    tab_id = custom_tab.json()["id"]
+    legacy = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab_id}/widgets",
+        json={
+            "title": "用户保留",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {"block": "chart_client_job_stage_grouped"},
+            "x": 0,
+            "y": 0,
+            "w": 12,
+            "h": 6,
+        },
+        cookies=login.cookies,
+    )
+    assert legacy.status_code == 200, legacy.text
+    legacy_id = legacy.json()["id"]
+
+    db = crm_main.SessionLocal()
+    try:
+        seed_default_dashboards(
+            db,
+            crm_main.DashboardDashboard,
+            crm_main.DashboardTab,
+            crm_main.DashboardWidget,
+        )
+    finally:
+        db.close()
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    overview_blocks = {
+        (w.get("config") or {}).get("block")
+        for t in boards[0]["tabs"]
+        if t["name"] == "总览"
+        for w in t["widgets"]
+    }
+    assert "chart_client_job_stage_grouped" not in overview_blocks
+    custom = next(t for t in boards[0]["tabs"] if t["id"] == tab_id)
+    saved_blocks = {(w.get("config") or {}).get("block") for w in custom["widgets"]}
+    assert "chart_client_job_stage_grouped" in saved_blocks
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{legacy_id}", cookies=login.cookies)
+    client_rbac.delete(f"/api/rms/dashboard-tabs/{tab_id}", cookies=login.cookies)
+
+
+def test_rms_dashboard_tab_ia_v2_sync(client_rbac, admin_auth, rms_engine, uniq):
+    import main as crm_main
+    from services.dashboards import seed_default_dashboards
+
+    login = _delivery_login(client_rbac, admin_auth, uniq)
+
+    def tab_snapshot():
+        boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+        tabs = boards[0]["tabs"]
+        return [t["name"] for t in tabs], sum(
+            1 for t in tabs if t["name"] == "客户岗位分析"
+        )
+
+    db = crm_main.SessionLocal()
+    try:
+        seed_default_dashboards(
+            db,
+            crm_main.DashboardDashboard,
+            crm_main.DashboardTab,
+            crm_main.DashboardWidget,
+        )
+        seed_default_dashboards(
+            db,
+            crm_main.DashboardDashboard,
+            crm_main.DashboardTab,
+            crm_main.DashboardWidget,
+        )
+    finally:
+        db.close()
+
+    names, client_job_count = tab_snapshot()
+    assert "生命周期转化" in names
+    assert "历史转化" not in names
+    assert client_job_count == 1
+    client_tab = next(
+        t for t in client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()[0]["tabs"]
+        if t["name"] == "客户岗位分析"
+    )
+    blocks = {(w.get("config") or {}).get("block") for w in client_tab["widgets"]}
+    assert "table_client_job_stage" in blocks
+
+
+def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """误点一面通过后改回待一面：已面试/面试通过不计入（当前仍在一面结果之后才计）。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"rb_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    for to_status in ("scheduling_interview", "pending_first_interview", "first_interview_passed"):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": to_status, "reason": "ok"},
+        )
+        assert tr.status_code == 200, tr.text
+
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["interviewed"] == 1
+    assert row["interview_passed"] == 1
+
+    corr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={
+            "to_status": "pending_first_interview",
+            "mode": "correction",
+            "note": "误点一面通过，改回待一面",
+        },
+    )
+    assert corr.status_code == 200, corr.text
+
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["interviewed"] == 0
+    assert row["interview_passed"] == 0
+    assert row["pending_interview"] == 1
+
+
+def test_rms_dashboard_metrics_6a2b(client_rbac, admin_auth, rms_engine, uniq):
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"hc_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    close = client_rbac.patch(
+        f"/api/rms/jobs/{job_id}",
+        cookies=login.cookies,
+        json={"status": "closed"},
+    )
+    assert close.status_code == 200, close.text
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["headcount"] == 0
+    assert "pending_roster_conversion_count" in row
+
+    page = client_rbac.get("/rms/dashboard", cookies=login.cookies)
+    assert page.status_code == 200, page.text
+    assert "pending_roster_conversion_count" not in page.text
+    assert "待转花名册" not in page.text

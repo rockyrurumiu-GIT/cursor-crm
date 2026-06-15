@@ -1,6 +1,6 @@
 # Phase 6A：招聘 Dashboard 客户岗位阶段统计增强
 
-**状态：** 已实施
+**状态：** 已 superseded by [plan/41-rms-dashboard-chart-system-plan.md](41-rms-dashboard-chart-system-plan.md)
 
 ## 目标
 
