@@ -554,6 +554,11 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
     assert row["pending_interview"] == 0
     assert row["interviewed"] == 1
     assert row["interview_passed"] == 1
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
+    assert row["first_interview_passed_rate"] == "100%"
+    assert row["second_interview_count"] == 0
+    assert row["second_interview_passed_count"] == 0
     assert row["internal_screen_passed_rate"] == "100%"
     assert row["client_screen_passed_rate"] == "100%"
     assert row["interview_passed_rate"] == "100%"
@@ -571,6 +576,11 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
     assert row["pending_offer_count"] == 1
     assert row["interview_passed"] == 1
     assert row["interviewed"] == 1
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
+    assert row["second_interview_count"] == 1
+    assert row["second_interview_passed_count"] == 1
+    assert row["second_interview_passed_rate"] == "100%"
     assert row["offer_dropped_count"] == 0
     assert row["onboarding_count"] == 0
     assert row["onboarding_lost_count"] == 0
@@ -598,6 +608,123 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
     row = dash_row()
     assert row["onboarding_count"] == 0
     assert row["hired_count"] == 1
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
+    assert row["second_interview_count"] == 1
+    assert row["second_interview_passed_count"] == 1
+
+
+def test_client_job_stage_interview_first_fail(client_rbac, admin_auth, rms_engine, uniq):
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"if_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    for to_status in (
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_failed",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": to_status, "reason": "ok"},
+        )
+        assert tr.status_code == 200, tr.text
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 0
+    assert row["first_interview_passed_rate"] == "0%"
+    assert row["second_interview_count"] == 0
+    assert row["second_interview_passed_count"] == 0
+
+
+def test_client_job_stage_interview_first_pass_pending_second(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"ip_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    for to_status in ("scheduling_interview", "pending_first_interview", "first_interview_passed"):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": to_status, "reason": "ok"},
+        )
+        assert tr.status_code == 200, tr.text
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
+    assert row["first_interview_passed_rate"] == "100%"
+    assert row["second_interview_count"] == 0
+    assert row["second_interview_passed_count"] == 0
+
+
+def test_client_job_stage_interview_second_fail(client_rbac, admin_auth, rms_engine, uniq):
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"sf_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    for to_status in (
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_passed",
+        "second_interview_failed",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": to_status, "reason": "ok"},
+        )
+        assert tr.status_code == 200, tr.text
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
+    assert row["first_interview_passed_rate"] == "100%"
+    assert row["second_interview_count"] == 1
+    assert row["second_interview_passed_count"] == 0
+    assert row["second_interview_passed_rate"] == "0%"
+
+
+def test_client_job_stage_interview_second_pass(client_rbac, admin_auth, rms_engine, uniq):
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"sp_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    for to_status in (
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_passed",
+        "second_interview_passed",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": to_status, "reason": "ok"},
+        )
+        assert tr.status_code == 200, tr.text
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
+    assert row["second_interview_count"] == 1
+    assert row["second_interview_passed_count"] == 1
+    assert row["second_interview_passed_rate"] == "100%"
 
 
 def test_client_job_stage_row_fields(client_rbac, admin_auth, rms_engine, uniq):
@@ -1740,6 +1867,8 @@ def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(
     row = _job_row(r.json()["client_job_stage_summary"], job_id)
     assert row["interviewed"] == 1
     assert row["interview_passed"] == 1
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
     first_before = next(
         s for s in r.json()["lifecycle_funnel"]["rows"] if s["key"] == "first_interview"
     )
@@ -1761,6 +1890,10 @@ def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(
     row = _job_row(r.json()["client_job_stage_summary"], job_id)
     assert row["interviewed"] == 0
     assert row["interview_passed"] == 0
+    assert row["first_interview_count"] == 0
+    assert row["first_interview_passed_count"] == 0
+    assert row["second_interview_count"] == 0
+    assert row["second_interview_passed_count"] == 0
     assert row["pending_interview"] == 1
 
     first_interview = next(
@@ -1768,6 +1901,58 @@ def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(
     )
     assert first_interview["passed"] == 0
     assert first_interview["pass_rate_value"] is None or first_interview["pass_rate_value"] <= 100
+
+
+def test_dashboard_interview_metrics_exclude_rollback_to_first_passed(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """误点二面通过后改回待二面：二面字段归零，一面字段保留。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"rb2_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    for to_status in (
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_passed",
+        "second_interview_passed",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={"to_status": to_status, "reason": "ok"},
+        )
+        assert tr.status_code == 200, tr.text
+
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
+    assert row["second_interview_count"] == 1
+    assert row["second_interview_passed_count"] == 1
+
+    corr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={
+            "to_status": "first_interview_passed",
+            "mode": "correction",
+            "note": "误点二面通过，改回待二面",
+        },
+    )
+    assert corr.status_code == 200, corr.text
+
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    row = _job_row(r.json()["client_job_stage_summary"], job_id)
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
+    assert row["second_interview_count"] == 0
+    assert row["second_interview_passed_count"] == 0
+    assert row["pending_second_interview"] == 1
 
 
 def test_rms_dashboard_metrics_6a2b(client_rbac, admin_auth, rms_engine, uniq):

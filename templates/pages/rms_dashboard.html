@@ -542,9 +542,9 @@
                         <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
                         <p v-else-if="!rmsChartHasData(item.block)" class="state-msg">暂无数据</p>
                         <div v-else class="chart-area">
-                            <p v-if="item.block === 'chart_client_job_stage_grouped'" class="chart-hint">按岗位对比推送、内筛、客筛、面试通过（竖向分组柱）</p>
-                            <p v-else-if="item.block === 'chart_client_job_stage_stacked'" class="chart-hint">按岗位展示待客筛、待面试、面试通过、放弃面试（横向堆叠）</p>
-                            <p v-else-if="item.block === 'chart_client_job_stage_funnel'" class="chart-hint">当前筛选合计：推送 → 内筛 → 客筛 → 已面试 → 面试通过</p>
+                            <p v-if="item.block === 'chart_client_job_stage_grouped'" class="chart-hint">按岗位对比推送、内筛、客筛、一面通过、二面通过（竖向分组柱）</p>
+                            <p v-else-if="item.block === 'chart_client_job_stage_stacked'" class="chart-hint">按岗位展示待客筛、待面试、一面通过、二面通过、放弃面试（横向堆叠）</p>
+                            <p v-else-if="item.block === 'chart_client_job_stage_funnel'" class="chart-hint">当前筛选合计：推送 → 内筛 → 客筛 → 一面 → 二面</p>
                             <div class="chart-canvas-wrap">
                                 <canvas :id="chartCanvasId(item.widget)"></canvas>
                             </div>
@@ -638,7 +638,7 @@
                                 <thead><tr>
                                     <th>时间</th><th>客户</th><th>岗位</th><th class="col-compact">HC</th><th>地点</th>
                                     <th class="col-compact">简历数</th><th>内筛通过</th><th>重复</th><th class="col-compact">待客筛</th>
-                                    <th>客筛通过</th><th>约面中</th><th>放弃面试</th><th>待面试</th><th>已面试</th><th>面试通过</th>
+                                    <th>客筛通过</th><th>约面中</th><th>放弃面试</th><th>待面试</th><th>一面数</th><th>一面通过</th><th>二面数</th><th>二面通过</th>
                                     <th>待offer</th><th>弃offer</th><th>在途</th><th>在途流失</th><th>已入职</th>
                                 </tr></thead>
                                 <tbody v-if="clientJobStageRows.length">
@@ -656,10 +656,12 @@
                                         <td>{{ row.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(row, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
                                         <td>{{ row.pending_interview }}</td>
-                                        <td>{{ row.interviewed }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'interview_passed', 'interviewed', '面试通过')">{{ jobStageMetricText(row, 'interview_passed', 'interview_passed_rate') }}</td>
+                                        <td>{{ row.first_interview_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'first_interview_passed_count', 'first_interview_count', '一面通过')">{{ jobStageMetricText(row, 'first_interview_passed_count', 'first_interview_passed_rate') }}</td>
+                                        <td>{{ row.second_interview_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'second_interview_passed_count', 'second_interview_count', '二面通过')">{{ jobStageMetricText(row, 'second_interview_passed_count', 'second_interview_passed_rate') }}</td>
                                         <td>{{ row.pending_offer_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'offer_dropped_count', 'interview_passed', '弃offer')">{{ jobStageMetricText(row, 'offer_dropped_count', 'offer_dropped_count_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'offer_dropped_count', 'second_interview_passed_count', '弃offer')">{{ jobStageMetricText(row, 'offer_dropped_count', 'offer_dropped_count_rate') }}</td>
                                         <td>{{ row.onboarding_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'onboarding_lost_count', 'onboarding_count', '在途流失')">{{ jobStageMetricText(row, 'onboarding_lost_count', 'onboarding_lost_count_rate') }}</td>
                                         <td>{{ row.hired_count }}</td>
@@ -678,17 +680,19 @@
                                         <td>{{ clientJobStageTotal.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(clientJobStageTotal, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
                                         <td>{{ clientJobStageTotal.pending_interview }}</td>
-                                        <td>{{ clientJobStageTotal.interviewed }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'interview_passed', 'interviewed', '面试通过')">{{ jobStageMetricText(clientJobStageTotal, 'interview_passed', 'interview_passed_rate') }}</td>
+                                        <td>{{ clientJobStageTotal.first_interview_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'first_interview_passed_count', 'first_interview_count', '一面通过')">{{ jobStageMetricText(clientJobStageTotal, 'first_interview_passed_count', 'first_interview_passed_rate') }}</td>
+                                        <td>{{ clientJobStageTotal.second_interview_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'second_interview_passed_count', 'second_interview_count', '二面通过')">{{ jobStageMetricText(clientJobStageTotal, 'second_interview_passed_count', 'second_interview_passed_rate') }}</td>
                                         <td>{{ clientJobStageTotal.pending_offer_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'offer_dropped_count', 'interview_passed', '弃offer')">{{ jobStageMetricText(clientJobStageTotal, 'offer_dropped_count', 'offer_dropped_count_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'offer_dropped_count', 'second_interview_passed_count', '弃offer')">{{ jobStageMetricText(clientJobStageTotal, 'offer_dropped_count', 'offer_dropped_count_rate') }}</td>
                                         <td>{{ clientJobStageTotal.onboarding_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'onboarding_lost_count', 'onboarding_count', '在途流失')">{{ jobStageMetricText(clientJobStageTotal, 'onboarding_lost_count', 'onboarding_lost_count_rate') }}</td>
                                         <td>{{ clientJobStageTotal.hired_count }}</td>
                                     </tr>
                                 </tbody>
                                 <tbody v-else>
-                                    <tr><td colspan="20" class="state-msg">暂无数据</td></tr>
+                                    <tr><td colspan="22" class="state-msg">暂无数据</td></tr>
                                 </tbody>
                             </table>
                         </div>

@@ -67,6 +67,11 @@ _FIRST_INTERVIEW_OUTCOME_STATUSES = frozenset({
     "first_interview_passed",
     "first_interview_failed",
 })
+_SECOND_INTERVIEW_OUTCOME_STATUSES = frozenset({
+    "second_interview_passed",
+    "second_interview_failed",
+    "second_interview_abandoned",
+})
 _INTERVIEW_PASSED_STATUSES = frozenset({
     "first_interview_passed",
     "second_interview_passed",
@@ -91,6 +96,10 @@ _SUMMARY_METRIC_KEYS = (
     "pending_interview",
     "pending_second_interview",
     "pending_final_interview",
+    "first_interview_count",
+    "first_interview_passed_count",
+    "second_interview_count",
+    "second_interview_passed_count",
     "interviewed",
     "interview_passed",
     "pending_offer_count",
@@ -129,6 +138,10 @@ _CLIENT_SCREEN_PASSED_STATUSES = _statuses_from("scheduling_interview")
 # 误操作改回「待一面」等前置状态时不计入。
 _INTERVIEWED_CURRENT_STATUSES = _statuses_from("first_interview_passed") | frozenset({
     "first_interview_failed",
+})
+_SECOND_INTERVIEWED_CURRENT_STATUSES = _statuses_from("second_interview_passed") | frozenset({
+    "second_interview_failed",
+    "second_interview_abandoned",
 })
 # 生命周期/历史各面试阶段「通过」：周期内曾到达该阶段 pass 节点，且当前仍在该 pass 节点之后。
 _STAGE_PASS_CURRENT_GUARD = {
@@ -254,6 +267,20 @@ def _app_counts_as_interviewed(
     ):
         return False
     return _status_at(app, histories, snapshot_as_of) in _INTERVIEWED_CURRENT_STATUSES
+
+
+def _app_counts_as_second_interviewed(
+    app: Any,
+    histories: List[Any],
+    date_from: str,
+    date_to: str,
+    snapshot_as_of: Optional[str],
+) -> bool:
+    if not _app_had_transition_in_period(
+        histories, _SECOND_INTERVIEW_OUTCOME_STATUSES, date_from, date_to
+    ):
+        return False
+    return _status_at(app, histories, snapshot_as_of) in _SECOND_INTERVIEWED_CURRENT_STATUSES
 
 
 def _app_counts_as_interview_passed(
@@ -649,6 +676,31 @@ def _metrics_for_apps(
             app, histories, date_from, date_to, snapshot_as_of
         ):
             metrics["interviewed"] += 1
+            metrics["first_interview_count"] += 1
+        if _app_counts_as_stage_passed(
+            app,
+            histories,
+            "first_interview",
+            "first_interview_passed",
+            date_from,
+            date_to,
+            snapshot_as_of,
+        ):
+            metrics["first_interview_passed_count"] += 1
+        if _app_counts_as_second_interviewed(
+            app, histories, date_from, date_to, snapshot_as_of
+        ):
+            metrics["second_interview_count"] += 1
+        if _app_counts_as_stage_passed(
+            app,
+            histories,
+            "second_interview",
+            "second_interview_passed",
+            date_from,
+            date_to,
+            snapshot_as_of,
+        ):
+            metrics["second_interview_passed_count"] += 1
         if _app_counts_as_interview_passed(
             app, histories, date_from, date_to, snapshot_as_of
         ):
@@ -677,8 +729,10 @@ _JOB_STAGE_RATE_SPECS = (
     ("duplicate_count", "duplicate_count_rate", "pushed_resume_count"),
     ("client_screen_passed", "client_screen_passed_rate", "internal_screen_passed"),
     ("interview_abandoned", "interview_abandoned_rate", "internal_screen_passed"),
+    ("first_interview_passed_count", "first_interview_passed_rate", "first_interview_count"),
+    ("second_interview_passed_count", "second_interview_passed_rate", "second_interview_count"),
     ("interview_passed", "interview_passed_rate", "interviewed"),
-    ("offer_dropped_count", "offer_dropped_count_rate", "interview_passed"),
+    ("offer_dropped_count", "offer_dropped_count_rate", "second_interview_passed_count"),
     ("onboarding_lost_count", "onboarding_lost_count_rate", "onboarding_count"),
 )
 
