@@ -917,6 +917,14 @@
 
                     <div v-if="isRmsPresetStyleBlock(widgetForm.config.block)" class="inspector-section">
                         <div class="inspector-section-title">STYLE</div>
+                        <div class="field">
+                            <label>图表类型</label>
+                            <div class="inspector-type-pills">
+                                <span v-for="t in rmsPresetChartTypePills" :key="'preset-chart-' + t"
+                                      :class="['inspector-pill', (widgetForm.config.style && widgetForm.config.style.chart_type) === t || (!widgetForm.config.style || !widgetForm.config.style.chart_type) && t === 'horizontal_bar' ? 'active' : '']"
+                                      @click="selectPresetChartType(t)">{{ rmsPresetChartTypeLabel(t) }}</span>
+                            </div>
+                        </div>
                         <div class="field color-picker-wrap" v-click-outside="closeColorPicker">
                             <label>颜色</label>
                             <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
@@ -1155,5 +1163,6 @@
 {% endblock %}
 {% block page_scripts %}
 <script src="/static/js/shared/dashboard-widget-kit.js?v=dashboard-widget-kit-twenty-12"></script>
-<script src="/static/js/pages/rms-dashboard.js?v=rms-dashboard-job-filter-apply-20260615"></script>
+<script src="/static/js/pages/rms-dashboard-core.js?v=dashboard-split-d1-20260615"></script>
+<script src="/static/js/pages/rms-dashboard.js?v=dashboard-split-d1-20260615"></script>
 {% endblock %}

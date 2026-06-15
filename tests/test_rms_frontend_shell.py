@@ -862,11 +862,26 @@ def test_rms_dashboard_twenty_shell():
     assert "RMS_PRESET_STYLE_BLOCKS" in js
     assert "defaultRmsPresetStyle" in js
     assert "rmsPresetStyle" in js
+    assert "renderPresetSeriesChart" in js
+    assert "selectPresetChartType" in js
+    assert "图表类型" in html
     assert "paletteForStyle" in js
     assert "presetBarColorsFromStyle" in js
+    assert "CrmRmsDashboardCore" in js
+    assert "getChartInstances" in js
     assert "STYLE" in html
     assert "搜索颜色" in html
     assert "数值降序" in html
+
+    assert "/static/js/pages/rms-dashboard-core.js" in html
+    assert html.index("rms-dashboard-core.js") < html.index("rms-dashboard.js")
+
+    core_src = (REPO_ROOT / "static/js/pages/rms-dashboard-core.js").read_text(encoding="utf-8")
+    assert "CrmRmsDashboardCore" in core_src
+    assert "horizontalBarOptions" in core_src
+    assert "apiGetOptional" in core_src
+    assert "destroyAllCharts" in core_src
+    assert "getChartInstances" in core_src
 
     for required in (
         "dash-root",
@@ -888,8 +903,9 @@ def test_rms_dashboard_twenty_shell():
         "招聘人效",
         "花名册核对",
         "table_lifecycle_detail",
+        "/static/js/pages/rms-dashboard-core.js",
         "/static/js/pages/rms-dashboard.js",
-        "rms-dashboard-job-filter-apply-20260615",
+        "dashboard-split-d1-20260615",
         "dashboard-widget-kit.js",
         "inspector-section",
         "inspector-row",
@@ -999,6 +1015,11 @@ def test_rms_dashboard_twenty_shell():
     ):
         assert js_forbidden not in js, f"forbidden {js_forbidden!r} in rms-dashboard.js"
 
+    subprocess.run(
+        ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard-core.js")],
+        check=True,
+        cwd=REPO_ROOT,
+    )
     subprocess.run(
         ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard.js")],
         check=True,

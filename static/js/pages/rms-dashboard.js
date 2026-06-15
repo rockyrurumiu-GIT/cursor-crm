@@ -2,9 +2,10 @@
  * RMS recruitment dashboard — Twenty-style editable widget boards.
  * Uses shared DashboardWidgetKit for CRM-style widget config capabilities.
  */
-(function () {
+(function (global) {
   "use strict";
 
+  var Core = global.CrmRmsDashboardCore || {};
   var MOUNT_ID = "rms-dashboard-app";
   var KIT = window.DashboardWidgetKit;
   var CHART_BLOCKS = {
@@ -22,33 +23,13 @@
     chart_recruiter_recommend_vs_hired: true,
   };
 
-  var JOB_STAGE_CHART_COLORS = {
-    pushed: "#7B96B8",
-    internal: "#88A992",
-    client: "#D6A461",
-    interviewed: "#9389AE",
-    passed: "#5B8A72",
-    pendingClient: "#B4C4D8",
-    scheduling: "#A8B8C8",
-    pendingInterview: "#C2D4C8",
-    abandoned: "#CD9180",
-  };
-
-  var RMS_CHART_GRID_COLOR = "rgba(208, 215, 222, 0.45)";
-  var RMS_CHART_TICK_COLOR = "#8c959f";
-  var RMS_CHART_LABEL_COLOR = "#24292f";
-  var RMS_CHART_BAR_RADIUS = 8;
-  var RMS_CHART_BAR_THICKNESS = 28;
-  var RMS_PRESET_PALETTE = [
-    "#8EA4C1",
-    "#9AB39F",
-    "#D2AA6A",
-    "#C69383",
-    "#9B93B7",
-    "#A8B5C6",
-    "#A3B8A8",
-    "#D8C08A",
-  ];
+  var JOB_STAGE_CHART_COLORS = Core.JOB_STAGE_CHART_COLORS || {};
+  var RMS_CHART_GRID_COLOR = Core.RMS_CHART_GRID_COLOR || "rgba(208, 215, 222, 0.45)";
+  var RMS_CHART_TICK_COLOR = Core.RMS_CHART_TICK_COLOR || "#8c959f";
+  var RMS_CHART_LABEL_COLOR = Core.RMS_CHART_LABEL_COLOR || "#24292f";
+  var RMS_CHART_BAR_RADIUS = Core.RMS_CHART_BAR_RADIUS || 8;
+  var RMS_CHART_BAR_THICKNESS = Core.RMS_CHART_BAR_THICKNESS || 28;
+  var RMS_PRESET_PALETTE = Core.RMS_PRESET_PALETTE || [];
 
   var RMS_PRESET_STYLE_BLOCKS = {
     chart_pipeline: true,
@@ -58,6 +39,20 @@
     chart_client_hired_ranking: true,
     chart_recruiter_recommend_vs_hired: true,
   };
+
+  var RMS_PRESET_GROUPED_CHART_BLOCKS = {
+    chart_recruiter_recommend_vs_hired: true,
+  };
+
+  var RMS_PRESET_CHART_TYPE_LABELS = {
+    horizontal_bar: "横向排名",
+    bar: "柱状",
+    pie: "环形",
+    line: "折线",
+  };
+
+  var RMS_PRESET_CHART_TYPES = ["horizontal_bar", "bar", "pie", "line"];
+  var RMS_PRESET_GROUPED_CHART_TYPES = ["horizontal_bar", "bar", "line"];
 
   var RMS_LEGACY_PALETTE_MAP = {
     green_3: { color: "green", color_shade: 2 },
@@ -85,6 +80,7 @@
       color: "green",
       color_shade: 2,
       sort: "value_desc",
+      chart_type: "horizontal_bar",
       show_values: false,
       show_grid: true,
       bar_radius: RMS_CHART_BAR_RADIUS,
@@ -137,6 +133,25 @@
     return out;
   }
 
+  var truncateJobLabel = Core.truncateJobLabel;
+  var formatRmsDate = Core.formatRmsDate;
+  var api = Core.api;
+  var apiGet = Core.apiGet;
+  var apiGetOptional = Core.apiGetOptional;
+  var cloneFilters = Core.cloneFilters;
+  var buildQuery = Core.buildQuery;
+  var widgetBlock = Core.widgetBlock;
+  var chartCanvasId = Core.chartCanvasId;
+  var chartsAvailable = Core.chartsAvailable;
+  var destroyChartKey = Core.destroyChartKey;
+  var destroyAllCharts = Core.destroyAllCharts;
+  var whiteTooltip = Core.whiteTooltip;
+  var safeRenderChart = Core.safeRenderChart;
+  var rmsShadeRamp = Core.rmsShadeRamp;
+  var parsePassRate = Core.parsePassRate;
+  var horizontalBarOptions = Core.horizontalBarOptions;
+  var groupedBarOptions = Core.groupedBarOptions;
+
   function horizontalBarOptionsForStyle(prefix, suffix, style) {
     var opts = horizontalBarOptions(prefix, suffix);
     if (opts.scales && opts.scales.x && opts.scales.x.grid) {
@@ -145,10 +160,228 @@
     return opts;
   }
 
-  function truncateJobLabel(title, maxLen) {
-    var t = String(title || "").trim() || "—";
-    maxLen = maxLen || 10;
-    return t.length > maxLen ? t.slice(0, maxLen) + "…" : t;
+  function resolvePresetChartType(style) {
+    var t = (style && style.chart_type) || "horizontal_bar";
+    return RMS_PRESET_CHART_TYPES.indexOf(t) >= 0 ? t : "horizontal_bar";
+  }
+
+  function presetTooltipValue(prefix, suffix, parsed) {
+    prefix = prefix != null ? String(prefix) : "";
+    suffix = suffix != null ? String(suffix) : "";
+    if (parsed == null || typeof parsed !== "object") {
+      return prefix + String(parsed != null ? parsed : "") + suffix;
+    }
+    if (parsed.x != null && parsed.y == null) return prefix + String(parsed.x) + suffix;
+    if (parsed.y != null) return prefix + String(parsed.y) + suffix;
+    return prefix + String(parsed) + suffix;
+  }
+
+  function verticalBarOptionsForStyle(prefix, suffix, style) {
+    prefix = prefix != null ? String(prefix) : "";
+    suffix = suffix != null ? String(suffix) : "";
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 250 },
+      plugins: {
+        legend: { display: false },
+        datalabels: { display: false },
+        tooltip: whiteTooltip(function (c) {
+          return presetTooltipValue(prefix, suffix, c.parsed);
+        }),
+      },
+      scales: {
+        x: {
+          grid: { display: false, drawBorder: false },
+          border: { display: false },
+          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 }, maxRotation: 45, minRotation: 0 },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: RMS_CHART_GRID_COLOR, display: style.show_grid !== false, drawBorder: false },
+          border: { display: false },
+          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 }, precision: 0 },
+        },
+      },
+    };
+  }
+
+  function lineChartOptionsForStyle(prefix, suffix, style, legend) {
+    prefix = prefix != null ? String(prefix) : "";
+    suffix = suffix != null ? String(suffix) : "";
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      animation: { duration: 250 },
+      plugins: {
+        legend: {
+          display: !!legend,
+          position: "bottom",
+          labels: { boxWidth: 10, padding: 8, font: { size: 10 }, color: "#6b7280" },
+        },
+        datalabels: { display: false },
+        tooltip: whiteTooltip(function (c) {
+          var label = c.dataset.label ? c.dataset.label + ": " : "";
+          return label + presetTooltipValue(prefix, suffix, c.parsed);
+        }),
+      },
+      scales: {
+        x: {
+          grid: { color: RMS_CHART_GRID_COLOR, display: style.show_grid !== false, drawBorder: false },
+          border: { display: false },
+          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 } },
+        },
+        y: {
+          beginAtZero: true,
+          grid: { color: RMS_CHART_GRID_COLOR, display: style.show_grid !== false, drawBorder: false },
+          border: { display: false },
+          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 }, precision: 0 },
+        },
+      },
+    };
+  }
+
+  function doughnutChartOptionsForStyle(prefix, suffix, totalText) {
+    prefix = prefix != null ? String(prefix) : "";
+    suffix = suffix != null ? String(suffix) : "";
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "74%",
+      animation: { duration: 250 },
+      plugins: {
+        legend: {
+          display: true,
+          position: "bottom",
+          labels: { boxWidth: 10, padding: 8, font: { size: 10 }, color: "#6b7280" },
+        },
+        datalabels: { display: false },
+        centerTotal: { display: true, text: totalText },
+        tooltip: whiteTooltip(function (c) {
+          return c.label + ": " + presetTooltipValue(prefix, suffix, c.parsed);
+        }),
+      },
+    };
+  }
+
+  function groupedHorizontalBarOptionsForStyle(style, prefix, suffix) {
+    prefix = prefix != null ? String(prefix) : "";
+    suffix = suffix != null ? String(suffix) : "";
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: "y",
+      animation: { duration: 250 },
+      plugins: {
+        legend: {
+          display: true,
+          position: "bottom",
+          labels: { boxWidth: 10, padding: 8, font: { size: 10 }, color: "#6b7280" },
+        },
+        datalabels: { display: false },
+        tooltip: whiteTooltip(function (c) {
+          return c.dataset.label + ": " + presetTooltipValue(prefix, suffix, c.parsed);
+        }),
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: RMS_CHART_GRID_COLOR, display: style.show_grid !== false, drawBorder: false },
+          border: { display: false },
+          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 }, precision: 0 },
+        },
+        y: {
+          grid: { display: false, drawBorder: false },
+          border: { display: false },
+          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 } },
+        },
+      },
+    };
+  }
+
+  function renderPresetSeriesChart(canvasId, rows, style, opts) {
+    opts = opts || {};
+    var prefix = opts.prefix != null ? String(opts.prefix) : "";
+    var suffix = opts.suffix != null ? String(opts.suffix) : "";
+    var chartType = resolvePresetChartType(style);
+    var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
+    var palette = paletteForStyle(style);
+    var accent = palette[KIT.selectedShade(presetStyleColorCfg(style))];
+    safeRenderChart(canvasId, function () {
+      var canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+      destroyChartKey(canvasId);
+      if (!rows.length) return;
+      var labels = rows.map(function (r) { return r.label; });
+      var values = rows.map(presetRowValue);
+      var colors = presetBarColorsFromStyle(style, rows.length);
+      if (chartType === "pie") {
+        var total = values.reduce(function (sum, v) { return sum + v; }, 0);
+        chartInstances[canvasId] = new Chart(canvas, {
+          type: "doughnut",
+          data: {
+            labels: labels,
+            datasets: [{ data: values, backgroundColor: colors, borderColor: "#fff", borderWidth: 2 }],
+          },
+          options: doughnutChartOptionsForStyle(prefix, suffix, prefix + KIT.fmtNum(total) + suffix),
+        });
+        return;
+      }
+      if (chartType === "line") {
+        chartInstances[canvasId] = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels: labels,
+            datasets: [{
+              data: values,
+              borderColor: accent,
+              backgroundColor: accent + "1f",
+              fill: true,
+              tension: 0.25,
+              pointRadius: 2,
+              pointBackgroundColor: accent,
+              borderWidth: 2,
+            }],
+          },
+          options: lineChartOptionsForStyle(prefix, suffix, style, false),
+        });
+        return;
+      }
+      if (chartType === "bar") {
+        chartInstances[canvasId] = new Chart(canvas, {
+          type: "bar",
+          data: {
+            labels: labels,
+            datasets: [{
+              data: values,
+              backgroundColor: colors,
+              borderRadius: radius,
+              maxBarThickness: 44,
+              barPercentage: 0.72,
+              categoryPercentage: 0.68,
+            }],
+          },
+          options: verticalBarOptionsForStyle(prefix, suffix, style),
+        });
+        return;
+      }
+      chartInstances[canvasId] = new Chart(canvas, {
+        type: "bar",
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            backgroundColor: colors,
+            borderRadius: radius,
+            maxBarThickness: 34,
+            barPercentage: 0.72,
+            categoryPercentage: 0.68,
+          }],
+        },
+        options: horizontalBarOptionsForStyle(prefix, suffix, style),
+      });
+    });
   }
 
   function showMountError(msg) {
@@ -164,6 +397,10 @@
       '<p style="font-size:0.85rem;color:#57606a;">' + safe + "</p></div>";
   }
 
+  if (!Core.api || !Core.horizontalBarOptions) {
+    showMountError("RMS Dashboard Core 未加载，请刷新后重试。");
+    return;
+  }
   if (typeof Vue === "undefined" || !Vue.createApp) {
     showMountError("Vue 未加载。请检查 Console / Network 中 vue.global.js 是否返回 200。");
     return;
@@ -181,7 +418,7 @@
   var onMounted = Vue.onMounted;
   var nextTick = Vue.nextTick;
 
-  var chartInstances = {};
+  var chartInstances = Core.getChartInstances ? Core.getChartInstances() : {};
   var widgetAutosaveTimer = null;
   var widgetPersistInFlight = false;
   var widgetPersistQueued = false;
@@ -190,170 +427,6 @@
   var widgetRefreshTimers = {};
 
   KIT.installChartPlugins(typeof Chart !== "undefined" ? Chart : undefined, typeof ChartDataLabels !== "undefined" ? ChartDataLabels : undefined);
-
-  function formatRmsDate(value) {
-    if (value == null || value === "") return "—";
-    var s = String(value).trim().slice(0, 10);
-    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "—";
-  }
-
-  function api(method, path, body) {
-    var opts = {
-      method: method,
-      credentials: "same-origin",
-      headers: Object.assign({}, window.crmAuthHeader ? window.crmAuthHeader() : {}),
-    };
-    if (body != null) {
-      opts.headers["Content-Type"] = "application/json";
-      opts.body = JSON.stringify(body);
-    }
-    return fetch(path, opts).then(function (r) {
-      if (!r.ok) {
-        return r.text().then(function (text) {
-          var detail = "";
-          try {
-            var b = JSON.parse(text || "{}");
-            detail = b && b.detail ? b.detail : "";
-          } catch (_) {
-            detail = text || "";
-          }
-          throw new Error(detail || r.statusText || "请求失败");
-        });
-      }
-      if (r.status === 204) return null;
-      return r.json();
-    });
-  }
-
-  function apiGet(path) {
-    return api("GET", path);
-  }
-
-  function apiGetOptional(path) {
-    return fetch(path, { credentials: "same-origin" }).then(function (r) {
-      if (!r.ok) return null;
-      return r.json();
-    });
-  }
-
-  function cloneFilters(src) {
-    src = src || {};
-    return {
-      client_id: src.client_id != null ? String(src.client_id) : "",
-      job_ids: Array.isArray(src.job_ids) ? src.job_ids.map(String) : [],
-      job_ids_text: src.job_ids_text != null ? String(src.job_ids_text) : "",
-      delivery_user_id: src.delivery_user_id != null ? String(src.delivery_user_id) : "",
-      recruiter_user_id: src.recruiter_user_id != null ? String(src.recruiter_user_id) : "",
-      city: src.city != null ? String(src.city) : "",
-      date_from: src.date_from != null ? String(src.date_from) : "",
-      date_to: src.date_to != null ? String(src.date_to) : "",
-    };
-  }
-
-  function buildQuery(filters) {
-    var params = new URLSearchParams();
-    Object.keys(filters).forEach(function (k) {
-      if (k === "job_ids" || k === "job_ids_text") return;
-      var v = filters[k];
-      if (v !== "" && v != null) params.set(k, String(v));
-    });
-    var jobIds = filters.job_ids;
-    if (Array.isArray(jobIds) && jobIds.length) {
-      params.set("job_ids", jobIds.map(String).join(","));
-    } else if (filters.job_ids_text) {
-      var textIds = String(filters.job_ids_text).split(",").map(function (s) { return s.trim(); }).filter(Boolean);
-      if (textIds.length) params.set("job_ids", textIds.join(","));
-    }
-    var qs = params.toString();
-    return qs ? "?" + qs : "";
-  }
-
-  function widgetBlock(w) {
-    if (!w) return "";
-    if (w.widget_type === "rms_block") return (w.config && w.config.block) || "";
-    return "";
-  }
-
-  function chartCanvasId(w) {
-    return "rms-chart-" + w.id;
-  }
-
-  function chartsAvailable() {
-    return typeof Chart !== "undefined";
-  }
-
-  function destroyChartKey(id) {
-    if (chartInstances[id]) {
-      chartInstances[id].destroy();
-      delete chartInstances[id];
-    }
-  }
-
-  function destroyAllCharts() {
-    Object.keys(chartInstances).forEach(destroyChartKey);
-  }
-
-  function whiteTooltip(labelFn) {
-    return {
-      backgroundColor: "#ffffff",
-      titleColor: "#1f2328",
-      bodyColor: "#6b7280",
-      borderColor: "#e6e8eb",
-      borderWidth: 1,
-      padding: 12,
-      callbacks: { label: labelFn },
-    };
-  }
-
-  function safeRenderChart(id, renderFn) {
-    if (!chartsAvailable()) return;
-    try {
-      renderFn();
-    } catch (chartErr) {
-      console.warn("[rms-dashboard] chart render skipped (" + id + "):", chartErr);
-    }
-  }
-
-  function rmsShadeRamp(n) {
-    return RMS_PRESET_PALETTE.slice(0, Math.max(1, n)).concat();
-  }
-
-  function parsePassRate(rateStr) {
-    if (!rateStr || rateStr === "—") return 0;
-    var n = parseFloat(String(rateStr).replace("%", ""));
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  function horizontalBarOptions(prefix, suffix) {
-    prefix = prefix != null ? String(prefix) : "";
-    suffix = suffix != null ? String(suffix) : "";
-    return {
-      responsive: true,
-      maintainAspectRatio: false,
-      indexAxis: "y",
-      animation: { duration: 250 },
-      plugins: {
-        legend: { display: false },
-        datalabels: { display: false },
-        tooltip: whiteTooltip(function (c) {
-          return prefix + String(c.parsed.x) + suffix;
-        }),
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          grid: { color: RMS_CHART_GRID_COLOR, drawBorder: false },
-          border: { display: false },
-          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 }, precision: 0 },
-        },
-        y: {
-          grid: { display: false, drawBorder: false },
-          border: { display: false },
-          ticks: { color: RMS_CHART_TICK_COLOR, font: { size: 10 } },
-        },
-      },
-    };
-  }
 
   function richTitle(text) {
     var t = (text || "").trim();
@@ -875,6 +948,12 @@
           return widgetForm.value.widget_type === "rms_block";
         });
 
+        var rmsPresetChartTypePills = computed(function () {
+          var block = widgetForm.value.config && widgetForm.value.config.block;
+          if (RMS_PRESET_GROUPED_CHART_BLOCKS[block]) return RMS_PRESET_GROUPED_CHART_TYPES.slice();
+          return RMS_PRESET_CHART_TYPES.slice();
+        });
+
         var sourceFields = computed(function () {
           var src = (metadata.value.sources || []).find(function (s) { return s.key === widgetForm.value.source_key; });
           return src ? src.fields : [];
@@ -1027,6 +1106,23 @@
           }
           widgetForm.value.config.style.color = key;
           widgetForm.value.config.style.color_shade = shadeIndex;
+          panelUserEdited.value = true;
+          flushPersistWidget();
+        }
+        function rmsPresetChartTypeLabel(chartType) {
+          return RMS_PRESET_CHART_TYPE_LABELS[chartType] || chartType;
+        }
+        function selectPresetChartType(chartType) {
+          if (!widgetForm.value.config) widgetForm.value.config = {};
+          var block = widgetForm.value.config.block || "chart_pipeline";
+          if (!widgetForm.value.config.style) {
+            widgetForm.value.config.style = defaultRmsPresetStyle(block);
+          }
+          var allowed = RMS_PRESET_GROUPED_CHART_BLOCKS[block]
+            ? RMS_PRESET_GROUPED_CHART_TYPES
+            : RMS_PRESET_CHART_TYPES;
+          if (allowed.indexOf(chartType) < 0) return;
+          widgetForm.value.config.style.chart_type = chartType;
           panelUserEdited.value = true;
           flushPersistWidget();
         }
@@ -1389,34 +1485,13 @@
           if (!data.value) return;
           var block = "chart_pipeline";
           var style = rmsPresetStyle(w && w.config, block);
-          var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
-          safeRenderChart(canvasId, function () {
-            var canvas = document.getElementById(canvasId);
-            if (!canvas) return;
-            destroyChartKey(canvasId);
-            var items = applyPresetStyleRows(
-              (data.value.pipeline_overview || []).map(function (x) {
-                return { label: x.label, count: x.count != null ? x.count : 0 };
-              }),
-              style
-            );
-            if (!items.length) return;
-            chartInstances[canvasId] = new Chart(canvas, {
-              type: "bar",
-              data: {
-                labels: items.map(function (x) { return x.label; }),
-                datasets: [{
-                  data: items.map(presetRowValue),
-                  backgroundColor: presetBarColorsFromStyle(style, items.length),
-                  borderRadius: radius,
-                  maxBarThickness: 34,
-                  barPercentage: 0.72,
-                  categoryPercentage: 0.68,
-                }],
-              },
-              options: horizontalBarOptionsForStyle("", "", style),
-            });
-          });
+          var items = applyPresetStyleRows(
+            (data.value.pipeline_overview || []).map(function (x) {
+              return { label: x.label, count: x.count != null ? x.count : 0 };
+            }),
+            style
+          );
+          renderPresetSeriesChart(canvasId, items, style, { prefix: "", suffix: "" });
         }
         function renderHistoryChart(canvasId) {
           if (!data.value) return;
@@ -1440,37 +1515,6 @@
             });
           });
         }
-        function groupedBarOptions() {
-          return {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                display: true,
-                position: "bottom",
-                labels: { boxWidth: 10, padding: 8, font: { size: 10 }, color: "#6b7280" },
-              },
-              datalabels: { display: false },
-              tooltip: whiteTooltip(function (c) {
-                return c.dataset.label + ": " + String(c.parsed.y);
-              }),
-            },
-            scales: {
-              x: {
-                grid: { display: false },
-                border: { display: false },
-                ticks: { color: "#8f949b", font: { size: 9 }, maxRotation: 45, minRotation: 0 },
-              },
-              y: {
-                beginAtZero: true,
-                grid: { color: "#f2f3f5" },
-                border: { display: false },
-                ticks: { color: "#8f949b", font: { size: 10 }, precision: 0 },
-              },
-            },
-          };
-        }
-
         function stackedHorizontalOptions() {
           return {
             responsive: true,
@@ -1619,28 +1663,7 @@
         }
 
         function renderHorizontalCountChart(canvasId, rows, emptyLabel, style) {
-          var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
-          safeRenderChart(canvasId, function () {
-            var canvas = document.getElementById(canvasId);
-            if (!canvas) return;
-            destroyChartKey(canvasId);
-            if (!rows.length) return;
-            chartInstances[canvasId] = new Chart(canvas, {
-              type: "bar",
-              data: {
-                labels: rows.map(function (r) { return r.label; }),
-                datasets: [{
-                  data: rows.map(presetRowValue),
-                  backgroundColor: presetBarColorsFromStyle(style, rows.length),
-                  borderRadius: radius,
-                  maxBarThickness: 34,
-                  barPercentage: 0.72,
-                  categoryPercentage: 0.68,
-                }],
-              },
-              options: horizontalBarOptionsForStyle(emptyLabel || "", "", style),
-            });
-          });
+          renderPresetSeriesChart(canvasId, rows, style, { prefix: emptyLabel || "", suffix: "" });
         }
 
         function renderPendingBacklogChart(canvasId, w) {
@@ -1680,37 +1703,15 @@
         function renderLifecyclePassRateChart(canvasId, w) {
           var block = "chart_lifecycle_pass_rate";
           var style = rmsPresetStyle(w && w.config, block);
-          var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
-          safeRenderChart(canvasId, function () {
-            var canvas = document.getElementById(canvasId);
-            if (!canvas) return;
-            destroyChartKey(canvasId);
-            var rows = lifecycleRows.value
-              .filter(function (r) { return r.key !== "resume" && r.pass_rate_value != null; })
-              .map(function (r) {
-                return {
-                  label: r.label,
-                  value: r.pass_rate_value != null ? r.pass_rate_value : 0,
-                };
-              });
-            rows = applyPresetStyleRows(rows, style);
-            if (!rows.length) return;
-            chartInstances[canvasId] = new Chart(canvas, {
-              type: "bar",
-              data: {
-                labels: rows.map(function (r) { return r.label; }),
-                datasets: [{
-                  data: rows.map(presetRowValue),
-                  backgroundColor: presetBarColorsFromStyle(style, rows.length),
-                  borderRadius: radius,
-                  maxBarThickness: 34,
-                  barPercentage: 0.72,
-                  categoryPercentage: 0.68,
-                }],
-              },
-              options: horizontalBarOptionsForStyle("", "%", style),
+          var rows = lifecycleRows.value
+            .filter(function (r) { return r.key !== "resume" && r.pass_rate_value != null; })
+            .map(function (r) {
+              return {
+                label: r.label,
+                value: r.pass_rate_value != null ? r.pass_rate_value : 0,
+              };
             });
-          });
+          renderPresetSeriesChart(canvasId, applyPresetStyleRows(rows, style), style, { prefix: "", suffix: "%" });
         }
 
         function renderJobPendingBacklogChart(canvasId, w) {
@@ -1738,6 +1739,8 @@
         function renderRecruiterRecommendVsHiredChart(canvasId, w) {
           var block = "chart_recruiter_recommend_vs_hired";
           var style = rmsPresetStyle(w && w.config, block);
+          var chartType = resolvePresetChartType(style);
+          if (chartType === "pie") chartType = "horizontal_bar";
           var palette = paletteForStyle(style);
           var si = KIT.selectedShade(presetStyleColorCfg(style));
           var radius = Number(style.bar_radius) || 6;
@@ -1759,14 +1762,79 @@
               style
             );
             if (!rows.length) return;
+            var labels = rows.map(function (r) { return r.label; });
+            var recommendData = rows.map(function (r) { return r.recommended_count != null ? r.recommended_count : 0; });
+            var hiredData = rows.map(function (r) {
+              return r.hired_count != null ? r.hired_count : (r.hired_this_month != null ? r.hired_this_month : 0);
+            });
+            if (chartType === "line") {
+              chartInstances[canvasId] = new Chart(canvas, {
+                type: "line",
+                data: {
+                  labels: labels,
+                  datasets: [
+                    {
+                      label: "推荐量",
+                      data: recommendData,
+                      borderColor: palette[si],
+                      backgroundColor: palette[si] + "1f",
+                      fill: false,
+                      tension: 0.25,
+                      pointRadius: 2,
+                      borderWidth: 2,
+                    },
+                    {
+                      label: "入职数",
+                      data: hiredData,
+                      borderColor: palette[(si + 2) % palette.length],
+                      backgroundColor: palette[(si + 2) % palette.length] + "1f",
+                      fill: false,
+                      tension: 0.25,
+                      pointRadius: 2,
+                      borderWidth: 2,
+                    },
+                  ],
+                },
+                options: lineChartOptionsForStyle("", "", style, true),
+              });
+              return;
+            }
+            if (chartType === "horizontal_bar") {
+              chartInstances[canvasId] = new Chart(canvas, {
+                type: "bar",
+                data: {
+                  labels: labels,
+                  datasets: [
+                    {
+                      label: "推荐量",
+                      data: recommendData,
+                      backgroundColor: palette[si],
+                      borderRadius: radius,
+                      barPercentage: 0.72,
+                      categoryPercentage: 0.68,
+                    },
+                    {
+                      label: "入职数",
+                      data: hiredData,
+                      backgroundColor: palette[(si + 2) % palette.length],
+                      borderRadius: radius,
+                      barPercentage: 0.72,
+                      categoryPercentage: 0.68,
+                    },
+                  ],
+                },
+                options: groupedHorizontalBarOptionsForStyle(style, "", ""),
+              });
+              return;
+            }
             chartInstances[canvasId] = new Chart(canvas, {
               type: "bar",
               data: {
-                labels: rows.map(function (r) { return r.label; }),
+                labels: labels,
                 datasets: [
                   {
                     label: "推荐量",
-                    data: rows.map(function (r) { return r.recommended_count != null ? r.recommended_count : 0; }),
+                    data: recommendData,
                     backgroundColor: palette[si],
                     borderRadius: radius,
                     barPercentage: 0.72,
@@ -1774,9 +1842,7 @@
                   },
                   {
                     label: "入职数",
-                    data: rows.map(function (r) {
-                      return r.hired_count != null ? r.hired_count : (r.hired_this_month != null ? r.hired_this_month : 0);
-                    }),
+                    data: hiredData,
                     backgroundColor: palette[(si + 2) % palette.length],
                     borderRadius: radius,
                     barPercentage: 0.72,
@@ -2892,6 +2958,9 @@
           isRosterSummary,
           isRmsBlock,
           isRmsPresetStyleBlock,
+          rmsPresetChartTypePills,
+          rmsPresetChartTypeLabel,
+          selectPresetChartType,
           paletteForStyle,
           presetStyleColorCfg,
           sourceFields,
@@ -2938,4 +3007,4 @@
     console.error("[rms-dashboard] mount failed:", mountErr);
     showMountError(mountErr && mountErr.message ? mountErr.message : String(mountErr));
   }
-})();
+})(typeof window !== "undefined" ? window : globalThis);

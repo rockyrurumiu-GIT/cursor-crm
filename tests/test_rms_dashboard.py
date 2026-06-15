@@ -202,6 +202,7 @@ def test_rms_preset_style_config_roundtrip(client_rbac, admin_auth, rms_engine, 
                     "color": "blue",
                     "color_shade": 2,
                     "sort": "value_asc",
+                    "chart_type": "bar",
                     "show_grid": False,
                     "bar_radius": 8,
                     "max_items": 6,
@@ -221,6 +222,7 @@ def test_rms_preset_style_config_roundtrip(client_rbac, admin_auth, rms_engine, 
     assert body["config"]["style"]["color"] == "blue"
     assert body["config"]["style"]["color_shade"] == 2
     assert body["config"]["style"]["sort"] == "value_asc"
+    assert body["config"]["style"]["chart_type"] == "bar"
     assert body["config"]["style"]["show_grid"] is False
     assert body["config"]["style"]["bar_radius"] == 8
     assert body["config"]["style"]["max_items"] == 6
@@ -292,6 +294,7 @@ def test_rms_preset_style_clamps_invalid_values(client_rbac, admin_auth, rms_eng
                     "color": "not_a_color",
                     "palette": "not_a_palette",
                     "sort": "bad_sort",
+                    "chart_type": "not_a_chart",
                     "bar_radius": 999,
                     "max_items": 0,
                 },
@@ -307,6 +310,7 @@ def test_rms_preset_style_clamps_invalid_values(client_rbac, admin_auth, rms_eng
     style = created.json()["config"]["style"]
     assert style["color"] == "blue"
     assert style["sort"] == "value_desc"
+    assert style["chart_type"] == "horizontal_bar"
     assert style["bar_radius"] == 8
     assert style["max_items"] == 8
 
@@ -343,7 +347,8 @@ def test_rms_backfill_missing_client_job_table(client_rbac, admin_auth, rms_engi
     boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
     client_job_tab = next(t for t in boards[0]["tabs"] if t["name"] == "客户岗位分析")
     blocks = {(w.get("config") or {}).get("block") for w in client_job_tab["widgets"]}
-    assert "table_client_job_stage" in blocks
+    assert "table_client_job_stage" not in blocks
+    assert (client_job_tab.get("layout_json") or {}).get("widgets_locked") is True
 
 
 def _admin_login(client, admin_auth):

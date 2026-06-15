@@ -248,10 +248,12 @@ def register_rms_dashboard_routes(
         _user: str = Depends(require_permission("dashboard.write")),
     ):
         _assert_rms_tab(db, tab_id)
-        return board_svc.create_widget(
+        result = board_svc.create_widget(
             db, tab_id, body.model_dump(), DashboardTab, DashboardWidget,
             allowed_source_keys=RMS_ALLOWED_SOURCE_KEYS,
         )
+        board_svc.lock_rms_tab_widgets(db, tab_id, DashboardTab)
+        return result
 
     @app.put("/api/rms/dashboard-widgets/{widget_id}")
     async def api_update_rms_widget(
@@ -260,11 +262,13 @@ def register_rms_dashboard_routes(
         db: Session = Depends(get_db),
         _user: str = Depends(require_permission("dashboard.write")),
     ):
-        _assert_rms_widget(db, widget_id)
-        return board_svc.update_widget(
+        w = _assert_rms_widget(db, widget_id)
+        result = board_svc.update_widget(
             db, widget_id, body.model_dump(), DashboardWidget,
             allowed_source_keys=RMS_ALLOWED_SOURCE_KEYS,
         )
+        board_svc.lock_rms_tab_widgets(db, w.tab_id, DashboardTab)
+        return result
 
     @app.delete("/api/rms/dashboard-widgets/{widget_id}")
     async def api_delete_rms_widget(
@@ -272,8 +276,11 @@ def register_rms_dashboard_routes(
         db: Session = Depends(get_db),
         _user: str = Depends(require_permission("dashboard.write")),
     ):
-        _assert_rms_widget(db, widget_id)
-        return board_svc.delete_widget(db, widget_id, DashboardWidget)
+        w = _assert_rms_widget(db, widget_id)
+        tab_id = w.tab_id
+        result = board_svc.delete_widget(db, widget_id, DashboardWidget)
+        board_svc.lock_rms_tab_widgets(db, tab_id, DashboardTab)
+        return result
 
     @app.delete("/api/rms/dashboard-tabs/{tab_id}")
     async def api_delete_rms_tab(

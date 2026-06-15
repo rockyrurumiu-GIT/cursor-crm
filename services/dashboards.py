@@ -333,7 +333,9 @@ RMS_PRESET_STYLE_BLOCKS: FrozenSet[str] = frozenset({
 })
 RMS_PRESET_STYLE_KEYS: FrozenSet[str] = frozenset({
     "color", "color_shade", "sort", "show_grid", "bar_radius", "max_items", "show_values", "palette",
+    "chart_type",
 })
+RMS_PRESET_CHART_TYPES: FrozenSet[str] = frozenset({"horizontal_bar", "bar", "pie", "line"})
 RMS_LEGACY_PRESET_PALETTE: Dict[str, str] = {
     "green_3": "green",
     "blue_3": "blue",
@@ -365,10 +367,14 @@ def _sanitize_rms_preset_style(raw: dict) -> dict:
     sort = raw.get("sort", "value_desc")
     if sort not in RMS_PRESET_SORT_VALUES:
         sort = "value_desc"
+    chart_type = raw.get("chart_type", "horizontal_bar")
+    if chart_type not in RMS_PRESET_CHART_TYPES:
+        chart_type = "horizontal_bar"
     return {
         "color": color,
         "color_shade": color_shade,
         "sort": sort,
+        "chart_type": chart_type,
         "show_grid": bool(raw.get("show_grid", True)),
         "show_values": bool(raw.get("show_values", False)),
         "bar_radius": _clamp_int(raw.get("bar_radius"), 4, 16, 8),
@@ -1802,9 +1808,9 @@ def seed_default_dashboards(
     _sync_roster_margin_preset_layout(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _seed_rms_recruitment(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _ensure_rms_tab_widget_locks(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _cleanup_rms_obsolete_seed_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_tab_ia_v2(db, DashboardDashboard, DashboardTab, DashboardWidget)
-    _backfill_missing_rms_tab_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_client_job_stage_title(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_filter_block_height(db, DashboardDashboard, DashboardTab, DashboardWidget)
 
@@ -1932,6 +1938,23 @@ def _rms_tab_template(tab) -> str:
     return (layout.get("rms_template") or "").strip()
 
 
+def _tab_widgets_locked(tab) -> bool:
+    layout = _parse_json(getattr(tab, "layout_json", None) or "{}", {})
+    return bool(layout.get("widgets_locked"))
+
+
+def lock_rms_tab_widgets(db: Session, tab_id: int, DashboardTab) -> None:
+    """Mark an RMS tab as user-customized; seed sync will no longer add/remove/move widgets."""
+    tab = db.query(DashboardTab).filter(DashboardTab.id == tab_id).first()
+    if not tab or _tab_widgets_locked(tab):
+        return
+    layout = _parse_json(tab.layout_json or "{}", {})
+    layout["widgets_locked"] = True
+    tab.layout_json = _dump_json(layout)
+    tab.updated_at = _now()
+    db.commit()
+
+
 def _is_rms_system_tab(tab) -> bool:
     name = (tab.name or "").strip()
     template = _rms_tab_template(tab)
@@ -1972,6 +1995,8 @@ def _cleanup_rms_obsolete_seed_widgets(
                 changed = True
                 continue
             if not _is_rms_system_tab(tab):
+                continue
+            if _tab_widgets_locked(tab):
                 continue
             widgets = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).all()
             for w in widgets:
@@ -2028,24 +2053,27 @@ def _sync_rms_tab_ia_v2(
             changed = True
 
         if lifecycle_tab and client_job_tab:
-            lifecycle_widgets = db.query(DashboardWidget).filter(
-                DashboardWidget.tab_id == lifecycle_tab.id
-            ).all()
-            client_has_table = _tab_has_block(
-                db, client_job_tab.id, "table_client_job_stage", DashboardWidget
-            )
-            for w in lifecycle_widgets:
-                if _widget_block(w) != "table_client_job_stage":
-                    continue
-                if client_has_table:
-                    db.query(DashboardWidget).filter(DashboardWidget.id == w.id).delete(
-                        synchronize_session=False
-                    )
-                else:
-                    w.tab_id = client_job_tab.id
-                    w.updated_at = now
-                    client_has_table = True
-                changed = True
+            lifecycle_locked = _tab_widgets_locked(lifecycle_tab)
+            client_job_locked = _tab_widgets_locked(client_job_tab)
+            if not lifecycle_locked and not client_job_locked:
+                lifecycle_widgets = db.query(DashboardWidget).filter(
+                    DashboardWidget.tab_id == lifecycle_tab.id
+                ).all()
+                client_has_table = _tab_has_block(
+                    db, client_job_tab.id, "table_client_job_stage", DashboardWidget
+                )
+                for w in lifecycle_widgets:
+                    if _widget_block(w) != "table_client_job_stage":
+                        continue
+                    if client_has_table:
+                        db.query(DashboardWidget).filter(DashboardWidget.id == w.id).delete(
+                            synchronize_session=False
+                        )
+                    else:
+                        w.tab_id = client_job_tab.id
+                        w.updated_at = now
+                        client_has_table = True
+                    changed = True
 
         tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
         for tab in tabs:
@@ -2057,6 +2085,8 @@ def _sync_rms_tab_ia_v2(
 
         tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
         for tab in tabs:
+            if _tab_widgets_locked(tab):
+                continue
             template = _rms_tab_template(tab)
             if template in ("lifecycle", "client_job"):
                 count = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).count()
@@ -2095,44 +2125,33 @@ def _backfill_missing_rms_tab_widgets(
     DashboardTab,
     DashboardWidget,
 ) -> None:
-    """Add missing template widgets to system RMS tabs without removing user widgets."""
+    """Deprecated: no longer called on startup — user tab layouts must not be auto-mutated."""
+    return
+
+
+def _ensure_rms_tab_widget_locks(
+    db,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+) -> None:
+    """Mark RMS tabs that already have widgets as user-owned (skip seed sync)."""
     changed = False
     now = _now()
     dashboards = db.query(DashboardDashboard).filter(DashboardDashboard.scope == "rms").all()
     for d in dashboards:
         tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
         for tab in tabs:
-            if not _is_rms_system_tab(tab):
+            if _tab_widgets_locked(tab):
                 continue
-            template = _rms_tab_template(tab)
-            specs = _RMS_TEMPLATE_WIDGETS.get(template) or []
-            if not specs:
+            count = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).count()
+            if count <= 0:
                 continue
-            widgets = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).all()
-            existing_blocks = {_widget_block(w) for w in widgets}
-            sort_base = max((int(w.sort_order or 0) for w in widgets), default=-1) + 1
-            add_idx = 0
-            for spec in specs:
-                block = (spec.get("config") or {}).get("block") or ""
-                if not block or block in existing_blocks:
-                    continue
-                db.add(DashboardWidget(
-                    tab_id=tab.id,
-                    title=spec["title"],
-                    widget_type=spec["widget_type"],
-                    source_key=spec.get("source_key") or "",
-                    config_json=_dump_json(spec.get("config") or {}),
-                    x=spec["x"],
-                    y=spec["y"],
-                    w=spec["w"],
-                    h=spec["h"],
-                    sort_order=sort_base + add_idx,
-                    created_at=now,
-                    updated_at=now,
-                ))
-                existing_blocks.add(block)
-                add_idx += 1
-                changed = True
+            layout = _parse_json(tab.layout_json or "{}", {})
+            layout["widgets_locked"] = True
+            tab.layout_json = _dump_json(layout)
+            tab.updated_at = now
+            changed = True
     if changed:
         db.commit()
 
@@ -2166,6 +2185,9 @@ def _sync_rms_client_job_stage_title(
         DashboardWidget.tab_id.in_(rms_tab_ids),
         DashboardWidget.widget_type == "rms_block",
     ).all():
+        tab = db.query(DashboardTab).filter(DashboardTab.id == w.tab_id).first()
+        if tab and _tab_widgets_locked(tab):
+            continue
         if (w.title or "").strip() != "历史数据":
             continue
         cfg = _parse_json(w.config_json or "{}", {})
@@ -2197,6 +2219,8 @@ def _sync_rms_filter_block_height(
     now = _now()
     tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id.in_(rms_dashboard_ids)).all()
     for tab in tabs:
+        if _tab_widgets_locked(tab):
+            continue
         widgets = (
             db.query(DashboardWidget)
             .filter(DashboardWidget.tab_id == tab.id)
