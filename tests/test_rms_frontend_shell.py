@@ -874,7 +874,8 @@ def test_rms_dashboard_twenty_shell():
     assert "数值降序" in html
 
     assert "/static/js/pages/rms-dashboard-core.js" in html
-    assert html.index("rms-dashboard-core.js") < html.index("rms-dashboard.js")
+    assert html.index("rms-dashboard-core.js") < html.index("rms-dashboard-metrics.js")
+    assert html.index("rms-dashboard-metrics.js") < html.index("rms-dashboard.js")
 
     core_src = (REPO_ROOT / "static/js/pages/rms-dashboard-core.js").read_text(encoding="utf-8")
     assert "CrmRmsDashboardCore" in core_src
@@ -882,6 +883,14 @@ def test_rms_dashboard_twenty_shell():
     assert "apiGetOptional" in core_src
     assert "destroyAllCharts" in core_src
     assert "getChartInstances" in core_src
+
+    metrics_src = (REPO_ROOT / "static/js/pages/rms-dashboard-metrics.js").read_text(encoding="utf-8")
+    assert "CrmRmsDashboardMetrics" in metrics_src
+    assert "createDashboardMetrics" in metrics_src
+    assert "clientJobStageRows" in metrics_src
+    assert "lifecycleRows" in metrics_src
+    assert "pendingBacklogRows" in metrics_src
+    assert "jobStageMetricText" in metrics_src
 
     for required in (
         "dash-root",
@@ -904,8 +913,9 @@ def test_rms_dashboard_twenty_shell():
         "花名册核对",
         "table_lifecycle_detail",
         "/static/js/pages/rms-dashboard-core.js",
+        "/static/js/pages/rms-dashboard-metrics.js",
         "/static/js/pages/rms-dashboard.js",
-        "dashboard-split-d1-20260615",
+        "dashboard-split-d2-20260615",
         "dashboard-widget-kit.js",
         "inspector-section",
         "inspector-row",
@@ -1017,6 +1027,11 @@ def test_rms_dashboard_twenty_shell():
 
     subprocess.run(
         ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard-core.js")],
+        check=True,
+        cwd=REPO_ROOT,
+    )
+    subprocess.run(
+        ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard-metrics.js")],
         check=True,
         cwd=REPO_ROOT,
     )
