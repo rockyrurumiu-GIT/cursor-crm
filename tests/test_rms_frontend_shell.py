@@ -862,20 +862,24 @@ def test_rms_dashboard_twenty_shell():
     assert "RMS_PRESET_STYLE_BLOCKS" in js
     assert "defaultRmsPresetStyle" in js
     assert "rmsPresetStyle" in js
-    assert "renderPresetSeriesChart" in js
     assert "selectPresetChartType" in js
     assert "图表类型" in html
     assert "paletteForStyle" in js
     assert "presetBarColorsFromStyle" in js
     assert "CrmRmsDashboardCore" in js
     assert "getChartInstances" in js
+    assert "CrmRmsDashboardCharts" in js
+    assert "RMS Dashboard Charts 未加载" in js
+    assert "renderSingleWidget = charts.renderSingleWidget" in js
+    assert "renderVisibleCharts = charts.renderVisibleCharts" in js
     assert "STYLE" in html
     assert "搜索颜色" in html
     assert "数值降序" in html
 
     assert "/static/js/pages/rms-dashboard-core.js" in html
     assert html.index("rms-dashboard-core.js") < html.index("rms-dashboard-metrics.js")
-    assert html.index("rms-dashboard-metrics.js") < html.index("rms-dashboard.js")
+    assert html.index("rms-dashboard-metrics.js") < html.index("rms-dashboard-charts.js")
+    assert html.index("rms-dashboard-charts.js") < html.index("rms-dashboard.js")
 
     core_src = (REPO_ROOT / "static/js/pages/rms-dashboard-core.js").read_text(encoding="utf-8")
     assert "CrmRmsDashboardCore" in core_src
@@ -891,6 +895,53 @@ def test_rms_dashboard_twenty_shell():
     assert "lifecycleRows" in metrics_src
     assert "pendingBacklogRows" in metrics_src
     assert "jobStageMetricText" in metrics_src
+
+    charts_path = REPO_ROOT / "static/js/pages/rms-dashboard-charts.js"
+    assert charts_path.is_file()
+    charts_src = charts_path.read_text(encoding="utf-8")
+    assert "CrmRmsDashboardCharts" in charts_src
+    assert "createDashboardCharts" in charts_src
+    for charts_sym in (
+        "renderSingleWidget",
+        "renderVisibleCharts",
+        "renderPresetSeriesChart",
+        "renderClientJobStageGroupedChart",
+        "renderClientJobStageStackedChart",
+        "renderClientJobStageFunnelChart",
+        "renderPendingBacklogChart",
+        "renderLifecycleFunnelChart",
+        "renderLifecyclePassRateChart",
+    ):
+        assert charts_sym in charts_src, f"missing {charts_sym!r} in rms-dashboard-charts.js"
+    for charts_forbidden in (
+        "loadDashboard",
+        "saveWidget",
+        "deleteWidget",
+        "widgetForm",
+        "filters",
+        "appliedFilters",
+        "openWidgetPanel",
+        "selectPresetChartType",
+        "rmsPresetChartTypeLabel",
+    ):
+        assert charts_forbidden not in charts_src, f"forbidden {charts_forbidden!r} in rms-dashboard-charts.js"
+
+    for shell_must_keep in (
+        "defaultRmsPresetStyle",
+        "rmsPresetStyle",
+        "applyPresetStyleRows",
+        "paletteForStyle",
+        "presetBarColorsFromStyle",
+        "presetStyleColorCfg",
+        "presetRowValue",
+        "selectPresetChartType",
+        "rmsPresetChartTypeLabel",
+        "rmsChartHasData",
+        "scheduleChartRenderBatch",
+        "refreshWidgetChart",
+        "destroyAllCharts",
+    ):
+        assert shell_must_keep in js, f"missing {shell_must_keep!r} in rms-dashboard.js"
 
     for required in (
         "dash-root",
@@ -914,8 +965,9 @@ def test_rms_dashboard_twenty_shell():
         "table_lifecycle_detail",
         "/static/js/pages/rms-dashboard-core.js",
         "/static/js/pages/rms-dashboard-metrics.js",
+        "/static/js/pages/rms-dashboard-charts.js",
         "/static/js/pages/rms-dashboard.js",
-        "dashboard-split-d2-20260615",
+        "dashboard-split-d3-20260616",
         "dashboard-widget-kit.js",
         "inspector-section",
         "inspector-row",
@@ -999,17 +1051,11 @@ def test_rms_dashboard_twenty_shell():
         "onRmsBlockChange",
         "selectRmsBlock",
         "flushPersistWidget",
-        "renderClientJobStageGroupedChart",
-        "renderClientJobStageStackedChart",
-        "renderClientJobStageFunnelChart",
         "lifecycleRows",
         "lifecycleFunnel",
         "confirmJobFilter",
         "appliedFilters.job_ids",
         "resumeCount",
-        "renderPendingBacklogChart",
-        "renderLifecycleFunnelChart",
-        "renderLifecyclePassRateChart",
         "chart_pending_backlog",
         "bringWidgetToFront",
         "activeWidgetId",
@@ -1032,6 +1078,11 @@ def test_rms_dashboard_twenty_shell():
     )
     subprocess.run(
         ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard-metrics.js")],
+        check=True,
+        cwd=REPO_ROOT,
+    )
+    subprocess.run(
+        ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard-charts.js")],
         check=True,
         cwd=REPO_ROOT,
     )
