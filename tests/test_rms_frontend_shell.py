@@ -855,31 +855,32 @@ def test_rms_dashboard_assets_and_nav():
 def test_rms_dashboard_twenty_shell():
     html = (REPO_ROOT / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
     js = (REPO_ROOT / "static/js/pages/rms-dashboard.js").read_text(encoding="utf-8")
+    inspector_src = (REPO_ROOT / "static/js/pages/rms-dashboard-inspector.js").read_text(
+        encoding="utf-8"
+    )
 
-    assert "RMS_PRESET_PALETTE" in js
-    assert "RMS_CHART_BAR_RADIUS" in js
     assert "RMS_CHART_GRID_COLOR" in js
-    assert "RMS_PRESET_STYLE_BLOCKS" in js
-    assert "defaultRmsPresetStyle" in js
-    assert "rmsPresetStyle" in js
-    assert "selectPresetChartType" in js
-    assert "图表类型" in html
-    assert "paletteForStyle" in js
-    assert "presetBarColorsFromStyle" in js
     assert "CrmRmsDashboardCore" in js
     assert "getChartInstances" in js
     assert "CrmRmsDashboardCharts" in js
+    assert "CrmRmsDashboardInspector" in js
     assert "RMS Dashboard Charts 未加载" in js
+    assert "RMS Dashboard Inspector 未加载" in js
     assert "renderSingleWidget = charts.renderSingleWidget" in js
     assert "renderVisibleCharts = charts.renderVisibleCharts" in js
+    assert "Insp.rmsPresetStyle" in js
+    assert "createDashboardInspector" in js
+    assert "图表类型" in html
     assert "STYLE" in html
     assert "搜索颜色" in html
     assert "数值降序" in html
 
     assert "/static/js/pages/rms-dashboard-core.js" in html
+    assert "/static/js/pages/rms-dashboard-inspector.js" in html
     assert html.index("rms-dashboard-core.js") < html.index("rms-dashboard-metrics.js")
     assert html.index("rms-dashboard-metrics.js") < html.index("rms-dashboard-charts.js")
-    assert html.index("rms-dashboard-charts.js") < html.index("rms-dashboard.js")
+    assert html.index("rms-dashboard-charts.js") < html.index("rms-dashboard-inspector.js")
+    assert html.index("rms-dashboard-inspector.js") < html.index("rms-dashboard.js")
 
     core_src = (REPO_ROOT / "static/js/pages/rms-dashboard-core.js").read_text(encoding="utf-8")
     assert "CrmRmsDashboardCore" in core_src
@@ -926,7 +927,11 @@ def test_rms_dashboard_twenty_shell():
     ):
         assert charts_forbidden not in charts_src, f"forbidden {charts_forbidden!r} in rms-dashboard-charts.js"
 
-    for shell_must_keep in (
+    inspector_path = REPO_ROOT / "static/js/pages/rms-dashboard-inspector.js"
+    assert inspector_path.is_file()
+    assert "CrmRmsDashboardInspector" in inspector_src
+    assert "createDashboardInspector" in inspector_src
+    for insp_sym in (
         "defaultRmsPresetStyle",
         "rmsPresetStyle",
         "applyPresetStyleRows",
@@ -936,10 +941,35 @@ def test_rms_dashboard_twenty_shell():
         "presetRowValue",
         "selectPresetChartType",
         "rmsPresetChartTypeLabel",
+        "openWidgetPanel",
+        "closePanel",
+        "flushPersistWidget",
+        "deleteWidget",
+        "selectRmsBlock",
+        "onRmsBlockChange",
+        "widgetForm",
+        "RMS_PRESET_STYLE_BLOCKS",
+    ):
+        assert insp_sym in inspector_src, f"missing {insp_sym!r} in rms-dashboard-inspector.js"
+
+    for insp_forbidden_impl in (
+        "function loadDashboard(",
+        "function renderVisibleCharts(",
+        "function renderSingleWidget(",
+    ):
+        assert insp_forbidden_impl not in inspector_src, (
+            f"forbidden {insp_forbidden_impl!r} in rms-dashboard-inspector.js"
+        )
+    assert "routes/" not in inspector_src
+    assert "services/" not in inspector_src
+
+    for shell_must_keep in (
         "rmsChartHasData",
         "scheduleChartRenderBatch",
         "refreshWidgetChart",
         "destroyAllCharts",
+        "loadDashboard",
+        "loadWidgetData",
     ):
         assert shell_must_keep in js, f"missing {shell_must_keep!r} in rms-dashboard.js"
 
@@ -966,8 +996,9 @@ def test_rms_dashboard_twenty_shell():
         "/static/js/pages/rms-dashboard-core.js",
         "/static/js/pages/rms-dashboard-metrics.js",
         "/static/js/pages/rms-dashboard-charts.js",
+        "/static/js/pages/rms-dashboard-inspector.js",
         "/static/js/pages/rms-dashboard.js",
-        "dashboard-split-d3-20260616",
+        "dashboard-split-d4-20260616",
         "dashboard-widget-kit.js",
         "inspector-section",
         "inspector-row",
@@ -1026,19 +1057,9 @@ def test_rms_dashboard_twenty_shell():
         "loadDashboard",
         "showMountError",
         "displayItems",
-        "openWidgetPanel",
         "DashboardWidgetKit",
         "reloadActiveTabData",
         "gridColumn",
-        "panelView",
-        "activePicker",
-        "manual_order",
-        "openManualOrder",
-        "manualOrderRowStyle",
-        "manualDragGhostStyle",
-        "manualDragIndex",
-        "primary_axis_order",
-        "grouped_series",
         "normalizeWidgetConfig",
         "job_ids",
         "cityOptions",
@@ -1048,9 +1069,6 @@ def test_rms_dashboard_twenty_shell():
         "rms_block",
         "onCardResizePointerDown",
         "resizeWidgetId",
-        "onRmsBlockChange",
-        "selectRmsBlock",
-        "flushPersistWidget",
         "lifecycleRows",
         "lifecycleFunnel",
         "confirmJobFilter",
@@ -1059,8 +1077,26 @@ def test_rms_dashboard_twenty_shell():
         "chart_pending_backlog",
         "bringWidgetToFront",
         "activeWidgetId",
+        "Object.assign",
+        "inspector.openWidgetPanel",
     ):
         assert js_required in js, f"missing {js_required!r} in rms-dashboard.js"
+
+    for insp_required in (
+        "panelView",
+        "activePicker",
+        "manual_order",
+        "openManualOrder",
+        "manualOrderRowStyle",
+        "manualDragGhostStyle",
+        "manualDragIndex",
+        "primary_axis_order",
+        "onRmsBlockChange",
+        "selectRmsBlock",
+        "flushPersistWidget",
+        "closePanel",
+    ):
+        assert insp_required in inspector_src, f"missing {insp_required!r} in rms-dashboard-inspector.js"
 
     assert "function confirmJobFilter() {\n          return applyFilters();" in js
 
@@ -1087,10 +1123,16 @@ def test_rms_dashboard_twenty_shell():
         cwd=REPO_ROOT,
     )
     subprocess.run(
+        ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard-inspector.js")],
+        check=True,
+        cwd=REPO_ROOT,
+    )
+    subprocess.run(
         ["node", "--check", str(REPO_ROOT / "static/js/pages/rms-dashboard.js")],
         check=True,
         cwd=REPO_ROOT,
     )
+    assert len(js.splitlines()) < 1600, "rms-dashboard.js shell should stay under 1600 lines"
     subprocess.run(
         ["node", "--check", str(REPO_ROOT / "static/js/shared/dashboard-widget-kit.js")],
         check=True,
