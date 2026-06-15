@@ -319,7 +319,7 @@ def test_rms_preset_style_clamps_invalid_values(client_rbac, admin_auth, rms_eng
 
 def test_rms_backfill_missing_client_job_table(client_rbac, admin_auth, rms_engine, uniq):
     import main as crm_main
-    from services.dashboards import seed_default_dashboards
+    from services.dashboards import _dump_json, _parse_json, seed_default_dashboards
 
     login = _admin_login(client_rbac, admin_auth)
     boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
@@ -341,14 +341,37 @@ def test_rms_backfill_missing_client_job_table(client_rbac, admin_auth, rms_engi
             crm_main.DashboardTab,
             crm_main.DashboardWidget,
         )
-    finally:
-        db.close()
 
-    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
-    client_job_tab = next(t for t in boards[0]["tabs"] if t["name"] == "客户岗位分析")
-    blocks = {(w.get("config") or {}).get("block") for w in client_job_tab["widgets"]}
-    assert "table_client_job_stage" not in blocks
-    assert (client_job_tab.get("layout_json") or {}).get("widgets_locked") is True
+        boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+        client_job_tab = next(t for t in boards[0]["tabs"] if t["name"] == "客户岗位分析")
+        blocks = {(w.get("config") or {}).get("block") for w in client_job_tab["widgets"]}
+        assert "table_client_job_stage" not in blocks
+        assert (client_job_tab.get("layout_json") or {}).get("widgets_locked") is True
+    finally:
+        tab = (
+            db.query(crm_main.DashboardTab)
+            .join(
+                crm_main.DashboardDashboard,
+                crm_main.DashboardTab.dashboard_id == crm_main.DashboardDashboard.id,
+            )
+            .filter(
+                crm_main.DashboardDashboard.scope == "rms",
+                crm_main.DashboardTab.name == "客户岗位分析",
+            )
+            .first()
+        )
+        if tab:
+            layout = _parse_json(tab.layout_json or "{}", {})
+            layout.pop("widgets_locked", None)
+            tab.layout_json = _dump_json(layout)
+            db.commit()
+        seed_default_dashboards(
+            db,
+            crm_main.DashboardDashboard,
+            crm_main.DashboardTab,
+            crm_main.DashboardWidget,
+        )
+        db.close()
 
 
 def _admin_login(client, admin_auth):
@@ -1971,7 +1994,12 @@ def test_rms_dashboard_obsolete_seed_widgets_cleaned(client_rbac, admin_auth, rm
 
 def test_rms_dashboard_tab_ia_v2_sync(client_rbac, admin_auth, rms_engine, uniq):
     import main as crm_main
-    from services.dashboards import seed_default_dashboards
+    from services.dashboards import (
+        _dump_json,
+        _parse_json,
+        _widget_block,
+        seed_default_dashboards,
+    )
 
     login = _delivery_login(client_rbac, admin_auth, uniq)
 
@@ -1984,6 +2012,29 @@ def test_rms_dashboard_tab_ia_v2_sync(client_rbac, admin_auth, rms_engine, uniq)
 
     db = crm_main.SessionLocal()
     try:
+        client_job_tab = (
+            db.query(crm_main.DashboardTab)
+            .join(
+                crm_main.DashboardDashboard,
+                crm_main.DashboardTab.dashboard_id == crm_main.DashboardDashboard.id,
+            )
+            .filter(
+                crm_main.DashboardDashboard.scope == "rms",
+                crm_main.DashboardTab.name == "客户岗位分析",
+            )
+            .first()
+        )
+        assert client_job_tab is not None
+        layout = _parse_json(client_job_tab.layout_json or "{}", {})
+        layout.pop("widgets_locked", None)
+        client_job_tab.layout_json = _dump_json(layout)
+        for w in db.query(crm_main.DashboardWidget).filter(
+            crm_main.DashboardWidget.tab_id == client_job_tab.id
+        ).all():
+            if _widget_block(w) == "table_client_job_stage":
+                db.delete(w)
+        db.commit()
+
         seed_default_dashboards(
             db,
             crm_main.DashboardDashboard,
@@ -2009,6 +2060,11 @@ def test_rms_dashboard_tab_ia_v2_sync(client_rbac, admin_auth, rms_engine, uniq)
     )
     blocks = {(w.get("config") or {}).get("block") for w in client_tab["widgets"]}
     assert "table_client_job_stage" in blocks
+    table_widgets = [
+        w for w in client_tab["widgets"]
+        if (w.get("config") or {}).get("block") == "table_client_job_stage"
+    ]
+    assert len(table_widgets) == 1
 
 
 def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(

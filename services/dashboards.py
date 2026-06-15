@@ -1808,11 +1808,12 @@ def seed_default_dashboards(
     _sync_roster_margin_preset_layout(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _seed_rms_recruitment(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_preset_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
-    _ensure_rms_tab_widget_locks(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _cleanup_rms_obsolete_seed_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_tab_ia_v2(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _sync_rms_client_job_required_widgets(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_client_job_stage_title(db, DashboardDashboard, DashboardTab, DashboardWidget)
     _sync_rms_filter_block_height(db, DashboardDashboard, DashboardTab, DashboardWidget)
+    _ensure_rms_tab_widget_locks(db, DashboardDashboard, DashboardTab, DashboardWidget)
 
 
 _RMS_DEFAULT_TABS = (
@@ -2094,6 +2095,56 @@ def _sync_rms_tab_ia_v2(
                     _seed_rms_tab_widgets(db, tab.id, template, DashboardWidget, now)
                     changed = True
 
+    if changed:
+        db.commit()
+
+
+def _sync_rms_client_job_required_widgets(
+    db,
+    DashboardDashboard,
+    DashboardTab,
+    DashboardWidget,
+) -> None:
+    """Backfill missing table_client_job_stage on unlocked client_job tabs only."""
+    table_spec = None
+    table_sort_order = 0
+    for i, spec in enumerate(_RMS_TEMPLATE_WIDGETS.get("client_job") or []):
+        if (spec.get("config") or {}).get("block") == "table_client_job_stage":
+            table_spec = spec
+            table_sort_order = i
+            break
+    if table_spec is None:
+        return
+
+    changed = False
+    now = _now()
+    dashboards = db.query(DashboardDashboard).filter(DashboardDashboard.scope == "rms").all()
+    for d in dashboards:
+        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
+        for tab in tabs:
+            name = (tab.name or "").strip()
+            template = _rms_tab_template(tab)
+            if name != "客户岗位分析" and template != "client_job":
+                continue
+            if _tab_widgets_locked(tab):
+                continue
+            if _tab_has_block(db, tab.id, "table_client_job_stage", DashboardWidget):
+                continue
+            db.add(DashboardWidget(
+                tab_id=tab.id,
+                title=table_spec["title"],
+                widget_type=table_spec["widget_type"],
+                source_key=table_spec.get("source_key") or "",
+                config_json=_dump_json(table_spec.get("config") or {}),
+                x=table_spec["x"],
+                y=table_spec["y"],
+                w=table_spec["w"],
+                h=table_spec["h"],
+                sort_order=table_sort_order,
+                created_at=now,
+                updated_at=now,
+            ))
+            changed = True
     if changed:
         db.commit()
 
