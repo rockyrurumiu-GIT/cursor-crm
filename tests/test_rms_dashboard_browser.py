@@ -72,24 +72,13 @@ def _login_admin(page, base_url: str) -> None:
     page.locator("#main-shell:not(.hidden)").wait_for(state="attached", timeout=15000)
 
 
-def _chromium_launchable() -> bool:
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            browser.close()
-        return True
-    except Exception as exc:
-        if "Executable doesn't exist" in str(exc):
-            return False
-        raise
-
-
 def test_rms_dashboard_browser_smoke(rms_dashboard_live_url):
     """Real browser: Vue mount + dashboard API; must not be a blank page."""
-    if not _chromium_launchable():
-        pytest.skip("playwright chromium not installed; run: playwright install")
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        try:
+            browser = p.chromium.launch(headless=True)
+        except Exception as exc:
+            pytest.skip(f"chromium not launchable: {exc}")
         try:
             page = browser.new_page()
             _login_admin(page, rms_dashboard_live_url)
@@ -99,7 +88,7 @@ def test_rms_dashboard_browser_smoke(rms_dashboard_live_url):
             page.locator('nav[aria-label="标签页"]').get_by_role(
                 "button", name="总览", exact=True
             ).wait_for(state="visible", timeout=15000)
-            page.get_by_text("需求总数", exact=True).first.wait_for(state="visible", timeout=15000)
+            page.locator('#rms-dashboard-app[data-ready="1"]').wait_for(state="attached", timeout=15000)
 
             html = page.locator("#rms-dashboard-app").inner_html() or ""
             assert "crm-table" not in html

@@ -117,6 +117,7 @@
       },
       setup: function () {
         var loading = ref(false);
+        var initialized = ref(false);
         var rosterLoading = ref(false);
         var error = ref("");
         var data = ref(null);
@@ -798,10 +799,10 @@
         }
 
         function loadWidgetData(widgets) {
-          if (!widgets || !widgets.length) return;
-          widgets.forEach(function (w) {
-            if (w.widget_type === "rms_block") return;
-            api("GET", "/api/rms/dashboard-widgets/" + w.id + "/data")
+          if (!widgets || !widgets.length) return Promise.resolve();
+          return Promise.all(widgets.map(function (w) {
+            if (w.widget_type === "rms_block") return Promise.resolve();
+            return api("GET", "/api/rms/dashboard-widgets/" + w.id + "/data")
               .then(function (d) {
                 widgetData.value[w.id] = d;
                 scheduleChartRenderBatch();
@@ -809,23 +810,25 @@
               .catch(function () {
                 widgetData.value[w.id] = { status: "error" };
               });
-          });
+          }));
         }
 
         function reloadActiveTabData() {
           destroyAllCharts();
           widgetData.value = {};
           var tab = activeTab.value;
-          if (!tab || !tab.widgets) return;
+          if (!tab || !tab.widgets) return Promise.resolve();
+          var jobs = [];
           if (tabNeedsDashboardData.value) {
-            loadDashboard();
+            jobs.push(loadDashboard());
           } else {
             data.value = null;
           }
           if (tabNeedsRosterData.value && !rosterCheck.value) {
-            loadRosterCheck();
+            jobs.push(loadRosterCheck());
           }
-          loadWidgetData(tab.widgets);
+          jobs.push(loadWidgetData(tab.widgets));
+          return Promise.all(jobs);
         }
 
         function selectDashboard(id) {
@@ -1094,6 +1097,13 @@
         });
 
         onMounted(function () {
+          var rootEl = document.getElementById(MOUNT_ID);
+          watch([initialized, loading], function () {
+            if (rootEl) {
+              rootEl.setAttribute("data-ready", (initialized.value && !loading.value) ? "1" : "0");
+            }
+          }, { immediate: true });
+
           document.addEventListener("click", function (evt) {
             if (!jobFilterDropdownOpen.value) return;
             if (!jobFilterRootContains(evt.target)) {
@@ -1140,13 +1150,20 @@
           });
 
           loadBoards().then(function () {
-            reloadActiveTabData();
+            var maybe = reloadActiveTabData();
+            if (maybe && typeof maybe.then === "function") {
+              return maybe;
+            }
+            return null;
+          }).finally(function () {
+            initialized.value = true;
           });
           loadFilterOptions();
         });
 
         return Object.assign({
           loading: loading,
+          initialized: initialized,
           rosterLoading: rosterLoading,
           error: error,
           data: data,
