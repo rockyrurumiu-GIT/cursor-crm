@@ -22,7 +22,7 @@ for folder in [UPLOAD_DIR, RECYCLE_BIN]:
     if not os.path.exists(folder):
         os.makedirs(folder)
 
-app = FastAPI(title="ITO CRM Ultimate")
+app = FastAPI(title="ITO BMS Ultimate")
 # 虽保留 Jinja2 配置以防后续扩展，但主页将直接返回 HTML 避免语法冲突
 templates = Jinja2Templates(directory=".") 
 
@@ -222,7 +222,7 @@ HTML_CONTENT = r"""
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ITO CRM Ultimate - 外包业务专家</title>
+    <title>ITO BMS Ultimate - 外包业务专家</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -238,7 +238,7 @@ HTML_CONTENT = r"""
         <aside class="w-64 bg-slate-900 text-white flex-shrink-0 flex flex-col">
             <div class="p-6 border-b border-slate-800">
                 <h1 class="text-xl font-bold flex items-center gap-2">
-                    <i data-lucide="layers" class="text-blue-400"></i> ITO CRM
+                    <i data-lucide="layers" class="text-blue-400"></i> ITO BMS
                 </h1>
                 <p class="text-xs text-slate-400 mt-1 uppercase tracking-widest">Ultimate Edition</p>
             </div>
@@ -618,7 +618,7 @@ def get_local_ip():
 if __name__ == "__main__":
     local_ip = get_local_ip()
     print("="*50)
-    print("  ITO CRM Ultimate 启动成功")
+    print("  ITO BMS Ultimate 启动成功")
     print(f"  内网访问地址: http://{local_ip}:8000")
     print("  管理账号: 无 (内部单机模式)")
     print("="*50)

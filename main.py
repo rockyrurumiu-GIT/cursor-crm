@@ -917,7 +917,7 @@ finally:
 
 
 # --- 3. 后端核心逻辑 ---
-app = FastAPI(title="ITO CRM Ultimate")
+app = FastAPI(title="ITO BMS Ultimate")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 security = HTTPBasic(auto_error=False)
 
@@ -1700,7 +1700,7 @@ if __name__ == "__main__":
 
     ip = get_host_ip()
     print(f"\n{'='*50}")
-    print("ITO CRM Ultimate V8 系统启动成功")
+    print("ITO BMS Ultimate V8 系统启动成功")
     print(f"本地访问: http://127.0.0.1:{V8_PORT}")
     print(f"内网访问: http://{ip}:{V8_PORT}")
     print(

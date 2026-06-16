@@ -4,7 +4,7 @@
 
 ## 1. 模块定位
 
-RMS 是 ITO CRM 内的招聘管理模块，不作为独立系统、独立代码库或独立 SaaS 产品开发。
+RMS 是 ITO BMS 内的招聘管理模块，不作为独立系统、独立代码库或独立 SaaS 产品开发。
 
 RMS 的核心目标是：
 
@@ -12,9 +12,9 @@ RMS 的核心目标是：
 - 支持候选人到岗位的多次推荐关系。
 - 支持 AI 辅助匹配、排序和解释。
 - 在候选人入职后，通过人工确认动作转入交付花名册。
-- 复用 CRM 已有的客户、登录、权限、导航、审计和数据安全能力。
+- 复用 BMS 已有的客户、登录、权限、导航、审计和数据安全能力。
 
-RMS 第一阶段应作为 CRM 的一个独立业务模块开发，但在代码、表结构、API、权限上保留清晰边界，方便未来在必要时拆分。
+RMS 第一阶段应作为 BMS 的一个独立业务模块开发，但在代码、表结构、API、权限上保留清晰边界，方便未来在必要时拆分。
 
 ## 2. 模块边界
 
@@ -30,7 +30,7 @@ RMS 使用以下边界约定：
 - 页面模板：`templates/pages/rms_*.html`
 - 页面脚本：`static/js/pages/rms-*.js`
 
-RMS 不应把逻辑直接堆入 `main.py`。新增能力应遵循现有 CRM 架构约定：路由、服务、schema、页面 JS 分层。
+RMS 不应把逻辑直接堆入 `main.py`。新增能力应遵循现有 BMS 架构约定：路由、服务、schema、页面 JS 分层。
 
 ## 3. 核心数据模型
 
@@ -55,7 +55,7 @@ RMS 的核心建模原则是：
 
 `rms_jobs` 表示客户岗位。
 
-岗位属于 CRM 客户，但不等同于 CRM 商机，也不等同于交付需求。
+岗位属于 BMS 客户管理模块中的客户，但不等同于 BMS 商机，也不等同于交付需求。
 
 建议核心字段：
 
@@ -72,9 +72,9 @@ RMS 的核心建模原则是：
 - `created_at`
 - `updated_at`
 
-其中 `client_id` 关联 CRM 现有客户表，不复制客户主数据。
+其中 `client_id` 关联 BMS 客户管理模块的现有客户表，不复制客户主数据。
 
-`owner_user_id` 表示**岗位负责人**（`rms_jobs` 实体级 Owner），与 CRM 客户上的交付锚点分工不同：
+`owner_user_id` 表示**岗位负责人**（`rms_jobs` 实体级 Owner），与 BMS 客户管理模块中客户上的交付锚点分工不同：
 
 - `rms_jobs.owner_user_id`：该岗位的招聘/交付负责人。
 - `clients.delivery_owner_user_id`：客户在交付 data scope 下的负责人锚点（见 [`auth/data_scope_catalog.py`](../auth/data_scope_catalog.py) 中 `CLIENT_DELIVERY_OWNER_COL`）。
@@ -151,7 +151,7 @@ RMS 的核心建模原则是：
 - `created_at`
 - `updated_at`
 
-`client_id` 为 CRM 客户冗余字段（Phase 1 表结构），与 `rms_jobs.client_id` 一致。创建或更新推荐记录时，应从关联岗位同步写入 `client_id`，便于 delivery data scope 与列表过滤，避免仅依赖运行时 `JOIN rms_jobs`。
+`client_id` 为 BMS 客户管理模块中的客户冗余字段（Phase 1 表结构），与 `rms_jobs.client_id` 一致。创建或更新推荐记录时，应从关联岗位同步写入 `client_id`，便于 delivery data scope 与列表过滤，避免仅依赖运行时 `JOIN rms_jobs`。
 
 状态应记录在 `rms_applications.status`，而不是 `rms_candidates`。
 
@@ -308,11 +308,11 @@ RMS API 必须使用 `require_permission`，不能只依赖登录态。
 
 完整 `rms.*` → resource 映射表见 [`plan/29-rms-module-plan.md`](../plan/29-rms-module-plan.md)。
 
-## 6. 与 CRM 的关系
+## 6. 与 BMS 的关系
 
-RMS 复用 CRM 客户，不复制客户表。
+RMS 复用 BMS 客户管理模块中的客户，不复制客户表。
 
-客户仍然由 CRM 模块维护。RMS 岗位通过 `client_id` 关联 CRM 客户。
+客户仍然由 BMS 客户管理模块维护。RMS 岗位通过 `client_id` 关联 BMS 客户管理模块中的客户。
 
 RMS 不应新增独立客户主表，避免出现以下问题：
 
@@ -321,7 +321,7 @@ RMS 不应新增独立客户主表，避免出现以下问题：
 - 权限边界混乱。
 - 后续客户经营、商机、合同、交付数据无法统一。
 
-RMS 岗位属于客户，但不等同于 CRM 商机或合同。
+RMS 岗位属于客户，但不等同于 BMS 商机或合同。
 
 ## 7. 与 Delivery 的关系
 
@@ -410,13 +410,13 @@ AI 结果应保存在 `rms_match_results`，并作为可追溯的辅助信息展
 11. 入职后人工确认转入交付花名册。
 12. 基础统计看板。
 
-第一阶段的目标不是做完整 ATS，而是验证 RMS 与现有 CRM / Delivery 体系能否形成稳定业务闭环。
+第一阶段的目标不是做完整 ATS，而是验证 RMS 与现有 BMS / Delivery 体系能否形成稳定业务闭环。
 
 ## 11. 验收原则
 
 RMS 模块完成后，应满足以下条件：
 
-- CRM 原有客户、商机、联系人、交付功能不受影响。
+- BMS 原有客户、商机、联系人、交付功能不受影响。
 - RMS API 全部使用 `require_permission`。
 - 候选人联系方式在无权限时正确脱敏。
 - 简历原文件下载受独立权限控制。
