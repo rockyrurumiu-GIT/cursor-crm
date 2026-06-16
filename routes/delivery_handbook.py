@@ -140,16 +140,18 @@ def register_delivery_handbook_routes(
             raw_name = up.filename or ""
             ext = os.path.splitext(raw_name)[1].lower()
             if ext not in HANDBOOK_ALLOWED_SUFFIXES:
+                display_name = raw_name or "\uff08\u672a\u547d\u540d\uff09"
                 raise HTTPException(
                     status_code=400,
                     detail=(
-                        f"\u4e0d\u652f\u6301\u7684\u6587\u4ef6\u7c7b\u578b\uff1a{raw_name or '\uff08\u672a\u547d\u540d\uff09'}\uff0c"
+                        f"\u4e0d\u652f\u6301\u7684\u6587\u4ef6\u7c7b\u578b\uff1a{display_name}\uff0c"
                         "\u5141\u8bb8\uff1aPDF\u3001Word\u3001\u5e38\u89c1\u97f3\u89c6\u9891\uff08mp4/webm/mp3 \u7b49\uff09"
                     ),
                 )
             content_bytes = await up.read()
             if len(content_bytes) > max_file_size:
-                raise HTTPException(status_code=400, detail=f"\u6587\u4ef6\u8d85\u8fc720MB\u9650\u5236\uff1a{raw_name or '\u672a\u547d\u540d'}")
+                oversize_name = raw_name or "\u672a\u547d\u540d"
+                raise HTTPException(status_code=400, detail=f"\u6587\u4ef6\u8d85\u8fc720MB\u9650\u5236\uff1a{oversize_name}")
             safe = safe_handbook_filename(raw_name)
             if not os.path.splitext(safe)[1]:
                 safe = safe + ext
@@ -575,8 +577,9 @@ def register_delivery_handbook_routes(
 
         if sources:
             client_names = [s.get("client_name") or f"\u5ba2\u6237#{s.get('client_id')}" for s in sources[:3]]
+            client_names_text = "\u3001".join(client_names)
             answer = (
-                f"\u627e\u5230 {len(sources)} \u6761\u76f8\u5173\u6765\u6e90\uff0c\u4e3b\u8981\u6765\u81ea {'\u3001'.join(client_names)}\u3002"
+                f"\u627e\u5230 {len(sources)} \u6761\u76f8\u5173\u6765\u6e90\uff0c\u4e3b\u8981\u6765\u81ea {client_names_text}\u3002"
                 "\u4e0b\u9762\u7684\u6765\u6e90\u53c2\u8003\u53ef\u76f4\u63a5\u6253\u5f00\u5bf9\u5e94\u624b\u518c\u4f4d\u7f6e\u3002"
             )
         else:

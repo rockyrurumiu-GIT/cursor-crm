@@ -1233,6 +1233,7 @@
                     <img src="/static/images/throme-logo.png?v=logo4" class="crm-login-logo" width="484" height="384" alt="Throme" decoding="async">
                 </div>
                 <h2 class="crm-login-title">修改密码</h2>
+                <p id="pwd-change-force-note" class="hidden mt-2 text-sm text-amber-300/90">管理员要求您首次登录时修改密码，请设置新密码后继续。</p>
             </div>
             <div class="crm-login-divider" role="presentation"></div>
             <form id="pwd-change-form" class="crm-login-form flex flex-col gap-4 crm-pwd-change-form" autocomplete="off" onsubmit="return false;">
@@ -2015,6 +2016,7 @@
             var shell = document.getElementById('main-shell');
             var errEl = document.getElementById('login-err');
             var pwdOverlay = document.getElementById('pwd-change-overlay');
+            var _pwdForce = false;
 
             function resetPwdModal() {
                 ['pwd-change-current', 'pwd-change-new', 'pwd-change-new2'].forEach(function (id) {
@@ -2026,14 +2028,22 @@
             }
 
             function closePwdModal() {
+                if (_pwdForce) { return; }
                 if (pwdOverlay) { pwdOverlay.classList.add('hidden'); }
                 resetPwdModal();
             }
 
-            function showPwdModal() {
+            function showPwdModal(force) {
                 if (!pwdOverlay) { return; }
+                _pwdForce = !!force;
                 resetPwdModal();
+                var cancelBtn = document.getElementById('pwd-change-cancel');
+                var forceNote = document.getElementById('pwd-change-force-note');
+                if (cancelBtn) { cancelBtn.classList.toggle('hidden', _pwdForce); }
+                if (forceNote) { forceNote.classList.toggle('hidden', !_pwdForce); }
                 pwdOverlay.classList.remove('hidden');
+                var firstInput = document.getElementById('pwd-change-current');
+                if (firstInput) { firstInput.focus(); }
             }
 
             function hideLoginOverlay() {
@@ -2097,6 +2107,10 @@
                     }
                     hideLoginOverlay();
                     showMainShell();
+                    if (data.must_change_password) {
+                        showPwdModal(true);
+                        return;
+                    }
                     if (window.__crm_login_next) {
                         var dest = window.__crm_login_next;
                         window.__crm_login_next = '';
@@ -2177,19 +2191,32 @@
                     if (pwdErr) { pwdErr.textContent = '两次输入的新密码不一致'; pwdErr.classList.remove('hidden'); }
                     return;
                 }
-                var u = localStorage.getItem('crm_user') || '';
-                var b = localStorage.getItem('crm_b64');
-                if (!b || !u) {
-                    closePwdModal();
-                    showLogin('请先登录');
-                    return;
-                }
                 try {
-                    var r = await fetch('/api/account/change-password', {
-                        method: 'POST',
-                        headers: Object.assign({}, window.crmAuthHeader(), { 'Content-Type': 'application/json' }),
-                        body: JSON.stringify({ current_password: cur, new_password: nw }),
-                    });
+                    var fetchUrl, fetchOpts;
+                    if (_pwdForce) {
+                        fetchUrl = '/api/auth/change-password';
+                        fetchOpts = {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ current_password: cur, new_password: nw }),
+                        };
+                    } else {
+                        var u = localStorage.getItem('crm_user') || '';
+                        var b = localStorage.getItem('crm_b64');
+                        if (!b || !u) {
+                            closePwdModal();
+                            showLogin('请先登录');
+                            return;
+                        }
+                        fetchUrl = '/api/account/change-password';
+                        fetchOpts = {
+                            method: 'POST',
+                            headers: Object.assign({}, window.crmAuthHeader(), { 'Content-Type': 'application/json' }),
+                            body: JSON.stringify({ current_password: cur, new_password: nw }),
+                        };
+                    }
+                    var r = await fetch(fetchUrl, fetchOpts);
                     var data = await r.json().catch(function () { return {}; });
                     if (!r.ok) {
                         var detail = data.detail;
@@ -2202,8 +2229,18 @@
                         if (pwdErr) { pwdErr.textContent = msg || '保存失败'; pwdErr.classList.remove('hidden'); }
                         return;
                     }
-                    localStorage.setItem('crm_b64', btoa(u + ':' + nw));
-                    closePwdModal();
+                    if (!_pwdForce) {
+                        var u2 = localStorage.getItem('crm_user') || '';
+                        var nwVal = nwEl ? nwEl.value : nw;
+                        if (u2) { localStorage.setItem('crm_b64', btoa(u2 + ':' + nwVal)); }
+                    }
+                    _pwdForce = false;
+                    var cancelBtn2 = document.getElementById('pwd-change-cancel');
+                    var forceNote2 = document.getElementById('pwd-change-force-note');
+                    if (cancelBtn2) { cancelBtn2.classList.remove('hidden'); }
+                    if (forceNote2) { forceNote2.classList.add('hidden'); }
+                    if (pwdOverlay) { pwdOverlay.classList.add('hidden'); }
+                    resetPwdModal();
                 } catch (e) {
                     if (pwdErr) { pwdErr.textContent = '网络错误'; pwdErr.classList.remove('hidden'); }
                 }

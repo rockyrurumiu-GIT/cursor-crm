@@ -913,7 +913,10 @@
         } else if (ev.target.classList.contains('btn-reset-pwd')) {
             var pw = prompt('输入新密码（至少6位）');
             if (!pw) return;
-            var force = confirm('是否强制用户下次登录修改密码？\n确定=是，取消=否');
+            var _forceResult = await (window.crmConfirmActionDialog
+                ? window.crmConfirmActionDialog({ title: '是否强制用户下次登录修改密码？', confirmText: '是', cancelText: '否' })
+                : { ok: confirm('是否强制用户下次登录修改密码？') });
+            var force = !!(_forceResult && _forceResult.ok);
             try {
                 await api('/api/system/users/' + id + '/password', {
                     method: 'PUT',
