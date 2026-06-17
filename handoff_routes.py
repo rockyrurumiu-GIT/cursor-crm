@@ -8,12 +8,13 @@ from typing import Any, Callable, Dict, List, Optional
 from fastapi import Body, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import desc
+from sqlalchemy import desc, text
 from sqlalchemy.orm import Session
 
 from auth import data_scope as ds
 from auth.data_scope_catalog import RESOURCE_DELIVERY_HANDOFF
 from auth.deps import get_current_context, require_permission
+from auth import service as auth_service
 from auth.service import AuthContext
 from handoff_core import (
     HANDOFF_REJECT_CODES,
@@ -66,6 +67,7 @@ def _handoff_to_dict(h, client_name: str = "") -> Dict[str, Any]:
         "status_label": HANDOFF_STATUS_LABELS.get(h.status, h.status),
         "sales_owner": h.sales_owner or "",
         "delivery_owner": h.delivery_owner or "",
+        "delivery_owner_user_id": getattr(h, "delivery_owner_user_id", None),
         "source_text": h.source_text or "",
         "requirement": req,
         "completeness": comp,
@@ -82,6 +84,16 @@ def _handoff_to_dict(h, client_name: str = "") -> Dict[str, Any]:
         "created_at": h.created_at.isoformat() if h.created_at else "",
         "updated_at": h.updated_at.isoformat() if h.updated_at else "",
     }
+
+
+def _username_for_user_id(db: Session, user_id: Optional[int]) -> str:
+    if not user_id:
+        return ""
+    row = db.execute(
+        text("SELECT username FROM sys_user WHERE id = :id AND status = 'active'"),
+        {"id": user_id},
+    ).fetchone()
+    return str(row[0]).strip() if row and row[0] else ""
 
 
 def register_handoff_routes(
@@ -211,7 +223,13 @@ def register_handoff_routes(
         }
 
     @app.get("/api/handoff/config")
-    async def handoff_config(user: str = Depends(require_permission("delivery.handoff.read"))):
+    async def handoff_config(
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("delivery.handoff.read")),
+    ):
+        can_review = is_delivery_reviewer(user, effective_admin_username()) or auth_service.user_has_permission(
+            ctx, "delivery.handoff.review"
+        )
         return {
             "reject_codes": [{"code": k, "label": v} for k, v in HANDOFF_REJECT_CODES.items()],
             "statuses": [{"code": s, "label": HANDOFF_STATUS_LABELS.get(s, s)} for s in sorted(HANDOFF_STATUSES)],
@@ -219,7 +237,7 @@ def register_handoff_routes(
             "json_schema_path": "/data/requirement_schema.json",
             "reviewers": load_delivery_reviewers(effective_admin_username()),
             "llm_available": get_llm_service().available,
-            "is_reviewer": is_delivery_reviewer(user, effective_admin_username()),
+            "is_reviewer": can_review,
         }
 
     @app.get("/api/clients/{client_id}/handoff-gate")
@@ -264,14 +282,20 @@ def register_handoff_routes(
             raise HTTPException(status_code=400, detail="存在未完成的交接单，请先提交或等待审批")
         if latest and latest.status == "approved":
             version = latest.version + 1
-        reviewers = load_delivery_reviewers(effective_admin_username())
+        delivery_owner_user_id = getattr(client, "delivery_owner_user_id", None)
+        delivery_owner = _username_for_user_id(db, delivery_owner_user_id)
+        if not delivery_owner:
+            reviewers = load_delivery_reviewers(effective_admin_username())
+            delivery_owner = reviewers[0] if reviewers else user
+            delivery_owner_user_id = None
         h = HandoffRequest(
             client_id=client_id,
             version=version,
             title=f"{client.name} 交接 v{version}",
             status="draft",
             sales_owner=client.owner or user,
-            delivery_owner=reviewers[0] if reviewers else user,
+            delivery_owner=delivery_owner,
+            delivery_owner_user_id=delivery_owner_user_id,
             requirement_json=json.dumps(empty_requirement(), ensure_ascii=False),
         )
         if latest and latest.status in ("rejected", "approved"):

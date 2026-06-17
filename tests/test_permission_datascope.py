@@ -214,6 +214,58 @@ def test_delivery_settlement_scoped_by_delivery_owner(client_rbac, admin_auth):
     assert cid_b not in client_ids
 
 
+def test_handoff_inherits_client_delivery_owner_for_pending_list(client_rbac, admin_auth):
+    suffix = os.getpid()
+    delivery_user = f"handoff_delivery_{suffix}"
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery_user, ["DELIVERY"])
+    admin_user, admin_pwd = admin_auth
+    headers = auth_header(admin_user, admin_pwd)
+
+    c = client_rbac.post(
+        "/api/clients",
+        headers=headers,
+        data={
+            "name": f"交接客户_{suffix}",
+            "industry": "IT",
+            "owner": "admin",
+            "scale": "100",
+            "phase": "成交",
+            "description": "d",
+            "delivery_owner_user_id": str(delivery_uid),
+        },
+    )
+    assert c.status_code == 200, c.text
+    cid = c.json()["id"]
+
+    h = client_rbac.post(f"/api/clients/{cid}/handoffs", headers=headers)
+    assert h.status_code == 200, h.text
+    body = h.json()
+    assert body["delivery_owner"] == delivery_user
+    assert body["delivery_owner_user_id"] == delivery_uid
+
+    import main as crm_main
+
+    with crm_main.engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE handoff_requests "
+                "SET status = 'pending_review', submitted_at = CURRENT_TIMESTAMP "
+                "WHERE id = :hid"
+            ),
+            {"hid": body["id"]},
+        )
+
+    login = _login(client_rbac, delivery_user, "pass1234")
+    cfg = client_rbac.get("/api/handoff/config", cookies=login.cookies)
+    assert cfg.status_code == 200, cfg.text
+    assert cfg.json()["is_reviewer"] is True
+
+    rows = client_rbac.get("/api/delivery/handoffs/pending", cookies=login.cookies)
+    assert rows.status_code == 200, rows.text
+    ids = {r["id"] for r in rows.json()}
+    assert body["id"] in ids
+
+
 def test_permission_preview_api(client_rbac, admin_auth):
     suffix = os.getpid()
     uid = _create_user(client_rbac, admin_auth, f"preview_{suffix}", ["SALES"])
