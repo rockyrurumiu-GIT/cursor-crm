@@ -14,7 +14,7 @@
             const selectedId = ref(null);
             const config = ref({ reject_codes: [], spec: { enums: {} }, is_reviewer: false, llm_available: false });
             const step = ref(0);
-            const steps = ['上下文', '技术栈', '岗位矩阵', '交付与商务'];
+            const steps = ['项目背景', '技术栈', '需求概述', '交付与商务'];
             const form = ref({ title: '', source_text: '', delivery_owner: '', requirement: emptyReq() });
             const logs = ref([]);
             const aiLoading = ref(false);
@@ -23,13 +23,27 @@
             const showReject = ref(false);
             const rejectForm = ref({ code: 'REQ_INCOMPLETE', detail: '' });
 
+            function emptyPosition() {
+                return {
+                    role: '',
+                    level: '',
+                    headcount: 1,
+                    billing_unit: '人月',
+                    onsite_city: '',
+                    education_requirement: '',
+                    skills: '',
+                    start_date: '',
+                    estimated_quote: '',
+                };
+            }
+
             function emptyReq() {
                 return {
-                    context: { project_type: '', location: '', timezone: '', attendance_rules: '', client_contact: '' },
+                    context: { project_type: '', estimated_gm_pct: '', estimated_avg_quote: '', location: '', project_cycle: '', invoice_payment_term: '', timezone: '', attendance_rules: '', client_contact: '' },
                     tech_stack: { languages: [], middleware: [], version_constraints: '', env_requirements: '' },
-                    positions: [],
+                    positions: [emptyPosition()],
                     delivery_constraints: { sla: '', acceptance: '', compliance: '', risk_notes: '' },
-                    commercial: { quote_ref: '', estimated_amount: '', payment_cycle: '', has_po: false, has_framework: false },
+                    commercial: { quote_ref: '', estimated_amount: '', payment_cycle: '', has_po: false, po_no: '', has_framework: false, framework_contract_no: '' },
                     urgent: false,
                 };
             }
@@ -48,9 +62,29 @@
             const setMw = (e) => {
                 form.value.requirement.tech_stack.middleware = e.target.value.split(/[,，]/).map(s => s.trim()).filter(Boolean);
             };
+            const formatAmountInput = (value) => {
+                const digits = String(value || '').replace(/[^\d]/g, '');
+                return digits ? Number(digits).toLocaleString('zh-CN') : '';
+            };
+            const formatPercentInput = (value) => {
+                let text = String(value || '').replace(/[^\d.]/g, '');
+                const dot = text.indexOf('.');
+                if (dot >= 0) text = text.slice(0, dot + 1) + text.slice(dot + 1).replace(/\./g, '');
+                return text ? text + '%' : '';
+            };
             const onEstimatedAmountInput = (e) => {
-                const digits = String(e && e.target ? e.target.value : '').replace(/[^\d]/g, '');
-                form.value.requirement.commercial.estimated_amount = digits ? Number(digits).toLocaleString('zh-CN') : '';
+                form.value.requirement.commercial.estimated_amount = formatAmountInput(e && e.target ? e.target.value : '');
+            };
+            const onEstimatedAvgQuoteInput = (e) => {
+                form.value.requirement.context.estimated_avg_quote = formatAmountInput(e && e.target ? e.target.value : '');
+            };
+            const onPositionEstimatedQuoteInput = (idx, e) => {
+                const p = form.value.requirement.positions[idx];
+                if (!p) return;
+                p.estimated_quote = formatAmountInput(e && e.target ? e.target.value : '');
+            };
+            const onEstimatedGmPctInput = (e) => {
+                form.value.requirement.context.estimated_gm_pct = formatPercentInput(e && e.target ? e.target.value : '');
             };
 
             const statusBadge = (s) => ({
@@ -59,6 +93,10 @@
                 rejected: 'bg-red-100 text-red-800',
                 approved: 'bg-green-100 text-green-800',
             }[s] || 'bg-gray-100');
+            const formatLogTime = (value) => {
+                const m = String(value || '').match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
+                return m ? `${m[1]} ${m[2]}:${m[3]}` : String(value || '');
+            };
 
             const loadConfig = async () => {
                 const r = await fetch('/api/handoff/config', { headers: auth() });
@@ -83,11 +121,22 @@
 
             const syncFormFromHandoff = (h) => {
                 handoff.value = h;
+                const requirement = JSON.parse(JSON.stringify(h.requirement));
+                requirement.context = { ...emptyReq().context, ...(requirement.context || {}) };
+                requirement.context.estimated_gm_pct = formatPercentInput(requirement.context.estimated_gm_pct);
+                requirement.context.estimated_avg_quote = formatAmountInput(requirement.context.estimated_avg_quote);
+                requirement.commercial = { ...emptyReq().commercial, ...(requirement.commercial || {}) };
+                requirement.commercial.estimated_amount = formatAmountInput(requirement.commercial.estimated_amount);
+                requirement.positions = (requirement.positions && requirement.positions.length ? requirement.positions : [emptyPosition()]).map((p) => ({
+                    ...emptyPosition(),
+                    ...p,
+                    estimated_quote: formatAmountInput(p.estimated_quote),
+                }));
                 form.value = {
                     title: h.title,
                     source_text: h.source_text,
                     delivery_owner: h.delivery_owner,
-                    requirement: JSON.parse(JSON.stringify(h.requirement)),
+                    requirement,
                 };
                 logs.value = h.logs || [];
                 aiBrief.value = h.ai_brief_md || '';
@@ -115,9 +164,20 @@
                 // 金额输入框允许千分位展示，提交时去掉分隔符。
                 requirement: {
                     ...form.value.requirement,
+                    context: {
+                        ...form.value.requirement.context,
+                        estimated_gm_pct: String(form.value.requirement.context.estimated_gm_pct || '').replace(/[%\s]/g, ''),
+                        estimated_avg_quote: String(form.value.requirement.context.estimated_avg_quote || '').replace(/[,\s]/g, ''),
+                    },
+                    positions: (form.value.requirement.positions || []).map((p) => ({
+                        ...p,
+                        estimated_quote: String(p.estimated_quote || '').replace(/[,\s]/g, ''),
+                    })),
                     commercial: {
                         ...form.value.requirement.commercial,
                         estimated_amount: String(form.value.requirement.commercial.estimated_amount || '').replace(/[,\s]/g, ''),
+                        po_no: form.value.requirement.commercial.has_po ? form.value.requirement.commercial.po_no : '',
+                        framework_contract_no: form.value.requirement.commercial.has_framework ? form.value.requirement.commercial.framework_contract_no : '',
                     },
                 },
                 title: form.value.title,
@@ -190,15 +250,17 @@
             };
 
             const addPosition = () => {
-                form.value.requirement.positions.push({
-                    role: '', level: '', headcount: 1, billing_unit: '人月', start_date: '', skills: '',
-                });
+                form.value.requirement.positions.push(emptyPosition());
             };
             const requestRemovePosition = async (idx) => {
                 if (!editable.value) return;
                 const list = form.value?.requirement?.positions || [];
-                const p = list[idx] || {};
-                if (idx >= 0 && idx < list.length) list.splice(idx, 1);
+                if (idx < 0 || idx >= list.length) return;
+                if (list.length === 1) {
+                    list.splice(idx, 1, emptyPosition());
+                    return;
+                }
+                list.splice(idx, 1);
             };
 
             const syncPipeline = async () => {
@@ -218,10 +280,10 @@
 
             return {
                 loading, clientId, clientName, handoffs, handoff, selectedId, config, step, steps, form, logs,
-                spec, editable, canReview, canCreate, langsStr, mwStr, setLangs, setMw, statusBadge,
+                spec, editable, canReview, canCreate, langsStr, mwStr, setLangs, setMw, statusBadge, formatLogTime,
                 aiLoading, aiBrief, aiGaps, showReject, rejectForm,
                 loadHandoff, createHandoff, saveDraft, submitHandoff, approveHandoff, confirmReject,
-                aiParse, aiReviewAssist, adoptReject, addPosition, requestRemovePosition, syncPipeline, onEstimatedAmountInput,
+                aiParse, aiReviewAssist, adoptReject, addPosition, requestRemovePosition, syncPipeline, onEstimatedAmountInput, onEstimatedAvgQuoteInput, onEstimatedGmPctInput, onPositionEstimatedQuoteInput,
             };
         },
     }).mount('#handoff-app');

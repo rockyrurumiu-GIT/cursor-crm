@@ -57,7 +57,11 @@ def empty_requirement() -> Dict[str, Any]:
     return {
         "context": {
             "project_type": "",
+            "estimated_gm_pct": "",
+            "estimated_avg_quote": "",
             "location": "",
+            "project_cycle": "",
+            "invoice_payment_term": "",
             "timezone": "",
             "attendance_rules": "",
             "client_contact": "",
@@ -68,7 +72,19 @@ def empty_requirement() -> Dict[str, Any]:
             "version_constraints": "",
             "env_requirements": "",
         },
-        "positions": [],
+        "positions": [
+            {
+                "role": "",
+                "level": "",
+                "headcount": 1,
+                "billing_unit": "人月",
+                "onsite_city": "",
+                "education_requirement": "",
+                "skills": "",
+                "start_date": "",
+                "estimated_quote": "",
+            }
+        ],
         "delivery_constraints": {
             "sla": "",
             "acceptance": "",
@@ -80,7 +96,9 @@ def empty_requirement() -> Dict[str, Any]:
             "estimated_amount": "",
             "payment_cycle": "",
             "has_po": False,
+            "po_no": "",
             "has_framework": False,
+            "framework_contract_no": "",
         },
         "urgent": False,
     }
@@ -140,7 +158,7 @@ def validate_for_submit(requirement: Dict[str, Any]) -> Tuple[bool, List[str]]:
     positions = requirement.get("positions") or []
     min_pos = int(rules.get("min_positions") or 1)
     if len(positions) < min_pos:
-        errors.append(f"岗位编制矩阵至少需要 {min_pos} 行")
+        errors.append(f"需求概述至少需要 {min_pos} 个岗位")
 
     langs = (requirement.get("tech_stack") or {}).get("languages") or []
     if rules.get("require_language") and not langs:
@@ -148,9 +166,9 @@ def validate_for_submit(requirement: Dict[str, Any]) -> Tuple[bool, List[str]]:
 
     for i, row in enumerate(positions):
         if not str(row.get("role") or "").strip():
-            errors.append(f"岗位矩阵第 {i + 1} 行：岗位名称必填")
+            errors.append(f"需求概述第 {i + 1} 个岗位：岗位名称必填")
         if not str(row.get("start_date") or "").strip():
-            errors.append(f"岗位矩阵第 {i + 1} 行：到岗时间必填")
+            errors.append(f"需求概述第 {i + 1} 个岗位：到岗时间必填")
 
     urgent_threshold = int(rules.get("urgent_days_threshold") or 90)
     today = date.today()
@@ -202,7 +220,11 @@ def generate_brief_markdown(
         "",
         "## 背景",
         f"- 项目类型：{ctx.get('project_type') or '待确认'}",
+        f"- 预估 GM%：{(str(ctx.get('estimated_gm_pct')).rstrip('%') + '%') if ctx.get('estimated_gm_pct') else '—'}",
+        f"- 预估平均报价：{ctx.get('estimated_avg_quote') or '—'}",
         f"- 办公地点：{ctx.get('location') or '待确认'}",
+        f"- 项目周期：{ctx.get('project_cycle') or '—'}",
+        f"- 票后账期：{ctx.get('invoice_payment_term') or '—'}",
         f"- 客户接口人：{ctx.get('client_contact') or '待确认'}",
         "",
         "## 技术栈",
@@ -213,12 +235,13 @@ def generate_brief_markdown(
         "## 编制需求",
     ]
     if positions:
-        lines.append("| 岗位 | 级别 | 编制 | 计费 | 到岗 | 技能要求 |")
-        lines.append("| --- | --- | --- | --- | --- | --- |")
+        lines.append("| 岗位 | 级别 | 编制 | 计费 | 驻场城市 | 学历要求 | 到岗 | 预估报价 | 技能描述 |")
+        lines.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- |")
         for p in positions:
             lines.append(
                 f"| {p.get('role','')} | {p.get('level','')} | {p.get('headcount','')} "
-                f"| {p.get('billing_unit','')} | {p.get('start_date','')} | {p.get('skills','')} |"
+                f"| {p.get('billing_unit','')} | {p.get('onsite_city','')} | {p.get('education_requirement','')} "
+                f"| {p.get('start_date','')} | {p.get('estimated_quote','')} | {p.get('skills','')} |"
             )
     else:
         lines.append("（暂无岗位矩阵）")
@@ -231,16 +254,15 @@ def generate_brief_markdown(
             "",
             "## 交付约束",
             f"- SLA：{dc.get('sla') or '—'}",
-            f"- 验收标准：{dc.get('acceptance') or '—'}",
             f"- 合规：{dc.get('compliance') or '—'}",
             f"- 风险自评：{dc.get('risk_notes') or '—'}",
             "",
             "## 商务前置",
-            f"- 报价单：{comm.get('quote_ref') or '—'}",
             f"- 预计金额：{comm.get('estimated_amount') or '—'}",
-            f"- 付款周期：{comm.get('payment_cycle') or '—'}",
             f"- 已有 PO：{'是' if comm.get('has_po') else '否'}",
+            f"- PO 号：{comm.get('po_no') or '—'}",
             f"- 框架合同：{'是' if comm.get('has_framework') else '否'}",
+            f"- 框架合同编号：{comm.get('framework_contract_no') or '—'}",
         ]
     )
     return "\n".join(lines)

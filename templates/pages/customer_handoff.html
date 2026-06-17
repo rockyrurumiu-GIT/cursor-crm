@@ -11,6 +11,25 @@
         border-top: 1px solid #e5e7eb;
         box-shadow: 0 -4px 20px rgba(15,23,42,0.06);
     }
+    #handoff-app input,
+    #handoff-app select,
+    #handoff-app textarea,
+    #handoff-app option {
+        font-family: inherit !important;
+        font-size: 0.875rem !important;
+        line-height: 1.25rem !important;
+        font-weight: 400 !important;
+        color: #1f2937 !important;
+    }
+    #handoff-app select.crm-form-control {
+        font-size: 0.875rem !important;
+        line-height: 1.25rem !important;
+        font-weight: 400 !important;
+    }
+    #handoff-app .handoff-bg-value {
+        width: 10rem !important;
+        max-width: 100%;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -49,28 +68,43 @@
                         class="px-3 py-1.5 rounded-full border text-sm">{{ i+1 }}. {{ s }}</button>
                 </div>
 
-                <!-- Step 0: 上下文 + 原文 -->
+                <!-- Step 0: 项目背景 + 原文 -->
                 <div v-show="step===0" class="bg-white border rounded-lg p-5 space-y-4">
-                    <h3 class="font-bold border-l-4 border-[#0969da] pl-2">项目上下文</h3>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <label class="text-sm">项目类型
-                            <select v-model="form.requirement.context.project_type" :disabled="!editable" class="crm-form-control w-full mt-1">
+                    <h3 class="font-bold border-l-4 border-[#0969da] pl-2">项目背景</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <label class="text-sm flex flex-col gap-1">项目类型
+                            <select v-model="form.requirement.context.project_type" :disabled="!editable" class="crm-form-control handoff-bg-value">
                                 <option value="">请选择</option>
                                 <option v-for="o in spec.enums.project_type" :key="o" :value="o">{{ o }}</option>
                             </select>
                         </label>
-                        <label class="text-sm">办公地点
-                            <input v-model="form.requirement.context.location" :disabled="!editable" class="w-full mt-1 border rounded p-2">
+                        <label class="text-sm flex flex-col gap-1">预估 GM%
+                            <input :value="form.requirement.context.estimated_gm_pct" @input="onEstimatedGmPctInput" :disabled="!editable" inputmode="decimal" placeholder="如：30%" class="handoff-bg-value border rounded p-2">
                         </label>
-                        <label class="text-sm">时区
-                            <input v-model="form.requirement.context.timezone" :disabled="!editable" class="w-full mt-1 border rounded p-2" placeholder="UTC+8">
+                        <label class="text-sm flex flex-col gap-1">预估平均报价
+                            <input :value="form.requirement.context.estimated_avg_quote" @input="onEstimatedAvgQuoteInput" :disabled="!editable" inputmode="numeric" placeholder="如：20,000" class="handoff-bg-value border rounded p-2">
                         </label>
-                        <label class="text-sm">客户接口人
-                            <input v-model="form.requirement.context.client_contact" :disabled="!editable" class="w-full mt-1 border rounded p-2">
+                        <label class="text-sm flex flex-col gap-1">客户接口人
+                            <input v-model="form.requirement.context.client_contact" :disabled="!editable" class="handoff-bg-value border rounded p-2">
+                        </label>
+                        <label class="text-sm flex flex-col gap-1 md:col-span-2">办公地址
+                            <input v-model="form.requirement.context.location" :disabled="!editable" class="w-full border rounded p-2">
+                        </label>
+                        <label class="text-sm flex flex-col gap-1">项目周期
+                            <select v-model="form.requirement.context.project_cycle" :disabled="!editable" class="crm-form-control handoff-bg-value">
+                                <option value="">请选择</option>
+                                <option v-for="o in spec.enums.project_cycle" :key="o" :value="o">{{ o }}</option>
+                            </select>
+                        </label>
+                        <label class="text-sm flex flex-col gap-1">票后账期
+                            <select v-model="form.requirement.context.invoice_payment_term" :disabled="!editable" class="crm-form-control handoff-bg-value">
+                                <option value="">请选择</option>
+                                <option v-for="o in spec.enums.invoice_payment_term" :key="o" :value="o">{{ o }}</option>
+                            </select>
                         </label>
                     </div>
                     <label class="text-sm block">考勤/加班规则
-                        <textarea v-model="form.requirement.context.attendance_rules" :disabled="!editable" rows="2" class="w-full mt-1 border rounded p-2"></textarea>
+                        <textarea v-model="form.requirement.context.attendance_rules" :disabled="!editable" rows="4" class="w-full mt-1 border rounded p-2" placeholder="考勤：人脸打卡/刷卡打卡/APP打卡/手工考勤&#10;工作制：9:00-18:00/10:00-22:00/大小周/996&#10;加班：无加班/加班费/调休/义务加班"></textarea>
                     </label>
                     <div class="border-t pt-4">
                         <h4 class="font-semibold text-sm mb-2">原始材料（会议纪要/聊天记录）</h4>
@@ -78,7 +112,6 @@
                         <button v-if="editable" type="button" @click="aiParse" :disabled="aiLoading" class="mt-2 text-sm bg-violet-50 text-violet-700 border border-violet-200 px-3 py-1.5 rounded">
                             {{ aiLoading ? '解析中…' : '✨ AI 从原文填充' }}
                         </button>
-                        <p v-if="!config.llm_available" class="text-xs text-amber-600 mt-1">LLM 未配置（CRM_LLM_PROVIDER=null），可手动填写。</p>
                     </div>
                 </div>
 
@@ -99,35 +132,68 @@
                     </label>
                 </div>
 
-                <!-- Step 2: 岗位矩阵 -->
+                <!-- Step 2: 需求概述 -->
                 <div v-show="step===2" class="bg-white border rounded-lg p-5 space-y-4">
                     <div class="flex justify-between items-center">
-                        <h3 class="font-bold border-l-4 border-[#0969da] pl-2">岗位编制矩阵</h3>
+                        <h3 class="font-bold border-l-4 border-[#0969da] pl-2">需求概述</h3>
                         <button v-if="editable" type="button" @click="addPosition" class="text-sm text-[#0969da]">+ 添加岗位</button>
                     </div>
                     <div v-for="(p, idx) in form.requirement.positions" :key="idx" class="border rounded p-3 space-y-2 bg-gray-50/50">
-                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-                            <input v-model="p.role" :disabled="!editable" placeholder="岗位" class="border rounded p-2 text-sm">
-                            <select v-model="p.level" :disabled="!editable" class="crm-form-control text-sm">
-                                <option value="">级别</option>
-                                <option v-for="lv in spec.enums.position_level" :key="lv" :value="lv">{{ lv }}</option>
-                            </select>
-                            <input v-model.number="p.headcount" :disabled="!editable" type="number" min="1" placeholder="编制" class="border rounded p-2 text-sm">
-                            <select v-model="p.billing_unit" :disabled="!editable" class="crm-form-control text-sm">
-                                <option v-for="u in spec.enums.billing_unit" :key="u" :value="u">{{ u }}</option>
-                            </select>
-                            <input v-model="p.start_date" :disabled="!editable" type="date" class="border rounded p-2 text-sm">
-                            <button v-if="editable" type="button" class="crm-op-btn-delete text-sm"
+                        <div v-if="editable" class="flex justify-end">
+                            <button type="button" class="crm-op-btn-delete text-sm"
                                 data-crm-delete-title="确认删除岗位"
                                 :data-crm-delete-target="'将删除岗位：' + (p.role || '未命名岗位') + ' · ' + (p.headcount || 1) + '人'"
-                                data-crm-delete-hint="删除后将从当前交接单岗位矩阵移除。"
+                                data-crm-delete-hint="删除后将从当前交接单需求概述移除。"
                                 @click="requestRemovePosition(idx)">删除</button>
                         </div>
-                        <input v-model="p.skills" :disabled="!editable" placeholder="技能硬要求" class="w-full border rounded p-2 text-sm">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-x-2 gap-y-3">
+                            <div class="flex flex-col gap-1">
+                                <span class="text-xs text-gray-500">岗位</span>
+                                <input v-model="p.role" :disabled="!editable" placeholder="如：前端工程师" class="border rounded p-2 text-sm">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-xs text-gray-500">驻场城市</span>
+                                <input v-model="p.onsite_city" :disabled="!editable" placeholder="如：广州" class="border rounded p-2 text-sm">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-xs text-gray-500">人员级别</span>
+                                <select v-model="p.level" :disabled="!editable" class="crm-form-control text-sm">
+                                    <option value="">请选择</option>
+                                    <option v-for="lv in spec.enums.position_level" :key="lv" :value="lv">{{ lv }}</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-xs text-gray-500">HC 数量</span>
+                                <input v-model.number="p.headcount" :disabled="!editable" type="number" min="1" placeholder="1" class="border rounded p-2 text-sm">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-xs text-gray-500">结算方式</span>
+                                <select v-model="p.billing_unit" :disabled="!editable" class="crm-form-control text-sm">
+                                    <option value="">请选择</option>
+                                    <option v-for="u in spec.enums.billing_unit" :key="u" :value="u">{{ u }}</option>
+                                </select>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-xs text-gray-500">预估报价</span>
+                                <input :value="p.estimated_quote" @input="onPositionEstimatedQuoteInput(idx, $event)" :disabled="!editable" inputmode="numeric" placeholder="如：20,000" class="border rounded p-2 text-sm">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-xs text-gray-500">学历要求</span>
+                                <input v-model="p.education_requirement" :disabled="!editable" placeholder="如：本科及以上" class="border rounded p-2 text-sm">
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <span class="text-xs text-gray-500">需求释放时间</span>
+                                <input v-model="p.start_date" :disabled="!editable" type="date" class="border rounded p-2 text-sm">
+                            </div>
+                            <div class="flex flex-col gap-1 md:col-span-4">
+                                <span class="text-xs text-gray-500">技能描述</span>
+                                <textarea v-model="p.skills" :disabled="!editable" rows="4" placeholder="如：React / Java / 5 年以上经验" class="border rounded p-2 text-sm"></textarea>
+                            </div>
+                        </div>
                     </div>
                     <label class="flex items-center gap-2 text-sm">
                         <input type="checkbox" v-model="form.requirement.urgent" :disabled="!editable">
-                        加急（90 天内到岗）
+                        加急（30 天内到岗）
                     </label>
                 </div>
 
@@ -135,24 +201,22 @@
                 <div v-show="step===3" class="bg-white border rounded-lg p-5 space-y-4">
                     <h3 class="font-bold border-l-4 border-orange-500 pl-2">交付约束</h3>
                     <textarea v-model="form.requirement.delivery_constraints.sla" :disabled="!editable" rows="2" class="w-full border rounded p-2 text-sm" placeholder="SLA / 替换人员时限"></textarea>
-                    <textarea v-model="form.requirement.delivery_constraints.acceptance" :disabled="!editable" rows="2" class="w-full border rounded p-2 text-sm" placeholder="验收标准"></textarea>
                     <textarea v-model="form.requirement.delivery_constraints.compliance" :disabled="!editable" rows="2" class="w-full border rounded p-2 text-sm" placeholder="合规/保密/设备"></textarea>
                     <textarea v-model="form.requirement.delivery_constraints.risk_notes" :disabled="!editable" rows="2" class="w-full border rounded p-2 text-sm" placeholder="风险自评"></textarea>
                     <h3 class="font-bold border-l-4 border-green-600 pl-2 pt-2">商务前置</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <input v-model="form.requirement.commercial.quote_ref" :disabled="!editable" placeholder="报价单编号" class="border rounded p-2 text-sm">
                         <input :value="form.requirement.commercial.estimated_amount" @input="onEstimatedAmountInput" :disabled="!editable" placeholder="预计合同金额" class="border rounded p-2 text-sm">
-                        <select v-model="form.requirement.commercial.payment_cycle" :disabled="!editable" class="crm-form-control text-sm">
-                            <option value="">付款周期</option>
-                            <option v-for="pc in spec.enums.payment_cycle" :key="pc" :value="pc">{{ pc }}</option>
-                        </select>
                     </div>
-                    <label class="flex items-center gap-2 text-sm"><input type="checkbox" v-model="form.requirement.commercial.has_po" :disabled="!editable"> 已有 PO</label>
-                    <label class="flex items-center gap-2 text-sm"><input type="checkbox" v-model="form.requirement.commercial.has_framework" :disabled="!editable"> 已有框架合同</label>
+                    <div class="space-y-3">
+                        <label class="flex items-center gap-2 text-sm"><input type="checkbox" v-model="form.requirement.commercial.has_framework" :disabled="!editable"> 已有框架合同</label>
+                        <input v-if="form.requirement.commercial.has_framework" v-model="form.requirement.commercial.framework_contract_no" :disabled="!editable" placeholder="框架合同编号" class="w-full border rounded p-2 text-sm">
+                        <label class="flex items-center gap-2 text-sm"><input type="checkbox" v-model="form.requirement.commercial.has_po" :disabled="!editable"> 已有 PO</label>
+                        <input v-if="form.requirement.commercial.has_po" v-model="form.requirement.commercial.po_no" :disabled="!editable" placeholder="PO号" class="w-full border rounded p-2 text-sm">
+                    </div>
                 </div>
 
                 <div v-if="editable" class="flex gap-2">
-                    <button type="button" @click="saveDraft" class="bg-gray-100 px-4 py-2 rounded text-sm">保存草稿</button>
+                    <button type="button" @click="saveDraft" class="border border-[#0969da] bg-blue-50 text-[#0969da] font-semibold px-4 py-2 rounded text-sm hover:bg-blue-100">保存草稿</button>
                     <button type="button" @click="submitHandoff" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm">提交交付负责人审批</button>
                 </div>
             </div>
@@ -197,11 +261,11 @@
                     <p class="mt-1 text-red-700">{{ handoff.reject_detail }}</p>
                 </div>
 
-                <div class="bg-white border rounded-lg p-4">
+                <div v-if="canReview" class="bg-white border rounded-lg p-4">
                     <h3 class="font-bold text-sm mb-3">审批历史</h3>
                     <div class="text-xs space-y-2 max-h-64 overflow-y-auto">
                         <div v-for="lg in logs" :key="lg.id" class="border-l-2 border-gray-200 pl-2">
-                            <p class="text-gray-400">{{ lg.created_at }} · {{ lg.operator }}</p>
+                            <p class="text-gray-400">{{ formatLogTime(lg.created_at) }} · {{ lg.operator }}</p>
                             <p>{{ lg.action }} <span v-if="lg.detail">— {{ lg.detail }}</span></p>
                         </div>
                     </div>
@@ -240,5 +304,5 @@ window.__CRM_HANDOFF__ = { clientId: {{ client_id }}, handoffId: {% if handoff_i
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/customer-handoff.js"></script>
+<script src="/static/js/pages/customer-handoff.js?v=20260617-log-time"></script>
 {% endblock %}

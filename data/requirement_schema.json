@@ -10,7 +10,11 @@
       "required": ["project_type", "location"],
       "properties": {
         "project_type": { "type": "string", "enum": ["驻场", "离岸", "混合", ""] },
+        "estimated_gm_pct": { "type": "string" },
+        "estimated_avg_quote": { "type": "string" },
         "location": { "type": "string", "minLength": 1 },
+        "project_cycle": { "type": "string", "enum": ["短期3-6个月", "短期6-12个月", "1年以上长期", ""] },
+        "invoice_payment_term": { "type": "string", "enum": ["30天内", "30-60天", "60-90天", "90天以上", ""] },
         "timezone": { "type": "string" },
         "attendance_rules": { "type": "string" },
         "client_contact": { "type": "string" }
@@ -37,7 +41,10 @@
           "level": { "type": "string", "enum": ["初级", "中级", "高级", "专家", ""] },
           "headcount": { "type": ["integer", "number", "string"] },
           "billing_unit": { "type": "string", "enum": ["人天", "人月", ""] },
+          "onsite_city": { "type": "string" },
+          "education_requirement": { "type": "string" },
           "start_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}" },
+          "estimated_quote": { "type": "string" },
           "skills": { "type": "string" }
         }
       }
@@ -58,7 +65,9 @@
         "estimated_amount": { "type": "string" },
         "payment_cycle": { "type": "string" },
         "has_po": { "type": "boolean" },
-        "has_framework": { "type": "boolean" }
+        "po_no": { "type": "string" },
+        "has_framework": { "type": "boolean" },
+        "framework_contract_no": { "type": "string" }
       }
     },
     "urgent": { "type": "boolean" }

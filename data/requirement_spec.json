@@ -9,7 +9,11 @@
   ],
   "field_labels": {
     "context.project_type": "项目类型",
+    "context.estimated_gm_pct": "预估GM%",
+    "context.estimated_avg_quote": "预估平均报价",
     "context.location": "办公地点",
+    "context.project_cycle": "项目周期",
+    "context.invoice_payment_term": "票后账期",
     "context.timezone": "时区",
     "context.attendance_rules": "考勤/加班规则",
     "context.client_contact": "客户方接口人",
@@ -17,17 +21,21 @@
     "tech_stack.middleware": "中间件",
     "tech_stack.version_constraints": "版本约束",
     "tech_stack.env_requirements": "环境隔离要求",
-    "positions": "岗位编制矩阵",
+    "positions": "需求概述",
     "delivery_constraints.sla": "SLA/替换时限",
     "delivery_constraints.acceptance": "验收标准",
     "delivery_constraints.compliance": "合规要求",
     "delivery_constraints.risk_notes": "风险自评",
     "commercial.quote_ref": "报价单编号",
     "commercial.estimated_amount": "预计合同金额",
-    "commercial.payment_cycle": "付款周期意向"
+    "commercial.payment_cycle": "付款周期意向",
+    "commercial.po_no": "PO号",
+    "commercial.framework_contract_no": "框架合同编号"
   },
   "enums": {
     "project_type": ["驻场", "离岸", "混合"],
+    "project_cycle": ["短期3-6个月", "短期6-12个月", "1年以上长期"],
+    "invoice_payment_term": ["30天内", "30-60天", "60-90天", "90天以上"],
     "position_level": ["初级", "中级", "高级", "专家"],
     "billing_unit": ["人天", "人月"],
     "payment_cycle": ["月度", "双月", "季度", "半年度"]
@@ -35,6 +43,6 @@
   "submit_rules": {
     "min_positions": 1,
     "require_language": true,
-    "urgent_days_threshold": 90
+    "urgent_days_threshold": 30
   }
 }
