@@ -30,7 +30,10 @@ def register_visit_routes(
     VisitRecord,
 ):
     @app.get("/customers/visits", response_class=HTMLResponse)
-    async def page_customer_visits(request: Request):
+    async def page_customer_visits(
+        request: Request,
+        _user: str = Depends(require_permission("crm.visits.read")),
+    ):
         return page_renderer("pages/customer_visits.html", request)
 
     @app.get("/api/customer-visits/filters")

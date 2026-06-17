@@ -78,6 +78,40 @@ def _create_user(client, admin_user: str, admin_pwd: str, username: str, role_co
             )
 
 
+def _create_role_with_permissions(
+    role_code: str,
+    permission_codes: list[str],
+    data_scopes: list[tuple[str, str, str]] | None = None,
+) -> None:
+    import main as crm_main
+
+    with crm_main.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT OR IGNORE INTO sys_role (code, name, description, is_builtin, created_at) "
+                "VALUES (:code, :name, '', 0, datetime('now'))"
+            ),
+            {"code": role_code, "name": role_code},
+        )
+        rid = int(conn.execute(text("SELECT id FROM sys_role WHERE code = :c"), {"c": role_code}).fetchone()[0])
+        for perm in permission_codes:
+            pid = conn.execute(text("SELECT id FROM sys_permission WHERE code = :p"), {"p": perm}).fetchone()
+            assert pid is not None
+            conn.execute(
+                text("INSERT OR IGNORE INTO sys_role_permission (role_id, permission_id) VALUES (:rid, :pid)"),
+                {"rid": rid, "pid": int(pid[0])},
+            )
+        for resource_code, action, scope_type in data_scopes or []:
+            conn.execute(
+                text(
+                    "INSERT OR REPLACE INTO sys_role_data_scope "
+                    "(role_id, resource_code, action, scope_type, created_at, updated_at) "
+                    "VALUES (:rid, :rc, :act, :scope, datetime('now'), datetime('now'))"
+                ),
+                {"rid": rid, "rc": resource_code, "act": action, "scope": scope_type},
+            )
+
+
 def _login(client, username: str, password: str):
     return client.post("/api/auth/login", json={"username": username, "password": password})
 
@@ -94,6 +128,19 @@ def _insert_client(name: str, owner: str) -> int:
             {"name": name, "owner": owner},
         )
         return int(conn.execute(text("SELECT last_insert_rowid()")).fetchone()[0])
+
+
+def _insert_visit(client_id: int) -> None:
+    import main as crm_main
+
+    with crm_main.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO visits (client_id, date, location, content, created_at) "
+                "VALUES (:cid, '2026-06-17', 'SZ', 'hidden visit', datetime('now'))"
+            ),
+            {"cid": client_id},
+        )
 
 
 @pytest.fixture(scope="module")
@@ -282,17 +329,34 @@ def test_client_readonly_user_cannot_open_or_call_write_surfaces(client_rbac, ad
     suffix = f"client_ro_{os.getpid()}"
     viewer = f"client_ro_{suffix}"
     viewer_pwd = "readonly1"
-    _create_user(client_rbac, admin_user, admin_pwd, viewer, ["VIEWER"], viewer_pwd)
+    role_code = f"CLIENT_READ_ONLY_{os.getpid()}"
+    _create_role_with_permissions(
+        role_code,
+        ["crm.clients.read"],
+        [("crm.client", "read", "all")],
+    )
+    _create_user(client_rbac, admin_user, admin_pwd, viewer, [role_code], viewer_pwd)
 
     cid = _insert_client(f"Readonly Client {suffix}", admin_user)
+    _insert_visit(cid)
 
     login = _login(client_rbac, viewer, viewer_pwd)
     assert login.status_code == 200, login.text
     cookies = login.cookies
 
     assert client_rbac.get("/customers", cookies=cookies).status_code == 200
+    _assert_forbidden(client_rbac.get("/contacts/all", cookies=cookies), "crm.contacts.read")
+    _assert_forbidden(client_rbac.get("/contacts/tags", cookies=cookies), "crm.contacts.read")
+    _assert_forbidden(client_rbac.get("/contacts/import", cookies=cookies), "crm.contacts.read")
+    _assert_forbidden(client_rbac.get("/customers/visits", cookies=cookies), "crm.visits.read")
     _assert_forbidden(client_rbac.get("/customers/new", cookies=cookies), "crm.clients.write")
     _assert_forbidden(client_rbac.get(f"/customers/{cid}/edit", cookies=cookies), "crm.clients.write")
+    _assert_forbidden(client_rbac.get("/api/export/clients", cookies=cookies), "crm.clients.write")
+    _assert_forbidden(client_rbac.get(f"/customers/{cid}/handoff", cookies=cookies), "delivery.handoff.read")
+    _assert_forbidden(client_rbac.get("/customers/reviews", cookies=cookies), "delivery.handoff.review")
+    details = client_rbac.get(f"/api/clients/{cid}/details", cookies=cookies)
+    assert details.status_code == 200, details.text
+    assert details.json()["visits"] == []
 
     post_resp = client_rbac.post(
         "/api/clients",
@@ -324,3 +388,32 @@ def test_client_readonly_user_cannot_open_or_call_write_surfaces(client_rbac, ad
 
     delete_resp = client_rbac.delete(f"/api/clients/{cid}", cookies=cookies)
     _assert_forbidden(delete_resp, "crm.clients.write")
+
+
+def test_handoff_page_permissions_are_split_by_read_and_review(client_rbac, admin_auth):
+    admin_user, admin_pwd = admin_auth
+    suffix = f"handoff_page_{os.getpid()}"
+    cid = _insert_client(f"Handoff Page Client {suffix}", admin_user)
+
+    read_role = f"HANDOFF_READ_{os.getpid()}"
+    read_user = f"handoff_read_{os.getpid()}"
+    read_pwd = "handoffread1"
+    _create_role_with_permissions(read_role, ["delivery.handoff.read"])
+    _create_user(client_rbac, admin_user, admin_pwd, read_user, [read_role], read_pwd)
+    read_login = _login(client_rbac, read_user, read_pwd)
+    assert read_login.status_code == 200, read_login.text
+    assert client_rbac.get(f"/customers/{cid}/handoff", cookies=read_login.cookies).status_code == 200
+    _assert_forbidden(client_rbac.get("/customers/reviews", cookies=read_login.cookies), "delivery.handoff.review")
+
+    review_role = f"HANDOFF_REVIEW_{os.getpid()}"
+    review_user = f"handoff_review_{os.getpid()}"
+    review_pwd = "handoffreview1"
+    _create_role_with_permissions(review_role, ["delivery.handoff.review"])
+    _create_user(client_rbac, admin_user, admin_pwd, review_user, [review_role], review_pwd)
+    review_login = _login(client_rbac, review_user, review_pwd)
+    assert review_login.status_code == 200, review_login.text
+    assert client_rbac.get("/customers/reviews", cookies=review_login.cookies).status_code == 200
+    _assert_forbidden(
+        client_rbac.get(f"/customers/{cid}/handoff", cookies=review_login.cookies),
+        "delivery.handoff.read",
+    )

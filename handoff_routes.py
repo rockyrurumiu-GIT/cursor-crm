@@ -649,7 +649,10 @@ def register_handoff_routes(
         return data
 
     @app.get("/customers/reviews", response_class=HTMLResponse)
-    async def page_handoff_reviews(request: Request):
+    async def page_handoff_reviews(
+        request: Request,
+        _user: str = Depends(require_permission("delivery.handoff.review")),
+    ):
         return page_renderer("pages/customer_reviews.html", request)
 
     @app.get("/delivery/handoff-pending", response_class=HTMLResponse)
@@ -657,11 +660,20 @@ def register_handoff_routes(
         return page_renderer("pages/delivery_handoff_pending.html", request)
 
     @app.get("/customers/{client_id}/handoff", response_class=HTMLResponse)
-    async def page_client_handoff(request: Request, client_id: int):
+    async def page_client_handoff(
+        request: Request,
+        client_id: int,
+        _user: str = Depends(require_permission("delivery.handoff.read")),
+    ):
         return page_renderer("pages/customer_handoff.html", request, client_id=client_id, handoff_id=None)
 
     @app.get("/customers/{client_id}/handoff/{handoff_id}", response_class=HTMLResponse)
-    async def page_client_handoff_detail(request: Request, client_id: int, handoff_id: int):
+    async def page_client_handoff_detail(
+        request: Request,
+        client_id: int,
+        handoff_id: int,
+        _user: str = Depends(require_permission("delivery.handoff.read")),
+    ):
         return page_renderer(
             "pages/customer_handoff.html",
             request,

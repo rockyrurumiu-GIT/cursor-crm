@@ -1602,7 +1602,10 @@ async def page_home_trash(request: Request):
 
 
 @app.get("/customers", response_class=HTMLResponse)
-async def page_customers(request: Request):
+async def page_customers(
+    request: Request,
+    _user: str = Depends(require_permission("crm.clients.read")),
+):
     return _page("pages/customers.html", request)
 
 

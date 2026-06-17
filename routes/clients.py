@@ -279,7 +279,7 @@ def register_client_read_routes(
     async def export_clients(
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(require_permission("crm.clients.read")),
+        user: str = Depends(require_permission("crm.clients.write")),
     ):
         from phase2_core import refresh_client_estimated_annual_amount
 
@@ -612,7 +612,10 @@ def register_client_related_routes(
         user: str = Depends(require_permission("crm.clients.read")),
     ):
         ensure_client_access(db, ctx, client_id, Client, action="read")
-        visits = db.query(VisitRecord).filter(VisitRecord.client_id == client_id).all()
+        if ctx.is_super or "crm.visits.read" in ctx.permissions:
+            visits = db.query(VisitRecord).filter(VisitRecord.client_id == client_id).all()
+        else:
+            visits = []
         logs = db.query(AuditLog).filter(AuditLog.client_id == client_id).order_by(desc(AuditLog.created_at)).all()
         return {"visits": visits, "logs": logs}
 

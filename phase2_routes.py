@@ -809,15 +809,24 @@ def register_phase2_routes(
         return RedirectResponse(url="/home/funnel#goals", status_code=302)
 
     @app.get("/contacts/all", response_class=HTMLResponse)
-    async def page_contacts_all(request: Request):
+    async def page_contacts_all(
+        request: Request,
+        _user: str = Depends(require_permission("crm.contacts.read")),
+    ):
         return page_renderer("pages/contacts_all.html", request)
 
     @app.get("/contacts/tags", response_class=HTMLResponse)
-    async def page_contacts_tags(request: Request):
+    async def page_contacts_tags(
+        request: Request,
+        _user: str = Depends(require_permission("crm.contacts.read")),
+    ):
         return RedirectResponse(url="/contacts/all", status_code=302)
 
     @app.get("/contacts/import", response_class=HTMLResponse)
-    async def page_contacts_import(request: Request):
+    async def page_contacts_import(
+        request: Request,
+        _user: str = Depends(require_permission("crm.contacts.read")),
+    ):
         return RedirectResponse(url="/contacts/all", status_code=302)
 
     @app.get("/goals/quarter", response_class=HTMLResponse)

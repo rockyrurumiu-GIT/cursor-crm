@@ -18,6 +18,14 @@ def test_dashboard_nav_moved_under_customers():
     assert re.search(r'data-crm-nav-any="[^"]*dashboard\.read', nav)
 
 
+def test_customer_nav_child_permissions():
+    nav = _nav_html()
+    assert re.search(r'data-crm-nav-any="[^"]*crm\.contacts\.read', nav)
+    assert 'href="/customers" data-crm-nav-perm="crm.clients.read"' in nav
+    assert 'href="/contacts/all" data-crm-nav-perm="crm.contacts.read"' in nav
+    assert 'href="/customers/visits" data-crm-nav-perm="crm.visits.read"' in nav
+
+
 def test_rms_nav_entry():
     nav = _nav_html()
     assert 'href="/rms"' in nav
