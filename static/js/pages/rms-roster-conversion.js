@@ -7,14 +7,20 @@
   function createRosterConversionState(deps) {
     var ref = deps.ref;
     var reactive = deps.reactive;
+    var computed = deps.computed;
     var rmsRequest = deps.rmsRequest;
     var toast = deps.toast;
     var loadApplications = deps.loadApplications;
+    var hasPermission = deps.hasPermission || function () { return false; };
+    var isSuper = deps.isSuper || { value: false };
     var CandidateReport = global.RmsCandidateReport || {};
 
     var rosterConvertModal = ref(null);
     var rosterConvertSaving = ref(false);
     var rosterConvertError = ref("");
+    var canUseGmCalc = computed(function () {
+      return !!isSuper.value || hasPermission("tools.gm_calc.read");
+    });
     var rosterConvertForm = reactive({
       employment_status: "在职",
       full_name: "",
@@ -208,6 +214,7 @@
       rosterConvertSaving: rosterConvertSaving,
       rosterConvertError: rosterConvertError,
       rosterConvertForm: rosterConvertForm,
+      canUseGmCalc: canUseGmCalc,
       resetRosterConvertForm: resetRosterConvertForm,
       validateRosterConvertForm: validateRosterConvertForm,
       appendGmCalcQueryPart: appendGmCalcQueryPart,

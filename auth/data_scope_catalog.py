@@ -125,6 +125,7 @@ SYSTEM_PERMISSIONS: FrozenSet[str] = frozenset({
     "system.audit.read",
     "dashboard.read",
     "dashboard.write",
+    "tools.gm_calc.read",
 })
 
 BUSINESS_PERMISSIONS: FrozenSet[str] = frozenset(

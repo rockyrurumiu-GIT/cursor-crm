@@ -345,6 +345,8 @@ def test_client_readonly_user_cannot_open_or_call_write_surfaces(client_rbac, ad
     cookies = login.cookies
 
     assert client_rbac.get("/customers", cookies=cookies).status_code == 200
+    _assert_forbidden(client_rbac.get("/tools/calc", cookies=cookies), "tools.gm_calc.read")
+    _assert_forbidden(client_rbac.get("/api/gm/insurance-locations", cookies=cookies), "tools.gm_calc.read")
     _assert_forbidden(client_rbac.get("/contacts/all", cookies=cookies), "crm.contacts.read")
     _assert_forbidden(client_rbac.get("/contacts/tags", cookies=cookies), "crm.contacts.read")
     _assert_forbidden(client_rbac.get("/contacts/import", cookies=cookies), "crm.contacts.read")
@@ -388,6 +390,25 @@ def test_client_readonly_user_cannot_open_or_call_write_surfaces(client_rbac, ad
 
     delete_resp = client_rbac.delete(f"/api/clients/{cid}", cookies=cookies)
     _assert_forbidden(delete_resp, "crm.clients.write")
+
+
+def test_gm_calc_permission_allows_page_and_read_api(client_rbac, admin_auth):
+    admin_user, admin_pwd = admin_auth
+    suffix = f"gm_calc_{os.getpid()}"
+    user = f"gm_calc_{suffix}"
+    user_pwd = "gmcalc1"
+    role_code = f"GM_CALC_READ_{os.getpid()}"
+    _create_role_with_permissions(role_code, ["tools.gm_calc.read"])
+    _create_user(client_rbac, admin_user, admin_pwd, user, [role_code], user_pwd)
+
+    login = _login(client_rbac, user, user_pwd)
+    assert login.status_code == 200, login.text
+    cookies = login.cookies
+
+    page = client_rbac.get("/tools/calc", cookies=cookies)
+    assert page.status_code == 200, page.text
+    api = client_rbac.get("/api/gm/insurance-locations", cookies=cookies)
+    assert api.status_code == 200, api.text
 
 
 def test_handoff_page_permissions_are_split_by_read_and_review(client_rbac, admin_auth):

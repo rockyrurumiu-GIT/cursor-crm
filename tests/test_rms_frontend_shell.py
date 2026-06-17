@@ -825,8 +825,18 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "openRosterGmCalculatorFromRms" in html
     assert "/tools/calc" in roster_js
     assert "毛利测算器" in html
+    assert "canUseGmCalc" in roster_js
+    assert 'hasPermission("tools.gm_calc.read")' in roster_js
+    assert 'v-if="canUseGmCalc"' in html
+    assert "hasPermission: hasPermission" in rms_src
+    assert "isSuper: isSuper" in rms_src
     assert "openConvertedRosterEntry" in roster_js
     assert "canConvertToRoster" in rms_src
+    roster_detail_html = (REPO_ROOT / "templates/pages/roster_detail.html").read_text(encoding="utf-8")
+    roster_detail_js = (REPO_ROOT / "static/js/pages/roster-detail.js").read_text(encoding="utf-8")
+    assert "canUseGmCalc" in roster_detail_js
+    assert "tools.gm_calc.read" in roster_detail_js
+    assert 'v-if="!formReadonly && canUseGmCalc"' in roster_detail_html
     assert ">简历</a>" in apps_region
     assert "hired_unconverted_only" in applications_js
     assert "applicationsFilter" in applications_js

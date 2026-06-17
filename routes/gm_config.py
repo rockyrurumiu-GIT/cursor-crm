@@ -32,7 +32,7 @@ def register_gm_config_routes(app, *, get_db: Callable, SocialInsuranceLocation)
     @app.get("/api/gm/insurance-locations")
     async def api_gm_insurance_locations(
         db: Session = Depends(get_db),
-        _user: str = Depends(require_permission("crm.clients.read")),
+        _user: str = Depends(require_permission("tools.gm_calc.read")),
     ):
         rows = (
             db.query(SocialInsuranceLocation)

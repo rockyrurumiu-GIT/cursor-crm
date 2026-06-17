@@ -1701,7 +1701,10 @@ async def page_delivery_pipeline_insight(request: Request, client_id: int):
 
 
 @app.get("/tools/calc", response_class=HTMLResponse)
-async def page_calc(request: Request):
+async def page_calc(
+    request: Request,
+    _user: str = Depends(require_permission("tools.gm_calc.read")),
+):
     return _page("pages/calc.html", request)
 
 

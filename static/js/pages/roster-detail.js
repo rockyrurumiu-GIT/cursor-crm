@@ -282,6 +282,9 @@ const rosterDetailApp = createApp({
         const touchedFields = reactive({});
         const crmClients = ref([]);
         const authHeader = () => window.crmAuthHeader();
+        const canUseGmCalc = computed(() => {
+            return !!window.crmIsSuper || !!window.crmHasPermission?.('tools.gm_calc.read');
+        });
         const rosterCustomerSelectOptions = computed(() => {
             const names = (crmClients.value || [])
                 .map((c) => String(c && c.name != null ? c.name : '').trim())
@@ -1084,7 +1087,7 @@ const rosterDetailApp = createApp({
             IS_GLOBAL_ROSTER,
             rosterCustomerSelectOptions,
             onboardingChannelOptions: ONBOARDING_CHANNEL_OPTIONS,
-            openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, saveForm, doDelete,
+            openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, canUseGmCalc, saveForm, doDelete,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
             showRosterValidation,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,

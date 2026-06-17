@@ -120,6 +120,13 @@
       const modal = ref(null);
       const modalError = ref("");
       const modalSaving = ref(false);
+      const isSuper = computed(function () {
+        const roles = me.value.roles || [];
+        return !!me.value.is_super || roles.indexOf("SUPER_ADMIN") !== -1;
+      });
+      function hasPermission(code) {
+        return (me.value.permissions || []).indexOf(code) !== -1;
+      }
 
       const jobs = window.CrmRmsJobs && window.CrmRmsJobs.createJobsState
         ? window.CrmRmsJobs.createJobsState({
@@ -136,21 +143,19 @@
         : {};
 
       const canWriteJobs = computed(function () {
-        return me.value.permissions.indexOf("rms.jobs.write") !== -1;
+        return hasPermission("rms.jobs.write");
       });
       const canWriteCandidates = computed(function () {
-        return me.value.permissions.indexOf("rms.candidates.write") !== -1;
+        return hasPermission("rms.candidates.write");
       });
       const canWriteApplications = computed(function () {
-        return me.value.permissions.indexOf("rms.applications.write") !== -1;
+        return hasPermission("rms.applications.write");
       });
       const canReadCandidates = computed(function () {
-        return me.value.permissions.indexOf("rms.candidates.read") !== -1;
+        return hasPermission("rms.candidates.read");
       });
       const canConvertToRoster = computed(function () {
-        const perms = me.value.permissions || [];
-        return perms.indexOf("rms.applications.write") !== -1 &&
-          perms.indexOf("delivery.roster.write") !== -1;
+        return hasPermission("rms.applications.write") && hasPermission("delivery.roster.write");
       });
 
       const modalTitle = computed(function () {
@@ -346,9 +351,12 @@
       const rosterConversion = window.CrmRmsRosterConversion.createRosterConversionState({
         ref: ref,
         reactive: reactive,
+        computed: computed,
         rmsRequest: rmsRequest,
         toast: toast,
         loadApplications: loadApplications,
+        hasPermission: hasPermission,
+        isSuper: isSuper,
       });
       if (!rosterConversion.submitRosterConvert) {
         showRmsBootError("RMS 转入花名册状态初始化失败，请刷新后重试。");

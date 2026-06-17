@@ -187,6 +187,16 @@ _MATRIX_ROWS: List[Dict[str, Any]] = [
         "approve": [],
     },
     {
+        "module": "tools",
+        "module_label": "工具",
+        "label": "毛利测算器",
+        "read": ["tools.gm_calc.read"],
+        "write": [],
+        "delete": [],
+        "import_export": [],
+        "approve": [],
+    },
+    {
         "module": "system",
         "module_label": "系统",
         "label": "用户管理",

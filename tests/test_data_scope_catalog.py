@@ -43,6 +43,32 @@ def test_system_permissions_have_no_data_scope_resource():
         assert catalog.is_system_permission(code)
 
 
+def test_gm_calc_permission_is_global_system_permission():
+    assert "tools.gm_calc.read" in catalog.SYSTEM_PERMISSIONS
+    assert "tools.gm_calc.read" not in catalog.BUSINESS_PERMISSIONS
+    assert "tools.gm_calc.read" not in catalog.PERMISSION_TO_RESOURCE
+    assert catalog.permission_to_resource("tools.gm_calc.read") is None
+
+
+def test_gm_calc_permission_in_permission_matrix():
+    from auth.permission_catalog import _MATRIX_ROWS, permission_codes_from_matrix_selection
+
+    row = next(r for r in _MATRIX_ROWS if r["label"] == "毛利测算器")
+    assert row["module"] == "tools"
+    assert row["module_label"] == "工具"
+    assert row["read"] == ["tools.gm_calc.read"]
+    selected = {
+        "毛利测算器": {
+            "read": True,
+            "write": False,
+            "delete": False,
+            "import_export": False,
+            "approve": False,
+        }
+    }
+    assert permission_codes_from_matrix_selection(selected) == ["tools.gm_calc.read"]
+
+
 def test_permission_mapping_targets_known_resources():
     for perm, resource in catalog.PERMISSION_TO_RESOURCE.items():
         assert perm in ALL_PERMISSION_CODES

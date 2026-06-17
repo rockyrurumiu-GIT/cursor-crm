@@ -45,6 +45,7 @@ ALL_PERMISSION_CODES: FrozenSet[str] = frozenset({
     "system.audit.read",
     "dashboard.read",
     "dashboard.write",
+    "tools.gm_calc.read",
 })
 
 ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {

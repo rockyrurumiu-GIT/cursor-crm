@@ -18,6 +18,12 @@ def test_dashboard_nav_moved_under_customers():
     assert re.search(r'data-crm-nav-any="[^"]*dashboard\.read', nav)
 
 
+def test_gm_calc_nav_requires_tools_permission():
+    nav = _nav_html()
+    assert re.search(r'data-crm-nav-any="[^"]*tools\.gm_calc\.read', nav)
+    assert 'href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">毛利测算器' in nav
+
+
 def test_customer_nav_child_permissions():
     nav = _nav_html()
     assert re.search(r'data-crm-nav-any="[^"]*crm\.contacts\.read', nav)
