@@ -295,7 +295,7 @@
                 </div>
                 <div class="flex items-center gap-3 shrink-0 text-sm">
                     <span class="text-[#8b949e] hidden sm:inline">欢迎，{{currentUser}}</span>
-                    <button type="button" @click="logout" class="text-[#58a6ff] hover:underline font-medium">退出</button>
+                    <button type="button" @click="logout" class="text-[#58a6ff] hover:underline font-medium">{{ currentUser ? currentUser + '退出' : '退出' }}</button>
                 </div>
             </div>
         </header>

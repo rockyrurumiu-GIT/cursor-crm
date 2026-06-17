@@ -567,9 +567,9 @@ def register_client_write_routes(
         client_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(require_permission("crm.clients.write")),
+        user: str = Depends(require_permission("crm.clients.delete")),
     ):
-        client = ensure_client_access(db, ctx, client_id, Client, action="write")
+        client = ensure_client_access(db, ctx, client_id, Client, action="delete")
         client_folder = f"{client.name}_{client.id}"
         src_path = os.path.join(upload_dir, client_folder)
         if os.path.exists(src_path):

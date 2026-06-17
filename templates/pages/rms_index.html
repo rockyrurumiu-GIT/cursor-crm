@@ -935,7 +935,7 @@
                         <td class="crm-td whitespace-nowrap rms-col-manage crm-op-col">
                             <div class="crm-op-actions">
                                 <button v-if="canWriteJobs" type="button" class="crm-op-btn-edit" @click="openJobEdit(j)">修改</button>
-                                <button v-if="canWriteJobs" type="button" class="crm-op-btn-delete" @click="removeJob(j)">删除</button>
+                                <button v-if="canDeleteJobs" type="button" class="crm-op-btn-delete" @click="removeJob(j)">删除</button>
                             </div>
                         </td>
                         <td class="crm-td whitespace-nowrap rms-sticky-recommend crm-sticky-right-op crm-op-col-xl">
@@ -1070,15 +1070,15 @@
                             <template v-if="c.resume_id">
                                 <a v-if="resumeCanView(c)" :href="resumeViewUrl(c)" target="_blank" rel="noopener"
                                     class="crm-op-btn-detail">阅读</a>
-                                <a :href="resumeDownloadUrl(c)" class="crm-op-btn-edit ml-1">下载</a>
+                                <a v-if="c.can_download_resume" :href="resumeDownloadUrl(c)" class="crm-op-btn-edit ml-1">下载</a>
                             </template>
                             <span v-else class="text-[#57606a]">—</span>
                         </td>
                         <td class="crm-td crm-sticky-right-op crm-op-col-wide whitespace-nowrap">
                             <div class="crm-op-actions flex flex-wrap items-center gap-1">
                                 <button type="button" class="crm-op-btn-detail" @click="openCandidateDetail(c)">详情</button>
-                                <button v-if="canWriteCandidates" type="button" class="crm-op-btn-edit" @click="openCandidateEdit(c)">修改</button>
-                                <button v-if="canWriteCandidates" type="button" class="crm-op-btn-delete"
+                                <button v-if="c.can_write" type="button" class="crm-op-btn-edit" @click="openCandidateEdit(c)">修改</button>
+                                <button v-if="c.can_delete" type="button" class="crm-op-btn-delete"
                                     data-crm-delete-title="确认删除候选人"
                                     :data-crm-delete-target="'将删除候选人：' + (c.name || ('#' + c.id))"
                                     data-crm-delete-hint="删除后将从候选人列表移除。"
@@ -1149,7 +1149,7 @@
                                 <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">简历</a>
                                 <button type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)">状态历史</button>
                                 <button v-if="a.status === 'hired' && !a.converted_to_roster_entry_id && canConvertToRoster" type="button" class="crm-op-btn-edit" data-rms-action="roster-convert-open" @click="openRosterConvertModal(a)">转入花名册</button>
-                                <button v-if="canWriteApplications" type="button" class="crm-op-btn-delete"
+                                <button v-if="canDeleteApplications" type="button" class="crm-op-btn-delete"
                                     data-crm-delete-title="确认删除推荐记录"
                                     :data-crm-delete-target="'将删除推荐：' + (appCandidateName(a) || ('#' + a.id)) + ' · ' + (appJobTitle(a) || '—')"
                                     data-crm-delete-hint="将同时删除状态历史、面试、Offer 等关联数据；候选人本身不会被删除。"
@@ -1210,13 +1210,13 @@
                                 <a v-if="a.resume_id" :href="resumeViewUrlById(a.resume_id)" target="_blank" rel="noopener" class="crm-op-btn-detail">简历</a>
                                 <template v-if="canWriteApplications">
                                     <button type="button" class="crm-op-btn-edit" @click="openDeliveryReviewModal(a)">内审</button>
-                                    <button type="button" class="crm-op-btn-delete"
+                                    <button v-if="canDeleteApplications" type="button" class="crm-op-btn-delete"
                                         data-crm-delete-title="确认删除推荐记录"
                                         :data-crm-delete-target="'将删除推荐：' + (appCandidateName(a) || ('#' + a.id)) + ' · ' + (appJobTitle(a) || '—')"
                                         data-crm-delete-hint="将同时删除状态历史等关联数据；候选人本身不会被删除。"
                                         @click="removeApplication(a)">删除</button>
                                 </template>
-                                <span v-if="!a.resume_id && !canWriteApplications" class="text-[#57606a]">—</span>
+                                <span v-if="!a.resume_id && !canWriteApplications && !canDeleteApplications" class="text-[#57606a]">—</span>
                             </div>
                         </td>
                     </tr>
@@ -1793,7 +1793,8 @@
                                     <a v-if="resumeCanView({ resume_id: editingCandidateResumeId, resume_file_name: editingCandidateResumeName })"
                                         :href="resumeViewUrl({ resume_id: editingCandidateResumeId })"
                                         target="_blank" rel="noopener" class="crm-op-btn-detail">阅读</a>
-                                    <a :href="resumeDownloadUrl({ resume_id: editingCandidateResumeId })"
+                                    <a v-if="editingCandidateCanDownloadResume"
+                                        :href="resumeDownloadUrl({ resume_id: editingCandidateResumeId })"
                                         class="crm-op-btn-edit">下载</a>
                                 </div>
                             </div>
@@ -1926,7 +1927,7 @@
                             <template v-if="candidateDetailRow.resume_id">
                                 <a v-if="resumeCanView(candidateDetailRow)" :href="resumeViewUrl(candidateDetailRow)" target="_blank" rel="noopener"
                                     class="crm-op-btn-detail">阅读</a>
-                                <a :href="resumeDownloadUrl(candidateDetailRow)" class="crm-op-btn-edit ml-1">下载</a>
+                                <a v-if="candidateDetailRow.can_download_resume" :href="resumeDownloadUrl(candidateDetailRow)" class="crm-op-btn-edit ml-1">下载</a>
                             </template>
                             <span v-else class="text-[#57606a]">—</span>
                         </div>
@@ -1961,5 +1962,5 @@
 <script src="/static/js/pages/rms-pipeline.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-delivery-review.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-roster-conversion.js?v=r3c3-pipeline-terminal-20260615"></script>
-<script src="/static/js/pages/rms.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms.js?v=delete-permissions-20260617"></script>
 {% endblock %}

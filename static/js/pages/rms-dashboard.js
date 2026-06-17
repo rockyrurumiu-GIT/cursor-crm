@@ -135,6 +135,7 @@
         var widgetData = ref({});
         var rosterClients = ref([]);
         var canWrite = ref(false);
+        var canDelete = ref(false);
         var editMode = ref(false);
 
         var activeDashboardId = ref(null);
@@ -1117,8 +1118,10 @@
           }).then(function (r) { return r.json(); }).then(function (me) {
             var perms = me.permissions || [];
             canWrite.value = !!me.is_super || perms.indexOf("dashboard.write") >= 0;
+            canDelete.value = !!me.is_super || perms.indexOf("dashboard.delete") >= 0;
           }).catch(function () {
             canWrite.value = false;
+            canDelete.value = false;
           });
 
           apiGet("/api/rms/dashboard-metadata").then(function (m) {
@@ -1183,6 +1186,7 @@
           displayItems: displayItems,
           editMode: editMode,
           canWrite: canWrite,
+          canDelete: canDelete,
           dragWidgetId: dragWidgetId,
           resizeWidgetId: resizeWidgetId,
           activeWidgetId: activeWidgetId,

@@ -850,6 +850,7 @@ const rosterDetailApp = createApp({
             alert(msg);
             loadRows();
         };
+        const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
         const exportCsv = async () => {
             const exportUrl = IS_GLOBAL_ROSTER ? '/api/roster/export' : `/api/clients/${CLIENT_ID}/roster/export`;
             const r = await fetch(exportUrl, { headers: authHeader() });
@@ -1087,7 +1088,7 @@ const rosterDetailApp = createApp({
             IS_GLOBAL_ROSTER,
             rosterCustomerSelectOptions,
             onboardingChannelOptions: ONBOARDING_CHANNEL_OPTIONS,
-            openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, canUseGmCalc, saveForm, doDelete,
+            openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, canUseGmCalc, saveForm, doDelete, canDeletePermission,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
             showRosterValidation,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,

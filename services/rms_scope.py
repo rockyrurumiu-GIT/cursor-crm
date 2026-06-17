@@ -13,6 +13,7 @@ from auth.data_scope_catalog import (
     CLIENT_RECRUITMENT_OWNER_COL,
     RESOURCE_CRM_CLIENT,
     RESOURCE_RMS_APPLICATION,
+    RESOURCE_RMS_CANDIDATE,
     RESOURCE_RMS_JOB,
 )
 from auth.service import AuthContext
@@ -51,6 +52,30 @@ def scoped_applications_query(
     return ds.filter_query_by_client_scope(
         q, db, ctx, RESOURCE_RMS_APPLICATION, action, RmsApplication.client_id, Client
     )
+
+
+def apply_candidate_scope_query(
+    query: Query,
+    ctx: AuthContext,
+    RmsCandidate: Type[Any],
+    *,
+    action: str,
+) -> Query:
+    scope = ds.get_effective_data_scope(ctx, RESOURCE_RMS_CANDIDATE, action)
+
+    if ctx.is_super or scope == ds.SCOPE_ALL:
+        return query
+
+    if scope == ds.SCOPE_NONE or ctx.user_id is None:
+        return query.filter(RmsCandidate.id == -1)
+
+    if scope in (ds.SCOPE_SELF, ds.SCOPE_ASSIGNED):
+        return query.filter(RmsCandidate.created_by_user_id == ctx.user_id)
+
+    if scope in (ds.SCOPE_DEPT, ds.SCOPE_DEPT_AND_CHILD):
+        return query.filter(RmsCandidate.id == -1)
+
+    return query.filter(RmsCandidate.id == -1)
 
 
 def _recruitment_client_job_writable(
@@ -146,9 +171,15 @@ def visible_candidate_ids(
     RmsCandidate: Type[Any],
     RmsApplication: Type[Any],
     Client: Type[Any],
+    *,
+    action: str = "read",
 ) -> Optional[Set[int]]:
     if ctx.is_super:
         return None
+    if action == "read":
+        candidate_scope = ds.get_effective_data_scope(ctx, RESOURCE_RMS_CANDIDATE, "read")
+        if candidate_scope == ds.SCOPE_ALL:
+            return None
     ids: Set[int] = set()
     if ctx.user_id is not None:
         rows = (
@@ -157,7 +188,7 @@ def visible_candidate_ids(
             .all()
         )
         ids.update(int(r[0]) for r in rows)
-    app_q = scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
+    app_q = scoped_applications_query(db, ctx, RmsApplication, Client, action=action)
     for (cid,) in app_q.with_entities(RmsApplication.candidate_id).distinct().all():
         if cid is not None:
             ids.add(int(cid))

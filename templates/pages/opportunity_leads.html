@@ -49,7 +49,7 @@
                         <div class="crm-op-actions">
                             <button type="button" class="crm-op-btn-detail" @click="openDetail(o)">详情</button>
                             <button type="button" class="crm-op-btn-edit" @click="openEdit(o)">修改</button>
-                            <button type="button" class="crm-op-btn-delete" @click="remove(o)">删除</button>
+                            <button v-if="canDeletePermission('crm.opportunities.delete')" type="button" class="crm-op-btn-delete" @click="remove(o)">删除</button>
                             <button v-if="o.stage==='won'" type="button" class="crm-op-btn-handoff" @click="createHandoff(o)">交接</button>
                         </div>
                     </td>
@@ -211,6 +211,7 @@ createApp({
         });
         const form = ref(emptyForm());
         const auth = () => window.crmAuthHeader();
+        const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
         let skipContactReset = false;
 
         const filteredContacts = computed(() => {
@@ -399,6 +400,7 @@ createApp({
             save,
             remove,
             createHandoff,
+            canDeletePermission,
             onAmountInput,
             onWinRateInput,
             displayAmount,

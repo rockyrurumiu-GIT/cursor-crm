@@ -70,6 +70,7 @@ createApp({
         const detailRow = ref(null);
 
         const auth = () => window.crmAuthHeader();
+        const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
 
         const loadFilters = async () => {
             const r = await fetch(`/api/customer-visits/filters?_=${Date.now()}`, {
@@ -212,6 +213,7 @@ createApp({
             openDetail,
             save,
             remove,
+            canDeletePermission,
         };
     },
 }).mount('#visits-app');

@@ -333,7 +333,7 @@
                             <div class="crm-op-actions">
                                 <button type="button" class="crm-op-btn-detail" @click="openDetail(row)">详情</button>
                                 <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
-                                <button type="button" class="crm-op-btn-delete" @click="removeRow(row)">删除</button>
+                                <button v-if="canDeletePermission('delivery.settlement.delete')" type="button" class="crm-op-btn-delete" @click="removeRow(row)">删除</button>
                             </div>
                         </td>
                     </tr>
@@ -433,5 +433,5 @@
 <script src="/static/js/core/crm-dom.js"></script>
 <script src="/static/js/core/crm-download.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
-<script src="/static/js/pages/delivery-settlement.js"></script>
+<script src="/static/js/pages/delivery-settlement.js?v=delete-perm-20260617"></script>
 {% endblock %}

@@ -175,7 +175,9 @@ def visible_client_ids(
             continue
         elif action == "write" and not perm.endswith(".write"):
             continue
-        elif action not in ("read", "write", "export"):
+        elif action == "delete" and not perm.endswith(".delete"):
+            continue
+        elif action not in ("read", "write", "export", "delete"):
             continue
         scoped = scoped_client_ids(db, ctx, resource, action, client_model)
         checked = True

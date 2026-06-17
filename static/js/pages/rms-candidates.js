@@ -58,6 +58,7 @@
     var editingCandidateId = ref(null);
     var editingCandidateResumeName = ref("");
     var editingCandidateResumeId = ref(null);
+    var editingCandidateCanDownloadResume = ref(false);
     var candidateDetailOpen = ref(false);
     var candidateDetailRow = ref(null);
     var candidateDetailLoading = ref(false);
@@ -443,6 +444,7 @@
       candidateResumeFile.value = null;
       editingCandidateResumeName.value = "";
       editingCandidateResumeId.value = null;
+      editingCandidateCanDownloadResume.value = false;
       jobPickerQuery.value = "";
       clientPickerQuery.value = "";
       jobPickerOpen.value = false;
@@ -476,6 +478,7 @@
       editingCandidateResumeName.value = String(c.resume_file_name || "").trim();
       editingCandidateResumeId.value =
         c.resume_id != null && c.resume_id !== "" ? Number(c.resume_id) : null;
+      editingCandidateCanDownloadResume.value = !!c.can_download_resume;
     }
 
     function buildCandidateBody(isEdit) {
@@ -553,6 +556,7 @@
       editingCandidateId.value = null;
       editingCandidateResumeName.value = "";
       editingCandidateResumeId.value = null;
+      editingCandidateCanDownloadResume.value = false;
     }
 
     async function openCandidateModal() {
@@ -698,6 +702,7 @@
       editingCandidateId: editingCandidateId,
       editingCandidateResumeName: editingCandidateResumeName,
       editingCandidateResumeId: editingCandidateResumeId,
+      editingCandidateCanDownloadResume: editingCandidateCanDownloadResume,
       candidateDetailOpen: candidateDetailOpen,
       candidateDetailRow: candidateDetailRow,
       candidateDetailLoading: candidateDetailLoading,

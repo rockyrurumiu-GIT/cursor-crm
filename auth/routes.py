@@ -457,7 +457,7 @@ def build_router(
     async def api_delete_role(
         role_id: int,
         ctx: AuthContext = Depends(get_current_context),
-        _perm: str = Depends(require_permission("system.roles.manage")),
+        _perm: str = Depends(require_permission("system.roles.delete")),
         db: Session = Depends(get_db),
     ):
         try:
@@ -472,7 +472,7 @@ def build_router(
     async def api_delete_role_post(
         role_id: int,
         ctx: AuthContext = Depends(get_current_context),
-        _perm: str = Depends(require_permission("system.roles.manage")),
+        _perm: str = Depends(require_permission("system.roles.delete")),
         db: Session = Depends(get_db),
     ):
         """POST fallback when DELETE is blocked by proxy or old clients."""
@@ -564,7 +564,7 @@ def build_router(
     async def api_delete_dept(
         dept_id: int,
         ctx: AuthContext = Depends(get_current_context),
-        _perm: str = Depends(require_permission("system.users.manage")),
+        _perm: str = Depends(require_permission("system.users.delete")),
         db: Session = Depends(get_db),
     ):
         try:
@@ -579,7 +579,7 @@ def build_router(
     async def api_delete_dept_post(
         dept_id: int,
         ctx: AuthContext = Depends(get_current_context),
-        _perm: str = Depends(require_permission("system.users.manage")),
+        _perm: str = Depends(require_permission("system.users.delete")),
         db: Session = Depends(get_db),
     ):
         try:

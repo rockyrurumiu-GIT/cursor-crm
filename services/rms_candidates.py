@@ -344,6 +344,9 @@ def candidate_to_dict(
     job_title: str = "",
     client_name: str = "",
     recommended_at: str = "",
+    can_write: bool = False,
+    can_delete: bool = False,
+    can_download_resume: bool = False,
 ) -> Dict[str, Any]:
     can_view_contacts = ctx.is_super or "rms.contacts.view" in ctx.permissions
     phone = row.phone or ""
@@ -386,6 +389,9 @@ def candidate_to_dict(
         "tags": row.tags or "[]",
         "resume_id": resume_row.id if resume_row else None,
         "resume_file_name": (resume_row.file_name or "") if resume_row else "",
+        "can_write": can_write,
+        "can_delete": can_delete,
+        "can_download_resume": can_download_resume,
         "created_by_user_id": row.created_by_user_id,
         "created_at": normalize_rms_date(row.created_at),
         "updated_at": normalize_rms_date(row.updated_at),
@@ -398,15 +404,65 @@ def _filtered_candidates_query(
     RmsCandidate: Type[Any],
     RmsApplication: Type[Any],
     Client: Type[Any],
+    *,
+    action: str = "read",
 ):
     q = db.query(RmsCandidate)
-    visible = rms_ds.visible_candidate_ids(db, ctx, RmsCandidate, RmsApplication, Client)
+    if action != "read":
+        return rms_ds.apply_candidate_scope_query(
+            q, ctx, RmsCandidate, action=action
+        )
+    visible = rms_ds.visible_candidate_ids(
+        db, ctx, RmsCandidate, RmsApplication, Client, action="read"
+    )
     if visible is not None:
         if not visible:
             q = q.filter(RmsCandidate.id == -1)
         else:
             q = q.filter(RmsCandidate.id.in_(visible))
     return q
+
+
+def _candidate_action_allowed(
+    db: Session,
+    ctx: AuthContext,
+    candidate_id: int,
+    RmsCandidate: Type[Any],
+    *,
+    action: str,
+) -> bool:
+    if ctx.is_super:
+        return True
+    q = db.query(RmsCandidate.id)
+    q = rms_ds.apply_candidate_scope_query(q, ctx, RmsCandidate, action=action)
+    return q.filter(RmsCandidate.id == candidate_id).first() is not None
+
+
+def candidate_resume_download_allowed(
+    db: Session,
+    ctx: AuthContext,
+    candidate_id: int,
+    RmsCandidate: Type[Any],
+    RmsApplication: Type[Any],
+) -> bool:
+    if ctx.is_super:
+        return True
+    if "rms.resumes.download" not in ctx.permissions or ctx.user_id is None:
+        return False
+    row = db.query(RmsCandidate.created_by_user_id).filter(RmsCandidate.id == candidate_id).first()
+    if not row:
+        return False
+    if row[0] is not None and int(row[0]) == ctx.user_id:
+        return True
+    return (
+        db.query(RmsApplication.id)
+        .filter(
+            RmsApplication.candidate_id == candidate_id,
+            RmsApplication.recommended_by == ctx.user_id,
+        )
+        .first()
+        is not None
+    )
 
 
 def _apply_candidate_keyword_search(
@@ -452,6 +508,7 @@ def _rows_to_dicts(
     ctx: AuthContext,
     rows: List[Any],
     *,
+    RmsCandidate: Optional[Type[Any]] = None,
     RmsResume: Optional[Type[Any]] = None,
     RmsJob: Optional[Type[Any]] = None,
     Client: Optional[Type[Any]] = None,
@@ -472,6 +529,21 @@ def _rows_to_dicts(
     for row in rows:
         jid = getattr(row, "target_job_id", None)
         cid = getattr(row, "target_client_id", None)
+        can_write = (
+            _candidate_action_allowed(db, ctx, row.id, RmsCandidate, action="write")
+            if RmsCandidate is not None
+            else False
+        )
+        can_delete = (
+            _candidate_action_allowed(db, ctx, row.id, RmsCandidate, action="delete")
+            if RmsCandidate is not None
+            else False
+        )
+        can_download_resume = (
+            candidate_resume_download_allowed(db, ctx, row.id, RmsCandidate, RmsApplication)
+            if RmsCandidate is not None and RmsApplication is not None
+            else ctx.is_super
+        )
         out.append(
             candidate_to_dict(
                 ctx,
@@ -480,6 +552,9 @@ def _rows_to_dicts(
                 job_title=job_titles.get(int(jid), "") if jid else "",
                 client_name=client_names.get(int(cid), "") if cid else "",
                 recommended_at=recommended_map.get(row.id, ""),
+                can_write=can_write,
+                can_delete=can_delete,
+                can_download_resume=can_download_resume,
             )
         )
     return out
@@ -512,6 +587,7 @@ def list_candidates(
         db,
         ctx,
         rows,
+        RmsCandidate=RmsCandidate,
         RmsResume=RmsResume,
         RmsJob=RmsJob,
         Client=Client,
@@ -530,7 +606,9 @@ def get_candidate(
     RmsResume: Optional[Type[Any]] = None,
     RmsJob: Optional[Type[Any]] = None,
 ) -> Dict[str, Any]:
-    row = _filtered_candidates_query(db, ctx, RmsCandidate, RmsApplication, Client).filter(
+    row = _filtered_candidates_query(
+        db, ctx, RmsCandidate, RmsApplication, Client, action="read"
+    ).filter(
         RmsCandidate.id == candidate_id
     ).first()
     if not row:
@@ -540,6 +618,7 @@ def get_candidate(
         db,
         ctx,
         [row],
+        RmsCandidate=RmsCandidate,
         RmsResume=RmsResume,
         RmsJob=RmsJob,
         Client=Client,
@@ -633,9 +712,9 @@ def update_candidate(
     RmsResume: Optional[Type[Any]] = None,
     RmsJob: Optional[Type[Any]] = None,
 ) -> Dict[str, Any]:
-    row = _filtered_candidates_query(db, ctx, RmsCandidate, RmsApplication, Client).filter(
-        RmsCandidate.id == candidate_id
-    ).first()
+    row = _filtered_candidates_query(
+        db, ctx, RmsCandidate, RmsApplication, Client, action="write"
+    ).filter(RmsCandidate.id == candidate_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="候选人不存在")
     if data.get("phone") is not None:
@@ -679,9 +758,9 @@ def delete_candidate(
     upload_dir: str,
     RmsResume: Optional[Type[Any]] = None,
 ) -> Dict[str, Any]:
-    row = _filtered_candidates_query(db, ctx, RmsCandidate, RmsApplication, Client).filter(
-        RmsCandidate.id == candidate_id
-    ).first()
+    row = _filtered_candidates_query(
+        db, ctx, RmsCandidate, RmsApplication, Client, action="delete"
+    ).filter(RmsCandidate.id == candidate_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="候选人不存在")
     app_count = (

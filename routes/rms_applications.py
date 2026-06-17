@@ -225,7 +225,7 @@ def register_rms_applications_routes(
         return app_svc.create_application(
             db,
             ctx,
-            payload.model_dump(),
+            payload.model_dump(exclude_unset=True),
             RmsJob,
             RmsCandidate,
             RmsApplication,
@@ -371,7 +371,7 @@ def register_rms_applications_routes(
         application_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        _user: str = Depends(require_permission("rms.applications.write")),
+        _user: str = Depends(require_permission("rms.applications.delete")),
     ):
         return _delete_application_impl(application_id, db, ctx)
 
@@ -380,7 +380,7 @@ def register_rms_applications_routes(
         application_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        _user: str = Depends(require_permission("rms.applications.write")),
+        _user: str = Depends(require_permission("rms.applications.delete")),
     ):
         """POST fallback when DELETE is blocked by proxy or old clients."""
         return _delete_application_impl(application_id, db, ctx)

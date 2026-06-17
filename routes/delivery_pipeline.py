@@ -207,7 +207,7 @@ def register_delivery_pipeline_routes(
     async def pipeline_delete_row(
         row_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("delivery.pipeline.write")),
+        user: str = Depends(require_permission("delivery.pipeline.delete")),
     ):
         entry = db.query(PipelineEntry).filter(PipelineEntry.id == row_id).first()
         if not entry:

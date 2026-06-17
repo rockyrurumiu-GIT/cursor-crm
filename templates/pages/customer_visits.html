@@ -154,7 +154,7 @@
                         <div class="crm-op-actions">
                             <button type="button" @click="openDetail(row)" class="crm-op-btn-detail">详情</button>
                             <button type="button" @click="openEdit(row)" class="crm-op-btn-edit">修改</button>
-                            <button type="button" @click="remove(row)" class="crm-op-btn-delete">删除</button>
+                            <button v-if="canDeletePermission('crm.visits.delete')" type="button" @click="remove(row)" class="crm-op-btn-delete">删除</button>
                         </div>
                     </td>
                 </tr>
@@ -245,5 +245,5 @@
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/customer_visits.js?v=6"></script>
+<script src="/static/js/customer_visits.js?v=7"></script>
 {% endblock %}

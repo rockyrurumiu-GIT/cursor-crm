@@ -351,7 +351,7 @@
                                 <div class="crm-op-actions">
                                     <button type="button" class="crm-op-btn-detail" @click="openRosterDetail(row)">详情</button>
                                     <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
-                                    <button type="button" class="crm-op-btn-delete"
+                                    <button v-if="canDeletePermission('delivery.roster.delete')" type="button" class="crm-op-btn-delete"
                                         data-crm-delete-title="确认删除记录"
                                         data-crm-delete-target-prefix="将删除："
                                         data-crm-delete-hint="删除后将从当前花名册列表移除。"
@@ -642,5 +642,5 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/roster-detail.js?v=17"></script>
+<script src="/static/js/pages/roster-detail.js?v=18"></script>
 {% endblock %}

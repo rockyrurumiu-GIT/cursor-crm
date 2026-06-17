@@ -283,6 +283,7 @@
       const metadata = ref({ sources: [], widget_types: [], metrics: [], date_groups: [], colors: [], sorts: [] });
       const widgetData = ref({});
       const canWrite = ref(false);
+      const canDelete = ref(false);
       const editMode = ref(false);
       const rosterClients = ref([]);
 
@@ -960,6 +961,7 @@
           .then(function (me) {
             const perms = me.permissions || [];
             canWrite.value = perms.indexOf("dashboard.write") >= 0 || me.is_super;
+            canDelete.value = perms.indexOf("dashboard.delete") >= 0 || me.is_super;
           });
         api("GET", "/api/dashboard-metadata").then(function (m) { metadata.value = m; });
         api("GET", "/api/dashboard/roster-clients")
@@ -980,7 +982,7 @@
       return {
         dashboards, activeDashboardId, activeTabId, activeDashboard, activeTab,
         displayItems, cardCanvasId, openDisplayItemPanel, extraRenderLabel,
-        metadata, widgetData, canWrite, editMode, rosterClients, rosterScope,
+        metadata, widgetData, canWrite, canDelete, editMode, rosterClients, rosterScope,
         showDashboardModal, showTabModal, panelOpen,
         dashboardForm, tabForm, widgetForm,
         needsDataSource, needsField, needsGroupBy, isChart, isDateGroup, isRosterSummary,

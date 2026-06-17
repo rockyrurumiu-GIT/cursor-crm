@@ -17,6 +17,7 @@ from auth.data_scope_catalog import (
     RESOURCE_SCOPE_ANCHOR,
     SCOPE_ASSIGNED,
     SCOPE_DEPT,
+    SCOPE_NONE,
     permission_to_resource,
 )
 from auth.permissions import (
@@ -33,13 +34,16 @@ from tests.helpers import auth_header
 RMS_PERMISSION_CODES = frozenset({
     "rms.jobs.read",
     "rms.jobs.write",
+    "rms.jobs.delete",
     "rms.candidates.read",
     "rms.candidates.write",
+    "rms.candidates.delete",
     "rms.resumes.read",
     "rms.resumes.download",
     "rms.contacts.view",
     "rms.applications.read",
     "rms.applications.write",
+    "rms.applications.delete",
     "rms.matching.run",
     "rms.analytics.read",
 })
@@ -367,3 +371,117 @@ def test_matrix_selection_maps_rms_rows_to_codes():
         }
     codes = set(permission_codes_from_matrix_selection(selected))
     assert RMS_PERMISSION_CODES <= codes
+
+
+def test_matrix_rms_application_write_does_not_grant_delete():
+    from auth.permission_catalog import permission_codes_from_matrix_selection
+
+    codes = set(permission_codes_from_matrix_selection({
+        "推荐记录": {
+            "read": False,
+            "write": True,
+            "delete": False,
+            "import_export": False,
+            "approve": False,
+        }
+    }))
+    assert "rms.applications.write" in codes
+    assert "rms.applications.delete" not in codes
+
+
+def test_delete_permission_backfill_runs_once(client_rbac, admin_auth):
+    import main as crm_main
+
+    role_code = f"DELETE_BACKFILL_{os.getpid()}"
+    marker = auth_svc.DELETE_PERMISSION_BACKFILL_ID
+    db = crm_main.SessionLocal()
+    try:
+        auth_svc.sync_permission_catalog_rows(db)
+        db.execute(text("DELETE FROM schema_migrations WHERE migration_id = :id"), {"id": marker})
+        db.execute(
+            text(
+                "INSERT INTO sys_role (code, name, description, is_builtin, created_at) "
+                "VALUES (:code, :name, '', 0, datetime('now'))"
+            ),
+            {"code": role_code, "name": role_code},
+        )
+        rid = int(db.execute(text("SELECT id FROM sys_role WHERE code = :code"), {"code": role_code}).scalar())
+        write_pid = int(db.execute(
+            text("SELECT id FROM sys_permission WHERE code = 'rms.applications.write'")
+        ).scalar())
+        delete_pid = int(db.execute(
+            text("SELECT id FROM sys_permission WHERE code = 'rms.applications.delete'")
+        ).scalar())
+        db.execute(
+            text("INSERT INTO sys_role_permission (role_id, permission_id) VALUES (:rid, :pid)"),
+            {"rid": rid, "pid": write_pid},
+        )
+        db.execute(
+            text(
+                "INSERT INTO sys_role_data_scope "
+                "(role_id, resource_code, action, scope_type, created_at, updated_at) "
+                "VALUES (:rid, :rc, 'write', :st, datetime('now'), datetime('now'))"
+            ),
+            {"rid": rid, "rc": RESOURCE_RMS_APPLICATION, "st": SCOPE_ASSIGNED},
+        )
+        db.execute(
+            text(
+                "INSERT INTO sys_role_data_scope "
+                "(role_id, resource_code, action, scope_type, created_at, updated_at) "
+                "VALUES (:rid, :rc, 'delete', 'none', datetime('now'), datetime('now'))"
+            ),
+            {"rid": rid, "rc": RESOURCE_RMS_APPLICATION},
+        )
+
+        auth_svc.backfill_delete_permissions_once(db)
+        has_delete = db.execute(
+            text(
+                "SELECT 1 FROM sys_role_permission "
+                "WHERE role_id = :rid AND permission_id = :pid"
+            ),
+            {"rid": rid, "pid": delete_pid},
+        ).fetchone()
+        delete_scope = db.execute(
+            text(
+                "SELECT scope_type FROM sys_role_data_scope "
+                "WHERE role_id = :rid AND resource_code = :rc AND action = 'delete'"
+            ),
+            {"rid": rid, "rc": RESOURCE_RMS_APPLICATION},
+        ).scalar()
+        assert has_delete is not None
+        assert delete_scope == SCOPE_ASSIGNED
+
+        db.execute(
+            text(
+                "DELETE FROM sys_role_permission "
+                "WHERE role_id = :rid AND permission_id = :pid"
+            ),
+            {"rid": rid, "pid": delete_pid},
+        )
+        db.execute(
+            text(
+                "UPDATE sys_role_data_scope SET scope_type = 'none' "
+                "WHERE role_id = :rid AND resource_code = :rc AND action = 'delete'"
+            ),
+            {"rid": rid, "rc": RESOURCE_RMS_APPLICATION},
+        )
+        auth_svc.backfill_delete_permissions_once(db)
+        has_delete_after_second_run = db.execute(
+            text(
+                "SELECT 1 FROM sys_role_permission "
+                "WHERE role_id = :rid AND permission_id = :pid"
+            ),
+            {"rid": rid, "pid": delete_pid},
+        ).fetchone()
+        delete_scope_after_second_run = db.execute(
+            text(
+                "SELECT scope_type FROM sys_role_data_scope "
+                "WHERE role_id = :rid AND resource_code = :rc AND action = 'delete'"
+            ),
+            {"rid": rid, "rc": RESOURCE_RMS_APPLICATION},
+        ).scalar()
+        assert has_delete_after_second_run is None
+        assert delete_scope_after_second_run == SCOPE_NONE
+    finally:
+        db.rollback()
+        db.close()

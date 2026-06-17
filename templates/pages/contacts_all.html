@@ -211,7 +211,7 @@
                         <div class="crm-op-actions">
                             <button type="button" class="crm-op-btn-detail" @click="openDetail(c)">详情</button>
                             <button type="button" class="crm-op-btn-edit" @click="openEdit(c)">修改</button>
-                            <button type="button" class="crm-op-btn-delete" @click="remove(c)">删除</button>
+                            <button v-if="canDeletePermission('crm.contacts.delete')" type="button" class="crm-op-btn-delete" @click="remove(c)">删除</button>
                         </div>
                     </td>
                 </tr>
@@ -427,6 +427,7 @@ createApp({
         });
         const form = ref(emptyForm());
         const authHeaders = () => window.crmAuthHeader();
+        const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
         const authFetch = (url, opts = {}) => fetch(url, {
             ...opts,
             headers: { ...authHeaders(), ...(opts.headers || {}) },
@@ -684,6 +685,7 @@ createApp({
             contactRelationship, contactGroupLabel, contactGroupBadgeClass,
             fileInput, triggerImport, onImportFile, exportCsv,
             openDetail, closeDetail, openEdit, openNew, save, remove, copyText,
+            canDeletePermission,
         };
     },
 }).mount('#contacts-app');

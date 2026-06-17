@@ -108,9 +108,10 @@ def test_rms_frontend_js_assets_exist():
     assert "r3a-20260614" not in rms_html
     assert "r3b-20260614" not in rms_html
     assert "r3c-20260614" not in rms_html
-    assert rms_html.count("r3c3-pipeline-terminal-20260615") == 10
+    assert rms_html.count("r3c3-pipeline-terminal-20260615") == 9
     assert "rms-delivery-review.js?v=r3c3-pipeline-terminal-20260615" in rms_html
     assert "rms-roster-conversion.js?v=r3c3-pipeline-terminal-20260615" in rms_html
+    assert "rms.js?v=delete-permissions-20260617" in rms_html
 
     for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError"):
         assert sym in core_src, f"missing core symbol: {sym}"
@@ -343,6 +344,9 @@ def test_rms_frontend_js_assets_exist():
     ):
         assert sym in rms_src, f"missing shell symbol: {sym}"
     assert 'rmsRequest("POST", "/api/rms/applications"' in report_src
+    existing_submit_start = report_src.index('rmsRequest("POST", "/api/rms/applications"')
+    existing_submit_slice = report_src[max(0, existing_submit_start - 2000) : existing_submit_start]
+    assert "ReportApi.validateReportForm" in existing_submit_slice
     assert "openCandidateDetail" in rms_src or "openCandidateDetail" in candidates_src
     assert "closeCandidateDetail" in rms_src or "closeCandidateDetail" in candidates_src
     assert "latest_resume_parse_summary" in candidates_src
@@ -704,6 +708,19 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "候选人摘要" not in picker_slice
     assert "showExistingCandidatePickerDetail(c)" not in picker_slice
     assert ">详情</button>" not in picker_slice
+
+    candidate_table_marker = '<table class="crm-table rms-candidates-table" data-table-id="rms-candidates">'
+    candidate_table_start = html.index(candidate_table_marker)
+    candidate_table_slice = html[candidate_table_start : candidate_table_start + 7000]
+    assert 'v-if="c.can_write" type="button" class="crm-op-btn-edit" @click="openCandidateEdit(c)"' in candidate_table_slice
+    assert 'v-if="c.can_delete" type="button" class="crm-op-btn-delete"' in candidate_table_slice
+    assert 'v-if="c.can_download_resume" :href="resumeDownloadUrl(c)"' in candidate_table_slice
+    assert 'v-if="canWriteCandidates" type="button" class="crm-op-btn-edit" @click="openCandidateEdit(c)"' not in candidate_table_slice
+    assert 'v-if="canDeleteCandidates" type="button" class="crm-op-btn-delete"' not in candidate_table_slice
+
+    assert "editingCandidateCanDownloadResume" in html
+    assert 'v-if="editingCandidateCanDownloadResume"' in html
+    assert 'v-if="candidateDetailRow.can_download_resume" :href="resumeDownloadUrl(candidateDetailRow)"' in html
 
     assert "data-rms-error" in html
     assert "data-rms-empty" in html

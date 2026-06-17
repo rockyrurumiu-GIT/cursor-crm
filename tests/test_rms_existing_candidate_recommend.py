@@ -44,6 +44,11 @@ def _count_candidates(engine) -> int:
         return int(conn.execute(text("SELECT COUNT(*) FROM rms_candidates")).scalar() or 0)
 
 
+def _count_applications(engine) -> int:
+    with engine.connect() as conn:
+        return int(conn.execute(text("SELECT COUNT(*) FROM rms_applications")).scalar() or 0)
+
+
 def test_recommend_existing_candidate_creates_application_only(
     client_rbac, admin_auth, rms_engine, uniq
 ):
@@ -85,3 +90,35 @@ def test_recommend_existing_candidate_duplicate_409(client_rbac, admin_auth, rms
     assert dup.status_code == 409
     assert "该岗位已存在该候选人的推荐记录" in dup.json().get("detail", "")
     assert _count_candidates(rms_engine) == before
+
+
+def test_recommend_existing_candidate_requires_complete_profile(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, job_id, cand_id, _ = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, uniq
+    )
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_candidates SET school = '' WHERE id = :id"),
+            {"id": cand_id},
+        )
+    before = _count_applications(rms_engine)
+
+    r = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+
+    assert r.status_code == 400, r.text
+    assert r.json().get("detail") == "请填写学校"
+    assert _count_applications(rms_engine) == before
+
+    fixed = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id, "school": "补填学校"},
+    )
+    assert fixed.status_code == 200, fixed.text
+    assert _count_applications(rms_engine) == before + 1

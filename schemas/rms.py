@@ -342,6 +342,23 @@ class ApplicationCreate(BaseModel):
     job_id: int
     candidate_id: int
     resume_id: Optional[int] = None
+    city: str = ""
+    location: str = ""
+    recommendation_note: str = ""
+    current_salary: str = ""
+    expected_salary: str = ""
+    name: str = ""
+    age: str = ""
+    work_years: str = ""
+    phone: str = ""
+    email_wechat: str = ""
+    available_date: str = ""
+    education_level: str = ""
+    source: str = ""
+    school: str = ""
+    major: str = ""
+    gender: str = ""
+    marital_status: str = ""
 
 
 class ApplicationUpdate(BaseModel):

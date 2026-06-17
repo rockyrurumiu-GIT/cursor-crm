@@ -19,6 +19,7 @@ def test_customers_list_hides_client_write_controls():
     assert "const meLoaded = ref(false);" in html
     assert "if (!meLoaded.value) return false;" in html
     assert "const canWriteClients = computed" in html
+    assert "const canDeleteClients = computed" in html
     assert "const canReadContacts = computed" in html
     assert "const canReadVisits = computed" in html
     assert "const canWriteVisits = computed" in html
@@ -28,6 +29,7 @@ def test_customers_list_hides_client_write_controls():
     assert "!!me.value.is_super" in html
     assert "(me.value.roles || []).includes('SUPER_ADMIN')" in html
     assert "hasPermission('crm.clients.write')" in html
+    assert "hasPermission('crm.clients.delete')" in html
     assert "hasPermission('crm.contacts.read')" in html
     assert "hasPermission('crm.visits.read')" in html
     assert "hasPermission('crm.visits.write')" in html
@@ -38,7 +40,7 @@ def test_customers_list_hides_client_write_controls():
     assert 'v-if="canReviewHandoff" href="/customers/reviews"' in html
     assert 'v-if="canExportClients" type="button" @click="exportCSV"' in html
     assert 'v-if="canWriteClients" :href="`/customers/${c.id}/edit`"' in html
-    assert 'v-if="canWriteClients" type="button" @click="confirmDelete(c)"' in html
+    assert 'v-if="canDeleteClients" type="button" @click="confirmDelete(c)"' in html
     assert 'v-if="canWriteClients" :href="`/customers/${selectedClient.id}/edit`"' in html
     assert ':disabled="!canWriteClients"' in html
     assert 'v-if="canWriteClients" type="button" @click="updateClient(selectedClient)"' in html

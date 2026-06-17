@@ -712,7 +712,7 @@
                             <div class="crm-op-actions">
                                 <button type="button" class="crm-op-btn-detail" @click="openDetail(row)">详情</button>
                                 <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
-                                <button type="button" class="crm-op-btn-delete" @click="removeRow(row)">删除</button>
+                                <button v-if="canDeletePermission('delivery.roster.delete')" type="button" class="crm-op-btn-delete" @click="removeRow(row)">删除</button>
                             </div>
                         </td>
                     </tr>
@@ -1108,5 +1108,5 @@
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/delivery-turnover.js"></script>
+<script src="/static/js/pages/delivery-turnover.js?v=delete-perm-20260617"></script>
 {% endblock %}

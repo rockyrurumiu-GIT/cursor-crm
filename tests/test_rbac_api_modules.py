@@ -389,7 +389,7 @@ def test_client_readonly_user_cannot_open_or_call_write_surfaces(client_rbac, ad
     _assert_forbidden(put_resp, "crm.clients.write")
 
     delete_resp = client_rbac.delete(f"/api/clients/{cid}", cookies=cookies)
-    _assert_forbidden(delete_resp, "crm.clients.write")
+    _assert_forbidden(delete_resp, "crm.clients.delete")
 
 
 def test_gm_calc_permission_allows_page_and_read_api(client_rbac, admin_auth):

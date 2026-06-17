@@ -296,7 +296,7 @@
         </nav>
         <div v-if="editMode && canWrite" class="dash-page-tabs-actions">
             <button class="tbtn" @click="openWidgetPanel()" :disabled="!activeTabId">+ 组件</button>
-            <button class="tbtn tbtn-danger" @click="deleteActiveDashboard()">删除看板</button>
+            <button v-if="canDelete" class="tbtn tbtn-danger" @click="deleteActiveDashboard()">删除看板</button>
         </div>
     </div>
 
@@ -313,7 +313,7 @@
                     <div v-if="editMode && !item.isExtra" class="card-actions">
                         <span class="icon-btn" @click="openDisplayItemPanel(item)" title="编辑">✎</span>
                         <span class="icon-btn" @click="duplicateWidget(item.widget)" title="复制">⧉</span>
-                        <span class="icon-btn danger" @click="deleteWidget(item.widget.id)" title="删除">✕</span>
+                        <span v-if="canDelete" class="icon-btn danger" @click="deleteWidget(item.widget.id)" title="删除">✕</span>
                     </div>
                     <div v-else-if="editMode && item.isExtra" class="card-actions">
                         <span class="icon-btn" @click="openDisplayItemPanel(item)" title="编辑数据源组件">✎</span>
@@ -616,5 +616,5 @@
 {% endblock %}
 {% block handbook_assistant %}{% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/dashboards.js?v=19"></script>
+<script src="/static/js/pages/dashboards.js?v=20"></script>
 {% endblock %}

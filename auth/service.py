@@ -25,6 +25,7 @@ from auth.permissions import (
 )
 from auth.data_scope_catalog import (
     DATA_SCOPE_ACTIONS,
+    PERMISSION_TO_RESOURCE,
     RESOURCE_CODES,
     RESOURCE_RMS_APPLICATION,
     RESOURCE_RMS_JOB,
@@ -33,6 +34,26 @@ from auth.data_scope_catalog import (
     SCOPE_NONE,
     merge_scope_types,
     permission_to_resource,
+)
+
+DELETE_PERMISSION_BACKFILL_ID = "rbac_delete_permissions_backfill_v1"
+
+DELETE_PERMISSION_COMPAT_PAIRS = (
+    ("crm.clients.write", "crm.clients.delete"),
+    ("crm.opportunities.write", "crm.opportunities.delete"),
+    ("crm.contacts.write", "crm.contacts.delete"),
+    ("crm.visits.write", "crm.visits.delete"),
+    ("delivery.roster.write", "delivery.roster.delete"),
+    ("delivery.pipeline.write", "delivery.pipeline.delete"),
+    ("delivery.handbook.write", "delivery.handbook.delete"),
+    ("delivery.interviews.write", "delivery.interviews.delete"),
+    ("delivery.settlement.write", "delivery.settlement.delete"),
+    ("rms.jobs.write", "rms.jobs.delete"),
+    ("rms.candidates.write", "rms.candidates.delete"),
+    ("rms.applications.write", "rms.applications.delete"),
+    ("dashboard.write", "dashboard.delete"),
+    ("system.users.manage", "system.users.delete"),
+    ("system.roles.manage", "system.roles.delete"),
 )
 
 _BUILTIN_ROLE_CODES = frozenset({
@@ -447,6 +468,7 @@ def seed_rbac_data(
     )
     seed_departments(db)
     seed_role_data_scopes(db, role_ids)
+    backfill_delete_permissions_once(db)
     _ensure_user_dept_defaults(db, uid, [ROLE_SUPER_ADMIN])
 
 
@@ -551,6 +573,88 @@ def seed_role_data_scopes(db: Session, role_ids: Dict[str, int]) -> None:
                 ),
                 {"rid": rid, "rc": resource_code, "act": action, "st": scope_type, "at": now},
             )
+
+
+def backfill_delete_permissions_once(db: Session) -> None:
+    """One-time compatibility backfill: old write/manage grants also allowed delete."""
+    db.execute(
+        text(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "migration_id TEXT PRIMARY KEY, applied_at TEXT NOT NULL)"
+        )
+    )
+    exists = db.execute(
+        text("SELECT 1 FROM schema_migrations WHERE migration_id = :id"),
+        {"id": DELETE_PERMISSION_BACKFILL_ID},
+    ).fetchone()
+    if exists:
+        return
+
+    now = _utc_now()
+    sync_permission_catalog_rows(db)
+    for source_code, delete_code in DELETE_PERMISSION_COMPAT_PAIRS:
+        db.execute(
+            text(
+                "INSERT OR IGNORE INTO sys_role_permission (role_id, permission_id) "
+                "SELECT rp.role_id, p_delete.id "
+                "FROM sys_role_permission rp "
+                "JOIN sys_permission p_source ON p_source.id = rp.permission_id "
+                "JOIN sys_permission p_delete ON p_delete.code = :delete_code "
+                "WHERE p_source.code = :source_code"
+            ),
+            {"source_code": source_code, "delete_code": delete_code},
+        )
+
+    for source_code, delete_code in DELETE_PERMISSION_COMPAT_PAIRS:
+        resource = PERMISSION_TO_RESOURCE.get(delete_code)
+        if not resource:
+            continue
+        db.execute(
+            text(
+                "UPDATE sys_role_data_scope "
+                "SET scope_type = COALESCE(("
+                "    SELECT src.scope_type FROM sys_role_data_scope src "
+                "    WHERE src.role_id = sys_role_data_scope.role_id "
+                "      AND src.resource_code = :resource "
+                "      AND src.action = 'write' "
+                "    LIMIT 1"
+                "), scope_type), updated_at = :now "
+                "WHERE resource_code = :resource AND action = 'delete' "
+                "AND role_id IN ("
+                "    SELECT rp.role_id "
+                "    FROM sys_role_permission rp "
+                "    JOIN sys_permission p ON p.id = rp.permission_id "
+                "    WHERE p.code = :delete_code"
+                ")"
+            ),
+            {"resource": resource, "delete_code": delete_code, "now": now},
+        )
+        db.execute(
+            text(
+                "INSERT INTO sys_role_data_scope "
+                "(role_id, resource_code, action, scope_type, created_at, updated_at) "
+                "SELECT rp.role_id, :resource, 'delete', src.scope_type, :now, :now "
+                "FROM sys_role_permission rp "
+                "JOIN sys_permission p ON p.id = rp.permission_id "
+                "JOIN sys_role_data_scope src "
+                "  ON src.role_id = rp.role_id "
+                " AND src.resource_code = :resource "
+                " AND src.action = 'write' "
+                "WHERE p.code = :delete_code "
+                "AND NOT EXISTS ("
+                "    SELECT 1 FROM sys_role_data_scope existing "
+                "    WHERE existing.role_id = rp.role_id "
+                "      AND existing.resource_code = :resource "
+                "      AND existing.action = 'delete'"
+                ")"
+            ),
+            {"resource": resource, "delete_code": delete_code, "now": now},
+        )
+
+    db.execute(
+        text("INSERT INTO schema_migrations (migration_id, applied_at) VALUES (:id, :at)"),
+        {"id": DELETE_PERMISSION_BACKFILL_ID, "at": now},
+    )
 
 
 def _ensure_user_dept_defaults(db: Session, user_id: int, role_codes: List[str]) -> None:

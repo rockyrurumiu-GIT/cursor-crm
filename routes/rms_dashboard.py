@@ -191,7 +191,7 @@ def register_rms_dashboard_routes(
     async def api_delete_rms_board(
         dashboard_id: int,
         db: Session = Depends(get_db),
-        _user: str = Depends(require_permission("dashboard.write")),
+        _user: str = Depends(require_permission("dashboard.delete")),
     ):
         _assert_rms_board(db, dashboard_id)
         return board_svc.delete_dashboard(
@@ -274,7 +274,7 @@ def register_rms_dashboard_routes(
     async def api_delete_rms_widget(
         widget_id: int,
         db: Session = Depends(get_db),
-        _user: str = Depends(require_permission("dashboard.write")),
+        _user: str = Depends(require_permission("dashboard.delete")),
     ):
         w = _assert_rms_widget(db, widget_id)
         tab_id = w.tab_id
@@ -286,7 +286,7 @@ def register_rms_dashboard_routes(
     async def api_delete_rms_tab(
         tab_id: int,
         db: Session = Depends(get_db),
-        _user: str = Depends(require_permission("dashboard.write")),
+        _user: str = Depends(require_permission("dashboard.delete")),
     ):
         tab = db.query(DashboardTab).filter(DashboardTab.id == tab_id).first()
         if not tab:

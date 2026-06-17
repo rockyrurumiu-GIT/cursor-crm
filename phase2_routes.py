@@ -337,12 +337,12 @@ def register_phase2_routes(
         opp_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(require_permission("crm.opportunities.write")),
+        user: str = Depends(require_permission("crm.opportunities.delete")),
     ):
         o = db.query(Opportunity).filter(Opportunity.id == opp_id).first()
         if not o:
             raise HTTPException(status_code=404, detail="商机不存在")
-        ds.assert_client_in_scope(db, ctx, o.client_id, Client, RESOURCE_CRM_OPPORTUNITY, "write")
+        ds.assert_client_in_scope(db, ctx, o.client_id, Client, RESOURCE_CRM_OPPORTUNITY, "delete")
         client_id = o.client_id
         db.delete(o)
         db.commit()
@@ -758,12 +758,12 @@ def register_phase2_routes(
         contact_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(require_permission("crm.contacts.write")),
+        user: str = Depends(require_permission("crm.contacts.delete")),
     ):
         ct = db.query(Contact).filter(Contact.id == contact_id).first()
         if not ct:
             raise HTTPException(status_code=404, detail="联系人不存在")
-        ds.assert_client_in_scope(db, ctx, ct.client_id, Client, RESOURCE_CRM_CONTACT, "write")
+        ds.assert_client_in_scope(db, ctx, ct.client_id, Client, RESOURCE_CRM_CONTACT, "delete")
         db.delete(ct)
         db.commit()
         return {"ok": True}

@@ -48,7 +48,11 @@ async def upload_candidate_resume(
     Client: Type[Any],
     RmsResume: Type[Any],
 ) -> Dict[str, Any]:
-    cand_svc.get_candidate(db, ctx, candidate_id, RmsCandidate, RmsApplication, Client)
+    row = cand_svc._filtered_candidates_query(
+        db, ctx, RmsCandidate, RmsApplication, Client, action="write"
+    ).filter(RmsCandidate.id == candidate_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="候选人不存在")
 
     raw_name = upload.filename or ""
     ext = os.path.splitext(raw_name)[1].lower()
@@ -178,7 +182,7 @@ def download_resume(
     Client: Type[Any],
     RmsResume: Type[Any],
 ) -> FileResponse:
-    _row, abs_path, filename, ext = _resolve_resume_file(
+    row, abs_path, filename, ext = _resolve_resume_file(
         db,
         ctx,
         resume_id,
@@ -188,6 +192,10 @@ def download_resume(
         Client=Client,
         RmsResume=RmsResume,
     )
+    if not cand_svc.candidate_resume_download_allowed(
+        db, ctx, int(row.candidate_id), RmsCandidate, RmsApplication
+    ):
+        raise HTTPException(status_code=403, detail="无简历下载权限")
     media_type = _MEDIA_TYPE_BY_EXT.get(ext, "application/octet-stream")
     return FileResponse(
         abs_path,

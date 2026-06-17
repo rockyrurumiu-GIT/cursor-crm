@@ -852,6 +852,7 @@ createApp({
             }
             await loadRows();
         };
+        const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
         const triggerImport = () => {
             if (fileInput.value) fileInput.value.click();
         };
@@ -986,7 +987,7 @@ createApp({
             openDashboard, closeDashboard, loadDashboard, resetDashboardFilters, onDashScopeChange, dashTrendRollingShareText, dashTrendRollingShareBarStyle, monthlyRateCell, dashTenureBarPct, dashBusinessBarPct,
             turnoverDepartureLinesForTooltip, analysisPeriodTooltipLines,
             showAddModal, addForm, addSaving, addFormReadonly, editingId, addTenurePreview, openAddForm, closeAddForm, saveAddForm, onAmountFieldInput,
-            openDetail, openEdit, removeRow,
+            openDetail, openEdit, removeRow, canDeletePermission,
             showLogs, logsLoading, logs, openLogs, closeLogs, formatDate,
         };
     }

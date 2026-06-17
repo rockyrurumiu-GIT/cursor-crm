@@ -319,7 +319,7 @@ def register_delivery_roster_routes(
     async def roster_delete_row(
         row_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("delivery.roster.write")),
+        user: str = Depends(require_permission("delivery.roster.delete")),
     ):
         entry = db.query(RosterEntry).filter(RosterEntry.id == row_id).first()
         if not entry:

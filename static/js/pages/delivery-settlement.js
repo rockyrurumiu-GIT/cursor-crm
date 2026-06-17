@@ -680,6 +680,7 @@ createApp({
                 crmToast.error(e.message || '删除失败');
             }
         };
+        const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
         onMounted(async () => {
             document.addEventListener('click', onDocClickCloseCustomerFilter);
             await loadRows();
@@ -694,7 +695,7 @@ createApp({
             totalAmountDisplay, totalAmountAllDisplay,
             expectedPaymentFilterWarning, onExpectedPaymentFilterStartDateInput, onExpectedPaymentFilterEndDateInput,
             showForm, editingId, formDetailReadonly, form, hasErrors,
-            openAdd, openEdit, openDetail, saveForm, removeRow, showPaymentReminders,
+            openAdd, openEdit, openDetail, saveForm, removeRow, showPaymentReminders, canDeletePermission,
             triggerImport, onImportFile, exportCsv, restoreLatestBackup, openLogs, formatDate, clearFilters, clearDateField, fillPaymentDaysByDates, onSettlementFieldChange, displayAmountInteger, displayDateSlash,
         };
     }

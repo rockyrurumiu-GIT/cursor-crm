@@ -361,7 +361,7 @@ def register_delivery_handbook_routes(
         client_id: int,
         row_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("delivery.handbook.write")),
+        user: str = Depends(require_permission("delivery.handbook.delete")),
     ):
         row = db.query(DeliveryHandbookFile).filter(DeliveryHandbookFile.id == row_id).first()
         if not row or row.client_id != client_id:

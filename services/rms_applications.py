@@ -53,6 +53,24 @@ _CANDIDATE_REPORT_REQUIRED = (
     ("marital_status", "婚姻状况"),
 )
 
+_EXISTING_CANDIDATE_REPORT_REQUIRED = (
+    ("city", "城市"),
+    ("current_salary", "当前薪资"),
+    ("expected_salary", "期望薪资"),
+    ("name", "姓名"),
+    ("age", "年龄"),
+    ("work_years", "年限"),
+    ("phone", "手机号"),
+    ("email_wechat", "邮箱/微信"),
+    ("available_date", "到岗时间"),
+    ("education_level", "学历"),
+    ("source", "来源"),
+    ("school", "学校"),
+    ("major", "专业"),
+    ("gender", "性别"),
+    ("marital_status", "婚姻状况"),
+)
+
 _RE_PHONE = re.compile(r"1[3-9]\d{9}")
 _RE_PHONE_LABEL = re.compile(
     r"(?:手机|电话|联系电话|mobile|tel)\s*[:：]?\s*([0-9][0-9\s\-()]{10,24})",
@@ -504,6 +522,28 @@ def validate_candidate_report_payload(report: Dict[str, Any]) -> None:
             raise HTTPException(status_code=400, detail=f"请填写{label}")
 
 
+def _existing_candidate_report_value(candidate: Any, data: Dict[str, Any], key: str) -> Any:
+    if key == "city":
+        if "city" in data:
+            return data.get("city")
+        if "location" in data:
+            return data.get("location")
+    if key in data:
+        return data.get(key)
+    return getattr(candidate, key, "")
+
+
+def _validate_existing_candidate_report_profile(candidate: Any, data: Dict[str, Any]) -> None:
+    for key, label in _EXISTING_CANDIDATE_REPORT_REQUIRED:
+        raw = _existing_candidate_report_value(candidate, data, key)
+        if key in ("current_salary", "expected_salary"):
+            val = _strip_salary_field(raw)
+        else:
+            val = str(raw or "").strip()
+        if not val:
+            raise HTTPException(status_code=400, detail=f"请填写{label}")
+
+
 def create_application(
     db: Session,
     ctx: AuthContext,
@@ -519,6 +559,10 @@ def create_application(
     rms_ds.assert_candidate_usable_for_application(
         db, ctx, candidate_id, RmsCandidate, RmsApplication, Client
     )
+    candidate = db.query(RmsCandidate).filter(RmsCandidate.id == candidate_id).first()
+    if not candidate:
+        raise HTTPException(status_code=404, detail="候选人不存在")
+    _validate_existing_candidate_report_profile(candidate, data)
     now = utc_date_str()
     row = RmsApplication(
         job_id=job_id,

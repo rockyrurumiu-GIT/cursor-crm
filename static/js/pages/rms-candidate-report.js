@@ -420,6 +420,7 @@
     var loadDeliveryReview = deps.loadDeliveryReview;
     var clientNameById = deps.clientNameById;
     var formatSalaryThousands = deps.formatSalaryThousands;
+    var stripSalaryCommas = deps.stripSalaryCommas || function (s) { return String(s || ""); };
     var showCandidateDuplicateDialog = deps.showCandidateDuplicateDialog;
     var isCandidateDuplicateError = deps.isCandidateDuplicateError;
     var userFacingRmsError = deps.userFacingRmsError;
@@ -965,6 +966,13 @@
             setReportError("请选择应聘岗位");
             return;
           }
+          var existingValidation = ReportApi.validateReportForm
+            ? ReportApi.validateReportForm(reportForm)
+            : { ok: true, message: "" };
+          if (!existingValidation.ok) {
+            setReportError(existingValidation.message, existingValidation.field);
+            return;
+          }
           var body = {
             job_id: Number(reportForm.job_id),
             candidate_id: Number(selectedExistingCandidate.value.id),
@@ -972,6 +980,22 @@
               selectedExistingCandidate.value.resume_id != null
                 ? selectedExistingCandidate.value.resume_id
                 : null,
+            city: (reportForm.location || "").trim(),
+            recommendation_note: (reportForm.recommendation_note || "").trim(),
+            current_salary: stripSalaryCommas(reportForm.current_salary),
+            expected_salary: stripSalaryCommas(reportForm.expected_salary),
+            name: (reportForm.name || "").trim(),
+            age: (reportForm.age || "").trim(),
+            work_years: (reportForm.work_years || "").trim(),
+            phone: (reportForm.phone || "").trim(),
+            email_wechat: (reportForm.email_wechat || "").trim(),
+            available_date: reportForm.available_date || "",
+            education_level: reportForm.education_level || "",
+            source: resolveSourceForSave(reportForm.source, reportForm.source_other),
+            school: (reportForm.school || "").trim(),
+            major: (reportForm.major || "").trim(),
+            gender: reportForm.gender || "",
+            marital_status: reportForm.marital_status || "",
           };
           var existingR = await rmsRequest("POST", "/api/rms/applications", body);
           if (!existingR.ok) {

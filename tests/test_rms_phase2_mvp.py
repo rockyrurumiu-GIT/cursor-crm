@@ -8,17 +8,28 @@ import pytest
 from sqlalchemy import text
 from starlette.testclient import TestClient
 
-from auth.data_scope_catalog import RESOURCE_RMS_APPLICATION, RESOURCE_RMS_JOB, SCOPE_ASSIGNED
+from auth.data_scope_catalog import (
+    RESOURCE_RMS_APPLICATION,
+    RESOURCE_RMS_CANDIDATE,
+    RESOURCE_RMS_JOB,
+    RESOURCE_RMS_RESUME,
+    SCOPE_ALL,
+    SCOPE_ASSIGNED,
+    SCOPE_SELF,
+)
 from auth.permissions import ROLE_DELIVERY, ROLE_SALES, ROLE_VIEWER
 from tests.helpers import auth_header
 
 RMS_MVP_PERMS = (
     "rms.jobs.read",
     "rms.jobs.write",
+    "rms.jobs.delete",
     "rms.candidates.read",
     "rms.candidates.write",
+    "rms.candidates.delete",
     "rms.applications.read",
     "rms.applications.write",
+    "rms.applications.delete",
 )
 
 
@@ -276,7 +287,10 @@ def _enable_delivery_rms_mvp(engine):
     _grant_role_permissions(engine, ROLE_DELIVERY, RMS_MVP_PERMS)
     _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "read", SCOPE_ASSIGNED)
     _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "write", SCOPE_ASSIGNED)
+    _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_CANDIDATE, "write", SCOPE_SELF)
+    _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_CANDIDATE, "delete", SCOPE_SELF)
     _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_APPLICATION, "write", SCOPE_ASSIGNED)
+    _set_role_data_scope(engine, ROLE_DELIVERY, RESOURCE_RMS_APPLICATION, "delete", SCOPE_ASSIGNED)
 
 
 @pytest.fixture
@@ -664,6 +678,182 @@ def test_candidate_search_respects_visibility(client_rbac, admin_auth, rms_engin
     r = client_rbac.get("/api/rms/candidates?q=Hidden Bob", cookies=login_b.cookies)
     assert r.status_code == 200, r.text
     assert cand_id not in _candidate_ids_from_list(r.json())
+
+
+def test_candidate_read_all_can_search_and_recommend_existing_candidate_with_boundaries(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    suffix = uniq
+    _grant_role_permissions(
+        rms_engine,
+        ROLE_DELIVERY,
+        ("rms.resumes.read", "rms.contacts.view"),
+    )
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_CANDIDATE, "read", SCOPE_ALL)
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_CANDIDATE, "write", SCOPE_SELF)
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_CANDIDATE, "delete", SCOPE_SELF)
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_RESUME, "read", SCOPE_ALL)
+    try:
+        login_a, job_a_id = _delivery_open_job(
+            client_rbac, rms_engine, admin_auth, f"pool_a_{suffix}"
+        )
+        login_b, job_b_id = _delivery_open_job(
+            client_rbac, rms_engine, admin_auth, f"pool_b_{suffix}"
+        )
+
+        raw_phone = _unique_phone()
+        raw_email = f"pool_{suffix}@example.com"
+        raw_wechat = f"wx_pool_{suffix}"
+        cand_name = f"PoolCand_{suffix}"
+        client_rbac.cookies.clear()
+        client_rbac.cookies.update(login_a.cookies)
+        created = client_rbac.post(
+            "/api/rms/candidates",
+            json=_candidate_json(
+                job_a_id,
+                name=cand_name,
+                phone=raw_phone,
+                email=raw_email,
+                wechat=raw_wechat,
+                email_wechat=raw_email,
+            ),
+        )
+        assert created.status_code == 200, created.text
+        cand_id = created.json()["id"]
+
+        upload = client_rbac.post(
+            f"/api/rms/candidates/{cand_id}/resume",
+            files={"file": ("resume.txt", b"candidate resume", "text/plain")},
+        )
+        assert upload.status_code == 200, upload.text
+        resume_id = upload.json()["id"]
+
+        client_rbac.cookies.clear()
+        client_rbac.cookies.update(login_b.cookies)
+        searched = client_rbac.get(f"/api/rms/candidates?q={cand_name}")
+        assert searched.status_code == 200, searched.text
+        assert cand_id in _candidate_ids_from_list(searched.json())
+        visible_a = next(c for c in searched.json() if c["id"] == cand_id)
+        assert visible_a["can_write"] is False
+        assert visible_a["can_delete"] is False
+        assert visible_a["can_download_resume"] is False
+
+        detail = client_rbac.get(f"/api/rms/candidates/{cand_id}")
+        assert detail.status_code == 200, detail.text
+        detail_body = detail.json()
+        assert detail_body["phone"] == raw_phone
+        assert detail_body["email"] == raw_email
+        assert detail_body["wechat"] == raw_wechat
+        assert detail_body["can_write"] is False
+        assert detail_body["can_delete"] is False
+        assert detail_body["can_download_resume"] is False
+
+        blocked_patch = client_rbac.patch(
+            f"/api/rms/candidates/{cand_id}",
+            json={"city": "BlockedCity"},
+        )
+        assert blocked_patch.status_code in (403, 404), blocked_patch.text
+
+        blocked_delete = client_rbac.delete(f"/api/rms/candidates/{cand_id}")
+        assert blocked_delete.status_code in (403, 404), blocked_delete.text
+
+        own_name = f"PoolOwn_{suffix}"
+        own_created = client_rbac.post(
+            "/api/rms/candidates",
+            json=_candidate_json(
+                job_b_id,
+                name=own_name,
+                phone=_unique_phone(),
+                email=f"pool_own_{suffix}@example.com",
+                wechat=f"wx_pool_own_{suffix}",
+                email_wechat=f"pool_own_{suffix}@example.com",
+            ),
+        )
+        assert own_created.status_code == 200, own_created.text
+        own_id = own_created.json()["id"]
+        assert own_created.json()["can_write"] is True
+        assert own_created.json()["can_delete"] is True
+        assert own_created.json()["can_download_resume"] is False
+
+        own_search = client_rbac.get(f"/api/rms/candidates?q={own_name}")
+        assert own_search.status_code == 200, own_search.text
+        visible_own = next(c for c in own_search.json() if c["id"] == own_id)
+        assert visible_own["can_write"] is True
+        assert visible_own["can_delete"] is True
+
+        own_patch = client_rbac.patch(
+            f"/api/rms/candidates/{own_id}",
+            json={"city": "SelfEditableCity"},
+        )
+        assert own_patch.status_code == 200, own_patch.text
+        assert own_patch.json()["city"] == "SelfEditableCity"
+
+        own_upload = client_rbac.post(
+            f"/api/rms/candidates/{own_id}/resume",
+            files={"file": ("own_resume.txt", b"own candidate resume", "text/plain")},
+        )
+        assert own_upload.status_code == 200, own_upload.text
+        own_resume_id = own_upload.json()["id"]
+
+        viewed = client_rbac.get(f"/api/rms/resumes/{resume_id}/view")
+        assert viewed.status_code == 200, viewed.text
+
+        downloaded = client_rbac.get(f"/api/rms/resumes/{resume_id}/download")
+        assert downloaded.status_code == 403, downloaded.text
+
+        _grant_role_permissions(rms_engine, ROLE_DELIVERY, ("rms.resumes.download",))
+
+        detail_before_recommend = client_rbac.get(f"/api/rms/candidates/{cand_id}")
+        assert detail_before_recommend.status_code == 200, detail_before_recommend.text
+        assert detail_before_recommend.json()["can_download_resume"] is False
+        still_forbidden = client_rbac.get(f"/api/rms/resumes/{resume_id}/download")
+        assert still_forbidden.status_code == 403, still_forbidden.text
+
+        own_detail = client_rbac.get(f"/api/rms/candidates/{own_id}")
+        assert own_detail.status_code == 200, own_detail.text
+        assert own_detail.json()["can_download_resume"] is True
+        own_download = client_rbac.get(f"/api/rms/resumes/{own_resume_id}/download")
+        assert own_download.status_code == 200, own_download.text
+
+        recommended = client_rbac.post(
+            "/api/rms/applications",
+            json={"job_id": job_b_id, "candidate_id": cand_id},
+        )
+        assert recommended.status_code == 200, recommended.text
+        assert recommended.json()["candidate_id"] == cand_id
+        assert recommended.json()["job_id"] == job_b_id
+        assert recommended.json()["resume_id"] is None
+
+        detail_after_recommend = client_rbac.get(f"/api/rms/candidates/{cand_id}")
+        assert detail_after_recommend.status_code == 200, detail_after_recommend.text
+        assert detail_after_recommend.json()["can_download_resume"] is True
+        recommended_download = client_rbac.get(f"/api/rms/resumes/{resume_id}/download")
+        assert recommended_download.status_code == 200, recommended_download.text
+
+        forbidden = client_rbac.post(
+            "/api/rms/applications",
+            json={"job_id": job_a_id, "candidate_id": cand_id, "resume_id": resume_id},
+        )
+        assert forbidden.status_code in (403, 404), forbidden.text
+
+        own_delete = client_rbac.delete(f"/api/rms/candidates/{own_id}")
+        assert own_delete.status_code == 200, own_delete.text
+    finally:
+        _set_role_data_scope(
+            rms_engine, ROLE_DELIVERY, RESOURCE_RMS_CANDIDATE, "read", SCOPE_ASSIGNED
+        )
+        _set_role_data_scope(
+            rms_engine, ROLE_DELIVERY, RESOURCE_RMS_CANDIDATE, "write", SCOPE_ASSIGNED
+        )
+        _set_role_data_scope(
+            rms_engine, ROLE_DELIVERY, RESOURCE_RMS_CANDIDATE, "delete", SCOPE_ASSIGNED
+        )
+        _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_RESUME, "read", SCOPE_ASSIGNED)
+        _revoke_role_permissions(
+            rms_engine,
+            ROLE_DELIVERY,
+            ("rms.resumes.read", "rms.resumes.download", "rms.contacts.view"),
+        )
 
 
 def test_candidate_hidden_when_not_creator_or_visible_application(client_rbac, admin_auth, rms_engine, uniq):

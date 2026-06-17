@@ -2087,7 +2087,9 @@
                 window.crmIsSuper = (data.roles || []).indexOf('SUPER_ADMIN') >= 0;
                 window.crmMeUser = data.user || null;
                 var u = (data.user && data.user.display_name) || (data.user && data.user.username) || '';
+                var logoutName = (data.user && data.user.username) || u;
                 document.getElementById('header-user').textContent = u ? ('欢迎，' + u) : '';
+                document.getElementById('logout-btn').textContent = logoutName ? (logoutName + '退出') : '退出';
                 window.crmApplyNavPermissions();
             }
 

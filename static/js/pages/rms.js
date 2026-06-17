@@ -145,11 +145,20 @@
       const canWriteJobs = computed(function () {
         return hasPermission("rms.jobs.write");
       });
+      const canDeleteJobs = computed(function () {
+        return hasPermission("rms.jobs.delete");
+      });
       const canWriteCandidates = computed(function () {
         return hasPermission("rms.candidates.write");
       });
+      const canDeleteCandidates = computed(function () {
+        return hasPermission("rms.candidates.delete");
+      });
       const canWriteApplications = computed(function () {
         return hasPermission("rms.applications.write");
+      });
+      const canDeleteApplications = computed(function () {
+        return hasPermission("rms.applications.delete");
       });
       const canReadCandidates = computed(function () {
         return hasPermission("rms.candidates.read");
@@ -391,6 +400,7 @@
         candidateParseSummaryEmpty: candidateParseSummaryEmpty,
         candidateParseSummaryValue: candidateParseSummaryValue,
         formatSalaryThousands: formatSalaryThousands,
+        stripSalaryCommas: stripSalaryCommas,
         PHONE_RE: PHONE_RE,
         showCandidateDuplicateDialog: showCandidateDuplicateDialog,
         isCandidateDuplicateError: isCandidateDuplicateError,
@@ -527,8 +537,11 @@
         ...applications,
         ...report,
         canWriteJobs,
+        canDeleteJobs,
         canWriteCandidates,
+        canDeleteCandidates,
         canWriteApplications,
+        canDeleteApplications,
         canReadCandidates,
         canRecommendExistingCandidate,
         canSubmitCandidateReport,

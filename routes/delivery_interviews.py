@@ -161,7 +161,7 @@ def register_delivery_interviews_routes(
     # --- Delete ---
 
     @app.delete("/api/delivery/interviews/row/{row_id}")
-    async def interview_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.write"))):
+    async def interview_delete_row(row_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.delete"))):
         entry = db.query(InterviewEntry).filter(InterviewEntry.id == row_id).first()
         if not entry:
             raise HTTPException(status_code=404, detail="记录不存在")

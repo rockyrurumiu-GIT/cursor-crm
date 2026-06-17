@@ -211,7 +211,7 @@
                             <div class="crm-op-actions">
                                 <button type="button" @click="openDetail(c)" class="crm-op-btn-detail">详情</button>
                                 <a v-if="canWriteClients" :href="`/customers/${c.id}/edit`" class="crm-op-btn-edit">修改</a>
-                                <button v-if="canWriteClients" type="button" @click="confirmDelete(c)" class="crm-op-btn-delete">删除</button>
+                                <button v-if="canDeleteClients" type="button" @click="confirmDelete(c)" class="crm-op-btn-delete">删除</button>
                             </div>
                         </td>
                     </tr>
@@ -490,6 +490,10 @@ createApp({
         const canWriteClients = computed(() => {
             if (!meLoaded.value) return false;
             return isSuper.value || hasPermission('crm.clients.write');
+        });
+        const canDeleteClients = computed(() => {
+            if (!meLoaded.value) return false;
+            return isSuper.value || hasPermission('crm.clients.delete');
         });
         const canReadContacts = computed(() => {
             if (!meLoaded.value) return false;
@@ -922,7 +926,7 @@ createApp({
 
         return {
             clients, handoffMap, filterPhase, filterHandoffStatuses, handoffFilterOptions: HANDOFF_FILTER_OPTIONS,
-            canWriteClients, canReadContacts, canReadVisits, canWriteVisits,
+            canWriteClients, canDeleteClients, canReadContacts, canReadVisits, canWriteVisits,
             canExportClients, canOpenHandoff, canReviewHandoff,
             handoffFilterLabel, handoffFilterSummary, handoffFilterDropdownOpen, handoffFilterRef,
             toggleHandoffFilterDropdown, toggleHandoffFilterOption,

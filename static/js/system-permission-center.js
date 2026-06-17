@@ -9,6 +9,8 @@
     var CAN_AUDIT = root.getAttribute('data-can-audit') === '1';
     var CAN_INSURANCE = root.getAttribute('data-can-insurance') === '1';
     var IS_SUPER = root.getAttribute('data-is-super') === '1';
+    var CAN_DELETE_USERS = IS_SUPER || !window.crmHasPermission || window.crmHasPermission('system.users.delete');
+    var CAN_DELETE_ROLES = IS_SUPER || !window.crmHasPermission || window.crmHasPermission('system.roles.delete');
     var BUILTIN_DEPT_CODES = { ROOT: 1, SALES: 1, DELIVERY: 1, FINANCE: 1, ADMIN: 1 };
 
     var state = {
@@ -327,7 +329,7 @@
             var builtin = BUILTIN_DEPT_CODES[d.code];
             var ops = '<div class="crm-op-actions">'
                 + '<button type="button" class="crm-op-btn-edit btn-edit-dept" data-id="' + d.id + '">编辑</button>'
-                + (builtin ? '' : '<button type="button" class="crm-op-btn-delete btn-delete-dept" data-id="' + d.id + '"'
+                + (builtin || !CAN_DELETE_USERS ? '' : '<button type="button" class="crm-op-btn-delete btn-delete-dept" data-id="' + d.id + '"'
                 + ' data-crm-delete-title="确认删除部门"'
                 + ' data-crm-delete-target="将删除部门：' + String(d.name || '').replace(/"/g, '&quot;') + '"'
                 + ' data-crm-delete-hint="若仍有用户或客户归属将无法删除。">删除</button>')
@@ -522,7 +524,7 @@
             var builtin = r.is_builtin;
             var typeLabel = builtin ? '内置' : '自定义';
             var desc = (r.description || '').trim() || '—';
-            var canDelete = !builtin;
+            var canDelete = !builtin && CAN_DELETE_ROLES;
             var ops = '<div class="crm-op-actions spc-op-actions">'
                 + '<button type="button" class="crm-op-btn-edit btn-role-matrix" data-id="' + r.id + '">编辑权限矩阵</button>'
                 + '<button type="button" class="crm-op-btn-detail btn-role-edit" data-id="' + r.id + '">修改</button>'

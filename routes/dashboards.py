@@ -116,7 +116,7 @@ def register_dashboard_routes(
         dashboard_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(require_permission("dashboard.write")),
+        user: str = Depends(require_permission("dashboard.delete")),
     ):
         return dash_svc.delete_dashboard(db, dashboard_id, DashboardDashboard, DashboardTab, DashboardWidget)
 
@@ -145,7 +145,7 @@ def register_dashboard_routes(
         tab_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(require_permission("dashboard.write")),
+        user: str = Depends(require_permission("dashboard.delete")),
     ):
         return dash_svc.delete_tab(db, tab_id, DashboardTab, DashboardWidget)
 
@@ -180,7 +180,7 @@ def register_dashboard_routes(
         widget_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(require_permission("dashboard.write")),
+        user: str = Depends(require_permission("dashboard.delete")),
     ):
         return dash_svc.delete_widget(db, widget_id, DashboardWidget)
 

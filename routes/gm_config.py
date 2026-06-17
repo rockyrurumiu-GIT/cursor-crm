@@ -113,7 +113,7 @@ def register_gm_config_routes(app, *, get_db: Callable, SocialInsuranceLocation)
     async def api_system_insurance_locations_delete(
         row_id: int,
         db: Session = Depends(get_db),
-        _user: str = Depends(require_permission("system.users.manage")),
+        _user: str = Depends(require_permission("system.users.delete")),
     ):
         row = db.query(SocialInsuranceLocation).filter(SocialInsuranceLocation.id == row_id).first()
         if not row:

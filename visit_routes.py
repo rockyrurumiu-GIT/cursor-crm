@@ -140,7 +140,7 @@ def register_visit_routes(
     async def delete_customer_visit(
         visit_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("crm.visits.write")),
+        user: str = Depends(require_permission("crm.visits.delete")),
     ):
         v = db.query(VisitRecord).filter(VisitRecord.id == visit_id).first()
         if not v:

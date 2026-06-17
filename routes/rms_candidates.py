@@ -143,7 +143,7 @@ def register_rms_candidates_routes(
         candidate_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        _user: str = Depends(require_permission("rms.candidates.write")),
+        _user: str = Depends(require_permission("rms.candidates.delete")),
     ):
         return cand_svc.delete_candidate(
             db,
