@@ -140,7 +140,7 @@
                         >清空</button>
                     </div>
                 </div>
-                <a href="/customers/new"
+                <a v-if="canWriteClients" href="/customers/new"
                     class="customers-toolbar-control border border-blue-600 bg-blue-600 text-white hover:bg-blue-700">+ 新增客户</a>
                 <a href="/customers/reviews"
                     class="customers-toolbar-control border border-amber-500 bg-white text-amber-700 hover:bg-amber-50">待审交接</a>
@@ -206,8 +206,8 @@
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div class="crm-op-actions">
                                 <button type="button" @click="openDetail(c)" class="crm-op-btn-detail">详情</button>
-                                <a :href="`/customers/${c.id}/edit`" class="crm-op-btn-edit">修改</a>
-                                <button type="button" @click="confirmDelete(c)" class="crm-op-btn-delete">删除</button>
+                                <a v-if="canWriteClients" :href="`/customers/${c.id}/edit`" class="crm-op-btn-edit">修改</a>
+                                <button v-if="canWriteClients" type="button" @click="confirmDelete(c)" class="crm-op-btn-delete">删除</button>
                             </div>
                         </td>
                     </tr>
@@ -227,7 +227,7 @@
                 <div class="min-h-0 md:max-h-[calc(100vh-11rem)] md:overflow-y-auto md:pr-2">
                     <div class="flex justify-between items-center mb-4">
                         <h4 class="font-bold border-l-4 border-blue-600 pl-2">拜访/沟通记录</h4>
-                        <button type="button" @click="showAddVisit=true" class="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">+ 新记录</button>
+                        <button v-if="canWriteVisits" type="button" @click="openAddVisit" class="text-sm bg-blue-100 text-blue-700 px-2 py-1 rounded">+ 新记录</button>
                     </div>
                     <div v-if="details.visits.length===0" class="text-center py-10 text-gray-400">暂无记录</div>
                     <div v-for="v in details.visits" :key="v.id" class="mb-4 p-4 border rounded relative bg-white shadow-sm">
@@ -249,7 +249,7 @@
                     <div>
                         <div class="flex justify-between items-center mb-3">
                             <h4 class="font-bold border-l-4 border-emerald-600 pl-2">线索信息</h4>
-                            <a :href="`/customers/${selectedClient.id}/edit`" class="text-sm text-[#0969da] hover:underline">修改</a>
+                            <a v-if="canWriteClients" :href="`/customers/${selectedClient.id}/edit`" class="text-sm text-[#0969da] hover:underline">修改</a>
                         </div>
                         <dl class="text-sm grid grid-cols-2 gap-x-4 gap-y-2 p-3 border rounded bg-gray-50">
                             <div><dt class="text-gray-500 text-xs">预估当年合作金额</dt><dd>{{ fmtAmount(selectedClient) }}</dd></div>
@@ -280,15 +280,15 @@
                     <div>
                         <div class="flex justify-between items-center mb-4">
                             <h4 class="font-bold border-l-4 border-[#0969da] pl-2">客户描述</h4>
-                            <a :href="`/customers/${selectedClient.id}/edit`" class="text-sm text-[#0969da] hover:underline">修改</a>
+                            <a v-if="canWriteClients" :href="`/customers/${selectedClient.id}/edit`" class="text-sm text-[#0969da] hover:underline">修改</a>
                         </div>
                         <div v-if="selectedClient.description" class="text-sm text-gray-700 whitespace-pre-wrap p-3 border rounded bg-gray-50">{{ selectedClient.description }}</div>
                         <p v-else class="text-sm text-gray-400">暂无描述，可在「修改」中填写。</p>
                     </div>
                     <div>
                         <h4 class="font-bold border-l-4 border-orange-500 pl-2 mb-4">备注与折算记录</h4>
-                        <textarea v-model="selectedClient.remarks" class="w-full h-32 p-2 border rounded text-sm bg-yellow-50" placeholder="点击保存按钮同步修改..."></textarea>
-                        <button type="button" @click="updateClient(selectedClient)" class="mt-2 w-full bg-orange-500 text-white text-sm py-1 rounded">保存备注及阶段修改</button>
+                        <textarea v-model="selectedClient.remarks" :disabled="!canWriteClients" class="w-full h-32 p-2 border rounded text-sm bg-yellow-50 disabled:bg-gray-50 disabled:text-gray-500" placeholder="点击保存按钮同步修改..."></textarea>
+                        <button v-if="canWriteClients" type="button" @click="updateClient(selectedClient)" class="mt-2 w-full bg-orange-500 text-white text-sm py-1 rounded">保存备注及阶段修改</button>
                     </div>
                 </div>
             </div>
@@ -436,6 +436,8 @@ createApp({
     setup() {
         const params = new URLSearchParams(window.location.search);
         const clients = ref([]);
+        const me = ref({ permissions: [], roles: [], is_super: false });
+        const meLoaded = ref(false);
         const assignOptions = ref({ depts: [], users: [] });
         const handoffMap = ref({});
         const opportunitiesByClient = ref({});
@@ -471,6 +473,35 @@ createApp({
         };
 
         const authHeader = () => window.crmAuthHeader();
+        const hasPermission = (code) => (me.value.permissions || []).includes(code);
+        const isSuper = computed(() => (
+            !!window.crmIsSuper
+            || !!me.value.is_super
+            || (me.value.roles || []).includes('SUPER_ADMIN')
+        ));
+        const canWriteClients = computed(() => {
+            if (!meLoaded.value) return false;
+            return isSuper.value || hasPermission('crm.clients.write');
+        });
+        const canWriteVisits = computed(() => {
+            if (!meLoaded.value) return false;
+            return isSuper.value || hasPermission('crm.visits.write');
+        });
+
+        const loadMe = async () => {
+            try {
+                const r = await fetch('/api/me', { headers: authHeader(), credentials: 'same-origin' });
+                if (r.ok) {
+                    me.value = await r.json();
+                } else {
+                    me.value = { permissions: [], roles: [], is_super: false };
+                }
+            } catch (_) {
+                me.value = { permissions: [], roles: [], is_super: false };
+            } finally {
+                meLoaded.value = true;
+            }
+        };
 
         const resolveHandoffStatus = (clientId) => {
             const entry = handoffMap.value[String(clientId)];
@@ -762,7 +793,24 @@ createApp({
             }
         };
 
+        const requireClientWrite = () => {
+            if (!canWriteClients.value) {
+                alert('无客户写入权限');
+                return false;
+            }
+            return true;
+        };
+
+        const requireVisitWrite = () => {
+            if (!canWriteVisits.value) {
+                alert('无拜访记录写入权限');
+                return false;
+            }
+            return true;
+        };
+
         const updateClient = (c) => {
+            if (!requireClientWrite()) return;
             const fd = new FormData();
             appendClientFields(fd, c);
             fetch(`/api/clients/${c.id}`, { method: 'PUT', headers: authHeader(), body: fd }).then(() => {
@@ -773,6 +821,7 @@ createApp({
         };
 
         const confirmDelete = (c) => {
+            if (!requireClientWrite()) return;
             clientToDelete.value = c;
             deleteCaptcha.value = Math.floor(1000 + Math.random() * 9000).toString();
             deleteInput.value = '';
@@ -780,13 +829,21 @@ createApp({
         };
 
         const executeDelete = () => {
+            if (!requireClientWrite()) return;
+            if (!clientToDelete.value) return;
             fetch(`/api/clients/${clientToDelete.value.id}`, { method: 'DELETE', headers: authHeader() }).then(() => {
                 showDelete.value = false;
                 loadClients();
             });
         };
 
+        const openAddVisit = () => {
+            if (!requireVisitWrite()) return;
+            showAddVisit.value = true;
+        };
+
         const submitVisit = async () => {
+            if (!requireVisitWrite()) return;
             const fd = new FormData();
             fd.append('client_id', selectedClient.value.id);
             fd.append('date', visitForm.value.date);
@@ -809,14 +866,16 @@ createApp({
         const isImage = (path) => /\.(jpg|jpeg|png|gif|webp)$/i.test(path);
         const viewFull = (path) => window.crmOpenAuthenticatedFile(path);
 
-        onMounted(() => {
-            loadClients();
+        onMounted(async () => {
+            await loadMe();
+            await loadClients();
             document.addEventListener('click', onDocumentClick);
         });
         onUnmounted(() => document.removeEventListener('click', onDocumentClick));
 
         return {
             clients, handoffMap, filterPhase, filterHandoffStatuses, handoffFilterOptions: HANDOFF_FILTER_OPTIONS,
+            canWriteClients, canWriteVisits,
             handoffFilterLabel, handoffFilterSummary, handoffFilterDropdownOpen, handoffFilterRef,
             toggleHandoffFilterDropdown, toggleHandoffFilterOption,
             showDetail, showAddVisit, showDelete, showOppDrawer, selectedOpp, relatedClient,
@@ -828,7 +887,8 @@ createApp({
             fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, displayAmount, displayWinRate, oppStageBadgeClass, hasPrimaryContact,
             salesDeptDisplay, salesOwnerDisplay,
             deliveryDeptDisplay, deliveryOwnerDisplay, recruitmentDeptDisplay, recruitmentOwnerDisplay,
-            openDetail, updateClient, confirmDelete, executeDelete,
+            openDetail, updateClient, confirmDelete, executeDelete, openAddVisit,
+            requireClientWrite, requireVisitWrite,
             submitVisit, exportCSV, isImage, viewFull, visitAttachmentUrls
         };
     }

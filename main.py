@@ -1607,12 +1607,19 @@ async def page_customers(request: Request):
 
 
 @app.get("/customers/new", response_class=HTMLResponse)
-async def page_customers_new(request: Request):
+async def page_customers_new(
+    request: Request,
+    _user: str = Depends(require_permission("crm.clients.write")),
+):
     return _page("pages/customers_new.html", request)
 
 
 @app.get("/customers/{client_id}/edit", response_class=HTMLResponse)
-async def page_customers_edit(request: Request, client_id: int):
+async def page_customers_edit(
+    request: Request,
+    client_id: int,
+    _user: str = Depends(require_permission("crm.clients.write")),
+):
     return _page("pages/customers_new.html", request, client_id=client_id)
 
 

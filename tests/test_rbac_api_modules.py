@@ -5,8 +5,10 @@ import importlib
 import os
 
 import pytest
+from sqlalchemy import text
 from starlette.testclient import TestClient
 
+from auth.password import hash_password
 from tests.helpers import auth_header
 
 
@@ -41,8 +43,57 @@ def _create_restricted(client, admin_user: str, admin_pwd: str, suffix: str):
     return username, "restricted1"
 
 
+def _create_user(client, admin_user: str, admin_pwd: str, username: str, role_codes: list[str], password: str):
+    import main as crm_main
+
+    salt_b64, hash_b64, iters = hash_password(password)
+    with crm_main.engine.begin() as conn:
+        row = conn.execute(text("SELECT id FROM sys_user WHERE username = :u"), {"u": username}).fetchone()
+        if row:
+            uid = int(row[0])
+            conn.execute(
+                text(
+                    "UPDATE sys_user SET password_hash = :h, password_salt = :s, "
+                    "password_iters = :i, status = 'active', updated_at = datetime('now') "
+                    "WHERE id = :uid"
+                ),
+                {"h": hash_b64, "s": salt_b64, "i": iters, "uid": uid},
+            )
+        else:
+            conn.execute(
+                text(
+                    "INSERT INTO sys_user (username, display_name, password_hash, password_salt, "
+                    "password_iters, status, session_version, created_at, updated_at) "
+                    "VALUES (:u, :dn, :h, :s, :i, 'active', 0, datetime('now'), datetime('now'))"
+                ),
+                {"u": username, "dn": username, "h": hash_b64, "s": salt_b64, "i": iters},
+            )
+            uid = int(conn.execute(text("SELECT id FROM sys_user WHERE username = :u"), {"u": username}).fetchone()[0])
+        for code in role_codes:
+            rid = conn.execute(text("SELECT id FROM sys_role WHERE code = :c"), {"c": code}).fetchone()
+            assert rid is not None
+            conn.execute(
+                text("INSERT OR IGNORE INTO sys_user_role (user_id, role_id) VALUES (:uid, :rid)"),
+                {"uid": uid, "rid": int(rid[0])},
+            )
+
+
 def _login(client, username: str, password: str):
     return client.post("/api/auth/login", json={"username": username, "password": password})
+
+
+def _insert_client(name: str, owner: str) -> int:
+    import main as crm_main
+
+    with crm_main.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO clients (name, industry, owner, scale, phase, description, created_at) "
+                "VALUES (:name, 'IT', :owner, 'M', '初步接触', 'rbac readonly test', datetime('now'))"
+            ),
+            {"name": name, "owner": owner},
+        )
+        return int(conn.execute(text("SELECT last_insert_rowid()")).fetchone()[0])
 
 
 @pytest.fixture(scope="module")
@@ -224,3 +275,52 @@ def test_restricted_module_forbidden(
     else:
         r = client.patch(write_path, cookies=cookies, json=body)
     _assert_forbidden(r, write_perm)
+
+
+def test_client_readonly_user_cannot_open_or_call_write_surfaces(client_rbac, admin_auth):
+    admin_user, admin_pwd = admin_auth
+    suffix = f"client_ro_{os.getpid()}"
+    viewer = f"client_ro_{suffix}"
+    viewer_pwd = "readonly1"
+    _create_user(client_rbac, admin_user, admin_pwd, viewer, ["VIEWER"], viewer_pwd)
+
+    cid = _insert_client(f"Readonly Client {suffix}", admin_user)
+
+    login = _login(client_rbac, viewer, viewer_pwd)
+    assert login.status_code == 200, login.text
+    cookies = login.cookies
+
+    assert client_rbac.get("/customers", cookies=cookies).status_code == 200
+    _assert_forbidden(client_rbac.get("/customers/new", cookies=cookies), "crm.clients.write")
+    _assert_forbidden(client_rbac.get(f"/customers/{cid}/edit", cookies=cookies), "crm.clients.write")
+
+    post_resp = client_rbac.post(
+        "/api/clients",
+        cookies=cookies,
+        data={
+            "name": f"Blocked Client {suffix}",
+            "industry": "IT",
+            "owner": viewer,
+            "scale": "S",
+            "phase": "初步接触",
+            "description": "blocked",
+        },
+    )
+    _assert_forbidden(post_resp, "crm.clients.write")
+
+    put_resp = client_rbac.put(
+        f"/api/clients/{cid}",
+        cookies=cookies,
+        data={
+            "name": f"Readonly Client {suffix}",
+            "industry": "IT",
+            "owner": admin_user,
+            "scale": "M",
+            "phase": "初步接触",
+            "description": "blocked update",
+        },
+    )
+    _assert_forbidden(put_resp, "crm.clients.write")
+
+    delete_resp = client_rbac.delete(f"/api/clients/{cid}", cookies=cookies)
+    _assert_forbidden(delete_resp, "crm.clients.write")

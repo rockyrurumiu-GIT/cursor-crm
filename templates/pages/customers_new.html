@@ -166,6 +166,7 @@
     var recruitmentOwnerSelect = document.getElementById('recruitment-owner-select');
     var assignUsers = [];
     var assignOptionsLoaded = false;
+    var canWriteClient = false;
 
     function fillSelect(selectEl, items, valueKey, labelFn, selectedValue) {
         if (!selectEl) return;
@@ -226,6 +227,31 @@
         amountDisplay.placeholder = clientId ? '暂无商机数据' : '保存后由名下商机自动汇总';
     }
 
+    function disableFormForNoWrite() {
+        if (submitBtn) submitBtn.classList.add('hidden');
+        Array.from(form.elements).forEach(function (el) { el.disabled = true; });
+    }
+
+    async function ensureCanWriteClient() {
+        var r = await fetch('/api/me', { headers: window.crmAuthHeader(), credentials: 'same-origin' });
+        if (!r.ok) {
+            window.location.href = '/customers';
+            return false;
+        }
+        var me = await r.json();
+        var perms = me.permissions || [];
+        var isSuper = !!me.is_super || (me.roles || []).indexOf('SUPER_ADMIN') >= 0 || !!window.crmIsSuper;
+        if (!isSuper && perms.indexOf('crm.clients.write') < 0) {
+            canWriteClient = false;
+            msg.textContent = '无客户写入权限';
+            msg.classList.remove('hidden');
+            disableFormForNoWrite();
+            return false;
+        }
+        canWriteClient = true;
+        return true;
+    }
+
     async function loadClient() {
         if (!clientId) {
             setEstimatedAmountDisplay('');
@@ -271,6 +297,11 @@
 
     form.onsubmit = async function (e) {
         e.preventDefault();
+        if (!canWriteClient) {
+            msg.textContent = '无客户写入权限';
+            msg.classList.remove('hidden');
+            return;
+        }
         msg.classList.add('hidden');
         syncOwnerFieldFromSalesUser();
         if (ownerField && !ownerField.value.trim()) {
@@ -300,7 +331,10 @@
         }
     };
 
-    loadClient();
+    (async function init() {
+        if (!(await ensureCanWriteClient())) return;
+        await loadClient();
+    })();
 })();
 </script>
 {% endblock %}
