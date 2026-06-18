@@ -190,6 +190,7 @@ def _build_roster_payload_prefill(
         "position_title": (getattr(job, "title", None) or "").strip(),
         "business_line": "",
         "entry_date": entry_date,
+        "regularization_status": "未转正",
         "monthly_quote_tax": "",
         "pre_tax_salary": "",
         "gms": "",

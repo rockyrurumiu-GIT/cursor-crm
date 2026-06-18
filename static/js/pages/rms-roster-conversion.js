@@ -32,6 +32,7 @@
       position_title: "",
       business_line: "",
       entry_date: "",
+      regularization_status: "未转正",
       regularization_date: "",
       monthly_quote_tax: "",
       pre_tax_salary: "",
@@ -55,6 +56,7 @@
       rosterConvertForm.position_title = "";
       rosterConvertForm.business_line = "";
       rosterConvertForm.entry_date = "";
+      rosterConvertForm.regularization_status = "未转正";
       rosterConvertForm.regularization_date = "";
       rosterConvertForm.monthly_quote_tax = "";
       rosterConvertForm.pre_tax_salary = "";
@@ -126,6 +128,7 @@
         ["position_title", "岗位"],
         ["business_line", "业务线"],
         ["entry_date", "入职时间"],
+        ["regularization_status", "转正"],
         ["monthly_quote_tax", "月报价(含税)"],
         ["pre_tax_salary", "税前工资"],
         ["gms", "GM$"],

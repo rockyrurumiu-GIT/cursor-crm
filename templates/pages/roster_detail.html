@@ -59,6 +59,10 @@
         padding-left: 8px;
         padding-right: 8px;
     }
+    .roster-filter-keyword {
+        min-width: 9rem;
+        width: 9rem;
+    }
     /* 中诺：岗位列宽约 15 个汉字 */
     .crm-table .crm-th.roster-col-position-zntx,
     .crm-table .crm-td.roster-col-position-zntx {
@@ -198,12 +202,241 @@
         word-break: break-word;
         overflow-wrap: anywhere;
     }
+    .roster-name-link {
+        padding: 0;
+        border: none;
+        background: none;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    .roster-name-link:hover {
+        color: #2563eb;
+        text-decoration: underline;
+    }
+    .crm-op-btn-regularize {
+        font-size: 0.75rem;
+        line-height: 1.25;
+        font-weight: 500;
+        color: #059669;
+        transition: color 0.12s ease;
+    }
+    .crm-op-btn-regularize:hover:not(:disabled) {
+        color: #047857;
+        text-decoration: underline;
+    }
+    .crm-op-btn-regularize:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
     /* Vue 未挂载前：避免 v-if 未编译的弹层挡住全页点击 */
     #roster-detail-app:not([data-roster-mounted="1"]) .roster-detail-modal-overlay,
-    #roster-detail-app:not([data-roster-mounted="1"]) > .crm-esc-modal {
+    #roster-detail-app:not([data-roster-mounted="1"]) > .crm-esc-modal,
+    #roster-detail-app:not([data-roster-mounted="1"]) .roster-validation-modal-overlay {
         display: none !important;
         pointer-events: none !important;
         visibility: hidden !important;
+    }
+    .roster-validation-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.45);
+        padding: 1rem;
+    }
+    .roster-validation-modal {
+        width: 100%;
+        max-width: 42rem;
+        max-height: min(85vh, 720px);
+        border-radius: 0.875rem;
+        background: #fff;
+        box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .roster-validation-list {
+        overflow-y: auto;
+        padding: 1rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+        background: #f6f8fa;
+    }
+    .roster-validation-card {
+        border-radius: 12px;
+        background: #fff;
+        border-left: 4px solid #1a56ad;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.04);
+        padding: 0.85rem 1rem 0.9rem;
+    }
+    .roster-validation-card-title {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-bottom: 0.55rem;
+    }
+    .roster-validation-card-dot {
+        flex: 0 0 auto;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 9999px;
+        background: #1a56ad;
+    }
+    .roster-validation-card-name {
+        color: #1a56ad;
+        font-weight: 700;
+        font-size: 0.92rem;
+    }
+    .roster-validation-card-customer {
+        color: #64748b;
+        font-size: 0.78rem;
+        font-weight: 500;
+    }
+    .roster-validation-card-category {
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: #64748b;
+        white-space: nowrap;
+    }
+    .roster-validation-card-text {
+        margin: 0;
+        color: #333;
+        font-size: 0.84rem;
+        line-height: 1.55;
+    }
+    .roster-validation-card-text + .roster-validation-card-text {
+        margin-top: 0.35rem;
+    }
+    .roster-validation-card-label {
+        color: #1a56ad;
+        font-weight: 700;
+    }
+    .roster-validation-tip {
+        padding: 0.75rem 1.25rem;
+        border-top: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+    .roster-reminder-summary {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.9rem 1rem;
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-bottom: 1px solid #bfdbfe;
+    }
+    .roster-reminder-summary-icon {
+        flex: 0 0 auto;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 9999px;
+        background: #2563eb;
+        color: #fff;
+        font-size: 0.95rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .roster-reminder-table-wrap {
+        overflow-y: auto;
+        padding: 1rem 1.25rem;
+        background: #f6f8fa;
+    }
+    .roster-reminder-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 0.625rem;
+        overflow: hidden;
+        font-size: 0.85rem;
+    }
+    .roster-reminder-table thead th {
+        background: #f8fafc;
+        color: #475569;
+        font-weight: 600;
+        text-align: left;
+        padding: 0.55rem 0.85rem;
+        border-bottom: 1px solid #e5e7eb;
+        white-space: nowrap;
+    }
+    .roster-reminder-table tbody td {
+        padding: 0.55rem 0.85rem;
+        border-bottom: 1px solid #f1f5f9;
+        color: #334155;
+        vertical-align: middle;
+    }
+    .roster-reminder-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+    .roster-reminder-table tbody tr:hover {
+        background: #f8fafc;
+    }
+    .roster-reminder-name {
+        color: #1a56ad;
+        font-weight: 700;
+    }
+    .roster-reminder-days {
+        display: inline-flex;
+        align-items: center;
+        font-weight: 700;
+        font-size: 0.78rem;
+        color: #1e40af;
+        background: #dbeafe;
+        border: 1px solid #93c5fd;
+        border-radius: 9999px;
+        padding: 0.1rem 0.55rem;
+        white-space: nowrap;
+    }
+    .roster-reminder-days.is-overdue {
+        color: #b91c1c;
+        background: #fee2e2;
+        border-color: #fca5a5;
+    }
+    .roster-reminder-detail-btn {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #1a56ad;
+        padding: 0.2rem 0.6rem;
+        border: 1px solid #bfdbfe;
+        border-radius: 0.4rem;
+        background: #eff6ff;
+    }
+    .roster-reminder-detail-btn:hover {
+        background: #dbeafe;
+    }
+    .roster-reminder-actions {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+    }
+    .roster-reminder-regularize-btn {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #047857;
+        padding: 0.2rem 0.6rem;
+        border: 1px solid #6ee7b7;
+        border-radius: 0.4rem;
+        background: #ecfdf5;
+    }
+    .roster-reminder-regularize-btn:hover:not(:disabled) {
+        background: #d1fae5;
+    }
+    .roster-reminder-regularize-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
     }
 </style>
 {% endblock %}
@@ -224,6 +457,12 @@
             <div class="flex flex-wrap items-center gap-2">
                 <button v-if="!IS_GLOBAL_ROSTER" type="button" @click="openAdd" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增行</button>
                 <button
+                    v-if="IS_GLOBAL_ROSTER"
+                    type="button"
+                    class="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-800 hover:bg-blue-100"
+                    @click="showRegularizationReminder"
+                >转正提醒</button>
+                <button
                     type="button"
                     class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
                     @click="showRosterValidation"
@@ -234,7 +473,7 @@
                     class="rounded-lg border px-4 py-2 text-sm font-medium"
                     :class="showOnlyChecked ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50'"
                 >只显示勾选</button>
-                <button type="button" @click="openLogs" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">日志</button>
+                <button v-if="canViewRosterLogs" type="button" @click="openLogs" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">日志</button>
                 <button type="button" @click="triggerImport" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导入</button>
                 <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
                 <button type="button" @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导出</button>
@@ -242,17 +481,21 @@
             </div>
         </div>
         <div class="mb-3 crm-filter-row roster-filter-row text-sm shrink-0">
-            <select v-if="hasFilterField('employmentStatus')" v-model="filters.employmentStatus" class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control">
-                <option value="">在职情况（全部）</option>
-                <option v-for="v in employmentStatusOptions" :key="`es-${v}`" :value="v">{{ v }}</option>
-            </select>
+            <input
+                v-if="hasFilterField('keyword')"
+                v-model.trim="filters.keyword"
+                type="search"
+                placeholder="关键字（模糊）"
+                class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control roster-filter-keyword"
+            />
             <select v-if="hasFilterField('workLocation')" v-model="filters.workLocation" class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control">
                 <option value="">工作地（全部）</option>
                 <option v-for="v in workLocationOptions" :key="`wl-${v}`" :value="v">{{ v }}</option>
             </select>
-            <select v-if="hasFilterField('customerName')" v-model="filters.customerName" class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control">
-                <option value="">客户（全部）</option>
-                <option v-for="v in customerNameOptions" :key="`cn-${v}`" :value="v">{{ v }}</option>
+            <select v-if="hasFilterField('regularizationStatus')" v-model="filters.regularizationStatus" class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control">
+                <option value="">转正（全部）</option>
+                <option value="未转正">未转正</option>
+                <option value="已转正">已转正</option>
             </select>
             <div v-if="hasFilterField('entryDateBefore')" class="crm-filter-item roster-filter-item crm-filter-date roster-filter-date">
                 <span class="crm-filter-date-label roster-filter-date-label">入职时间早于</span>
@@ -283,6 +526,7 @@
                             <th class="crm-th min-w-[3.25rem] roster-col-serial roster-sticky-left-serial">序号</th>
                             <th class="crm-th min-w-[5.5rem] roster-col-name roster-sticky-left-key">姓名</th>
                             <th class="crm-th min-w-[4.5rem]">在职情况</th>
+                            <th class="crm-th min-w-[5rem]">转正</th>
                             <th v-if="isZNTX" class="crm-th min-w-[6rem]">工号</th>
                             <th class="crm-th min-w-[8rem]">联系方式</th>
                             <th class="crm-th min-w-[5rem]">客户</th>
@@ -319,10 +563,11 @@
                                         :checked="isRowChecked(row.id)"
                                         @change="setRowChecked(row.id, $event.target.checked)"
                                     />
-                                    <span class="roster-name-text">{{ row.full_name }}</span>
+                                    <button type="button" class="roster-name-text roster-name-link" @click.stop="openRosterDetail(row)">{{ row.full_name }}</button>
                                 </label>
                             </td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-600 align-top">{{ row.employment_status }}</td>
+                            <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.regularization_status || '—' }}</td>
                             <td v-if="isZNTX" class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.zntx_staff_no }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top tabular-nums">{{ row.contact_info }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap text-gray-700 align-top">{{ row.customer_name }}</td>
@@ -349,7 +594,13 @@
                             <td class="crm-td px-3 py-3 max-w-[13rem] break-words text-gray-700 align-top leading-snug">{{ row.remarks }}</td>
                             <td class="crm-td px-3 py-3 whitespace-nowrap align-top roster-sticky-op crm-sticky-right-op">
                                 <div class="crm-op-actions">
-                                    <button type="button" class="crm-op-btn-detail" @click="openRosterDetail(row)">详情</button>
+                                    <button
+                                        v-if="canRegularizeRow(row)"
+                                        type="button"
+                                        class="crm-op-btn-regularize"
+                                        :disabled="regularizingId === row.id"
+                                        @click="doRegularize(row)"
+                                    >转正</button>
                                     <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
                                     <button v-if="canDeletePermission('delivery.roster.delete')" type="button" class="crm-op-btn-delete"
                                         data-crm-delete-title="确认删除记录"
@@ -366,7 +617,7 @@
                     <tfoot v-if="!loading && filteredRows.length">
                         <template v-if="!isZNTX">
                             <tr class="text-sm font-medium">
-                                <td colspan="10" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
                                     <div class="flex items-center justify-between gap-3">
                                         <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
                                         <span class="text-xs font-medium text-slate-500">共 {{ filteredRows.length }} 条</span>
@@ -382,7 +633,7 @@
                                 <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                             <tr class="text-sm font-medium">
-                                <td colspan="10" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
                                     <span class="text-lg font-bold tracking-wide text-slate-900">均值</span>
                                 </td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgQuote }}</td>
@@ -397,7 +648,7 @@
                         </template>
                         <template v-else>
                             <tr class="text-sm font-medium">
-                                <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                <td colspan="12" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
                                     <div class="flex items-center justify-between gap-3">
                                         <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
                                         <span class="text-xs font-medium text-slate-500">共 {{ filteredRows.length }} 条</span>
@@ -413,7 +664,7 @@
                                 <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                             <tr class="text-sm font-medium">
-                                <td colspan="11" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
+                                <td colspan="12" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle">
                                     <span class="text-lg font-bold tracking-wide text-slate-900">均值</span>
                                 </td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgQuote }}</td>
@@ -464,6 +715,20 @@
                             <option value="待入职">待入职</option>
                             <option value="在职">在职</option>
                             <option value="离职">离职</option>
+                        </select>
+                        <select
+                            v-else-if="f.key === 'regularization_status'"
+                            v-model="form[f.key]"
+                            :disabled="formReadonly"
+                            @change="markTouched(f.key)"
+                            :class="[
+                                'crm-form-control',
+                                getFieldError(f.key) ? 'crm-form-control--error' : '',
+                            ]"
+                        >
+                            <option value="">请选择</option>
+                            <option value="未转正">未转正</option>
+                            <option value="已转正">已转正</option>
                         </select>
                         <select
                             v-else-if="f.key === 'zntx_onboarding_channel'"
@@ -610,6 +875,129 @@
         </div>
     </div>
 
+    <!-- 转正提醒 -->
+    <div v-if="showRegReminder" class="roster-validation-modal-overlay" @click.self="closeRegularizationReminder">
+        <div class="roster-validation-modal" role="dialog" aria-modal="true" aria-labelledby="roster-reminder-title">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
+                <div class="min-w-0">
+                    <h3 id="roster-reminder-title" class="text-lg font-bold text-gray-900">整体客户 · 转正提醒</h3>
+                    <p class="text-sm text-gray-500 mt-1">转正日期距当前日期不足 30 天的记录，共 {{ regReminderFindings.length }} 条</p>
+                </div>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closeRegularizationReminder">&times;</button>
+            </div>
+            <div class="roster-reminder-summary">
+                <div class="roster-reminder-summary-icon">i</div>
+                <div class="min-w-0">
+                    <p class="text-sm font-semibold text-blue-900">发现 {{ regReminderFindings.length }} 条近期转正记录</p>
+                    <p class="text-xs text-blue-800 mt-1">下列人员转正日期在 30 天内（含已到期未处理），请及时跟进转正事宜。</p>
+                </div>
+            </div>
+            <div class="roster-reminder-table-wrap">
+                <table class="roster-reminder-table">
+                    <thead>
+                        <tr>
+                            <th class="text-center">编号</th>
+                            <th>姓名</th>
+                            <th>业务</th>
+                            <th class="text-center">转正剩余天数</th>
+                            <th class="text-center">详情</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(item, idx) in regReminderFindings" :key="item.id">
+                            <td class="text-center text-gray-500">{{ idx + 1 }}</td>
+                            <td class="roster-reminder-name">{{ item.name }}</td>
+                            <td>{{ item.businessLine || '—' }}</td>
+                            <td class="text-center">
+                                <span class="roster-reminder-days" :class="{ 'is-overdue': item.isOverdue }">{{ item.days }} 天</span>
+                            </td>
+                            <td class="text-center">
+                                <div class="roster-reminder-actions">
+                                    <button
+                                        v-if="canRegularizeRow(item.row)"
+                                        type="button"
+                                        class="roster-reminder-regularize-btn"
+                                        :disabled="regularizingId === item.id"
+                                        @click="doRegularize(item.row)"
+                                    >转正</button>
+                                    <button type="button" class="roster-reminder-detail-btn" @click="openRegDetail(item)">详情</button>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="roster-validation-tip">
+                可在列表或详情中核对并修正相关日期。
+                <span v-if="regReminderCopied" class="ml-2 text-emerald-600 font-medium">提醒结果已复制到剪贴板</span>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex justify-end gap-2 shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="copyRegularizationReminderResults">复制结果</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700" @click="closeRegularizationReminder">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 转正提醒 · 员工详情边栏 -->
+    <div v-if="regDetailRow" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeRegDetail"></div>
+    <aside v-if="regDetailRow" class="crm-esc-modal crm-right-drawer open">
+        <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
+            <div class="min-w-0">
+                <h3 class="text-lg font-bold text-gray-900 truncate">{{ regDetailRow.full_name || '员工详情' }}</h3>
+                <p class="text-sm text-gray-500 mt-0.5">花名册详细信息</p>
+            </div>
+            <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closeRegDetail">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-5">
+            <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div v-for="f in regDetailFields" :key="f.key" :class="{ 'col-span-2': isWideDetailField(f.key) }">
+                    <dt class="text-xs text-gray-400 mb-0.5">{{ f.label }}</dt>
+                    <dd class="font-medium text-gray-800 break-words whitespace-pre-line">{{ rosterDetailValue(regDetailRow, f.key) }}</dd>
+                </div>
+            </dl>
+        </div>
+        <div class="px-5 py-4 border-t border-gray-200 flex justify-end shrink-0">
+            <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="closeRegDetail">关闭</button>
+        </div>
+    </aside>
+
+    <!-- 花名册校验结果 -->
+    <div v-if="showValidation" class="roster-validation-modal-overlay" @click.self="closeValidation">
+        <div class="roster-validation-modal" role="dialog" aria-modal="true" aria-labelledby="roster-validation-title">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
+                <div class="min-w-0">
+                    <h3 id="roster-validation-title" class="text-lg font-bold text-gray-900">{{ validationScope }} · 花名册校验</h3>
+                    <p class="text-sm text-gray-500 mt-1">当前筛选范围内发现 {{ validationFindings.length }} 条矛盾或疑点</p>
+                </div>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closeValidation">&times;</button>
+            </div>
+            <div class="roster-validation-list">
+                <article v-for="item in validationFindings" :key="item.id + '-' + item.category" class="roster-validation-card">
+                    <div class="roster-validation-card-title">
+                        <span class="roster-validation-card-dot" aria-hidden="true"></span>
+                        <span class="roster-validation-card-name">{{ item.name }}</span>
+                        <span v-if="item.customer" class="roster-validation-card-customer">{{ item.customer }}</span>
+                        <span class="roster-validation-card-category">{{ item.category }}</span>
+                    </div>
+                    <p class="roster-validation-card-text">
+                        <span class="roster-validation-card-label">疑点：</span>{{ item.issue }}
+                    </p>
+                    <p class="roster-validation-card-text">
+                        <span class="roster-validation-card-label">建议处理：</span>{{ item.action }}
+                    </p>
+                </article>
+            </div>
+            <div class="roster-validation-tip">
+                在列表或详情中修正原始记录后保存，并再次点击「校验」复核。
+                <span v-if="validationCopied" class="ml-2 text-emerald-600 font-medium">校验结果已复制到剪贴板</span>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex justify-end gap-2 shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="copyValidationResults">复制结果</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700" @click="closeValidation">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 审计日志 -->
     <div v-if="showLogs" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
@@ -642,5 +1030,5 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/roster-detail.js?v=18"></script>
+<script src="/static/js/pages/roster-detail.js?v=23"></script>
 {% endblock %}

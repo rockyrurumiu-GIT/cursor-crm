@@ -614,7 +614,10 @@ def register_client_related_routes(
             visits = db.query(VisitRecord).filter(VisitRecord.client_id == client_id).all()
         else:
             visits = []
-        logs = db.query(AuditLog).filter(AuditLog.client_id == client_id).order_by(desc(AuditLog.created_at)).all()
+        if ctx.is_super:
+            logs = db.query(AuditLog).filter(AuditLog.client_id == client_id).order_by(desc(AuditLog.created_at)).all()
+        else:
+            logs = []
         return {"visits": visits, "logs": logs}
 
     @app.get("/api/clients/{client_id}/brief")

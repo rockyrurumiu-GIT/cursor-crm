@@ -123,6 +123,7 @@ def roster_entry_to_dict(e: Any) -> dict:
         "position_title": e.position_title or "",
         "business_line": e.business_line or "",
         "entry_date": e.entry_date or "",
+        "regularization_status": e.regularization_status or "",
         "regularization_date": e.regularization_date or "",
         "monthly_quote_tax": e.monthly_quote_tax or "",
         "pre_tax_salary": e.pre_tax_salary or "",
@@ -162,6 +163,7 @@ def normalize_roster_payload(d: Dict[str, Any]) -> Dict[str, str]:
         "position_title",
         "business_line",
         "entry_date",
+        "regularization_status",
         "regularization_date",
         "monthly_quote_tax",
         "pre_tax_salary",
@@ -217,6 +219,10 @@ def validate_roster_business_fields(data: Dict[str, str]) -> None:
     gm_pct_plain_ok = re.fullmatch(r"(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)", gm_pct_norm)
     if gm_pct and not (gm_pct_with_symbol_ok or gm_pct_plain_ok):
         raise HTTPException(status_code=400, detail="GM%需为0-100（如 12、12.5、12% 或 12.5%）")
+
+    reg_status = str(data.get("regularization_status", "")).strip()
+    if reg_status and reg_status not in ("未转正", "已转正"):
+        raise HTTPException(status_code=400, detail="转正必须为「未转正」或「已转正」")
 
 
 # ---------------------------------------------------------------------------

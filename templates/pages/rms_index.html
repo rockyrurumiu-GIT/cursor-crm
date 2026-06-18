@@ -1943,6 +1943,13 @@
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">岗位<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.position_title" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">业务线<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.business_line" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">入职日期<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model="rosterConvertForm.entry_date" type="date" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">转正<span class="text-red-500" data-rms-roster-required="1">*</span></span>
+                        <select v-model="rosterConvertForm.regularization_status" class="crm-form-control">
+                            <option value="">请选择</option>
+                            <option value="未转正">未转正</option>
+                            <option value="已转正">已转正</option>
+                        </select>
+                    </label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">转正时间</span><input v-model="rosterConvertForm.regularization_date" type="date" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">月报价(含税)<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterMoneyDisplay(rosterConvertForm.monthly_quote_tax)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">税前工资<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterMoneyDisplay(rosterConvertForm.pre_tax_salary)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>

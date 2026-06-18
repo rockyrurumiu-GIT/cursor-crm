@@ -13,6 +13,7 @@ const STANDARD_FORM_FIELDS = [
     { key: 'serial_no', label: '序号' },
     { key: 'full_name', label: '姓名' },
     { key: 'employment_status', label: '在职情况' },
+    { key: 'regularization_status', label: '转正' },
     { key: 'contact_info', label: '联系方式' },
     { key: 'customer_name', label: '客户' },
     { key: 'work_location', label: '工作地' },
@@ -43,6 +44,7 @@ const ZNTX_FORM_FIELDS = [
     { key: 'serial_no', label: '序号' },
     { key: 'full_name', label: '姓名' },
     { key: 'employment_status', label: '在职情况' },
+    { key: 'regularization_status', label: '转正' },
     { key: 'zntx_staff_no', label: '工号' },
     { key: 'contact_info', label: '联系方式' },
     { key: 'customer_name', label: '客户' },
@@ -81,6 +83,7 @@ const REQUIRED_FIELD_KEYS = new Set([
     'position_title',
     'business_line',
     'entry_date',
+    'regularization_status',
     'monthly_quote_tax',
     'pre_tax_salary',
     'gms',
@@ -96,6 +99,7 @@ function emptyForm() {
     const o = {};
     FORM_FIELDS.forEach((f) => { o[f.key] = ''; });
     o.zntx_onboarding_channel_other = '';
+    o.regularization_status = '未转正';
     return o;
 }
 /** 从单元格文本解析金额（¥、千分位、空格等） */
@@ -177,14 +181,20 @@ function rosterDateSortKey(raw) {
     if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
     return y * 10000 + mo * 100 + d;
 }
-function rosterValidationRowLabel(row) {
-    const name = String(row.full_name || '').trim() || `#${row.id}`;
-    if (IS_GLOBAL_ROSTER) {
-        const c = String(row.customer_name || '').trim();
-        return c ? `${name}（${c}）` : name;
-    }
-    return name;
+function rosterDateDiffDays(entryRaw, regRaw) {
+    const entryKey = rosterDateSortKey(entryRaw);
+    const regKey = rosterDateSortKey(regRaw);
+    if (entryKey == null || regKey == null) return null;
+    const toDate = (key) => {
+        const y = Math.floor(key / 10000);
+        const mo = Math.floor((key % 10000) / 100) - 1;
+        const d = key % 100;
+        return new Date(y, mo, d);
+    };
+    const ms = toDate(regKey).getTime() - toDate(entryKey).getTime();
+    return Math.round(ms / 86400000);
 }
+
 function isValidGmPctInput(raw) {
     const s = String(raw || '').trim();
     if (!s) return true;
@@ -238,6 +248,27 @@ const ROSTER_ADD_QUERY_KEYS = [
     'prefill_gms',
     'prefill_gm_pct',
 ];
+const ROSTER_KEYWORD_SEARCH_FIELDS = [
+    'full_name',
+    'contact_info',
+    'employment_status',
+    'regularization_status',
+    'customer_name',
+    'work_location',
+    'position_title',
+    'business_line',
+    'employee_plus1',
+    'employee_plus2',
+    'interface_contact',
+    'zntx_staff_no',
+    'zntx_onboarding_channel',
+    'remarks',
+];
+function rowMatchesRosterKeyword(row, keyword) {
+    const q = String(keyword || '').trim().toLowerCase();
+    if (!q) return true;
+    return ROSTER_KEYWORD_SEARCH_FIELDS.some((key) => String(row[key] || '').toLowerCase().includes(q));
+}
 const rosterDetailApp = createApp({
     setup() {
         const rows = ref([]);
@@ -265,9 +296,9 @@ const rosterDetailApp = createApp({
         );
         const fileInput = ref(null);
         const filters = reactive({
-            employmentStatus: '',
+            keyword: '',
             workLocation: '',
-            customerName: '',
+            regularizationStatus: '',
             entryDateBefore: '',
             entryDateAfter: '',
             gmsBelow: '',
@@ -279,12 +310,22 @@ const rosterDetailApp = createApp({
         const showLogs = ref(false);
         const logsLoading = ref(false);
         const logs = ref([]);
+        const showValidation = ref(false);
+        const validationScope = ref('');
+        const validationFindings = ref([]);
+        const validationCopied = ref(false);
+        const showRegReminder = ref(false);
+        const regReminderFindings = ref([]);
+        const regReminderCopied = ref(false);
+        const regDetailRow = ref(null);
+        const regularizingId = ref(null);
         const touchedFields = reactive({});
         const crmClients = ref([]);
         const authHeader = () => window.crmAuthHeader();
         const canUseGmCalc = computed(() => {
             return !!window.crmIsSuper || !!window.crmHasPermission?.('tools.gm_calc.read');
         });
+        const canViewRosterLogs = computed(() => !!window.crmIsSuper);
         const rosterCustomerSelectOptions = computed(() => {
             const names = (crmClients.value || [])
                 .map((c) => String(c && c.name != null ? c.name : '').trim())
@@ -320,8 +361,8 @@ const rosterDetailApp = createApp({
         });
         const showStdReleaseLeaveCols = computed(() => !isZNTX.value && !hideReleaseLeaveCols.value);
         const emptyRowColspan = computed(() => {
-            if (isZNTX.value) return 23;
-            return hideReleaseLeaveCols.value ? 21 : 24;
+            if (isZNTX.value) return 24;
+            return hideReleaseLeaveCols.value ? 22 : 25;
         });
         const isRowChecked = (rowId) => !!checkedRowIds[String(rowId)];
         const setRowChecked = (rowId, checked) => {
@@ -348,9 +389,7 @@ const rosterDetailApp = createApp({
             });
             return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'));
         };
-        const employmentStatusOptions = computed(() => uniqueOptions('employment_status'));
         const workLocationOptions = computed(() => uniqueOptions('work_location'));
-        const customerNameOptions = computed(() => uniqueOptions('customer_name'));
         const positionTitleOptions = computed(() => uniqueOptions('position_title'));
         const tableFieldKeys = computed(() => {
             let fields;
@@ -360,9 +399,8 @@ const rosterDetailApp = createApp({
             return new Set(fields.map((f) => f.key));
         });
         const FILTER_FIELD_MAP = {
-            employmentStatus: 'employment_status',
             workLocation: 'work_location',
-            customerName: 'customer_name',
+            regularizationStatus: 'regularization_status',
             entryDateBefore: 'entry_date',
             entryDateAfter: 'entry_date',
             gmsBelow: 'gms',
@@ -372,6 +410,7 @@ const rosterDetailApp = createApp({
             preTaxSalaryBelow: 'pre_tax_salary',
         };
         const hasFilterField = (filterKey) => {
+            if (filterKey === 'keyword') return true;
             const fieldKey = FILTER_FIELD_MAP[filterKey];
             if (!fieldKey) return false;
             return tableFieldKeys.value.has(fieldKey);
@@ -379,9 +418,12 @@ const rosterDetailApp = createApp({
         const filteredRows = computed(() => {
             const ci = (v) => String(v || '').trim().toLowerCase();
             return rows.value.filter((row) => {
-                if (filters.employmentStatus && String(row.employment_status || '') !== filters.employmentStatus) return false;
+                if (!rowMatchesRosterKeyword(row, filters.keyword)) return false;
                 if (filters.workLocation && hasFieldData('work_location') && ci(row.work_location) !== ci(filters.workLocation)) return false;
-                if (filters.customerName && hasFieldData('customer_name') && ci(row.customer_name) !== ci(filters.customerName)) return false;
+                if (filters.regularizationStatus) {
+                    const status = String(row.regularization_status || '未转正').trim();
+                    if (status !== filters.regularizationStatus) return false;
+                }
                 if (filters.entryDateBefore) {
                     const toDateKey = (v) => {
                         const s = String(v || '').trim();
@@ -724,8 +766,75 @@ const rosterDetailApp = createApp({
             showForm.value = true;
         };
         const openRosterDetail = (row) => {
-            openEdit(row);
-            formReadonly.value = true;
+            regDetailRow.value = row || null;
+        };
+        const canRegularizeRow = (row) => {
+            if (!row) return false;
+            const status = String(row.regularization_status || '未转正').trim();
+            return status === '未转正';
+        };
+        const syncRosterRowInList = (updated) => {
+            if (!updated || updated.id == null) return;
+            const idx = rows.value.findIndex((r) => Number(r.id) === Number(updated.id));
+            if (idx >= 0) {
+                rows.value[idx] = updated;
+            }
+            if (regDetailRow.value && Number(regDetailRow.value.id) === Number(updated.id)) {
+                regDetailRow.value = updated;
+            }
+            regReminderFindings.value = regReminderFindings.value
+                .map((item) => (
+                    item && Number(item.id) === Number(updated.id)
+                        ? { ...item, row: updated }
+                        : item
+                ))
+                .filter((item) => {
+                    const status = String(item?.row?.regularization_status || '未转正').trim();
+                    return status !== '已转正';
+                });
+        };
+        const doRegularize = async (targetRow) => {
+            const row = targetRow || regDetailRow.value;
+            if (!row || !canRegularizeRow(row)) return;
+            if (typeof window.crmConfirmActionDialog !== 'function') {
+                alert('确认对话框不可用');
+                return;
+            }
+            const result = await window.crmConfirmActionDialog({
+                title: '确认转正',
+                lines: [
+                    { label: '姓名', value: row.full_name || '—' },
+                    { label: '当前状态', value: row.regularization_status || '未转正' },
+                ],
+                hint: '确认后将把转正状态从「未转正」改为「已转正」。',
+                confirmText: '确认转正',
+                cancelText: '取消',
+                zIndex: 120,
+            });
+            if (!result || !result.ok) return;
+            regularizingId.value = row.id;
+            try {
+                const r = await fetch(`/api/roster/${row.id}`, {
+                    method: 'PUT',
+                    headers: { ...authHeader(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ regularization_status: '已转正' }),
+                });
+                if (!r.ok) {
+                    let msg = '转正操作失败';
+                    try {
+                        const err = await r.json();
+                        if (typeof err.detail === 'string') {
+                            msg = err.detail;
+                        }
+                    } catch (e) { /* ignore */ }
+                    alert(msg);
+                    return;
+                }
+                const updated = await r.json();
+                syncRosterRowInList(updated);
+            } finally {
+                regularizingId.value = null;
+            }
         };
         const saveForm = async () => {
             if (formReadonly.value) return;
@@ -881,6 +990,7 @@ const rosterDetailApp = createApp({
             }
         };
         const openLogs = async () => {
+            if (!canViewRosterLogs.value) return;
             showLogs.value = true;
             await loadLogs();
         };
@@ -916,9 +1026,9 @@ const rosterDetailApp = createApp({
             await loadLogs();
         };
         const clearFilters = () => {
-            filters.employmentStatus = '';
+            filters.keyword = '';
             filters.workLocation = '';
-            filters.customerName = '';
+            filters.regularizationStatus = '';
             filters.entryDateBefore = '';
             filters.entryDateAfter = '';
             filters.gmsBelow = '';
@@ -930,18 +1040,25 @@ const rosterDetailApp = createApp({
         const toggleShowCheckedOnly = () => {
             showOnlyChecked.value = !showOnlyChecked.value;
         };
-        const buildRosterValidationText = () => {
-            const scope = IS_GLOBAL_ROSTER ? '整体客户' : (String(brief.value?.name || '').trim() || '当前客户');
-            const lines = [`【${scope} · 花名册校验】`];
-            const todayKey = rosterDateSortKey(todayInputDate());
+        const buildRosterValidationFindings = () => {
             const findings = [];
+            const todayKey = rosterDateSortKey(todayInputDate());
             for (const row of filteredRows.value) {
+                const name = String(row.full_name || '').trim() || `#${row.id}`;
+                const customer = IS_GLOBAL_ROSTER ? String(row.customer_name || '').trim() : '';
                 const status = String(row.employment_status || '').trim();
                 if (status.includes('待入职')) {
                     const entryKey = rosterDateSortKey(row.entry_date);
                     if (entryKey != null && todayKey != null && entryKey < todayKey) {
                         const entryDisp = displayRosterDate(row.entry_date) || String(row.entry_date || '').trim() || '—';
-                        findings.push(`${rosterValidationRowLabel(row)}｜在职情况含「待入职」，但入职日期 ${entryDisp} 早于当前日期；请核对是否已入职或调整在职情况`);
+                        findings.push({
+                            id: row.id,
+                            name,
+                            customer,
+                            category: '在职与入职日期',
+                            issue: `在职情况含「待入职」，但入职日期 ${entryDisp} 早于当前日期`,
+                            action: '请核对是否已入职，或调整在职情况/入职日期',
+                        });
                     }
                 }
                 const entryKey2 = rosterDateSortKey(row.entry_date);
@@ -949,44 +1066,137 @@ const rosterDetailApp = createApp({
                 if (entryKey2 != null && regKey != null && regKey < entryKey2) {
                     const entryDisp = displayRosterDate(row.entry_date) || String(row.entry_date || '').trim() || '—';
                     const regDisp = displayRosterDate(row.regularization_date) || String(row.regularization_date || '').trim() || '—';
-                    findings.push(`${rosterValidationRowLabel(row)}｜转正时间 ${regDisp} 早于入职日期 ${entryDisp}`);
+                    findings.push({
+                        id: row.id,
+                        name,
+                        customer,
+                        category: '转正与入职日期',
+                        issue: `转正时间 ${regDisp} 早于入职日期 ${entryDisp}`,
+                        action: '请核对转正时间或入职日期是否录入有误',
+                    });
                 }
             }
+            return findings;
+        };
+        const buildRegularizationReminderFindings = () => {
+            const findings = [];
+            const today = todayInputDate();
+            for (const row of rows.value) {
+                const regStatus = String(row.regularization_status || '未转正').trim();
+                if (regStatus === '已转正') continue;
+                const days = rosterDateDiffDays(today, row.regularization_date);
+                if (days == null || days >= 30) continue;
+                const name = String(row.full_name || '').trim() || `#${row.id}`;
+                const customer = String(row.customer_name || '').trim();
+                findings.push({
+                    id: row.id,
+                    name,
+                    customer,
+                    businessLine: String(row.business_line || '').trim(),
+                    regularizationDate: displayRosterDate(row.regularization_date) || String(row.regularization_date || '').trim() || '—',
+                    days,
+                    isOverdue: days < 0,
+                    row,
+                });
+            }
+            findings.sort((a, b) => a.days - b.days || a.name.localeCompare(b.name, 'zh-CN'));
+            return findings;
+        };
+        const buildRegularizationReminderText = (findings) => {
             if (!findings.length) return '';
-            lines.push('矛盾或疑点条目');
-            findings.forEach((text, idx) => lines.push(`${idx + 1}. ${text}`));
+            const lines = ['【整体客户 · 转正提醒】', '转正日期距当前日期不足 30 天（负数表示已超过转正日期）'];
+            findings.forEach((item, idx) => {
+                const label = item.customer ? `${item.name}（${item.customer}）` : item.name;
+                const biz = item.businessLine ? `，业务 ${item.businessLine}` : '';
+                lines.push(`${idx + 1}. ${label}${biz}｜转正 ${item.regularizationDate}，剩余 ${item.days} 天`);
+            });
+            return lines.join('\n');
+        };
+        const buildRosterValidationText = (findings, scope) => {
+            if (!findings.length) return '';
+            const lines = [`【${scope} · 花名册校验】`, '矛盾或疑点条目'];
+            findings.forEach((item, idx) => {
+                const label = item.customer ? `${item.name}（${item.customer}）` : item.name;
+                lines.push(`${idx + 1}. ${label}｜${item.issue}；${item.action}`);
+            });
             lines.push('');
             lines.push('建议：在列表或详情中修正原始记录后保存，并再次点击「校验」复核。');
             return lines.join('\n');
         };
-        const showRosterValidation = async () => {
-            const text = buildRosterValidationText();
-            if (!text) {
-                alert('当前筛选范围内暂无校验问题');
-                return;
-            }
-            let copied = false;
+        const copyTextToClipboard = async (text) => {
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     await navigator.clipboard.writeText(text);
-                    copied = true;
-                } else {
-                    const ta = document.createElement('textarea');
-                    ta.value = text;
-                    ta.setAttribute('readonly', '');
-                    ta.style.position = 'fixed';
-                    ta.style.opacity = '0';
-                    document.body.appendChild(ta);
-                    ta.focus();
-                    ta.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(ta);
-                    copied = true;
+                    return true;
                 }
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                return ok;
             } catch (err) {
-                copied = false;
+                return false;
             }
-            alert(copied ? `${text}\n\n校验结果已复制` : text);
+        };
+        const closeValidation = () => {
+            showValidation.value = false;
+            validationCopied.value = false;
+        };
+        const closeRegularizationReminder = () => {
+            showRegReminder.value = false;
+            regReminderCopied.value = false;
+        };
+        const regDetailFields = computed(() => [...detailCompactFields.value, ...detailTextareaFields.value]);
+        const isWideDetailField = (key) => DETAIL_TEXTAREA_KEYS.has(key);
+        const rosterDetailValue = (row, key) => {
+            if (!row) return '—';
+            const raw = row[key];
+            if (raw == null || String(raw).trim() === '') return '—';
+            if (DATE_FIELD_KEYS.has(key)) return displayRosterDate(raw) || String(raw);
+            if (ROSTER_AMOUNT_FIELD_KEYS.has(key)) return displayAmountInteger(raw);
+            return String(raw);
+        };
+        const openRegDetail = (finding) => {
+            openRosterDetail(finding && finding.row ? finding.row : null);
+        };
+        const closeRegDetail = () => {
+            regDetailRow.value = null;
+        };
+        const copyValidationResults = async () => {
+            const text = buildRosterValidationText(validationFindings.value, validationScope.value);
+            validationCopied.value = await copyTextToClipboard(text);
+        };
+        const copyRegularizationReminderResults = async () => {
+            const text = buildRegularizationReminderText(regReminderFindings.value);
+            regReminderCopied.value = await copyTextToClipboard(text);
+        };
+        const showRosterValidation = async () => {
+            const scope = IS_GLOBAL_ROSTER ? '整体客户' : (String(brief.value?.name || '').trim() || '当前客户');
+            const findings = buildRosterValidationFindings();
+            if (!findings.length) {
+                alert('当前筛选范围内暂无校验问题');
+                return;
+            }
+            validationScope.value = scope;
+            validationFindings.value = findings;
+            validationCopied.value = await copyTextToClipboard(buildRosterValidationText(findings, scope));
+            showValidation.value = true;
+        };
+        const showRegularizationReminder = async () => {
+            const findings = buildRegularizationReminderFindings();
+            if (!findings.length) {
+                alert('暂无转正日期距当前日期不足 30 天的记录');
+                return;
+            }
+            regReminderFindings.value = findings;
+            regReminderCopied.value = await copyTextToClipboard(buildRegularizationReminderText(findings));
+            showRegReminder.value = true;
         };
         const stripRosterAddQueryFromUrl = () => {
             try {
@@ -1081,16 +1291,22 @@ const rosterDetailApp = createApp({
             });
         });
         return {
-            rows, filteredRows, filters, employmentStatusOptions, workLocationOptions, customerNameOptions, positionTitleOptions,
+            rows, filteredRows, filters, workLocationOptions, positionTitleOptions,
             brief, loading, showForm, editingId, form, formFields: activeFormFields, detailCompactFields, detailTextareaFields,
             fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
-            showLogs, logsLoading, logs, missingRequiredFields, hasBlockingErrors, showOnlyChecked, displayCountHint, emptyStateText,
+            showLogs, logsLoading, logs, showValidation, validationScope, validationFindings, validationCopied,
+            showRegReminder, regReminderFindings, regReminderCopied,
+            regDetailRow, regDetailFields, isWideDetailField, rosterDetailValue, openRegDetail, closeRegDetail,
+            canRegularizeRow, doRegularize, regularizingId,
+            missingRequiredFields, hasBlockingErrors, showOnlyChecked, displayCountHint, emptyStateText,
             IS_GLOBAL_ROSTER,
+            canViewRosterLogs,
             rosterCustomerSelectOptions,
             onboardingChannelOptions: ONBOARDING_CHANNEL_OPTIONS,
             openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, canUseGmCalc, saveForm, doDelete, canDeletePermission,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
-            showRosterValidation,
+            showRosterValidation, closeValidation, copyValidationResults,
+            showRegularizationReminder, closeRegularizationReminder, copyRegularizationReminderResults,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,
             clearDateField, displayAmountInteger, displayRosterDate,
         };

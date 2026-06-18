@@ -147,6 +147,7 @@ def _full_roster_payload(cand, client_row, job, **overrides):
         "position_title": job.get("title") or "工程师",
         "business_line": "测试线",
         "entry_date": "2026-06-15",
+        "regularization_status": "未转正",
         "monthly_quote_tax": "10000",
         "pre_tax_salary": "8000",
         "gms": "2000",
@@ -198,6 +199,7 @@ def test_hired_roster_draft_prefill(client_rbac, admin_auth, rms_engine, uniq):
     assert payload["work_location"] == (job.get("location") or "")
     assert payload["entry_date"] == "2026-06-15"
     assert payload["employment_status"] == "在职"
+    assert payload["regularization_status"] == "未转正"
     assert payload["zntx_onboarding_channel"] == (cand.get("source") or "")
     assert payload["monthly_quote_tax"] == "10000"
     assert payload["pre_tax_salary"] == "8000"

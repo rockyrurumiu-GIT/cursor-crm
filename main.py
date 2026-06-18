@@ -413,6 +413,7 @@ class RosterEntry(Base):
     position_title = Column(String, default="")
     business_line = Column(String, default="")
     entry_date = Column(String, default="")
+    regularization_status = Column(String, default="未转正")
     regularization_date = Column(String, default="")
     monthly_quote_tax = Column(String, default="")
     pre_tax_salary = Column(String, default="")
@@ -693,6 +694,7 @@ def _ensure_roster_schema_compat():
     with engine.begin() as conn:
         existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(roster_entries)").fetchall()}
         add_cols = {
+            "regularization_status": "TEXT DEFAULT '未转正'",
             "zntx_staff_no": "TEXT DEFAULT ''",
             "zntx_onboarding_channel": "TEXT DEFAULT ''",
             "zntx_attendance_checkin": "TEXT DEFAULT ''",

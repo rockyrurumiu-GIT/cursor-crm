@@ -61,6 +61,7 @@ class TestRosterWrite:
             "work_location": "北京",
             "business_line": "测试线",
             "entry_date": "2025-01-01",
+            "regularization_status": "未转正",
             "monthly_quote_tax": "10000",
             "pre_tax_salary": "8000",
             "gms": "2000",

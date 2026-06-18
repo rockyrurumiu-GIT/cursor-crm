@@ -147,8 +147,10 @@ def register_delivery_roster_routes(
     @app.get("/api/roster/logs")
     async def roster_logs_all(
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("delivery.roster.read")),
+        ctx: AuthContext = Depends(get_current_context),
     ):
+        if not ctx.is_super:
+            raise HTTPException(status_code=403, detail="仅超级管理员可查看日志")
         logs = db.query(AuditLog).filter(AuditLog.action.like("%花名册%")).order_by(desc(AuditLog.created_at)).limit(300).all()
         return logs
 
