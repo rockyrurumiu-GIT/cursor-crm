@@ -54,6 +54,52 @@ def _unique_phone(seed: str) -> str:
     return f"138{core}"
 
 
+def _seed_approved_offer(
+    rms_engine,
+    *,
+    app_id: int,
+    client_id: int,
+    candidate_id: int,
+    job_id: int,
+    **overrides,
+) -> None:
+    vals = {
+        "monthly_quote_tax": "10000",
+        "pre_tax_salary": "8000",
+        "gm_amount": "2000",
+        "gm_pct": "20",
+        "quote_tax_unit": "人月",
+        "planned_onboard_date": "2026-06-15",
+    }
+    vals.update(overrides)
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO rms_offer_records (
+                    application_id, candidate_id, job_id, client_id, status,
+                    current_approval_node, gm_pct, gm_amount, monthly_quote_tax,
+                    quote_tax_unit, pre_tax_salary, probation_days, probation_discount_months,
+                    planned_onboard_date, reason, form_json, created_at, updated_at
+                ) VALUES (
+                    :app_id, :candidate_id, :job_id, :client_id, 'approved',
+                    '', :gm_pct, :gm_amount, :monthly_quote_tax,
+                    :quote_tax_unit, :pre_tax_salary, '0', '0',
+                    :planned_onboard_date, '', '{}', :now, :now
+                )
+                """
+            ),
+            {
+                "app_id": app_id,
+                "candidate_id": candidate_id,
+                "job_id": job_id,
+                "client_id": client_id,
+                "now": "2026-06-18",
+                **vals,
+            },
+        )
+
+
 def _hired_application(client, rms_engine, admin_auth, uniq: str):
     login, job_id, cand_id, client_id = _trial_job_and_candidate(
         client, rms_engine, admin_auth, uniq
@@ -71,13 +117,20 @@ def _hired_application(client, rms_engine, admin_auth, uniq: str):
         json={"result": "passed"},
     )
     assert review.status_code == 200, review.text
-    _advance_to_onboarding(client, login, app_id)
+    _advance_to_onboarding(client, login, app_id, engine=rms_engine)
     hired = client.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,
         json={"to_status": "hired", "hired_at": "2026-06-15"},
     )
     assert hired.status_code == 200, hired.text
+    _seed_approved_offer(
+        rms_engine,
+        app_id=app_id,
+        client_id=client_id,
+        candidate_id=cand_id,
+        job_id=job_id,
+    )
     cand = client.get(f"/api/rms/candidates/{cand_id}", cookies=login.cookies).json()
     client_row = client.get(f"/api/clients/{client_id}", cookies=login.cookies).json()
     job = client.get(f"/api/rms/jobs/{job_id}", cookies=login.cookies).json()
@@ -146,7 +199,77 @@ def test_hired_roster_draft_prefill(client_rbac, admin_auth, rms_engine, uniq):
     assert payload["entry_date"] == "2026-06-15"
     assert payload["employment_status"] == "在职"
     assert payload["zntx_onboarding_channel"] == (cand.get("source") or "")
+    assert payload["monthly_quote_tax"] == "10000"
+    assert payload["pre_tax_salary"] == "8000"
+    assert payload["gms"] == "2000"
+    assert payload["gm_pct"] == "20%"
+    assert body["offer_financial_locked"] is True
+    assert body["quote_tax_display"] == "10,000"
     assert f"#{app_id}" in payload["remarks"]
+
+
+def test_hired_roster_draft_converts_day_quote_to_monthly(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id, client_id, cand, _client_row, job = _hired_application(
+        client_rbac, rms_engine, admin_auth, f"{uniq}day"
+    )
+    with rms_engine.begin() as conn:
+        conn.execute(text("DELETE FROM rms_offer_records WHERE application_id = :id"), {"id": app_id})
+    _seed_approved_offer(
+        rms_engine,
+        app_id=app_id,
+        client_id=client_id,
+        candidate_id=cand["id"],
+        job_id=job["id"],
+        monthly_quote_tax="1000",
+        quote_tax_unit="人天",
+    )
+    r = client_rbac.get(
+        f"/api/rms/applications/{app_id}/roster-draft",
+        cookies=login.cookies,
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()["roster_payload"]
+    assert payload["monthly_quote_tax"] == "20670"
+    assert r.json()["quote_tax_display"] == "20,670"
+
+
+def test_hired_roster_draft_converts_hour_quote_to_monthly(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id, client_id, cand, _client_row, job = _hired_application(
+        client_rbac, rms_engine, admin_auth, f"{uniq}hour"
+    )
+    with rms_engine.begin() as conn:
+        conn.execute(text("DELETE FROM rms_offer_records WHERE application_id = :id"), {"id": app_id})
+    _seed_approved_offer(
+        rms_engine,
+        app_id=app_id,
+        client_id=client_id,
+        candidate_id=cand["id"],
+        job_id=job["id"],
+        monthly_quote_tax="100",
+        quote_tax_unit="人时",
+    )
+    r = client_rbac.get(
+        f"/api/rms/applications/{app_id}/roster-draft",
+        cookies=login.cookies,
+    )
+    assert r.status_code == 200, r.text
+    payload = r.json()["roster_payload"]
+    assert payload["monthly_quote_tax"] == "16536"
+    assert r.json()["quote_tax_display"] == "16,536"
+
+
+def test_hired_roster_draft_without_offer_returns_400(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id, _client_id, _cand, _client_row, _job = _hired_application(
+        client_rbac, rms_engine, admin_auth, f"{uniq}no_offer"
+    )
+    with rms_engine.begin() as conn:
+        conn.execute(text("DELETE FROM rms_offer_records WHERE application_id = :id"), {"id": app_id})
+    r = client_rbac.get(
+        f"/api/rms/applications/{app_id}/roster-draft",
+        cookies=login.cookies,
+    )
+    assert r.status_code == 400
+    assert "Offer" in r.json()["detail"]
 
 
 def test_convert_missing_required_fields_400(client_rbac, admin_auth, rms_engine, uniq):
@@ -208,6 +331,10 @@ def test_convert_success_writes_roster_and_application(client_rbac, admin_auth, 
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["roster_entry"]["full_name"] == payload["full_name"]
+    assert body["roster_entry"]["monthly_quote_tax"] == "10000"
+    assert body["roster_entry"]["pre_tax_salary"] == "8000"
+    assert body["roster_entry"]["gms"] == "2000"
+    assert body["roster_entry"]["gm_pct"] == "20%"
     assert body["application"]["converted_to_roster_entry_id"] == body["roster_entry"]["id"]
     assert body["application"]["converted_to_roster_at"][:10] >= before[:10]
     assert body["application"]["converted_to_roster_by"] is not None

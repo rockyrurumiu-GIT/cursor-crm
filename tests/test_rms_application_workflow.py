@@ -1325,30 +1325,13 @@ def test_delivery_review_submit_failed_sets_internal_screen_failed(
 
 
 def test_hired_requires_hired_at(client_rbac, admin_auth, rms_engine, uniq):
+    from tests.test_rms_phase2_mvp import _advance_to_onboarding
+
     login, app_id = _create_recommended_application(
         client_rbac, admin_auth, rms_engine, f"hire_{uniq}"
     )
-    client_rbac.post(
-        f"/api/rms/applications/{app_id}/delivery-review",
-        cookies=login.cookies,
-        json={"result": "passed"},
-    )
-    for st in ("scheduling_interview", "pending_first_interview", "first_interview_passed",
-               "second_interview_passed", "pending_offer", "onboarding"):
-        prev = client_rbac.get(f"/api/rms/applications/{app_id}", cookies=login.cookies).json()
-        nxt = {
-            "pending_client_screen": "scheduling_interview",
-            "scheduling_interview": "pending_first_interview",
-            "pending_first_interview": "first_interview_passed",
-            "first_interview_passed": "second_interview_passed",
-            "second_interview_passed": "pending_offer",
-            "pending_offer": "onboarding",
-        }[prev["status"]]
-        client_rbac.post(
-            f"/api/rms/applications/{app_id}/status",
-            cookies=login.cookies,
-            json={"to_status": nxt},
-        )
+    _advance_to_onboarding(client_rbac, login, app_id, engine=rms_engine)
+
     bad = client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,

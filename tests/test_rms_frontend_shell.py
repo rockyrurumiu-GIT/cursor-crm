@@ -22,6 +22,7 @@ RMS_JS_BUNDLE_FILES = (
     "static/js/pages/rms-candidates.js",
     "static/js/pages/rms-applications.js",
     "static/js/pages/rms-pipeline.js",
+    "static/js/pages/rms-offer-management.js",
     "static/js/pages/rms-delivery-review.js",
     "static/js/pages/rms-roster-conversion.js",
     "static/js/pages/rms.js",
@@ -103,7 +104,8 @@ def test_rms_frontend_js_assets_exist():
     assert rms_html.index("rms-applications.js") < rms_html.index("rms-pipeline.js")
     assert rms_html.index("rms-pipeline.js") < rms_html.index("rms-delivery-review.js")
     assert rms_html.index("rms-delivery-review.js") < rms_html.index("rms-roster-conversion.js")
-    assert rms_html.index("rms-roster-conversion.js") < rms_html.index("rms.js")
+    assert rms_html.index("rms-roster-conversion.js") < rms_html.index("rms-offer-management.js")
+    assert rms_html.index("rms-offer-management.js") < rms_html.index("rms.js")
     assert "r2b-20260614" not in rms_html
     assert "r3a-20260614" not in rms_html
     assert "r3b-20260614" not in rms_html
@@ -111,7 +113,7 @@ def test_rms_frontend_js_assets_exist():
     assert rms_html.count("r3c3-pipeline-terminal-20260615") == 9
     assert "rms-delivery-review.js?v=r3c3-pipeline-terminal-20260615" in rms_html
     assert "rms-roster-conversion.js?v=r3c3-pipeline-terminal-20260615" in rms_html
-    assert "rms.js?v=delete-permissions-20260617" in rms_html
+    assert "rms.js?v=offer-approval-20260618" in rms_html
 
     for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError"):
         assert sym in core_src, f"missing core symbol: {sym}"
@@ -855,12 +857,12 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "tools.gm_calc.read" in roster_detail_js
     assert 'v-if="!formReadonly && canUseGmCalc"' in roster_detail_html
     assert ">简历</a>" in apps_region
-    assert "hired_unconverted_only" in applications_js
+    assert "hide_roster_converted" in applications_js
     assert "applicationsFilter" in applications_js
     assert "待转花名册" in apps_region
     assert "已转花名册" in html
     assert "filteredApplications" in applications_js
-    assert "只看未转入花名册" in apps_region
+    assert "隐藏已转花名册" in apps_region
 
     assert "Plan 34" not in html
     assert "占位" not in html
@@ -903,6 +905,67 @@ def test_rms_delivery_ops_tabs_gated_by_applications_write():
     auth_routes = (REPO_ROOT / "auth/routes.py").read_text(encoding="utf-8")
     assert '"rms_delivery_ops_tabs"' in auth_routes
     assert "can_view_rms_delivery_ops_tabs" in auth_routes
+
+
+def test_rms_offer_management_shell():
+    rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
+    rms_js = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    offer_js = (REPO_ROOT / "static/js/pages/rms-offer-management.js").read_text(encoding="utf-8")
+    labels_js = (REPO_ROOT / "static/js/pages/rms-application-labels.js").read_text(encoding="utf-8")
+
+    assert "Offer 管理" in rms_html
+    assert 'data-rms-tab="offerManagement"' in rms_html
+    assert "发起 Offer 审批" in rms_html
+    assert "弃offer原因 *" in offer_js
+    assert "在途流失原因 *" in offer_js
+    assert "发起在途审批" not in rms_html
+    assert "发起在途审批" not in offer_js
+    assert "rms-offer-management.js" in rms_html
+    assert "offerManagement" in rms_js
+    assert "createOfferManagementState" in offer_js
+    assert "offerState = reactive" in offer_js
+    assert "offer_approval_pending" in labels_js
+    assert "/api/rms/offers" in offer_js
+    assert "/offer-approval" in offer_js
+    assert "openOfferGmCalculator" in offer_js
+    assert "rms_offer_gm_calc_result" in offer_js
+    assert "quote_tax_unit" in offer_js
+    assert "monthly_quote_tax" in offer_js
+    assert "pre_tax_salary" in offer_js
+    assert "moneySame" in offer_js
+    assert "clearOfferGmCalcFields" in offer_js
+    assert "请使用毛利测算器" in offer_js
+    assert "openOfferGmCalculator" in rms_html
+    assert "毛利测算器" in rms_html
+
+    calc_html = (REPO_ROOT / "templates/pages/calc.html").read_text(encoding="utf-8")
+    assert "confirmOfferCalculation" in calc_html
+    assert "quote_tax_unit" in calc_html
+    assert "rms_offer_gm_calc_result" in calc_html
+    assert "isOfferApprovalMode" in calc_html
+    assert 'v-if="!isOfferApprovalMode"' in calc_html
+    assert "不支持自定义小时数" in calc_html
+    assert "测算数据不一致" in calc_html
+    assert "crmConfirmDeleteDialog" in calc_html
+    assert "offerSource" in calc_html
+    assert "can_submit_offer_approval" in rms_html
+    assert "当前审批人" in rms_html
+    labels_js = (REPO_ROOT / "static/js/pages/rms-application-labels.js").read_text(encoding="utf-8")
+    assert "offerApprovalPendingHint" in labels_js
+    assert "offerApprovalPendingHint" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    assert "rms-offer-approval-hint-wrap" in rms_html
+    assert "rms-offer-progress-label" in rms_html
+    assert "rms-offer-approval-hint-popup" in rms_html
+    assert "initOfferApprovalHintPopovers" in (REPO_ROOT / "static/js/pages/rms-core.js").read_text(encoding="utf-8")
+    assert "offer_pending_approver_label" in labels_js
+    assert "pending_approver_label" in rms_html
+    assert "currentMeUserId" in offer_js
+    assert "formatOfferRowQuote" in offer_js
+    assert "data-table-id=\"rms-offer-management\"" in rms_html
+    base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
+    assert "crm-notify-wrap" in base_html
+    assert "crmRefreshNotifications" in base_html
+    assert "crmRmsNavigateToOffer" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
 
 
 def test_rms_dashboard_assets_and_nav():
@@ -1198,6 +1261,30 @@ def test_rms_dashboard_twenty_shell():
     assert len(js.splitlines()) < 1600, "rms-dashboard.js shell should stay under 1600 lines"
     subprocess.run(
         ["node", "--check", str(REPO_ROOT / "static/js/shared/dashboard-widget-kit.js")],
+        check=True,
+        cwd=REPO_ROOT,
+    )
+
+
+def test_system_admin_offer_approval_config_shell():
+    html = (REPO_ROOT / "templates/pages/system_admin.html").read_text(encoding="utf-8")
+    js = (REPO_ROOT / "static/js/rms-offer-approval-config-admin.js").read_text(encoding="utf-8")
+    spc = (REPO_ROOT / "static/js/system-permission-center.js").read_text(encoding="utf-8")
+
+    assert "Offer审批配置" in html
+    assert 'data-tab="offerApproval"' in html
+    assert "panel-offerApproval" in html
+    assert "dept_superior_user_id" in js
+    assert "ops_head_user_id" in js
+    assert "gm_user_id" in js
+    assert "/api/rms/offer-approval-config" in js
+    assert "loadRmsOfferApprovalConfigAdmin" in js
+    assert "loadRmsOfferApprovalConfigAdmin" in spc
+    assert "rms_offer_approval_configs" in (REPO_ROOT / "migrations/014_rms_offer_approval_configs.sql").read_text(
+        encoding="utf-8"
+    )
+    subprocess.run(
+        ["node", "--check", str(REPO_ROOT / "static/js/rms-offer-approval-config-admin.js")],
         check=True,
         cwd=REPO_ROOT,
     )

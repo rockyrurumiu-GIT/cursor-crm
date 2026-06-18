@@ -27,6 +27,7 @@ APPLICATION_PROGRESS_LABELS: dict[str, str] = {
     "final_interview_failed": "终面fail",
     "final_interview_abandoned": "终面弃面",
     "pending_offer": "待offer",
+    "offer_approval_pending": "Offer审批中",
     "offer_dropped": "弃offer",
     "onboarding": "在途",
     "onboarding_lost": "在途流失",
@@ -144,6 +145,7 @@ ACTIVE_PIPELINE_STATUSES = frozenset({
     "first_interview_passed",
     "second_interview_passed",
     "pending_offer",
+    "offer_approval_pending",
     "onboarding",
 })
 
@@ -180,6 +182,7 @@ APPLICATION_PROGRESS_STATUSES = frozenset({
     "final_interview_failed",
     "final_interview_abandoned",
     "pending_offer",
+    "offer_approval_pending",
     "offer_dropped",
     "onboarding",
     "onboarding_lost",
@@ -204,6 +207,7 @@ APPLICATION_PROGRESS_ORDER: Tuple[str, ...] = (
     "final_interview_failed",
     "final_interview_abandoned",
     "pending_offer",
+    "offer_approval_pending",
     "offer_dropped",
     "onboarding",
     "onboarding_lost",
@@ -229,7 +233,8 @@ ALLOWED_TRANSITIONS: dict[str, set[str]] = {
         "pending_offer",
         "final_interview_abandoned",
     },
-    "pending_offer": {"offer_dropped", "onboarding"},
+    "pending_offer": set(),
+    "offer_approval_pending": set(),
     "onboarding": {"onboarding_lost", "hired"},
 }
 
@@ -384,6 +389,70 @@ class DeliveryReviewBody(BaseModel):
 
     result: Literal["passed", "failed"]
     note: str = ""
+
+
+OFFER_APPROVAL_REQUIRED_FIELDS = (
+    "monthly_quote_tax",
+    "quote_tax_unit",
+    "pre_tax_salary",
+    "probation_days",
+    "probation_discount_months",
+    "gm_amount",
+    "gm_pct",
+    "planned_onboard_date",
+)
+
+OFFER_APPROVAL_REQUIRED_LABELS = {
+    "monthly_quote_tax": "报价（含税）",
+    "quote_tax_unit": "报价（含税）",
+    "pre_tax_salary": "税前工资",
+    "probation_days": "试工期",
+    "probation_discount_months": "折扣月数",
+    "gm_amount": "GM$",
+    "gm_pct": "GM%",
+    "planned_onboard_date": "计划入职日期",
+}
+
+OFFER_PROBATION_DISCOUNT_MONTHS = frozenset({"0", "1", "2", "3"})
+OFFER_QUOTE_TAX_UNITS = frozenset({"人月", "人天", "人时"})
+
+OFFER_RECORD_TAB_STATUSES = frozenset({"pending", "approved", "offer_dropped", "onboarding_lost"})
+
+
+class OfferApprovalSubmitBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    monthly_quote_tax: str = ""
+    quote_tax_unit: str = ""
+    pre_tax_salary: str = ""
+    probation_days: str = ""
+    probation_discount_months: str = ""
+    gm_amount: str = ""
+    gm_pct: str = ""
+    planned_onboard_date: str = ""
+    full_name: str = ""
+    contact_info: str = ""
+    customer_name: str = ""
+    work_location: str = ""
+    position_title: str = ""
+
+
+class OfferRejectBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = ""
+
+
+class OfferReasonBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = ""
+
+
+class OfferApproveBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    comment: str = ""
 
 
 class JobCreate(BaseModel):

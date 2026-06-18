@@ -37,6 +37,8 @@ def register_rms_applications_routes(
     RosterEntry: Type[Any],
     RmsInterview: Type[Any],
     RmsOffer: Type[Any],
+    RmsOfferRecord: Type[Any],
+    RmsOfferApprovalStep: Type[Any],
     RmsMatchResult: Type[Any],
     AuditLog: Type[Any],
 ):
@@ -59,6 +61,8 @@ def register_rms_applications_routes(
             candidate_id=candidate_id,
             client_id=client_id,
             status=status,
+            RmsOfferRecord=RmsOfferRecord,
+            RmsOfferApprovalStep=RmsOfferApprovalStep,
         )
 
     @app.post("/api/rms/applications/candidate-report/parse-draft")
@@ -211,7 +215,15 @@ def register_rms_applications_routes(
         ctx: AuthContext = Depends(get_current_context),
         _user: str = Depends(require_permission("rms.applications.read")),
     ):
-        return app_svc.get_application(db, ctx, application_id, RmsApplication, Client)
+        return app_svc.get_application(
+            db,
+            ctx,
+            application_id,
+            RmsApplication,
+            Client,
+            RmsOfferRecord=RmsOfferRecord,
+            RmsOfferApprovalStep=RmsOfferApprovalStep,
+        )
 
     @app.post("/api/rms/applications")
     async def api_create_application(
@@ -311,6 +323,7 @@ def register_rms_applications_routes(
             RmsApplication=RmsApplication,
             RmsCandidate=RmsCandidate,
             RmsJob=RmsJob,
+            RmsOfferRecord=RmsOfferRecord,
             Client=Client,
         )
 
@@ -334,6 +347,7 @@ def register_rms_applications_routes(
             RmsJob=RmsJob,
             Client=Client,
             RosterEntry=RosterEntry,
+            RmsOfferRecord=RmsOfferRecord,
             AuditLog=AuditLog,
         )
 
@@ -363,6 +377,7 @@ def register_rms_applications_routes(
             Client,
             RmsInterview=RmsInterview,
             RmsOffer=RmsOffer,
+            RmsOfferRecord=RmsOfferRecord,
             RmsMatchResult=RmsMatchResult,
         )
 

@@ -1442,14 +1442,18 @@ def _set_application_status(engine, app_id: int, status: str, *, hired_at: str =
         )
 
 
-def _advance_to_onboarding(client, login, app_id):
+def _advance_to_onboarding(client, login, app_id, *, engine=None):
+    client.post(
+        f"/api/rms/applications/{app_id}/delivery-review",
+        cookies=login.cookies,
+        json={"result": "passed"},
+    )
     steps = [
         "scheduling_interview",
         "pending_first_interview",
         "first_interview_passed",
         "second_interview_passed",
         "pending_offer",
-        "onboarding",
     ]
     for st in steps:
         r = client.post(
@@ -1458,6 +1462,15 @@ def _advance_to_onboarding(client, login, app_id):
             json={"to_status": st},
         )
         assert r.status_code == 200, r.text
+    if engine is not None:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE rms_applications SET status = 'onboarding', current_stage = 'onboarding' "
+                    "WHERE id = :id"
+                ),
+                {"id": app_id},
+            )
 
 
 def test_status_transition_mode_blocks_skip(client_rbac, admin_auth, rms_engine, uniq):
@@ -1559,7 +1572,7 @@ def test_status_correction_requires_pipeline_eligible(client_rbac, admin_auth, r
 
 def test_status_correction_from_hired_clears_hired_at(client_rbac, admin_auth, rms_engine, uniq):
     login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
-    _advance_to_onboarding(client_rbac, login, app_id)
+    _advance_to_onboarding(client_rbac, login, app_id, engine=rms_engine)
     hired = client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,

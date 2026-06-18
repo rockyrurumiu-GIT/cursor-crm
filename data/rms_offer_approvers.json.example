@@ -1,0 +1,8 @@
+{
+  "default": {
+    "dept_superior_user_id": null,
+    "ops_head_user_id": null,
+    "gm_user_id": null
+  },
+  "by_dept_id": {}
+}

@@ -28,6 +28,7 @@
     final_interview_failed: "终面fail",
     final_interview_abandoned: "终面弃面",
     pending_offer: "待offer",
+    offer_approval_pending: "Offer审批中",
     offer_dropped: "弃offer",
     onboarding: "在途",
     onboarding_lost: "在途流失",
@@ -50,8 +51,9 @@
     pending_first_interview: ["first_interview_failed", "first_interview_passed"],
     first_interview_passed: ["second_interview_failed", "second_interview_passed", "second_interview_abandoned"],
     second_interview_passed: ["final_interview_failed", "pending_offer", "final_interview_abandoned"],
-    pending_offer: ["offer_dropped", "onboarding"],
-    onboarding: ["onboarding_lost", "hired"],
+    pending_offer: [],
+    offer_approval_pending: [],
+    onboarding: ["hired"],
   };
 
   var LEGACY_STATUS_NORMALIZE = {
@@ -78,6 +80,7 @@
     "final_interview_failed",
     "final_interview_abandoned",
     "pending_offer",
+    "offer_approval_pending",
     "offer_dropped",
     "onboarding",
     "onboarding_lost",
@@ -127,6 +130,15 @@
     var s = status == null ? "" : String(status).trim();
     if (!s) s = "pending";
     return DELIVERY_REVIEW_STATUS_LABELS[s] || s || "—";
+  }
+
+  function offerApprovalPendingHint(app) {
+    if (!app || app.status !== "offer_approval_pending") return "";
+    var node = String(app.offer_current_approval_node_label == null ? "" : app.offer_current_approval_node_label).trim();
+    var approver = String(app.offer_pending_approver_label == null ? "" : app.offer_pending_approver_label).trim();
+    if (node && approver) return node + " · " + approver;
+    if (node || approver) return node || approver;
+    return "暂无审批信息";
   }
 
   function deriveProtectionStatus(status) {
@@ -411,6 +423,7 @@
     progressLabel: progressLabel,
     receiveLabel: receiveLabel,
     deliveryReviewLabel: deliveryReviewLabel,
+    offerApprovalPendingHint: offerApprovalPendingHint,
     deriveProtectionStatus: deriveProtectionStatus,
     progressTransitionsFor: progressTransitionsFor,
     progressActionBtnClass: progressActionBtnClass,

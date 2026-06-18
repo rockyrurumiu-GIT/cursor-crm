@@ -16,6 +16,76 @@
         .funnel-layer:hover { filter: brightness(1.1); cursor: pointer; }
         /* 父级若 overflow 非 visible，下拉会被裁切 — nav 禁止横向 overflow 裁剪 */
         .crm-header-nav-wrap { overflow: visible; min-width: 0; }
+        .crm-notify-wrap { position: relative; }
+        .crm-notify-btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2rem;
+            height: 2rem;
+            border-radius: 0.375rem;
+            color: #8b949e;
+            background: transparent;
+            border: 0;
+            cursor: pointer;
+        }
+        .crm-notify-btn:hover { color: #e6edf3; background: rgba(255,255,255,0.06); }
+        .crm-notify-badge {
+            position: absolute;
+            top: 0.1rem;
+            right: 0.05rem;
+            min-width: 1rem;
+            height: 1rem;
+            padding: 0 0.25rem;
+            border-radius: 9999px;
+            background: #da3633;
+            color: #fff;
+            font-size: 0.625rem;
+            line-height: 1rem;
+            font-weight: 700;
+            text-align: center;
+        }
+        .crm-notify-panel {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 0.35rem);
+            width: min(22rem, calc(100vw - 2rem));
+            max-height: min(24rem, calc(100vh - 5rem));
+            overflow: auto;
+            border-radius: 0.75rem;
+            border: 1px solid #30363d;
+            background: #161b22;
+            box-shadow: 0 16px 48px rgba(1, 4, 9, 0.45);
+            z-index: 220;
+        }
+        .crm-notify-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.65rem 0.85rem;
+            border-bottom: 1px solid #30363d;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: #e6edf3;
+        }
+        .crm-notify-item {
+            display: block;
+            width: 100%;
+            text-align: left;
+            padding: 0.7rem 0.85rem;
+            border: 0;
+            border-bottom: 1px solid #21262d;
+            background: transparent;
+            color: #e6edf3;
+            cursor: pointer;
+        }
+        .crm-notify-item:hover { background: rgba(255,255,255,0.04); }
+        .crm-notify-item.is-read { color: #8b949e; }
+        .crm-notify-msg { font-size: 0.8125rem; line-height: 1.45; }
+        .crm-notify-time { margin-top: 0.25rem; font-size: 0.6875rem; color: #8b949e; }
+        .crm-notify-empty { padding: 1rem 0.85rem; font-size: 0.8125rem; color: #8b949e; }
         .gh-nav-item { position: relative; }
         .gh-mega {
             position: absolute; left: 0; top: 100%; padding-top: 0.45rem; z-index: 200;
@@ -1279,6 +1349,21 @@
                 </div>
                 {% block header_extra %}{% endblock %}
                 <div class="flex items-center gap-3 shrink-0 text-sm">
+                    <div id="crm-notify-wrap" class="crm-notify-wrap hidden">
+                        <button type="button" id="crm-notify-btn" class="crm-notify-btn" aria-label="通知" aria-expanded="false" aria-controls="crm-notify-panel">
+                            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                            </svg>
+                            <span id="crm-notify-badge" class="crm-notify-badge hidden">0</span>
+                        </button>
+                        <div id="crm-notify-panel" class="crm-notify-panel hidden" role="dialog" aria-label="通知列表">
+                            <div class="crm-notify-head">
+                                <span>通知</span>
+                                <span id="crm-notify-count" class="text-[#8b949e] font-normal"></span>
+                            </div>
+                            <div id="crm-notify-list"></div>
+                        </div>
+                    </div>
                     <span id="header-user" class="text-[#8b949e] hidden sm:inline"></span>
                     <button type="button" id="change-pwd-btn" class="text-[#58a6ff] hover:underline font-medium">修改密码</button>
                     <button type="button" id="logout-btn" class="text-[#58a6ff] hover:underline font-medium">退出</button>
@@ -1386,6 +1471,129 @@
                 el.style.display = ok ? '' : 'none';
             });
         };
+
+        window.crmNotifications = [];
+
+        window.crmFormatNotifyTime = function (raw) {
+            if (!raw) return '';
+            var d = new Date(raw);
+            if (isNaN(d.getTime())) return String(raw).slice(0, 16);
+            var pad = function (n) { return n < 10 ? '0' + n : String(n); };
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        };
+
+        window.crmRenderNotifications = function () {
+            var wrap = document.getElementById('crm-notify-wrap');
+            var badge = document.getElementById('crm-notify-badge');
+            var countEl = document.getElementById('crm-notify-count');
+            var listEl = document.getElementById('crm-notify-list');
+            if (!wrap || !badge || !countEl || !listEl) return;
+            var items = window.crmNotifications || [];
+            var unread = items.filter(function (n) { return !n.read_at; }).length;
+            wrap.classList.remove('hidden');
+            if (unread > 0) {
+                badge.textContent = unread > 99 ? '99+' : String(unread);
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+            countEl.textContent = unread > 0 ? (unread + ' 条未读') : '暂无未读';
+            if (!items.length) {
+                listEl.innerHTML = '<div class="crm-notify-empty">暂无通知</div>';
+                return;
+            }
+            listEl.innerHTML = items.map(function (n) {
+                var cls = 'crm-notify-item' + (n.read_at ? ' is-read' : '');
+                var msg = String(n.message || '通知').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var time = window.crmFormatNotifyTime(n.created_at);
+                return '<button type="button" class="' + cls + '" data-notify-id="' + n.id + '">'
+                    + '<div class="crm-notify-msg">' + msg + '</div>'
+                    + (time ? '<div class="crm-notify-time">' + time + '</div>' : '')
+                    + '</button>';
+            }).join('');
+        };
+
+        window.crmSetNotifyPanelOpen = function (open) {
+            var btn = document.getElementById('crm-notify-btn');
+            var panel = document.getElementById('crm-notify-panel');
+            if (!btn || !panel) return;
+            panel.classList.toggle('hidden', !open);
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        };
+
+        window.crmOpenNotification = async function (notificationId) {
+            var item = (window.crmNotifications || []).find(function (n) {
+                return Number(n.id) === Number(notificationId);
+            });
+            if (!item) return;
+            if (!item.read_at) {
+                try {
+                    await fetch('/api/notifications/' + item.id + '/read', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: window.crmAuthHeader(),
+                    });
+                    item.read_at = new Date().toISOString();
+                    window.crmRenderNotifications();
+                } catch (e) { /* ignore */ }
+            }
+            window.crmSetNotifyPanelOpen(false);
+            if (item.link_url) {
+                if (typeof window.crmRmsNavigateToOffer === 'function' && window.crmRmsNavigateToOffer(item.link_url)) {
+                    return;
+                }
+                window.location.href = item.link_url;
+            }
+        };
+
+        window.crmRefreshNotifications = async function () {
+            var wrap = document.getElementById('crm-notify-wrap');
+            if (!wrap) return;
+            try {
+                var r = await fetch('/api/notifications', {
+                    credentials: 'same-origin',
+                    headers: window.crmAuthHeader(),
+                });
+                if (!r.ok) {
+                    wrap.classList.add('hidden');
+                    window.crmNotifications = [];
+                    return;
+                }
+                var data = await r.json();
+                window.crmNotifications = Array.isArray(data) ? data : [];
+                window.crmRenderNotifications();
+            } catch (e) {
+                wrap.classList.add('hidden');
+                window.crmNotifications = [];
+            }
+        };
+
+        window.crmInitNotifications = function () {
+            if (window.__crmNotifyInited) return;
+            window.__crmNotifyInited = true;
+            var btn = document.getElementById('crm-notify-btn');
+            var panel = document.getElementById('crm-notify-panel');
+            var listEl = document.getElementById('crm-notify-list');
+            if (!btn || !panel || !listEl) return;
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var open = panel.classList.contains('hidden');
+                window.crmSetNotifyPanelOpen(open);
+            });
+            listEl.addEventListener('click', function (e) {
+                var target = e.target.closest('[data-notify-id]');
+                if (!target) return;
+                var id = target.getAttribute('data-notify-id');
+                if (id) window.crmOpenNotification(id);
+            });
+            document.addEventListener('click', function (e) {
+                var wrap = document.getElementById('crm-notify-wrap');
+                if (!wrap || wrap.classList.contains('hidden')) return;
+                if (wrap.contains(e.target)) return;
+                window.crmSetNotifyPanelOpen(false);
+            });
+        };
+
         window.crmFileAccessUrl = function (storedPath) {
             if (!storedPath) { return ''; }
             return '/api/files/access?path=' + encodeURIComponent(storedPath);
@@ -1449,6 +1657,13 @@
             var zIndex = Number(options.zIndex || 90);
             var confirmText = String(options.confirmText || '确认删除');
             var cancelText = String(options.cancelText || '取消');
+            var singleButton = !!options.singleButton;
+            var confirmClass = String(
+                options.confirmClass
+                || (singleButton
+                    ? 'flex-1 py-2 rounded-md bg-[#0969da] text-white text-sm font-medium hover:bg-[#0550ae]'
+                    : 'flex-1 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700')
+            );
             return new Promise(function (resolve) {
                 var done = false;
                 function finish(ok) {
@@ -1490,9 +1705,11 @@
                 cancelBtn.setAttribute('data-crm-esc-close', '1');
                 var confirmBtn = document.createElement('button');
                 confirmBtn.type = 'button';
-                confirmBtn.className = 'flex-1 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700';
+                confirmBtn.className = confirmClass;
                 confirmBtn.textContent = confirmText;
-                actions.appendChild(cancelBtn);
+                if (!singleButton) {
+                    actions.appendChild(cancelBtn);
+                }
                 actions.appendChild(confirmBtn);
                 panel.appendChild(h3);
                 panel.appendChild(pTarget);
@@ -1503,7 +1720,7 @@
                     if (e.target === overlay) { finish(false); }
                 });
                 cancelBtn.addEventListener('click', function () { finish(false); });
-                confirmBtn.addEventListener('click', function () { finish(true); });
+                confirmBtn.addEventListener('click', function () { finish(singleButton ? false : true); });
                 document.addEventListener('keydown', onKeyDown, true);
                 document.body.appendChild(overlay);
             });
@@ -2091,6 +2308,8 @@
                 document.getElementById('header-user').textContent = u ? ('欢迎，' + u) : '';
                 document.getElementById('logout-btn').textContent = logoutName ? (logoutName + '退出') : '退出';
                 window.crmApplyNavPermissions();
+                window.crmInitNotifications();
+                window.crmRefreshNotifications();
             }
 
             async function verifySession() {

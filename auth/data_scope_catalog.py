@@ -181,6 +181,7 @@ PERMISSION_TO_RESOURCE: Dict[str, str] = {
     "rms.applications.read": RESOURCE_RMS_APPLICATION,
     "rms.applications.write": RESOURCE_RMS_APPLICATION,
     "rms.applications.delete": RESOURCE_RMS_APPLICATION,
+    "rms.offer_approval.submit": RESOURCE_RMS_APPLICATION,
     "rms.matching.run": RESOURCE_RMS_JOB,
     "rms.analytics.read": RESOURCE_RMS_JOB,
 }

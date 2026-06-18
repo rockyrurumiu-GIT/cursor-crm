@@ -175,6 +175,10 @@
     }
     .crm-table.rms-candidates-table .crm-th,
     .crm-table.rms-candidates-table .crm-td { white-space: nowrap; }
+    .crm-table[data-table-id="rms-offer-management"] {
+        width: max-content;
+        min-width: 100%;
+    }
     /* 岗位：仅序号列冻结；候选人：仅姓名列冻结 */
     .rms-jobs-panel {
         display: flex;
@@ -474,6 +478,59 @@
         background: #fee2e2;
         color: #b91c1c;
         border: 1px solid #fecaca;
+    }
+    .rms-offer-progress-label {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        white-space: nowrap;
+        gap: 0.15rem;
+        max-width: 100%;
+    }
+    .rms-offer-approval-hint {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1rem;
+        height: 1rem;
+        margin-left: 0.15rem;
+        border-radius: 9999px;
+        border: 1px solid #0969da;
+        color: #0969da;
+        background: #f6f8fa;
+        font-size: 0.68rem;
+        font-weight: 700;
+        line-height: 1;
+        cursor: help;
+        flex-shrink: 0;
+        user-select: none;
+        vertical-align: middle;
+    }
+    .crm-table td.crm-td.rms-offer-progress-cell,
+    .crm-table td.crm-td.rms-pipeline-progress {
+        overflow: visible !important;
+    }
+    .rms-offer-approval-hint-wrap {
+        display: inline-flex;
+        align-items: center;
+        vertical-align: middle;
+        flex-shrink: 0;
+    }
+    .rms-offer-approval-hint-popup {
+        position: fixed;
+        z-index: 10050;
+        max-width: 16rem;
+        padding: 0.35rem 0.55rem;
+        border-radius: 6px;
+        background: #24292f;
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 500;
+        line-height: 1.35;
+        white-space: normal;
+        text-align: center;
+        box-shadow: 0 8px 24px rgba(31, 35, 40, 0.18);
+        pointer-events: none;
     }
     .rms-roster-tag--done {
         background: #dcfce7;
@@ -812,6 +869,9 @@
         <button v-if="canUseRmsDeliveryOpsTabs" type="button" data-rms-tab="pipeline" @click="activeTab = 'pipeline'"
             :class="activeTab === 'pipeline' ? 'rms-tab-active' : ''"
             class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">招聘pipeline-候选人状态（交付）</button>
+        <button v-if="canReadApplications" type="button" data-rms-tab="offerManagement" @click="activeTab = 'offerManagement'"
+            :class="activeTab === 'offerManagement' ? 'rms-tab-active' : ''"
+            class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">Offer 管理</button>
     </div>
 
     <!-- Jobs -->
@@ -1094,12 +1154,57 @@
 
     <!-- Applications -->
     <section v-show="activeTab === 'applications' && viewMode !== 'candidateReport'" data-rms-region="applications">
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div class="mb-3">
             <h2 class="text-lg font-medium text-[#1f2328]">推荐记录</h2>
-            <label class="rms-apps-filter-checkbox">
-                <input v-model="applicationsFilter.hired_unconverted_only" type="checkbox" class="rounded border-[#d0d7de]" />
-                <span>只看未转入花名册</span>
-            </label>
+        </div>
+        <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3">
+            <div class="flex flex-wrap items-end justify-between gap-2 mb-2">
+                <p class="text-sm font-semibold text-[#1f2328]">
+                    合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredApplications.length }}</span> 条
+                </p>
+                <div class="flex flex-wrap items-center gap-2">
+                    <label class="crm-filter-item crm-filter-reset inline-flex items-center gap-1.5 cursor-pointer">
+                        <input v-model="applicationsFilter.hide_roster_converted" type="checkbox" class="rounded border-[#d0d7de]" />
+                        <span>隐藏已转花名册</span>
+                    </label>
+                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetApplicationFilter">清除筛选</button>
+                </div>
+            </div>
+            <div class="crm-filter-row">
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">关键词</span>
+                    <input v-model.trim="applicationsFilter.keyword" type="text" class="crm-filter-control w-[8rem]" placeholder="候选人/客户/岗位" />
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">客户</span>
+                    <select v-model="applicationsFilter.client_id" class="crm-filter-control w-[10rem]">
+                        <option value="">全部</option>
+                        <option v-for="c in clientOptions" :key="'ac'+c.id" :value="String(c.id)">{{ c.name }}</option>
+                    </select>
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">推荐岗位</span>
+                    <select v-model="applicationsFilter.job_id" class="crm-filter-control w-[10rem]">
+                        <option value="">全部</option>
+                        <option v-for="j in jobsState.items" :key="'aj'+j.id" :value="String(j.id)">{{ j.title || ('#'+j.id) }}</option>
+                    </select>
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">招聘进展</span>
+                    <select v-model="applicationsFilter.status" class="crm-filter-control w-[10rem]">
+                        <option value="">全部</option>
+                        <option v-for="p in applicationProgressOptions" :key="'ap'+p.value" :value="p.value">{{ p.label }}</option>
+                    </select>
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">推荐日起</span>
+                    <input v-model="applicationsFilter.date_from" type="date" class="crm-filter-control w-[9rem]" />
+                </label>
+                <label class="crm-filter-item flex flex-col gap-1 text-xs">
+                    <span class="text-[#57606a]">推荐日止</span>
+                    <input v-model="applicationsFilter.date_to" type="date" class="crm-filter-control w-[9rem]" />
+                </label>
+            </div>
         </div>
         <div v-if="applicationsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ applicationsState.error }}</div>
         <div v-else-if="applicationsState.loading" class="text-sm text-[#57606a]">加载中…</div>
@@ -1136,10 +1241,21 @@
                         <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
                         <td class="crm-td">{{ receiveLabel(a.receive_status) }}</td>
                         <td class="crm-td">{{ deliveryReviewLabel(a.delivery_review_status) }}</td>
-                        <td class="crm-td">
-                            <span>{{ progressLabel(a.status) }}</span>
-                            <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
-                            <span v-else-if="a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
+                        <td class="crm-td rms-offer-progress-cell">
+                            <span class="inline-flex items-center flex-wrap gap-x-1 gap-y-0.5">
+                                <span class="rms-offer-progress-label">
+                                    <span>{{ progressLabel(a.status) }}</span>
+                                    <span
+                                        v-if="a.status === 'offer_approval_pending'"
+                                        class="rms-offer-approval-hint-wrap"
+                                        :data-hint="offerApprovalPendingHint(a)"
+                                        tabindex="0"
+                                        :aria-label="offerApprovalPendingHint(a)"
+                                    ><span class="rms-offer-approval-hint">?</span></span>
+                                </span>
+                                <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
+                                <span v-else-if="a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
+                            </span>
                         </td>
                         <td class="crm-td" :title="'保护期规则后续单独实现'">{{ protectionLabel(a.status) }}</td>
                         <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
@@ -1338,19 +1454,44 @@
                         <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
                         <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
                         <td class="crm-td rms-pipeline-progress">
-                            <span>{{ progressLabel(a.status) }}</span>
-                            <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
-                            <span v-else-if="a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
+                            <span class="inline-flex items-center flex-wrap gap-x-1 gap-y-0.5">
+                                <span class="rms-offer-progress-label">
+                                    <span>{{ progressLabel(a.status) }}</span>
+                                    <span
+                                        v-if="a.status === 'offer_approval_pending'"
+                                        class="rms-offer-approval-hint-wrap"
+                                        :data-hint="offerApprovalPendingHint(a)"
+                                        tabindex="0"
+                                        :aria-label="offerApprovalPendingHint(a)"
+                                    ><span class="rms-offer-approval-hint">?</span></span>
+                                </span>
+                                <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
+                                <span v-else-if="a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
+                            </span>
                         </td>
                         <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
                         <td class="crm-td">{{ formatRmsDate(a.updated_at) }}</td>
                         <td class="crm-td whitespace-nowrap rms-pipeline-next-op">
                             <div v-if="canWriteApplications" class="crm-op-actions flex flex-nowrap items-center gap-1">
-                                <template v-for="next in progressTransitionsFor(a.status)" :key="'pt'+a.id+'-'+next">
-                                    <button type="button" :class="progressActionBtnClass(next)" data-rms-action="progress-confirm-open"
-                                        @click="openProgressConfirmModal(a, next, 'transition')">{{ progressLabel(next) }}</button>
+                                <template v-if="a.status === 'pending_offer'">
+                                    <button v-if="a.can_submit_offer_approval" type="button" class="rms-progress-btn rms-progress-btn--blue" data-rms-action="offer-approval-open"
+                                        @click="openOfferApprovalModal(a)">发起 Offer 审批</button>
+                                    <button type="button" class="rms-progress-btn rms-progress-btn--red" data-rms-action="drop-offer-open"
+                                        @click="openDropOfferModal(a)">弃offer</button>
                                 </template>
-                                <span v-if="!progressTransitionsFor(a.status).length" class="text-[#57606a] text-xs">—</span>
+                                <template v-else-if="a.status === 'onboarding'">
+                                    <button type="button" class="rms-progress-btn rms-progress-btn--red" data-rms-action="transit-lost-open"
+                                        @click="openTransitLostModal(a)">在途流失</button>
+                                    <button type="button" :class="progressActionBtnClass('hired')" data-rms-action="progress-confirm-open"
+                                        @click="openProgressConfirmModal(a, 'hired', 'transition')">已入职</button>
+                                </template>
+                                <template v-else>
+                                    <template v-for="next in progressTransitionsFor(a.status)" :key="'pt'+a.id+'-'+next">
+                                        <button type="button" :class="progressActionBtnClass(next)" data-rms-action="progress-confirm-open"
+                                            @click="openProgressConfirmModal(a, next, 'transition')">{{ progressLabel(next) }}</button>
+                                    </template>
+                                </template>
+                                <span v-if="a.status !== 'pending_offer' && a.status !== 'onboarding' && !progressTransitionsFor(a.status).length" class="text-[#57606a] text-xs">—</span>
                             </div>
                             <span v-else class="text-[#57606a]">—</span>
                         </td>
@@ -1366,6 +1507,75 @@
                 </tbody>
             </table>
             </div>
+        </div>
+    </section>
+
+    <!-- Offer management -->
+    <section v-show="activeTab === 'offerManagement' && viewMode !== 'candidateReport'" class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
+        <div class="flex flex-wrap items-center gap-2 mb-4">
+            <select v-model="offerState.statusFilter" class="crm-filter-control w-[10rem]" @change="loadOfferRecords">
+                <option v-for="opt in offerStatusFilterOptions" :key="'of'+opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+            <button type="button" class="crm-filter-reset" @click="offerState.statusFilter = ''; loadOfferRecords()">清除筛选</button>
+        </div>
+        <div v-if="offerState.error" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 mb-3">{{ offerState.error }}</div>
+        <div v-else-if="offerState.loading" class="text-sm text-gray-500 py-8 text-center">加载中…</div>
+        <div v-else class="border border-gray-200 rounded-lg crm-table-scroll">
+            <table class="crm-table rms-candidates-table" data-table-id="rms-offer-management">
+                <thead>
+                    <tr>
+                        <th class="crm-th">状态</th>
+                        <th class="crm-th">当前审批节点</th>
+                        <th class="crm-th">当前审批人</th>
+                        <th class="crm-th">客户</th>
+                        <th class="crm-th">岗位</th>
+                        <th class="crm-th">候选人</th>
+                        <th class="crm-th">报价（含税）</th>
+                        <th class="crm-th">人选薪资</th>
+                        <th class="crm-th">试工期</th>
+                        <th class="crm-th">折扣月数</th>
+                        <th class="crm-th">GM$</th>
+                        <th class="crm-th">GM%</th>
+                        <th class="crm-th">计划入职时间</th>
+                        <th class="crm-th">招聘</th>
+                        <th class="crm-th">申请人</th>
+                        <th class="crm-th">原因</th>
+                        <th class="crm-th">创建时间</th>
+                        <th class="crm-th crm-sticky-right-op">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in offerState.items" :key="'offer'+row.id">
+                        <td class="crm-td">{{ row.status_label }}</td>
+                        <td class="crm-td">{{ row.current_approval_node_label || '—' }}</td>
+                        <td class="crm-td">{{ row.pending_approver_label || '—' }}</td>
+                        <td class="crm-td">{{ row.client_name || '—' }}</td>
+                        <td class="crm-td">{{ row.job_title || '—' }}</td>
+                        <td class="crm-td">{{ row.candidate_name || '—' }}</td>
+                        <td class="crm-td">{{ formatOfferRowQuote(row) }}</td>
+                        <td class="crm-td">{{ formatOfferListMoney(row.pre_tax_salary) }}</td>
+                        <td class="crm-td">{{ row.probation_days || '—' }}</td>
+                        <td class="crm-td">{{ row.probation_discount_months === '0' ? '不打折' : (row.probation_discount_months || '—') }}</td>
+                        <td class="crm-td">{{ formatOfferListMoney(row.gm_amount) }}</td>
+                        <td class="crm-td">{{ formatOfferListGmPct(row.gm_pct) }}</td>
+                        <td class="crm-td">{{ row.planned_onboard_date || '—' }}</td>
+                        <td class="crm-td">{{ row.recommended_by_label || '—' }}</td>
+                        <td class="crm-td">{{ row.created_by_label || '—' }}</td>
+                        <td class="crm-td">{{ row.reason || '—' }}</td>
+                        <td class="crm-td">{{ formatRmsDate(row.created_at) }}</td>
+                        <td class="crm-td crm-sticky-right-op whitespace-nowrap">
+                            <div v-if="row.status === 'pending' && canApproveOfferRow(row)" class="crm-op-actions flex flex-nowrap items-center gap-1">
+                                <button type="button" class="crm-op-btn-detail" :disabled="offerActionSaving" @click="openOfferApproveModal(row)">通过</button>
+                                <button type="button" class="crm-op-btn-delete" :disabled="offerActionSaving" @click="openOfferRejectModal(row)">驳回</button>
+                            </div>
+                            <span v-else class="text-[#57606a]">—</span>
+                        </td>
+                    </tr>
+                    <tr v-if="!offerState.items.length">
+                        <td class="crm-td text-center text-[#57606a]" colspan="17">暂无 Offer 记录</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </section>
 
@@ -1554,6 +1764,50 @@
         </div>
     </div>
 
+    <!-- RMS Offer approval modal -->
+    <div v-if="offerApprovalModal" class="crm-esc-modal crm-form-modal-overlay z-50" @click.self="closeOfferApprovalModal">
+        <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
+            <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">发起 Offer 审批</h3>
+                <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeOfferApprovalModal">&times;</button>
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-5">
+                <p v-if="offerApprovalError" class="mb-3 text-sm text-red-700">{{ offerApprovalError }}</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">客户</span><input v-model.trim="offerApprovalForm.customer_name" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">岗位</span><input v-model.trim="offerApprovalForm.position_title" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">姓名</span><input v-model.trim="offerApprovalForm.full_name" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">联系方式</span><input v-model.trim="offerApprovalForm.contact_info" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">工作地</span><input v-model.trim="offerApprovalForm.work_location" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1 sm:col-span-2 lg:col-span-1"><span class="text-[#57606a]">报价（含税）<span class="text-red-500">*</span></span>
+                        <div class="flex gap-2">
+                            <select v-model="offerApprovalForm.quote_tax_unit" class="crm-form-control w-[7.5rem] shrink-0" @change="clearOfferGmCalcFields">
+                                <option value="">单位</option>
+                                <option value="人月">人月</option>
+                                <option value="人天">人天</option>
+                                <option value="人时">人时</option>
+                            </select>
+                            <input v-model.trim="offerApprovalForm.monthly_quote_tax" class="crm-form-control min-w-0 flex-1" inputmode="decimal" placeholder="请输入金额" @input="onOfferApprovalMoneyInput('monthly_quote_tax')" @change="onOfferApprovalMoneyChange('monthly_quote_tax')" @blur="formatOfferApprovalMoneyField('monthly_quote_tax')" />
+                        </div>
+                    </label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">税前工资<span class="text-red-500">*</span></span><input v-model.trim="offerApprovalForm.pre_tax_salary" class="crm-form-control" inputmode="decimal" @input="onOfferApprovalMoneyInput('pre_tax_salary')" @change="onOfferApprovalMoneyChange('pre_tax_salary')" @blur="formatOfferApprovalMoneyField('pre_tax_salary')" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">试工期<span class="text-red-500">*</span></span><input v-model.trim="offerApprovalForm.probation_days" class="crm-form-control" inputmode="numeric" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM$<span class="text-red-500">*</span></span><input :value="formatOfferMoney(offerApprovalForm.gm_amount)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" placeholder="请使用毛利测算器" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM%<span class="text-red-500">*</span></span><input :value="formatOfferGmPct(offerApprovalForm.gm_pct)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" placeholder="请使用毛利测算器" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">计划入职日期<span class="text-red-500">*</span></span><input v-model="offerApprovalForm.planned_onboard_date" type="date" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">折扣月数<span class="text-red-500">*</span></span><select v-model="offerApprovalForm.probation_discount_months" class="crm-form-control"><option value="0">不打折</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-between shrink-0">
+                <button v-if="canUseGmCalc" type="button" class="px-4 py-2 rounded-lg border border-[#0969da] text-[#0969da] hover:bg-[#f0f6ff]" @click="openOfferGmCalculator">毛利测算器</button>
+                <div class="flex gap-2 ml-auto">
+                    <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de]" @click="closeOfferApprovalModal">取消</button>
+                    <button type="button" class="px-4 py-2 rounded-lg bg-[#0969da] text-white hover:bg-[#0860ca] disabled:opacity-50" :disabled="offerApprovalSaving" @click="submitOfferApproval">{{ offerApprovalSaving ? '提交中…' : '提交审批' }}</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- RMS roster convert modal -->
     <div v-if="rosterConvertModal" class="crm-esc-modal crm-form-modal-overlay z-50" @click.self="closeRosterConvertModal">
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
@@ -1578,11 +1832,11 @@
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">业务线<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.business_line" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">入职日期<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model="rosterConvertForm.entry_date" type="date" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">转正时间</span><input v-model="rosterConvertForm.regularization_date" type="date" class="crm-form-control" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">月报价(含税)<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.monthly_quote_tax" class="crm-form-control" inputmode="numeric" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">税前工资<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.pre_tax_salary" class="crm-form-control" inputmode="numeric" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">月报价(含税)<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterMoneyDisplay(rosterConvertForm.monthly_quote_tax)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">税前工资<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterMoneyDisplay(rosterConvertForm.pre_tax_salary)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">薪资报价比</span><input v-model="rosterConvertForm.salary_quote_ratio" disabled class="crm-form-control bg-[#f6f8fa] text-[#57606a]" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM$<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.gms" class="crm-form-control" inputmode="numeric" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM%<span class="text-red-500" data-rms-roster-required="1">*</span></span><input v-model.trim="rosterConvertForm.gm_pct" class="crm-form-control" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM$<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterMoneyDisplay(rosterConvertForm.gms)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM%<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterGmPctDisplay(rosterConvertForm.gm_pct)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">员工+1</span><input v-model.trim="rosterConvertForm.employee_plus1" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">员工+2</span><input v-model.trim="rosterConvertForm.employee_plus2" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">接口</span><input v-model.trim="rosterConvertForm.interface_contact" class="crm-form-control" /></label>
@@ -1953,14 +2207,15 @@
 <script src="/static/js/vendor/vue.global.prod.js"></script>
 <script src="/static/js/core/crm-api.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
-<script src="/static/js/pages/rms-application-labels.js?v=r3c3-pipeline-terminal-20260615"></script>
-<script src="/static/js/pages/rms-core.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-application-labels.js?v=offer-approval-hint-20260618"></script>
+<script src="/static/js/pages/rms-core.js?v=offer-hint-popover-20260618"></script>
 <script src="/static/js/pages/rms-candidate-report.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-jobs.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-candidates.js?v=r3c3-pipeline-terminal-20260615"></script>
-<script src="/static/js/pages/rms-applications.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-applications.js?v=hide-roster-converted-20260618"></script>
 <script src="/static/js/pages/rms-pipeline.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-delivery-review.js?v=r3c3-pipeline-terminal-20260615"></script>
-<script src="/static/js/pages/rms-roster-conversion.js?v=r3c3-pipeline-terminal-20260615"></script>
-<script src="/static/js/pages/rms.js?v=delete-permissions-20260617"></script>
+<script src="/static/js/pages/rms-roster-conversion.js?v=roster-offer-lock-20260618"></script>
+<script src="/static/js/pages/rms-offer-management.js?v=offer-approval-no-super-20260618"></script>
+<script src="/static/js/pages/rms.js?v=offer-hint-popover-20260618"></script>
 {% endblock %}

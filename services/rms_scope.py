@@ -9,6 +9,8 @@ from sqlalchemy.orm import Query, Session
 
 from auth import data_scope as ds
 from auth.data_scope_catalog import (
+    CLIENT_DELIVERY_DEPT_COL,
+    CLIENT_DELIVERY_OWNER_COL,
     CLIENT_RECRUITMENT_DEPT_COL,
     CLIENT_RECRUITMENT_OWNER_COL,
     RESOURCE_CRM_CLIENT,
@@ -181,6 +183,66 @@ def assert_job_writable(
     if not job:
         raise HTTPException(status_code=404, detail="岗位不存在")
     return job
+
+
+def _user_manages_client_delivery_dept(
+    db: Session,
+    ctx: AuthContext,
+    client: Any,
+) -> bool:
+    """True when the user's dept subtree covers the client's delivery department."""
+    if ctx.user_id is None:
+        return False
+    delivery_dept = getattr(client, CLIENT_DELIVERY_DEPT_COL, None)
+    if delivery_dept is None:
+        return False
+    user_depts = ctx.dept_ids or ([ctx.primary_dept_id] if ctx.primary_dept_id else [])
+    if not user_depts:
+        return False
+    managed = ds._dept_subtree_ids(db, [int(d) for d in user_depts])
+    return int(delivery_dept) in managed
+
+
+def can_act_as_offer_submitter(
+    db: Session,
+    ctx: AuthContext,
+    client: Any,
+) -> bool:
+    if ctx.is_super:
+        return True
+    if ctx.user_id is None:
+        return False
+    perms = ctx.permissions or set()
+    if "rms.offer_approval.submit" in perms:
+        return True
+    delivery_owner = getattr(client, CLIENT_DELIVERY_OWNER_COL, None)
+    if delivery_owner is not None and int(delivery_owner) == int(ctx.user_id):
+        return True
+    return _user_manages_client_delivery_dept(db, ctx, client)
+
+
+def can_submit_offer_approval(
+    db: Session,
+    ctx: AuthContext,
+    client: Any,
+    *,
+    app_status: str,
+) -> bool:
+    if (app_status or "").strip() != "pending_offer":
+        return False
+    if client is None:
+        return False
+    return can_act_as_offer_submitter(db, ctx, client)
+
+
+def assert_can_submit_offer_approval(
+    db: Session,
+    ctx: AuthContext,
+    client: Any,
+) -> None:
+    if can_act_as_offer_submitter(db, ctx, client):
+        return
+    raise HTTPException(status_code=403, detail="仅交付负责人或授权人员可发起 Offer 审批")
 
 
 def visible_candidate_ids(

@@ -5,6 +5,7 @@ import importlib
 import uuid
 
 import pytest
+from sqlalchemy import text
 from starlette.testclient import TestClient
 
 from auth.permissions import ROLE_DELIVERY
@@ -19,6 +20,17 @@ from tests.test_rms_phase2_mvp import (
     _login,
     _set_client_owner,
 )
+
+
+def _set_application_onboarding(engine, app_id: int) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'onboarding', current_stage = 'onboarding' "
+                "WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
 
 
 @pytest.fixture
@@ -776,12 +788,7 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
     assert row["onboarding_lost_count"] == 0
     assert row["hired_count"] == 0
 
-    tr = client_rbac.post(
-        f"/api/rms/applications/{app_id}/status",
-        cookies=login.cookies,
-        json={"to_status": "onboarding", "reason": "ok"},
-    )
-    assert tr.status_code == 200, tr.text
+    _set_application_onboarding(rms_engine, app_id)
 
     row = dash_row()
     assert row["pending_offer_count"] == 0
@@ -987,7 +994,6 @@ def test_client_job_stage_snapshot_scheduling_and_onboarding(
         "first_interview_passed",
         "second_interview_passed",
         "pending_offer",
-        "onboarding",
     ):
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
@@ -995,6 +1001,7 @@ def test_client_job_stage_snapshot_scheduling_and_onboarding(
             json={"to_status": to_status, "reason": "ok"},
         )
         assert tr.status_code == 200, tr.text
+    _set_application_onboarding(rms_engine, app_id)
 
     row = dash_row()
     assert row["scheduling_interview_count"] == 0

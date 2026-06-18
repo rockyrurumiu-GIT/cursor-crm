@@ -324,6 +324,9 @@ class CrmNotification(Base):
     ntype = Column(String)
     handoff_id = Column(Integer, nullable=True)
     client_id = Column(Integer, nullable=True)
+    application_id = Column(Integer, nullable=True)
+    offer_record_id = Column(Integer, nullable=True)
+    link_url = Column(String, default="")
     message = Column(Text)
     read_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
@@ -1501,6 +1504,7 @@ from routes.rms_jobs import register_rms_jobs_routes
 from routes.rms_candidates import register_rms_candidates_routes
 from routes.rms_applications import register_rms_applications_routes
 from routes.rms_dashboard import register_rms_dashboard_routes
+from routes.rms_offers import register_rms_offers_routes
 
 register_rms_jobs_routes(
     app,
@@ -1532,6 +1536,8 @@ register_rms_applications_routes(
     RosterEntry=RosterEntry,
     RmsInterview=RMS_MODELS["RmsInterview"],
     RmsOffer=RMS_MODELS["RmsOffer"],
+    RmsOfferRecord=RMS_MODELS["RmsOfferRecord"],
+    RmsOfferApprovalStep=RMS_MODELS["RmsOfferApprovalStep"],
     RmsMatchResult=RMS_MODELS["RmsMatchResult"],
     AuditLog=AuditLog,
 )
@@ -1554,6 +1560,27 @@ register_rms_dashboard_routes(
     DashboardDashboard=DashboardDashboard,
     DashboardTab=DashboardTab,
     DashboardWidget=DashboardWidget,
+)
+from routes.rms_offer_approval_config import register_rms_offer_approval_config_routes
+
+register_rms_offer_approval_config_routes(
+    app,
+    get_db=get_db,
+    RmsOfferApprovalConfig=RMS_MODELS["RmsOfferApprovalConfig"],
+)
+
+register_rms_offers_routes(
+    app,
+    get_db=get_db,
+    Client=Client,
+    CrmNotification=CrmNotification,
+    RmsApplication=RMS_MODELS["RmsApplication"],
+    RmsApplicationStatusHistory=RMS_MODELS["RmsApplicationStatusHistory"],
+    RmsCandidate=RMS_MODELS["RmsCandidate"],
+    RmsJob=RMS_MODELS["RmsJob"],
+    RmsOfferRecord=RMS_MODELS["RmsOfferRecord"],
+    RmsOfferApprovalStep=RMS_MODELS["RmsOfferApprovalStep"],
+    RmsOfferApprovalConfig=RMS_MODELS["RmsOfferApprovalConfig"],
 )
 
 register_rms_shell_routes(app, page_renderer=_page)

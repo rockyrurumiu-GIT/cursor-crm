@@ -19,6 +19,7 @@ _PIPELINE_LABELS = {
     "first_interview_passed": "待二面",
     "second_interview_passed": "待终面",
     "pending_offer": "待offer",
+    "offer_approval_pending": "Offer审批中",
     "onboarding": "在途",
 }
 

@@ -71,6 +71,11 @@ def get_current_user(ctx: AuthContext = Depends(get_current_context)) -> str:
     return ctx.username
 
 
+def _require_logged_in(ctx: AuthContext = Depends(get_current_context)) -> AuthContext:
+    """Authenticated session only; route may apply finer authorization."""
+    return ctx
+
+
 def authenticate_admin(ctx: AuthContext = Depends(get_current_context)) -> str:
     if not ctx.is_super and "system.users.manage" not in ctx.permissions:
         if auth_svc.is_rbac_mode():

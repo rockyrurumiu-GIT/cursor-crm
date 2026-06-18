@@ -26,6 +26,104 @@ from services.delivery_roster import (
 
 ScopeAction = Literal["read", "write"]
 
+OFFER_FINANCIAL_ROSTER_KEYS = (
+    "monthly_quote_tax",
+    "pre_tax_salary",
+    "gms",
+    "gm_pct",
+)
+
+ROSTER_MONTHLY_WORK_DAYS = 20.67
+ROSTER_MONTHLY_HOURS = 165.36
+
+
+def _format_amount_display(amount: Any) -> str:
+    raw = str(amount or "").strip().replace(",", "")
+    if not raw:
+        return ""
+    try:
+        n = float(raw)
+    except ValueError:
+        return raw
+    if abs(n - round(n)) < 1e-9:
+        return f"{int(round(n)):,}"
+    text = f"{n:,.2f}".rstrip("0").rstrip(".")
+    return text
+
+
+def _format_quote_tax_display(amount: Any, unit: Any) -> str:
+    _ = unit
+    return _format_amount_display(amount)
+
+
+def _parse_offer_amount(raw: Any) -> float:
+    text = str(raw or "").strip().replace(",", "")
+    if not text:
+        return 0.0
+    try:
+        return float(text)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Offer 报价格式无效")
+
+
+def _format_roster_amount_storage(amount: float) -> str:
+    if amount <= 0:
+        return ""
+    if abs(amount - round(amount)) < 1e-9:
+        return str(int(round(amount)))
+    return f"{amount:.2f}".rstrip("0").rstrip(".")
+
+
+def offer_quote_to_roster_monthly_amount(amount: Any, unit: Any) -> str:
+    raw = _parse_offer_amount(amount)
+    if raw <= 0:
+        return ""
+    u = str(unit or "").strip()
+    if u == "人天":
+        monthly = raw * ROSTER_MONTHLY_WORK_DAYS
+    elif u == "人时":
+        monthly = raw * ROSTER_MONTHLY_HOURS
+    else:
+        monthly = raw
+    return _format_roster_amount_storage(monthly)
+
+
+def _format_gm_pct_for_roster(val: Any) -> str:
+    s = str(val or "").strip().replace("\uff05", "%")
+    if not s:
+        return ""
+    if s.endswith("%"):
+        return s
+    return f"{s}%"
+
+
+def _approved_offer_for_application(
+    db: Session,
+    application_id: int,
+    RmsOfferRecord: Type[Any],
+) -> Any:
+    return (
+        db.query(RmsOfferRecord)
+        .filter(
+            RmsOfferRecord.application_id == int(application_id),
+            RmsOfferRecord.status == "approved",
+        )
+        .order_by(RmsOfferRecord.id.desc())
+        .first()
+    )
+
+
+def _apply_offer_financials_to_roster_payload(payload: Dict[str, str], offer_record: Any) -> Dict[str, str]:
+    out = dict(payload)
+    out["monthly_quote_tax"] = offer_quote_to_roster_monthly_amount(
+        getattr(offer_record, "monthly_quote_tax", None),
+        getattr(offer_record, "quote_tax_unit", None),
+    )
+    out["pre_tax_salary"] = str(getattr(offer_record, "pre_tax_salary", None) or "").strip()
+    out["gms"] = str(getattr(offer_record, "gm_amount", None) or "").strip()
+    out["gm_pct"] = _format_gm_pct_for_roster(getattr(offer_record, "gm_pct", None))
+    return out
+
 
 def _load_convertible_application(
     db: Session,
@@ -67,12 +165,23 @@ def _load_convertible_application(
     return row, candidate, job, client
 
 
-def _build_roster_payload_prefill(application: Any, candidate: Any, job: Any, client: Any) -> Dict[str, str]:
+def _build_roster_payload_prefill(
+    application: Any,
+    candidate: Any,
+    job: Any,
+    client: Any,
+    *,
+    offer_record: Any = None,
+) -> Dict[str, str]:
     hired_at = (getattr(application, "hired_at", None) or "").strip()
     entry_date = hired_at[:10] if hired_at else utc_date_str()
+    if offer_record is not None:
+        planned = str(getattr(offer_record, "planned_onboard_date", None) or "").strip()
+        if planned:
+            entry_date = planned[:10]
     app_id = int(application.id)
     source = (getattr(candidate, "source", None) or "").strip()
-    return {
+    payload = {
         "employment_status": "在职",
         "full_name": (getattr(candidate, "name", None) or "").strip(),
         "contact_info": (getattr(candidate, "phone", None) or "").strip(),
@@ -88,6 +197,9 @@ def _build_roster_payload_prefill(application: Any, candidate: Any, job: Any, cl
         "zntx_onboarding_channel": source,
         "remarks": f"来自 RMS application #{app_id}",
     }
+    if offer_record is not None:
+        payload = _apply_offer_financials_to_roster_payload(payload, offer_record)
+    return payload
 
 
 def get_roster_draft(
@@ -98,6 +210,7 @@ def get_roster_draft(
     RmsApplication: Type[Any],
     RmsCandidate: Type[Any],
     RmsJob: Type[Any],
+    RmsOfferRecord: Type[Any],
     Client: Type[Any],
 ) -> Dict[str, Any]:
     app, candidate, job, client = _load_convertible_application(
@@ -110,11 +223,24 @@ def get_roster_draft(
         RmsJob=RmsJob,
         Client=Client,
     )
+    offer = _approved_offer_for_application(db, application_id, RmsOfferRecord)
+    if not offer:
+        raise HTTPException(status_code=400, detail="未找到已通过的 Offer 审批，无法转入花名册")
+    payload = _build_roster_payload_prefill(
+        app,
+        candidate,
+        job,
+        client,
+        offer_record=offer,
+    )
     return {
         "application_id": app.id,
         "converted_to_roster_entry_id": getattr(app, "converted_to_roster_entry_id", None),
         "client_id": int(app.client_id),
-        "roster_payload": _build_roster_payload_prefill(app, candidate, job, client),
+        "offer_financial_locked": True,
+        "quote_tax_unit": str(getattr(offer, "quote_tax_unit", None) or "").strip(),
+        "quote_tax_display": _format_amount_display(payload["monthly_quote_tax"]),
+        "roster_payload": payload,
     }
 
 
@@ -151,6 +277,7 @@ def convert_application_to_roster(
     RmsJob: Type[Any],
     Client: Type[Any],
     RosterEntry: Type[Any],
+    RmsOfferRecord: Type[Any],
     AuditLog: Type[Any],
 ) -> Dict[str, Any]:
     app, candidate, _job, _client = _load_convertible_application(
@@ -163,7 +290,13 @@ def convert_application_to_roster(
         RmsJob=RmsJob,
         Client=Client,
     )
-    data = _validate_roster_create_payload(db, int(app.client_id), body, RosterEntry, Client)
+    offer = _approved_offer_for_application(db, application_id, RmsOfferRecord)
+    if not offer:
+        raise HTTPException(status_code=400, detail="未找到已通过的 Offer 审批，无法转入花名册")
+    request_body = body if isinstance(body, dict) else {}
+    merged = dict(request_body)
+    merged = _apply_offer_financials_to_roster_payload(merged, offer)
+    data = _validate_roster_create_payload(db, int(app.client_id), merged, RosterEntry, Client)
     if not str(data.get("zntx_onboarding_channel", "")).strip():
         source = (getattr(candidate, "source", None) or "").strip()
         if source:

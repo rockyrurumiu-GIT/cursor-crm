@@ -430,8 +430,65 @@ def application_to_dict(row: Any) -> Dict[str, Any]:
         "converted_to_roster_entry_id": getattr(row, "converted_to_roster_entry_id", None),
         "converted_to_roster_at": normalize_rms_date(getattr(row, "converted_to_roster_at", None)),
         "converted_to_roster_by": getattr(row, "converted_to_roster_by", None),
+        "can_submit_offer_approval": False,
     }
     return d
+
+
+def _clients_by_id(db: Session, Client: Type[Any], client_ids: set[int]) -> Dict[int, Any]:
+    if not client_ids:
+        return {}
+    rows = db.query(Client).filter(Client.id.in_(client_ids)).all()
+    return {int(c.id): c for c in rows}
+
+
+def _application_to_dict_with_capabilities(
+    db: Session,
+    ctx: AuthContext,
+    row: Any,
+    *,
+    Client: Type[Any],
+    offer_approval_info: Optional[Dict[int, Dict[str, str]]] = None,
+) -> Dict[str, Any]:
+    items = _applications_to_dicts_with_capabilities(
+        db,
+        ctx,
+        [row],
+        Client=Client,
+        offer_approval_info=offer_approval_info,
+    )
+    return items[0]
+
+
+def _applications_to_dicts_with_capabilities(
+    db: Session,
+    ctx: AuthContext,
+    rows: List[Any],
+    *,
+    Client: Type[Any],
+    offer_approval_info: Optional[Dict[int, Dict[str, str]]] = None,
+) -> List[Dict[str, Any]]:
+    client_ids = {int(r.client_id) for r in rows if getattr(r, "client_id", None) is not None}
+    clients_by_id = _clients_by_id(db, Client, client_ids)
+    offer_approval_info = offer_approval_info or {}
+    result: List[Dict[str, Any]] = []
+    for row in rows:
+        d = application_to_dict(row)
+        client = clients_by_id.get(int(row.client_id)) if getattr(row, "client_id", None) is not None else None
+        d["can_submit_offer_approval"] = rms_ds.can_submit_offer_approval(
+            db,
+            ctx,
+            client,
+            app_status=row.status or "",
+        )
+        d["offer_current_approval_node_label"] = ""
+        d["offer_pending_approver_label"] = ""
+        extra = offer_approval_info.get(int(row.id))
+        if extra:
+            d["offer_current_approval_node_label"] = extra.get("offer_current_approval_node_label") or ""
+            d["offer_pending_approver_label"] = extra.get("offer_pending_approver_label") or ""
+        result.append(d)
+    return result
 
 
 def status_history_to_dict(row: Any) -> Dict[str, Any]:
@@ -457,6 +514,8 @@ def list_applications(
     candidate_id: Optional[int] = None,
     client_id: Optional[int] = None,
     status: Optional[str] = None,
+    RmsOfferRecord: Optional[Type[Any]] = None,
+    RmsOfferApprovalStep: Optional[Type[Any]] = None,
 ) -> List[Dict[str, Any]]:
     q = rms_ds.scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
     if job_id is not None:
@@ -468,7 +527,29 @@ def list_applications(
     if status:
         q = q.filter(RmsApplication.status == status)
     rows = q.order_by(RmsApplication.id.desc()).all()
-    return [application_to_dict(r) for r in rows]
+    offer_approval_info: Dict[int, Dict[str, str]] = {}
+    if RmsOfferRecord is not None and RmsOfferApprovalStep is not None:
+        pending_app_ids = [
+            int(r.id)
+            for r in rows
+            if (getattr(r, "status", None) or "").strip() == "offer_approval_pending"
+        ]
+        if pending_app_ids:
+            from services import rms_offer_approval as offer_svc
+
+            offer_approval_info = offer_svc.pending_approval_info_by_application_ids(
+                db,
+                pending_app_ids,
+                RmsOfferRecord=RmsOfferRecord,
+                RmsOfferApprovalStep=RmsOfferApprovalStep,
+            )
+    return _applications_to_dicts_with_capabilities(
+        db,
+        ctx,
+        rows,
+        Client=Client,
+        offer_approval_info=offer_approval_info,
+    )
 
 
 def get_application(
@@ -477,6 +558,9 @@ def get_application(
     application_id: int,
     RmsApplication: Type[Any],
     Client: Type[Any],
+    *,
+    RmsOfferRecord: Optional[Type[Any]] = None,
+    RmsOfferApprovalStep: Optional[Type[Any]] = None,
 ) -> Dict[str, Any]:
     row = (
         rms_ds.scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
@@ -485,7 +569,27 @@ def get_application(
     )
     if not row:
         raise HTTPException(status_code=404, detail="推荐记录不存在")
-    return application_to_dict(row)
+    offer_approval_info: Dict[int, Dict[str, str]] = {}
+    if (
+        RmsOfferRecord is not None
+        and RmsOfferApprovalStep is not None
+        and (row.status or "").strip() == "offer_approval_pending"
+    ):
+        from services import rms_offer_approval as offer_svc
+
+        offer_approval_info = offer_svc.pending_approval_info_by_application_ids(
+            db,
+            [int(row.id)],
+            RmsOfferRecord=RmsOfferRecord,
+            RmsOfferApprovalStep=RmsOfferApprovalStep,
+        )
+    return _application_to_dict_with_capabilities(
+        db,
+        ctx,
+        row,
+        Client=Client,
+        offer_approval_info=offer_approval_info,
+    )
 
 
 def _get_writable_application(
@@ -676,6 +780,11 @@ def transition_application_status(
                 status_code=400,
                 detail="状态修正仅适用于已接收且内审通过的推荐记录",
             )
+        if from_status == "offer_approval_pending":
+            raise HTTPException(
+                status_code=400,
+                detail="Offer审批中不可通过状态修正变更，须通过审批 API 或等待驳回",
+            )
         hist_note = validate_status_correction_note(str(data.get("note") or ""))
         hist_reason = "status_correction"
     else:
@@ -738,6 +847,7 @@ def _delete_application_children(
     RmsApplicationStatusHistory: Type[Any],
     RmsInterview: Optional[Type[Any]] = None,
     RmsOffer: Optional[Type[Any]] = None,
+    RmsOfferRecord: Optional[Type[Any]] = None,
     RmsMatchResult: Optional[Type[Any]] = None,
 ) -> None:
     db.query(RmsApplicationStatusHistory).filter(
@@ -750,6 +860,10 @@ def _delete_application_children(
     if RmsOffer is not None:
         db.query(RmsOffer).filter(
             RmsOffer.application_id == application_id
+        ).delete(synchronize_session=False)
+    if RmsOfferRecord is not None:
+        db.query(RmsOfferRecord).filter(
+            RmsOfferRecord.application_id == application_id
         ).delete(synchronize_session=False)
     if RmsMatchResult is not None:
         db.query(RmsMatchResult).filter(
@@ -767,6 +881,7 @@ def delete_application(
     *,
     RmsInterview: Optional[Type[Any]] = None,
     RmsOffer: Optional[Type[Any]] = None,
+    RmsOfferRecord: Optional[Type[Any]] = None,
     RmsMatchResult: Optional[Type[Any]] = None,
 ) -> Dict[str, Any]:
     row = _get_writable_application(db, ctx, application_id, RmsApplication, Client)
@@ -778,6 +893,7 @@ def delete_application(
         RmsApplicationStatusHistory=RmsApplicationStatusHistory,
         RmsInterview=RmsInterview,
         RmsOffer=RmsOffer,
+        RmsOfferRecord=RmsOfferRecord,
         RmsMatchResult=RmsMatchResult,
     )
     db.delete(row)

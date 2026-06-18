@@ -56,6 +56,7 @@
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="datascope" id="tab-btn-datascope">数据权限</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="preview" id="tab-btn-preview">权限预览</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="depts" id="tab-btn-depts">部门管理</button>
+        <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="offerApproval" id="tab-btn-offer-approval">Offer审批配置</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="audit" id="tab-btn-audit">审计日志</button>
         <button type="button" class="spc-tab px-3 py-2 text-sm" data-tab="insurance" id="tab-btn-insurance">社保参保地</button>
     </div>
@@ -190,6 +191,54 @@
         </div>
     </section>
 
+    <!-- Tab: Offer approval config -->
+    <section id="panel-offerApproval" class="spc-panel hidden">
+        <p class="text-sm text-gray-600 mb-4">
+            配置 Offer 审批链。GM% &ge; 15：部门上级 &rarr; 经营负责人；GM% &lt; 15：部门上级 &rarr; 经营负责人 &rarr; 总经理。
+            部门覆盖缺省字段将回退到默认配置。
+        </p>
+        <div class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+            <h3 class="font-semibold text-gray-900 mb-3">默认审批链</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">部门上级</label>
+                    <select id="oac-default-dept-superior" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">经营负责人</label>
+                    <select id="oac-default-ops-head" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">总经理</label>
+                    <select id="oac-default-gm" class="w-full border rounded-lg px-3 py-2 text-sm"></select>
+                </div>
+            </div>
+            <div class="mt-4">
+                <button type="button" id="btn-oac-save-default" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">保存默认审批链</button>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <h3 class="font-semibold text-gray-900">按部门覆盖</h3>
+            <button type="button" id="btn-oac-add-dept" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增部门覆盖</button>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div class="crm-h-scroll">
+                <table class="crm-table w-full min-w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th class="crm-th">部门</th>
+                            <th class="crm-th">部门上级</th>
+                            <th class="crm-th">经营负责人</th>
+                            <th class="crm-th">总经理</th>
+                            <th class="crm-th">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="oac-dept-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
     <!-- Tab: Social insurance locations -->
     <section id="panel-insurance" class="spc-panel hidden">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
@@ -260,6 +309,7 @@
 </aside>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/system-permission-center.js?v=14"></script>
+<script src="/static/js/system-permission-center.js?v=15"></script>
 <script src="/static/js/gm-insurance-admin.js?v=1"></script>
+<script src="/static/js/rms-offer-approval-config-admin.js?v=1"></script>
 {% endblock %}

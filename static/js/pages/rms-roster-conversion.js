@@ -18,6 +18,8 @@
     var rosterConvertModal = ref(null);
     var rosterConvertSaving = ref(false);
     var rosterConvertError = ref("");
+    var rosterOfferFinancialLocked = ref(false);
+    var rosterQuoteTaxDisplay = ref("");
     var canUseGmCalc = computed(function () {
       return !!isSuper.value || hasPermission("tools.gm_calc.read");
     });
@@ -89,6 +91,24 @@
       return String(val || "").replace(/[,¥￥\s\u00a0]/g, "").trim();
     }
 
+    function formatRosterMoneyDisplay(val) {
+      var raw = normalizeRosterAmountText(val);
+      if (!raw) return "";
+      var n = Number(raw);
+      if (!Number.isFinite(n)) return String(val || "");
+      if (Math.abs(n - Math.round(n)) < 1e-9) {
+        return Math.round(n).toLocaleString("zh-CN");
+      }
+      return n.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+
+    function formatRosterGmPctDisplay(val) {
+      var s = String(val || "").trim().replace(/\uff05/g, "%");
+      if (!s) return "";
+      if (s.charAt(s.length - 1) === "%") return s;
+      return s + "%";
+    }
+
     function formatGmPctSymbol(val) {
       var s = String(val || "").trim().replace(/\uff05/g, "%");
       if (!s) return "";
@@ -139,6 +159,7 @@
       appendGmCalcQueryPart(parts, "work_location", rosterConvertForm.work_location);
       appendGmCalcQueryPart(parts, "position", rosterConvertForm.position_title);
       appendGmCalcQueryPart(parts, "monthly_quote_tax", normalizeRosterAmountText(rosterConvertForm.monthly_quote_tax));
+      appendGmCalcQueryPart(parts, "quote_tax_unit", "人月");
       appendGmCalcQueryPart(parts, "pre_tax_salary", normalizeRosterAmountText(rosterConvertForm.pre_tax_salary));
       appendGmCalcQueryPart(parts, "gms", normalizeRosterAmountText(rosterConvertForm.gms));
       appendGmCalcQueryPart(parts, "gm_pct", rosterConvertForm.gm_pct);
@@ -148,8 +169,10 @@
     async function openRosterConvertModal(appRow) {
       rosterConvertError.value = "";
       rosterConvertSaving.value = false;
+      rosterOfferFinancialLocked.value = false;
+      rosterQuoteTaxDisplay.value = "";
       resetRosterConvertForm();
-      rosterConvertModal.value = { applicationId: appRow.id, clientId: appRow.client_id };
+      rosterConvertModal.value = { applicationId: appRow.id, clientId: appRow.client_id, quoteTaxUnit: "" };
       var r = await rmsRequest("GET", "/api/rms/applications/" + appRow.id + "/roster-draft");
       if (!r.ok) {
         rosterConvertError.value = r.message || "加载花名册草稿失败";
@@ -160,6 +183,11 @@
       if (data.client_id != null) {
         rosterConvertModal.value.clientId = data.client_id;
       }
+      if (rosterConvertModal.value) {
+        rosterConvertModal.value.quoteTaxUnit = String(data.quote_tax_unit || "").trim();
+      }
+      rosterOfferFinancialLocked.value = !!data.offer_financial_locked;
+      rosterQuoteTaxDisplay.value = String(data.quote_tax_display || "").trim();
       Object.keys(rosterConvertForm).forEach(function (key) {
         if (key === "zntx_onboarding_channel" || key === "zntx_onboarding_channel_other") return;
         if (payload[key] != null) rosterConvertForm[key] = String(payload[key]);
@@ -171,6 +199,8 @@
       rosterConvertModal.value = null;
       rosterConvertError.value = "";
       rosterConvertSaving.value = false;
+      rosterOfferFinancialLocked.value = false;
+      rosterQuoteTaxDisplay.value = "";
     }
 
     function openConvertedRosterEntry(a) {
@@ -214,6 +244,10 @@
       rosterConvertSaving: rosterConvertSaving,
       rosterConvertError: rosterConvertError,
       rosterConvertForm: rosterConvertForm,
+      rosterOfferFinancialLocked: rosterOfferFinancialLocked,
+      rosterQuoteTaxDisplay: rosterQuoteTaxDisplay,
+      formatRosterMoneyDisplay: formatRosterMoneyDisplay,
+      formatRosterGmPctDisplay: formatRosterGmPctDisplay,
       canUseGmCalc: canUseGmCalc,
       resetRosterConvertForm: resetRosterConvertForm,
       validateRosterConvertForm: validateRosterConvertForm,

@@ -56,7 +56,7 @@
                             <option value="month">元/月</option>
                             <option value="day">元/天</option>
                             <option value="hour">元/时</option>
-                            <option value="custom">自选</option>
+                            <option v-if="!isOfferApprovalMode" value="custom">自选</option>
                         </select>
                     </div>
                     <p v-if="quoteUnitWarning" class="text-xs text-amber-600 mt-1">{{ quoteUnitWarning }}</p>
@@ -233,7 +233,12 @@
                 <p class="text-xs text-blue-400 mt-2">{{ result.formula }}</p>
             </div>
 
-            <div id="calc-remark" class="mt-4 pt-4 border-t">
+            <div v-if="isOfferApprovalMode" class="mt-4 pt-4 border-t">
+                <button type="button" @click="confirmOfferCalculation"
+                    class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700">确认测算</button>
+            </div>
+
+            <div v-if="!isOfferApprovalMode" id="calc-remark" class="mt-4 pt-4 border-t">
                 <label class="block text-sm font-medium mb-1">为以下客户创建新员工条目</label>
                 <div class="flex space-x-2 flex-wrap gap-y-2">
                     <select v-model="form.targetClientId" class="crm-form-control flex-1 min-w-[12rem]">
@@ -305,6 +310,11 @@ createApp({
             workLocation: '',
             returnTo: '',
             rosterAdd: '',
+            offerSource: {
+                quoteTaxUnit: '',
+                monthlyQuoteTax: null,
+                preTaxSalary: null,
+            },
         });
         const authHeader = () => window.crmAuthHeader();
 
@@ -640,6 +650,8 @@ createApp({
 
         const canCreateRosterEntry = computed(() => !!form.value.targetClientId);
 
+        const isOfferApprovalMode = computed(() => passthrough.value.returnTo === 'offer_approval');
+
         const applyQueryPrefill = () => {
             const params = new URLSearchParams(window.location.search);
             const targetId = params.get('targetClientId');
@@ -669,6 +681,98 @@ createApp({
             passthrough.value.workLocation = params.get('work_location') != null ? String(params.get('work_location')).trim() : '';
             passthrough.value.returnTo = params.get('return_to') != null ? String(params.get('return_to')).trim() : '';
             passthrough.value.rosterAdd = params.get('roster_add') != null ? String(params.get('roster_add')).trim() : '';
+            const quoteUnit = params.get('quote_tax_unit');
+            const offerUnitToCalcUnit = { '人月': 'month', '人天': 'day', '人时': 'hour' };
+            if (passthrough.value.returnTo === 'offer_approval' && quoteUnit) {
+                passthrough.value.offerSource.quoteTaxUnit = String(quoteUnit).trim();
+                form.value.quoteUnit = offerUnitToCalcUnit[quoteUnit] || 'month';
+            }
+            if (quote != null && String(quote).trim() !== '') {
+                passthrough.value.offerSource.monthlyQuoteTax = core.parseMoneyInput(quote);
+            }
+            if (salary != null && String(salary).trim() !== '') {
+                passthrough.value.offerSource.preTaxSalary = core.parseMoneyInput(salary);
+            }
+        };
+
+        function offerApprovalMoneySame(a, b) {
+            const x = Number(a);
+            const y = Number(b);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+            return Math.abs(x - y) < 0.01;
+        }
+
+        function formatOfferSourceMoney(n) {
+            if (!Number.isFinite(Number(n))) return '—';
+            return core.formatMoneyInput(Number(n));
+        }
+
+        async function showOfferApprovalMismatchDialog(mismatches) {
+            if (typeof window.crmConfirmDeleteDialog !== 'function') {
+                alert('测算数据不一致，请调整报价单位、报价金额或税前工资后再确认测算。');
+                return;
+            }
+            await window.crmConfirmDeleteDialog({
+                title: '测算数据不一致',
+                targetText: 'GM 计算器中的报价单位、报价金额或税前工资与 Offer 审批表单不一致，测算结果无法写入。',
+                hint: mismatches.join('；'),
+                confirmText: '知道了',
+                singleButton: true,
+            });
+        }
+
+        const confirmOfferCalculation = async () => {
+            if (form.value.quoteUnit === 'custom') {
+                alert('Offer审批测算不支持自定义小时数，请选择月/天/时报价。');
+                return;
+            }
+            const r = core.compute(form.value, selectedRates.value);
+            if (!Number.isFinite(r.Z) || !Number.isFinite(r.margin)) {
+                alert('测算结果无效，请检查报价、工资和参保地。');
+                return;
+            }
+            const calcUnitToOfferUnit = { month: '人月', day: '人天', hour: '人时' };
+            const currentUnit = calcUnitToOfferUnit[form.value.quoteUnit] || '';
+            const src = passthrough.value.offerSource || {};
+            const unitOk = String(src.quoteTaxUnit || '') === String(currentUnit || '');
+            const quoteOk = offerApprovalMoneySame(form.value.quoteTaxIncluded, src.monthlyQuoteTax);
+            const salaryOk = offerApprovalMoneySame(form.value.salary, src.preTaxSalary);
+            if (!unitOk || !quoteOk || !salaryOk) {
+                const mismatches = [];
+                if (!unitOk) {
+                    mismatches.push(
+                        '报价单位不一致（Offer：' + (src.quoteTaxUnit || '—') + '，计算器：' + (currentUnit || '—') + '）'
+                    );
+                }
+                if (!quoteOk) {
+                    mismatches.push(
+                        '报价金额不一致（Offer：' + formatOfferSourceMoney(src.monthlyQuoteTax)
+                        + '，计算器：' + formatOfferSourceMoney(form.value.quoteTaxIncluded) + '）'
+                    );
+                }
+                if (!salaryOk) {
+                    mismatches.push(
+                        '税前工资不一致（Offer：' + formatOfferSourceMoney(src.preTaxSalary)
+                        + '，计算器：' + formatOfferSourceMoney(form.value.salary) + '）'
+                    );
+                }
+                await showOfferApprovalMismatchDialog(mismatches);
+                return;
+            }
+            const payload = {
+                type: 'rms_offer_gm_calc_result',
+                quote_tax_unit: calcUnitToOfferUnit[form.value.quoteUnit] || '',
+                monthly_quote_tax: String(form.value.quoteTaxIncluded || ''),
+                pre_tax_salary: String(form.value.salary || ''),
+                gm_amount: String(Math.round(r.Z)),
+                gm_pct: (r.margin * 100).toFixed(2),
+            };
+            if (window.opener) {
+                window.opener.postMessage(payload, window.location.origin);
+                window.close();
+            } else {
+                alert('无法回传测算结果，请从 Offer 审批弹框重新打开测算器。');
+            }
         };
 
         const goCreateRosterEntry = () => {
@@ -756,6 +860,8 @@ createApp({
             resetForm,
             canCreateRosterEntry,
             goCreateRosterEntry,
+            isOfferApprovalMode,
+            confirmOfferCalculation,
         };
     },
 }).mount('#page-app');

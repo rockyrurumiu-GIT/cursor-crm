@@ -13,6 +13,9 @@ _CLASS_BY_TABLE: Dict[str, str] = {
     "rms_application_status_history": "RmsApplicationStatusHistory",
     "rms_interviews": "RmsInterview",
     "rms_offers": "RmsOffer",
+    "rms_offer_approval_configs": "RmsOfferApprovalConfig",
+    "rms_offer_records": "RmsOfferRecord",
+    "rms_offer_approval_steps": "RmsOfferApprovalStep",
     "rms_match_results": "RmsMatchResult",
 }
 
@@ -170,6 +173,54 @@ def register_rms_models(Base) -> Dict[str, Type]:
         created_at = Column(String, default="")
         updated_at = Column(String, default="")
 
+    class RmsOfferApprovalConfig(Base):
+        __tablename__ = "rms_offer_approval_configs"
+        id = Column(Integer, primary_key=True, index=True)
+        scope_key = Column(String, nullable=False, unique=True, index=True)
+        dept_id = Column(Integer, nullable=True, index=True)
+        dept_superior_user_id = Column(Integer, nullable=True)
+        ops_head_user_id = Column(Integer, nullable=True)
+        gm_user_id = Column(Integer, nullable=True)
+        updated_by = Column(Integer, ForeignKey("sys_user.id"), nullable=True)
+        created_at = Column(String, default="")
+        updated_at = Column(String, default="")
+
+    class RmsOfferRecord(Base):
+        __tablename__ = "rms_offer_records"
+        id = Column(Integer, primary_key=True, index=True)
+        application_id = Column(Integer, ForeignKey("rms_applications.id"), nullable=False, index=True)
+        candidate_id = Column(Integer, nullable=True)
+        job_id = Column(Integer, nullable=True)
+        client_id = Column(Integer, nullable=True)
+        status = Column(String, default="")
+        current_approval_node = Column(String, default="")
+        gm_pct = Column(String, default="")
+        gm_amount = Column(String, default="")
+        monthly_quote_tax = Column(String, default="")
+        quote_tax_unit = Column(String, default="")
+        pre_tax_salary = Column(String, default="")
+        probation_days = Column(String, default="")
+        probation_discount_months = Column(String, default="")
+        planned_onboard_date = Column(String, default="")
+        reason = Column(String, default="")
+        form_json = Column(Text, default="{}")
+        created_by = Column(Integer, ForeignKey("sys_user.id"), nullable=True)
+        created_at = Column(String, default="")
+        updated_at = Column(String, default="")
+
+    class RmsOfferApprovalStep(Base):
+        __tablename__ = "rms_offer_approval_steps"
+        id = Column(Integer, primary_key=True, index=True)
+        offer_record_id = Column(
+            Integer, ForeignKey("rms_offer_records.id", ondelete="CASCADE"), nullable=False, index=True
+        )
+        step_order = Column(Integer, nullable=False)
+        step_type = Column(String, default="")
+        approver_user_id = Column(Integer, nullable=True, index=True)
+        status = Column(String, default="pending")
+        comment = Column(Text, default="")
+        acted_at = Column(String, default="")
+
     class RmsMatchResult(Base):
         __tablename__ = "rms_match_results"
         id = Column(Integer, primary_key=True, index=True)
@@ -193,6 +244,9 @@ def register_rms_models(Base) -> Dict[str, Type]:
         "RmsApplicationStatusHistory": RmsApplicationStatusHistory,
         "RmsInterview": RmsInterview,
         "RmsOffer": RmsOffer,
+        "RmsOfferApprovalConfig": RmsOfferApprovalConfig,
+        "RmsOfferRecord": RmsOfferRecord,
+        "RmsOfferApprovalStep": RmsOfferApprovalStep,
         "RmsMatchResult": RmsMatchResult,
     }
     _models_cache_by_base[cache_key] = models

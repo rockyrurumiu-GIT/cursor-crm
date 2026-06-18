@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from auth import data_scope as ds
 from auth.data_scope_catalog import RESOURCE_DELIVERY_HANDOFF
-from auth.deps import get_current_context, require_permission
+from auth.deps import get_current_context, _require_logged_in, get_current_user, require_permission
 from auth import service as auth_service
 from auth.service import AuthContext
 from handoff_core import (
@@ -587,11 +587,14 @@ def register_handoff_routes(
         db.commit()
         return {"ok": True, "synced": synced}
 
+    def _require_notification_user(user: str = Depends(get_current_user)) -> str:
+        return user
+
     @app.get("/api/notifications")
     async def list_notifications(
         unread: Optional[int] = None,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("delivery.handoff.read")),
+        user: str = Depends(_require_notification_user),
     ):
         q = db.query(CrmNotification).filter(CrmNotification.username == user)
         if unread:
@@ -604,6 +607,9 @@ def register_handoff_routes(
                 "message": n.message,
                 "handoff_id": n.handoff_id,
                 "client_id": n.client_id,
+                "application_id": getattr(n, "application_id", None),
+                "offer_record_id": getattr(n, "offer_record_id", None),
+                "link_url": getattr(n, "link_url", None) or "",
                 "read_at": n.read_at.isoformat() if n.read_at else "",
                 "created_at": n.created_at.isoformat() if n.created_at else "",
             }
@@ -614,7 +620,7 @@ def register_handoff_routes(
     async def read_notification(
         notification_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("delivery.handoff.read")),
+        user: str = Depends(_require_notification_user),
     ):
         n = db.query(CrmNotification).filter(CrmNotification.id == notification_id, CrmNotification.username == user).first()
         if n and not n.read_at:

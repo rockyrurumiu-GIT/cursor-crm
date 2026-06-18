@@ -157,6 +157,9 @@
       const canWriteApplications = computed(function () {
         return hasPermission("rms.applications.write");
       });
+      const canReadApplications = computed(function () {
+        return hasPermission("rms.applications.read");
+      });
       const canUseRmsDeliveryOpsTabs = computed(function () {
         if (me.value.rms_delivery_ops_tabs != null) {
           return !!me.value.rms_delivery_ops_tabs;
@@ -255,6 +258,15 @@
           : "rms-progress-btn rms-progress-btn--blue";
       }
 
+      function offerApprovalPendingHint(app) {
+        if (!app || app.status !== "offer_approval_pending") return "";
+        var node = String(app.offer_current_approval_node_label == null ? "" : app.offer_current_approval_node_label).trim();
+        var approver = String(app.offer_pending_approver_label == null ? "" : app.offer_pending_approver_label).trim();
+        if (node && approver) return node + " · " + approver;
+        if (node || approver) return node || approver;
+        return "暂无审批信息";
+      }
+
       const appDisplay = Labels.createAppDisplayHelpers
         ? Labels.createAppDisplayHelpers({
             getJobs: function () { return jobs.jobsState.items; },
@@ -303,12 +315,20 @@
         computed: computed,
         rmsRequest: rmsRequest,
         toast: toast,
+        Labels: Labels,
+        jobs: jobs,
         candidatesState: candidatesState,
         displaySalary: displaySalary,
         formatRmsDate: formatRmsDate,
         scheduleCandidatesTableColumnFit: scheduleCandidatesTableColumnFit,
         loadCandidates: loadCandidates,
         loadDeliveryReview: function () { return loadDeliveryReviewBridge.apply(null, arguments); },
+        appCandidateName: appCandidateName,
+        appClientName: appClientName,
+        appJobTitle: appJobTitle,
+        appJobLocation: appJobLocation,
+        appRecommenderLabel: appRecommenderLabel,
+        appDeliveryLabel: appDeliveryLabel,
       });
       const applicationsState = applications.applicationsState;
       const loadApplications = applications.loadApplications;
@@ -375,6 +395,27 @@
       });
       if (!rosterConversion.submitRosterConvert) {
         showRmsBootError("RMS 转入花名册状态初始化失败，请刷新后重试。");
+        return {};
+      }
+
+      if (!window.CrmRmsOfferManagement || typeof window.CrmRmsOfferManagement.createOfferManagementState !== "function") {
+        showRmsBootError("RMS Offer 管理模块未加载，请刷新后重试。");
+        return {};
+      }
+      const offerManagement = window.CrmRmsOfferManagement.createOfferManagementState({
+        ref: ref,
+        reactive: reactive,
+        activeTab: activeTab,
+        me: me,
+        rmsRequest: rmsRequest,
+        toast: toast,
+        loadApplications: loadApplications,
+        scheduleCandidatesTableColumnFit: scheduleCandidatesTableColumnFit,
+        appCandidateName: appCandidateName,
+        appJobTitle: appJobTitle,
+      });
+      if (!offerManagement.loadOfferRecords) {
+        showRmsBootError("RMS Offer 管理状态初始化失败，请刷新后重试。");
         return {};
       }
 
@@ -511,12 +552,68 @@
         }
       }
 
-      var RMS_TAB_IDS = ["jobs", "candidates", "applications", "deliveryReview", "pipeline"];
+      var RMS_TAB_IDS = ["jobs", "candidates", "applications", "deliveryReview", "pipeline", "offerManagement"];
+
+      function parseRmsOfferLink(linkUrl) {
+        try {
+          var url = new URL(String(linkUrl || ""), window.location.origin);
+          var tab = url.searchParams.get("tab");
+          var offerParam = url.searchParams.get("offer");
+          if (!tab && url.hash) {
+            var hashBody = url.hash.replace(/^#/, "");
+            var hashParts = hashBody.split("?");
+            tab = hashParts[0] || "";
+            if (hashParts[1]) {
+              var hashQuery = new URLSearchParams(hashParts[1]);
+              if (!offerParam) offerParam = hashQuery.get("offer");
+            }
+          }
+          return {
+            tab: tab || "offerManagement",
+            offerId: offerParam != null && offerParam !== "" ? Number(offerParam) : null,
+          };
+        } catch (e) {
+          return { tab: "offerManagement", offerId: null };
+        }
+      }
+
+      function applyRmsOfferNavigation(parsed) {
+        if (!parsed) return;
+        ensureAllowedActiveTab();
+        if (parsed.tab && RMS_TAB_IDS.indexOf(parsed.tab) !== -1) {
+          activeTab.value = parsed.tab;
+        }
+        if (activeTab.value === "offerManagement" && offerManagement.loadOfferRecords) {
+          offerManagement.loadOfferRecords();
+        }
+      }
+
+      window.crmRmsNavigateToOffer = function (linkUrl) {
+        var parsed = parseRmsOfferLink(linkUrl);
+        if (window.location.pathname.replace(/\/$/, "") !== "/rms") {
+          return false;
+        }
+        var next = new URL(window.location.href);
+        next.searchParams.set("tab", parsed.tab || "offerManagement");
+        if (parsed.offerId) next.searchParams.set("offer", String(parsed.offerId));
+        else next.searchParams.delete("offer");
+        next.hash = "";
+        history.replaceState(null, "", next.pathname + next.search);
+        applyRmsOfferNavigation(parsed);
+        return true;
+      };
 
       function resolveInitialActiveTab() {
+        var params = new URLSearchParams(window.location.search);
+        var tabFromQuery = params.get("tab");
+        if (tabFromQuery && RMS_TAB_IDS.indexOf(tabFromQuery) !== -1) {
+          activeTab.value = tabFromQuery;
+          return;
+        }
         var hash = String(window.location.hash || "").replace(/^#/, "").trim();
-        if (RMS_TAB_IDS.indexOf(hash) !== -1) {
-          activeTab.value = hash;
+        var base = hash.split("?")[0];
+        if (RMS_TAB_IDS.indexOf(base) !== -1) {
+          activeTab.value = base;
         }
       }
 
@@ -534,11 +631,14 @@
       });
 
       watch(activeTab, function (tab) {
-        if (tab === "candidates" || tab === "applications" || tab === "deliveryReview" || tab === "pipeline") {
+        if (tab === "candidates" || tab === "applications" || tab === "deliveryReview" || tab === "pipeline" || tab === "offerManagement") {
           scheduleCandidatesTableColumnFit();
         }
         if (tab === "deliveryReview" && canUseRmsDeliveryOpsTabs.value) {
           loadDeliveryReview();
+        }
+        if (tab === "offerManagement") {
+          offerManagement.loadOfferRecords();
         }
       });
 
@@ -555,9 +655,21 @@
         if (canUseRmsDeliveryOpsTabs.value) {
           mountTasks.push(loadDeliveryReview());
         }
+        mountTasks.push(offerManagement.loadOfferRecords());
         await Promise.all(mountTasks);
+        var offerId = offerManagement.resolveOfferFromUrl();
+        if (offerId) {
+          activeTab.value = "offerManagement";
+        }
         if (activeTab.value === "candidates") {
           scheduleCandidatesTableColumnFit();
+        }
+        window.addEventListener("popstate", function () {
+          resolveInitialActiveTab();
+          applyRmsOfferNavigation(parseRmsOfferLink(window.location.href));
+        });
+        if (Core.initOfferApprovalHintPopovers) {
+          Core.initOfferApprovalHintPopovers();
         }
       });
 
@@ -574,6 +686,7 @@
         canWriteCandidates,
         canDeleteCandidates,
         canWriteApplications,
+        canReadApplications,
         canUseRmsDeliveryOpsTabs,
         canDeleteApplications,
         canReadCandidates,
@@ -592,12 +705,14 @@
         },
         ...deliveryReview,
         ...rosterConversion,
+        ...offerManagement,
         educationOptions: EDUCATION_OPTIONS,
         genderOptions: GENDER_OPTIONS,
         sourceOptions: SOURCE_OPTIONS,
         maritalOptions: MARITAL_OPTIONS,
         formatRmsDate,
         progressActionBtnClass,
+        offerApprovalPendingHint,
         appCandidateName,
         appClientName,
         appJobTitle,

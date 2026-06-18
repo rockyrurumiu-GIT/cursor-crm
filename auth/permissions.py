@@ -50,6 +50,7 @@ ALL_PERMISSION_CODES: FrozenSet[str] = frozenset({
     "rms.applications.read",
     "rms.applications.write",
     "rms.applications.delete",
+    "rms.offer_approval.submit",
     "rms.matching.run",
     "rms.analytics.read",
     "system.users.manage",

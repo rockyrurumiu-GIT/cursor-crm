@@ -16,10 +16,35 @@
     var scheduleCandidatesTableColumnFit = deps.scheduleCandidatesTableColumnFit;
     var loadCandidates = deps.loadCandidates;
     var loadDeliveryReview = deps.loadDeliveryReview;
+    var Labels = deps.Labels || {};
+    var jobs = deps.jobs;
+    var appCandidateName = deps.appCandidateName || function () { return ""; };
+    var appClientName = deps.appClientName || function () { return ""; };
+    var appJobTitle = deps.appJobTitle || function () { return ""; };
+    var appJobLocation = deps.appJobLocation || function () { return ""; };
+    var appRecommenderLabel = deps.appRecommenderLabel || function () { return ""; };
+    var appDeliveryLabel = deps.appDeliveryLabel || function () { return ""; };
+
+    var parseDateOnly = Labels.parseDateOnly || function () { return null; };
+    var statusMatchesFilter = Labels.statusMatchesFilter || function () { return true; };
+    var jobById = Labels.jobById || function () { return null; };
 
     var applicationsState = reactive({ loading: false, items: [], error: "" });
     var applicationsFilter = reactive({
-      hired_unconverted_only: false,
+      keyword: "",
+      client_id: "",
+      job_id: "",
+      status: "",
+      date_from: "",
+      date_to: "",
+      hide_roster_converted: false,
+    });
+
+    var applicationProgressOptions = (Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
+      return {
+        value: s,
+        label: Labels.progressLabel ? Labels.progressLabel(s) : s,
+      };
     });
 
     var statusHistoryModal = ref(null);
@@ -31,15 +56,81 @@
     var applicationDetailFailNote = ref("");
     var applicationDetailLoading = ref(false);
 
+    function resolveApplicationClientId(app) {
+      if (app && app.client_id != null && app.client_id !== "") return Number(app.client_id);
+      var jobList = jobs && jobs.jobsState ? jobs.jobsState.items : [];
+      var job = app && app.job_id != null && app.job_id !== "" ? jobById(jobList, app.job_id) : null;
+      if (job && job.client_id != null && job.client_id !== "") return Number(job.client_id);
+      return null;
+    }
+
+    function matchesApplicationKeyword(app, keyword) {
+      var q = (keyword || "").trim().toLowerCase();
+      if (!q) return true;
+      var haystack = [
+        appCandidateName(app),
+        appClientName(app),
+        appJobTitle(app),
+        appJobLocation(app),
+        appRecommenderLabel(app),
+        appDeliveryLabel(app),
+      ].join(" ").toLowerCase();
+      return haystack.indexOf(q) !== -1;
+    }
+
     var filteredApplications = computed(function () {
       var rows = applicationsState.items.slice();
-      if (applicationsFilter.hired_unconverted_only) {
+      if (applicationsFilter.hide_roster_converted) {
         rows = rows.filter(function (a) {
-          return a.status === "hired" && !a.converted_to_roster_entry_id;
+          return !a.converted_to_roster_entry_id;
+        });
+      }
+      if (applicationsFilter.client_id !== "" && applicationsFilter.client_id != null) {
+        var wantClient = Number(applicationsFilter.client_id);
+        rows = rows.filter(function (a) {
+          return resolveApplicationClientId(a) === wantClient;
+        });
+      }
+      if (applicationsFilter.job_id !== "" && applicationsFilter.job_id != null) {
+        var wantJob = Number(applicationsFilter.job_id);
+        rows = rows.filter(function (a) {
+          return Number(a.job_id) === wantJob;
+        });
+      }
+      if (applicationsFilter.status) {
+        var selectedStatus = String(applicationsFilter.status);
+        rows = rows.filter(function (a) {
+          return statusMatchesFilter(a.status, [selectedStatus]);
+        });
+      }
+      var from = parseDateOnly(applicationsFilter.date_from);
+      var to = parseDateOnly(applicationsFilter.date_to);
+      if (from || to) {
+        rows = rows.filter(function (a) {
+          var recDate = parseDateOnly(a.recommended_at);
+          if (from && (!recDate || recDate < from)) return false;
+          if (to && (!recDate || recDate > to)) return false;
+          return true;
+        });
+      }
+      var keyword = applicationsFilter.keyword;
+      if ((keyword || "").trim()) {
+        rows = rows.filter(function (a) {
+          return matchesApplicationKeyword(a, keyword);
         });
       }
       return rows;
     });
+
+    function resetApplicationFilter() {
+      applicationsFilter.keyword = "";
+      applicationsFilter.client_id = "";
+      applicationsFilter.job_id = "";
+      applicationsFilter.status = "";
+      applicationsFilter.date_from = "";
+      applicationsFilter.date_to = "";
+      applicationsFilter.hide_roster_converted = false;
+    }
 
     function candidateForApp(a) {
       if (!a || a.candidate_id == null || a.candidate_id === "") return null;
@@ -177,7 +268,9 @@
     return {
       applicationsState: applicationsState,
       applicationsFilter: applicationsFilter,
+      applicationProgressOptions: applicationProgressOptions,
       filteredApplications: filteredApplications,
+      resetApplicationFilter: resetApplicationFilter,
       applicationDetailModal: applicationDetailModal,
       applicationDetailFailNote: applicationDetailFailNote,
       applicationDetailLoading: applicationDetailLoading,

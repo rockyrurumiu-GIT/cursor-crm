@@ -140,6 +140,9 @@
         if (name === 'datascope' && CAN_ROLES) runTabLoad(loadDataScopeTab);
         if (name === 'preview' && CAN_USERS) runTabLoad(loadPreviewTab);
         if (name === 'depts' && CAN_USERS) runTabLoad(loadDeptsTab);
+        if (name === 'offerApproval' && CAN_USERS && typeof window.loadRmsOfferApprovalConfigAdmin === 'function') {
+            window.loadRmsOfferApprovalConfigAdmin();
+        }
         if (name === 'audit' && CAN_AUDIT) runTabLoad(function () { return loadAudit(false); });
         if (name === 'insurance' && CAN_INSURANCE && typeof window.loadGmInsuranceAdmin === 'function') {
             window.loadGmInsuranceAdmin();
@@ -1053,6 +1056,10 @@
     }
     if (!CAN_USERS) document.getElementById('tab-btn-preview').style.display = 'none';
     if (!CAN_USERS) document.getElementById('tab-btn-depts').style.display = 'none';
+    if (!CAN_USERS) {
+        var oacTab = document.getElementById('tab-btn-offer-approval');
+        if (oacTab) oacTab.style.display = 'none';
+    }
     if (!CAN_AUDIT) document.getElementById('tab-btn-audit').style.display = 'none';
     if (!CAN_INSURANCE) {
         var insTab = document.getElementById('tab-btn-insurance');

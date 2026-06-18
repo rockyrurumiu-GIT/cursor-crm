@@ -154,7 +154,7 @@ _MATRIX_ROWS: List[Dict[str, Any]] = [
         "write": ["rms.applications.write"],
         "delete": ["rms.applications.delete"],
         "import_export": [],
-        "approve": [],
+        "approve": ["rms.offer_approval.submit"],
     },
     {
         "module": "rms",

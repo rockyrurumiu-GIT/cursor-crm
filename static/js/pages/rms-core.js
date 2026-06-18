@@ -160,6 +160,93 @@
     return { ok: true, data: payload };
   }
 
+  function initOfferApprovalHintPopovers(rootEl) {
+    var root = rootEl || (global.document && global.document.getElementById("rms-app"));
+    if (!root || root.getAttribute("data-rms-hint-popover-inited")) return;
+    root.setAttribute("data-rms-hint-popover-inited", "1");
+
+    var popup = null;
+    var activeWrap = null;
+
+    function ensurePopup() {
+      if (popup) return popup;
+      popup = global.document.createElement("div");
+      popup.className = "rms-offer-approval-hint-popup";
+      popup.setAttribute("role", "tooltip");
+      popup.hidden = true;
+      global.document.body.appendChild(popup);
+      return popup;
+    }
+
+    function hidePopup() {
+      activeWrap = null;
+      if (!popup) return;
+      popup.hidden = true;
+    }
+
+    function positionPopup(wrap) {
+      var text = String(wrap.getAttribute("data-hint") || "").trim();
+      if (!text) {
+        hidePopup();
+        return;
+      }
+      var box = ensurePopup();
+      box.textContent = text;
+      box.hidden = false;
+      var rect = wrap.getBoundingClientRect();
+      var gap = 6;
+      box.style.left = "0px";
+      box.style.top = "0px";
+      var boxRect = box.getBoundingClientRect();
+      var left = rect.left + rect.width / 2 - boxRect.width / 2;
+      var top = rect.bottom + gap;
+      var pad = 8;
+      if (left < pad) left = pad;
+      if (left + boxRect.width > global.innerWidth - pad) {
+        left = Math.max(pad, global.innerWidth - pad - boxRect.width);
+      }
+      if (top + boxRect.height > global.innerHeight - pad) {
+        top = rect.top - gap - boxRect.height;
+      }
+      box.style.left = left + "px";
+      box.style.top = top + "px";
+    }
+
+    function showForWrap(wrap) {
+      if (!wrap) return;
+      activeWrap = wrap;
+      positionPopup(wrap);
+    }
+
+    root.addEventListener("mouseover", function (e) {
+      var wrap = e.target.closest && e.target.closest(".rms-offer-approval-hint-wrap");
+      if (wrap) showForWrap(wrap);
+    });
+    root.addEventListener("mouseout", function (e) {
+      var wrap = e.target.closest && e.target.closest(".rms-offer-approval-hint-wrap");
+      if (!wrap) return;
+      var rel = e.relatedTarget;
+      if (rel && wrap.contains(rel)) return;
+      hidePopup();
+    });
+    root.addEventListener("focusin", function (e) {
+      var wrap = e.target.closest && e.target.closest(".rms-offer-approval-hint-wrap");
+      if (wrap) showForWrap(wrap);
+    });
+    root.addEventListener("focusout", function (e) {
+      var wrap = e.target.closest && e.target.closest(".rms-offer-approval-hint-wrap");
+      if (!wrap) return;
+      var rel = e.relatedTarget;
+      if (rel && wrap.contains(rel)) return;
+      hidePopup();
+    });
+    root.addEventListener("scroll", function () {
+      if (activeWrap) positionPopup(activeWrap);
+      else hidePopup();
+    }, true);
+    global.addEventListener("resize", hidePopup);
+  }
+
   global.CrmRmsCore = {
     JOB_SALARY_CAP_MIN: JOB_SALARY_CAP_MIN,
     JOB_SALARY_CAP_MAX: JOB_SALARY_CAP_MAX,
@@ -176,6 +263,7 @@
     fuzzyMatch: fuzzyMatch,
     showValidationPrompt: showValidationPrompt,
     showRmsBootError: showRmsBootError,
+    initOfferApprovalHintPopovers: initOfferApprovalHintPopovers,
     rmsRequest: rmsRequest,
   };
 })(typeof window !== "undefined" ? window : globalThis);

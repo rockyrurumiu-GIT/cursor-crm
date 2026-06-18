@@ -16,6 +16,9 @@ RMS_TABLES = (
     "rms_application_status_history",
     "rms_interviews",
     "rms_offers",
+    "rms_offer_approval_configs",
+    "rms_offer_records",
+    "rms_offer_approval_steps",
     "rms_match_results",
 )
 
@@ -27,6 +30,9 @@ EXPECTED_ORM_TABLENAMES = {
     "RmsApplicationStatusHistory": "rms_application_status_history",
     "RmsInterview": "rms_interviews",
     "RmsOffer": "rms_offers",
+    "RmsOfferApprovalConfig": "rms_offer_approval_configs",
+    "RmsOfferRecord": "rms_offer_records",
+    "RmsOfferApprovalStep": "rms_offer_approval_steps",
     "RmsMatchResult": "rms_match_results",
 }
 

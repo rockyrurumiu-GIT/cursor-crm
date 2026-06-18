@@ -39,6 +39,9 @@ permission-archi.pdf
 # RMS 批量简历导入报告，可能包含候选人信息
 reports/rms_imports/
 
+# RMS Offer 审批人配置（生产环境本地维护，不入库）
+data/rms_offer_approvers.json
+
 # Pytest / Playwright 本地测试产物（勿提交）
 test-results/
 playwright-report/
