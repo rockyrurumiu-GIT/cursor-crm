@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Type
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
@@ -126,12 +126,16 @@ def build_router(
     *,
     legacy_verify: Callable[[str, str], bool],
     legacy_effective_username: Callable[[], str],
+    Client: Optional[Type[Any]] = None,
 ) -> APIRouter:
     router = APIRouter(tags=["auth"])
 
     @router.get("/api/me")
-    async def api_me(ctx: AuthContext = Depends(get_current_context)):
-        return {
+    async def api_me(
+        ctx: AuthContext = Depends(get_current_context),
+        db: Session = Depends(get_db),
+    ):
+        payload = {
             "user": {
                 "id": ctx.user_id,
                 "username": ctx.username,
@@ -145,6 +149,17 @@ def build_router(
             "is_super": ctx.is_super,
             "must_change_password": ctx.must_change_password,
         }
+        if Client is not None:
+            from services import rms_scope as rms_ds
+
+            payload["rms_delivery_ops_tabs"] = rms_ds.can_view_rms_delivery_ops_tabs(
+                db, ctx, Client
+            )
+        else:
+            payload["rms_delivery_ops_tabs"] = bool(
+                ctx.is_super or "rms.applications.write" in (ctx.permissions or set())
+            )
+        return payload
 
     @router.post("/api/auth/login")
     async def api_auth_login(body: LoginBody, db: Session = Depends(get_db)):

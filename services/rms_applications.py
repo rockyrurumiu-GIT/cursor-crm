@@ -791,7 +791,14 @@ def list_delivery_review_applications(
     RmsApplication: Type[Any],
     Client: Type[Any],
 ) -> List[Dict[str, Any]]:
-    q = rms_ds.scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
+    q = rms_ds.scoped_applications_query(
+        db,
+        ctx,
+        RmsApplication,
+        Client,
+        action="read",
+        include_recommended_by_for_read=False,
+    )
     q = q.filter(RmsApplication.status == "recommended")
     q = q.filter(
         or_(

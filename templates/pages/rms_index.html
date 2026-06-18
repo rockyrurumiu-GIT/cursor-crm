@@ -806,10 +806,10 @@
         <button type="button" data-rms-tab="applications" @click="activeTab = 'applications'"
             :class="activeTab === 'applications' ? 'rms-tab-active' : ''"
             class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">推荐</button>
-        <button type="button" data-rms-tab="deliveryReview" @click="activeTab = 'deliveryReview'"
+        <button v-if="canUseRmsDeliveryOpsTabs" type="button" data-rms-tab="deliveryReview" @click="activeTab = 'deliveryReview'"
             :class="activeTab === 'deliveryReview' ? 'rms-tab-active' : ''"
             class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">交付内审</button>
-        <button type="button" data-rms-tab="pipeline" @click="activeTab = 'pipeline'"
+        <button v-if="canUseRmsDeliveryOpsTabs" type="button" data-rms-tab="pipeline" @click="activeTab = 'pipeline'"
             :class="activeTab === 'pipeline' ? 'rms-tab-active' : ''"
             class="px-3 py-1.5 rounded-md border border-transparent text-sm text-[#57606a] hover:bg-[#f6f8fa]">招聘pipeline-候选人状态（交付）</button>
     </div>
@@ -1164,7 +1164,7 @@
     </section>
 
     <!-- Delivery review -->
-    <section v-show="activeTab === 'deliveryReview' && viewMode !== 'candidateReport'">
+    <section v-if="canUseRmsDeliveryOpsTabs" v-show="activeTab === 'deliveryReview' && viewMode !== 'candidateReport'">
         <div class="flex justify-between items-center mb-3">
             <h2 class="text-lg font-medium text-[#1f2328]">交付内审</h2>
         </div>
@@ -1227,7 +1227,7 @@
     </section>
 
     <!-- Pipeline (delivery progress) -->
-    <section v-show="activeTab === 'pipeline' && viewMode !== 'candidateReport'" data-rms-region="pipeline">
+    <section v-if="canUseRmsDeliveryOpsTabs" v-show="activeTab === 'pipeline' && viewMode !== 'candidateReport'" data-rms-region="pipeline">
         <div class="flex justify-between items-center mb-3">
             <h2 class="text-lg font-medium text-[#1f2328]">招聘pipeline-候选人状态（交付）</h2>
         </div>

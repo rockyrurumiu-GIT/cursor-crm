@@ -947,6 +947,7 @@ app.include_router(
         get_db,
         legacy_verify=_verify_admin_login,
         legacy_effective_username=_effective_admin_username,
+        Client=Client,
     )
 )
 

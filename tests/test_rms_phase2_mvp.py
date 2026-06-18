@@ -15,6 +15,7 @@ from auth.data_scope_catalog import (
     RESOURCE_RMS_RESUME,
     SCOPE_ALL,
     SCOPE_ASSIGNED,
+    SCOPE_NONE,
     SCOPE_SELF,
 )
 from auth.permissions import ROLE_DELIVERY, ROLE_SALES, ROLE_VIEWER
@@ -140,6 +141,87 @@ def _set_role_data_scope(engine, role_code: str, resource_code: str, action: str
             ),
             {"rid": rid, "rc": resource_code, "act": action, "st": scope_type},
         )
+
+
+def _set_role_data_scope_by_id(
+    engine, role_id: int, resource_code: str, action: str, scope_type: str
+) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "DELETE FROM sys_role_data_scope "
+                "WHERE role_id = :rid AND resource_code = :rc AND action = :act"
+            ),
+            {"rid": role_id, "rc": resource_code, "act": action},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO sys_role_data_scope "
+                "(role_id, resource_code, action, scope_type, created_at, updated_at) "
+                "VALUES (:rid, :rc, :act, :st, datetime('now'), datetime('now'))"
+            ),
+            {"rid": role_id, "rc": resource_code, "act": action, "st": scope_type},
+        )
+
+
+def _create_recruiter_role(
+    client,
+    admin_auth,
+    engine,
+    suffix: str,
+    *,
+    permission_codes: tuple[str, ...],
+    read_scope: str,
+    write_scope: str,
+    delete_scope: str,
+) -> str:
+    user, pwd = admin_auth
+    headers = {**auth_header(user, pwd), "Content-Type": "application/json"}
+    created = client.post(
+        "/api/system/roles",
+        headers=headers,
+        json={"name": f"招聘测试_{suffix}", "description": "RMS 推荐记录 read scope 测试"},
+    )
+    assert created.status_code == 200, created.text
+    role_id = int(created.json()["id"])
+    saved = client.put(
+        f"/api/system/roles/{role_id}/permissions",
+        headers=headers,
+        json={"permission_codes": list(permission_codes)},
+    )
+    assert saved.status_code == 200, saved.text
+    for action, scope in (
+        ("read", read_scope),
+        ("write", write_scope),
+        ("delete", delete_scope),
+    ):
+        _set_role_data_scope_by_id(engine, role_id, RESOURCE_RMS_APPLICATION, action, scope)
+    with engine.connect() as conn:
+        role_code = conn.execute(
+            text("SELECT code FROM sys_role WHERE id = :id"),
+            {"id": role_id},
+        ).scalar()
+    assert role_code
+    return str(role_code)
+
+
+def _set_application_recommended_by(
+    engine, application_id: int, recommended_by: int, *, delivery_review_status: str | None = None
+) -> None:
+    with engine.begin() as conn:
+        if delivery_review_status is None:
+            conn.execute(
+                text("UPDATE rms_applications SET recommended_by = :uid WHERE id = :id"),
+                {"uid": recommended_by, "id": application_id},
+            )
+        else:
+            conn.execute(
+                text(
+                    "UPDATE rms_applications SET recommended_by = :uid, "
+                    "delivery_review_status = :dr WHERE id = :id"
+                ),
+                {"uid": recommended_by, "dr": delivery_review_status, "id": application_id},
+            )
 
 
 def _create_client_admin(client, admin_auth, name: str) -> int:
@@ -1502,3 +1584,140 @@ def test_status_invalid_mode(client_rbac, admin_auth, rms_engine, uniq):
         json={"to_status": "scheduling_interview", "mode": "foo"},
     )
     assert r.status_code == 422
+
+
+def test_application_read_scope_includes_own_recommendations(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    suffix = uniq
+    recruiter_role = _create_recruiter_role(
+        client_rbac,
+        admin_auth,
+        rms_engine,
+        suffix,
+        permission_codes=(
+            "rms.applications.read",
+            "rms.applications.write",
+            "rms.applications.delete",
+        ),
+        read_scope=SCOPE_ASSIGNED,
+        write_scope=SCOPE_NONE,
+        delete_scope=SCOPE_NONE,
+    )
+    a4 = f"rms2_rec_a4_{suffix}"
+    other = f"rms2_rec_b_{suffix}"
+    a4_uid = _create_user(client_rbac, admin_auth, a4, [recruiter_role])
+    other_uid = _create_user(client_rbac, admin_auth, other, [recruiter_role])
+
+    login_del, job_id, cand_id, _ = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"recscope_{suffix}"
+    )
+    passed = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert passed.status_code == 200, passed.text
+    passed_id = int(passed.json()["id"])
+    _set_application_recommended_by(
+        rms_engine, passed_id, a4_uid, delivery_review_status="passed"
+    )
+
+    pending_cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id, name=f"Pending {suffix}", phone=_unique_phone()),
+    )
+    assert pending_cand.status_code == 200, pending_cand.text
+    pending = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": pending_cand.json()["id"]},
+    )
+    assert pending.status_code == 200, pending.text
+    pending_id = int(pending.json()["id"])
+    _set_application_recommended_by(
+        rms_engine, pending_id, a4_uid, delivery_review_status="pending"
+    )
+
+    other_cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id, name=f"Other {suffix}", phone=_unique_phone()),
+    )
+    assert other_cand.status_code == 200, other_cand.text
+    foreign = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": other_cand.json()["id"]},
+    )
+    assert foreign.status_code == 200, foreign.text
+    foreign_id = int(foreign.json()["id"])
+    _set_application_recommended_by(rms_engine, foreign_id, other_uid)
+
+    login_a4 = _login(client_rbac, a4)
+    assert login_a4.status_code == 200
+
+    listed = client_rbac.get("/api/rms/applications", cookies=login_a4.cookies)
+    assert listed.status_code == 200, listed.text
+    listed_ids = {int(row["id"]) for row in listed.json()}
+    assert passed_id in listed_ids
+    assert pending_id in listed_ids
+    assert foreign_id not in listed_ids
+    passed_row = next(row for row in listed.json() if int(row["id"]) == passed_id)
+    assert passed_row["delivery_review_status"] == "passed"
+
+    detail = client_rbac.get(f"/api/rms/applications/{passed_id}", cookies=login_a4.cookies)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["delivery_review_status"] == "passed"
+
+    history = client_rbac.get(
+        f"/api/rms/applications/{passed_id}/status-history",
+        cookies=login_a4.cookies,
+    )
+    assert history.status_code == 200, history.text
+
+    blocked = client_rbac.get(f"/api/rms/applications/{foreign_id}", cookies=login_a4.cookies)
+    assert blocked.status_code == 404
+
+    patch = client_rbac.patch(
+        f"/api/rms/applications/{passed_id}",
+        cookies=login_a4.cookies,
+        json={"resume_id": None},
+    )
+    assert patch.status_code == 404
+
+    status = client_rbac.post(
+        f"/api/rms/applications/{passed_id}/status",
+        cookies=login_a4.cookies,
+        json={"to_status": "screening"},
+    )
+    assert status.status_code == 404
+
+    deleted = client_rbac.delete(
+        f"/api/rms/applications/{passed_id}",
+        cookies=login_a4.cookies,
+    )
+    assert deleted.status_code == 404
+
+    delivery_review = client_rbac.get(
+        "/api/rms/applications/delivery-review",
+        cookies=login_a4.cookies,
+    )
+    assert delivery_review.status_code == 200, delivery_review.text
+    review_ids = {int(row["id"]) for row in delivery_review.json()}
+    assert pending_id not in review_ids
+
+    me = client_rbac.get("/api/me", cookies=login_a4.cookies)
+    assert me.status_code == 200, me.text
+    assert me.json().get("rms_delivery_ops_tabs") is False
+
+
+def test_delivery_user_me_exposes_rms_delivery_ops_tabs(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    suffix = uniq
+    login_del, _ = _delivery_open_job(client_rbac, rms_engine, admin_auth, suffix)
+    me = client_rbac.get("/api/me", cookies=login_del.cookies)
+    assert me.status_code == 200, me.text
+    assert me.json().get("rms_delivery_ops_tabs") is True

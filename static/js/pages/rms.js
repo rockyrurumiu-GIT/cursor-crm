@@ -157,6 +157,12 @@
       const canWriteApplications = computed(function () {
         return hasPermission("rms.applications.write");
       });
+      const canUseRmsDeliveryOpsTabs = computed(function () {
+        if (me.value.rms_delivery_ops_tabs != null) {
+          return !!me.value.rms_delivery_ops_tabs;
+        }
+        return isSuper.value || hasPermission("rms.applications.write");
+      });
       const canDeleteApplications = computed(function () {
         return hasPermission("rms.applications.delete");
       });
@@ -505,24 +511,51 @@
         }
       }
 
+      var RMS_TAB_IDS = ["jobs", "candidates", "applications", "deliveryReview", "pipeline"];
+
+      function resolveInitialActiveTab() {
+        var hash = String(window.location.hash || "").replace(/^#/, "").trim();
+        if (RMS_TAB_IDS.indexOf(hash) !== -1) {
+          activeTab.value = hash;
+        }
+      }
+
+      function ensureAllowedActiveTab() {
+        if (
+          (activeTab.value === "deliveryReview" || activeTab.value === "pipeline") &&
+          !canUseRmsDeliveryOpsTabs.value
+        ) {
+          activeTab.value = "applications";
+        }
+      }
+
+      watch(canUseRmsDeliveryOpsTabs, function () {
+        ensureAllowedActiveTab();
+      });
+
       watch(activeTab, function (tab) {
         if (tab === "candidates" || tab === "applications" || tab === "deliveryReview" || tab === "pipeline") {
           scheduleCandidatesTableColumnFit();
         }
-        if (tab === "deliveryReview") {
+        if (tab === "deliveryReview" && canUseRmsDeliveryOpsTabs.value) {
           loadDeliveryReview();
         }
       });
 
       onMounted(async function () {
-        await Promise.all([
-          loadMe(),
+        resolveInitialActiveTab();
+        await loadMe();
+        ensureAllowedActiveTab();
+        var mountTasks = [
           jobs.loadJobs(),
           loadCandidates(),
           loadApplications(),
-          loadDeliveryReview(),
           jobs.loadJobFormOptions(),
-        ]);
+        ];
+        if (canUseRmsDeliveryOpsTabs.value) {
+          mountTasks.push(loadDeliveryReview());
+        }
+        await Promise.all(mountTasks);
         if (activeTab.value === "candidates") {
           scheduleCandidatesTableColumnFit();
         }
@@ -541,6 +574,7 @@
         canWriteCandidates,
         canDeleteCandidates,
         canWriteApplications,
+        canUseRmsDeliveryOpsTabs,
         canDeleteApplications,
         canReadCandidates,
         canRecommendExistingCandidate,

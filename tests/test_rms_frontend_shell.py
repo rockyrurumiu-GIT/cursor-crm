@@ -869,6 +869,42 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "Phase 0" not in html
 
 
+def test_rms_delivery_ops_tabs_gated_by_applications_write():
+    rms_js = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
+    rms_html = (REPO_ROOT / "templates/pages/rms_index.html").read_text(encoding="utf-8")
+
+    assert "const canUseRmsDeliveryOpsTabs = computed" in rms_js
+    assert "me.value.rms_delivery_ops_tabs" in rms_js
+    assert "function ensureAllowedActiveTab()" in rms_js
+    assert 'activeTab.value === "deliveryReview"' in rms_js
+    assert 'activeTab.value === "pipeline"' in rms_js
+    assert '!canUseRmsDeliveryOpsTabs.value' in rms_js
+    assert 'activeTab.value = "applications"' in rms_js
+    assert "function resolveInitialActiveTab()" in rms_js
+    assert "window.location.hash" in rms_js
+    assert "if (canUseRmsDeliveryOpsTabs.value)" in rms_js
+    assert "mountTasks.push(loadDeliveryReview())" in rms_js
+    assert "tab === \"deliveryReview\" && canUseRmsDeliveryOpsTabs.value" in rms_js
+    assert "canUseRmsDeliveryOpsTabs," in rms_js
+
+    assert 'v-if="canUseRmsDeliveryOpsTabs" type="button" data-rms-tab="deliveryReview"' in rms_html
+    assert 'v-if="canUseRmsDeliveryOpsTabs" type="button" data-rms-tab="pipeline"' in rms_html
+    assert 'v-if="canUseRmsDeliveryOpsTabs" v-show="activeTab === \'deliveryReview\'' in rms_html
+    assert 'v-if="canUseRmsDeliveryOpsTabs" v-show="activeTab === \'pipeline\'' in rms_html
+
+    apps_tab = 'data-rms-tab="applications"'
+    apps_tab_idx = rms_html.index(apps_tab)
+    apps_tab_slice = rms_html[apps_tab_idx - 120 : apps_tab_idx + 120]
+    assert "canUseRmsDeliveryOpsTabs" not in apps_tab_slice
+    assert "canWriteApplications" not in apps_tab_slice
+
+    scope_src = (REPO_ROOT / "services/rms_scope.py").read_text(encoding="utf-8")
+    assert "def can_view_rms_delivery_ops_tabs(" in scope_src
+    auth_routes = (REPO_ROOT / "auth/routes.py").read_text(encoding="utf-8")
+    assert '"rms_delivery_ops_tabs"' in auth_routes
+    assert "can_view_rms_delivery_ops_tabs" in auth_routes
+
+
 def test_rms_dashboard_assets_and_nav():
     dash_js = REPO_ROOT / "static/js/pages/rms-dashboard.js"
     dash_html = REPO_ROOT / "templates/pages/rms_dashboard.html"

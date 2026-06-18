@@ -17,6 +17,7 @@ from auth.data_scope_catalog import (
     RESOURCE_RMS_JOB,
 )
 from auth.service import AuthContext
+from auth.permissions import ROLE_DELIVERY
 
 
 def scoped_jobs_query(
@@ -47,10 +48,27 @@ def scoped_applications_query(
     Client: Type[Any],
     *,
     action: str = "read",
+    include_recommended_by_for_read: bool = True,
 ) -> Query:
     q = db.query(RmsApplication)
-    return ds.filter_query_by_client_scope(
-        q, db, ctx, RESOURCE_RMS_APPLICATION, action, RmsApplication.client_id, Client
+    if (
+        action != "read"
+        or ctx.user_id is None
+        or not include_recommended_by_for_read
+    ):
+        return ds.filter_query_by_client_scope(
+            q, db, ctx, RESOURCE_RMS_APPLICATION, action, RmsApplication.client_id, Client
+        )
+    allowed = ds.scoped_client_ids(db, ctx, RESOURCE_RMS_APPLICATION, action, Client)
+    if allowed is None:
+        return q
+    if not allowed:
+        return q.filter(RmsApplication.recommended_by == ctx.user_id)
+    return q.filter(
+        or_(
+            RmsApplication.client_id.in_(allowed),
+            RmsApplication.recommended_by == ctx.user_id,
+        )
     )
 
 
@@ -193,6 +211,32 @@ def visible_candidate_ids(
         if cid is not None:
             ids.add(int(cid))
     return ids
+
+
+def can_view_rms_delivery_ops_tabs(
+    db: Session,
+    ctx: AuthContext,
+    Client: Type[Any],
+) -> bool:
+    """True when user has delivery client scope on applications, not recommended-by-only read."""
+    if ctx.is_super:
+        return True
+    perms = ctx.permissions or set()
+    if "rms.applications.read" not in perms and "rms.applications.write" not in perms:
+        return False
+    for action in ("write", "read"):
+        if action == "write" and "rms.applications.write" not in perms:
+            continue
+        if action == "read" and "rms.applications.read" not in perms:
+            continue
+        allowed = ds.scoped_client_ids(db, ctx, RESOURCE_RMS_APPLICATION, action, Client)
+        if allowed is None:
+            return True
+        if allowed:
+            return True
+    if ROLE_DELIVERY in (ctx.roles or []):
+        return True
+    return False
 
 
 def assert_candidate_usable_for_application(
