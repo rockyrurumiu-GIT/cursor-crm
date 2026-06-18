@@ -735,7 +735,7 @@
         var sel = document.getElementById('preview-user-select');
         if (sel && !sel.options.length) {
             sel.innerHTML = state.users.map(function (u) {
-                return '<option value="' + u.id + '">' + u.username + ' · ' + (u.display_name || '') + '</option>';
+                return '<option value="' + u.id + '">' + (u.display_name || u.username) + '</option>';
             }).join('');
         }
         await renderPreview();
@@ -752,7 +752,7 @@
         var scopeHtml = scopeRows.map(function (x) {
             return '<tr><td class="px-2 py-1">' + x.resource_code + '</td><td class="px-2 py-1">' + x.action + '</td><td class="px-2 py-1">' + x.scope_type + '</td></tr>';
         }).join('');
-        box.innerHTML = '<p><strong>用户</strong>：' + data.user.username + '（' + (data.user.display_name || '') + '）</p>'
+        box.innerHTML = '<p><strong>用户</strong>：' + (data.user.display_name || data.user.username) + '</p>'
             + '<p class="mt-2"><strong>角色</strong>：' + roles + '</p>'
             + '<p class="mt-2"><strong>功能权限</strong>（节选）：' + perms + '</p>'
             + '<p class="mt-3 font-semibold">有效数据范围（非 none）</p>'

@@ -13,6 +13,7 @@
         /* Critical fallback when Tailwind CDN is unavailable. */
         .hidden { display: none !important; }
         [v-cloak] { display: none !important; }
+        .crm-field-required-mark { color: #dc2626; font-weight: 700; }
         .funnel-layer:hover { filter: brightness(1.1); cursor: pointer; }
         /* 父级若 overflow 非 visible，下拉会被裁切 — nav 禁止横向 overflow 裁剪 */
         .crm-header-nav-wrap { overflow: visible; min-width: 0; }
@@ -29,12 +30,13 @@
             background: transparent;
             border: 0;
             cursor: pointer;
+            overflow: visible;
         }
         .crm-notify-btn:hover { color: #e6edf3; background: rgba(255,255,255,0.06); }
         .crm-notify-badge {
             position: absolute;
-            top: 0.1rem;
-            right: 0.05rem;
+            top: -0.2rem;
+            right: -0.35rem;
             min-width: 1rem;
             height: 1rem;
             padding: 0 0.25rem;
@@ -45,6 +47,9 @@
             line-height: 1rem;
             font-weight: 700;
             text-align: center;
+            z-index: 2;
+            box-shadow: 0 0 0 1px #010409;
+            pointer-events: none;
         }
         .crm-notify-panel {
             position: absolute;
@@ -70,13 +75,33 @@
             font-weight: 600;
             color: #e6edf3;
         }
+        .crm-notify-head-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .crm-notify-action {
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: #8b949e;
+            background: transparent;
+            border: 0;
+            cursor: pointer;
+            padding: 0;
+        }
+        .crm-notify-action:hover { color: #f85149; }
+        .crm-notify-row {
+            display: flex;
+            align-items: stretch;
+            border-bottom: 1px solid #21262d;
+        }
         .crm-notify-item {
             display: block;
-            width: 100%;
+            flex: 1;
+            min-width: 0;
             text-align: left;
             padding: 0.7rem 0.85rem;
             border: 0;
-            border-bottom: 1px solid #21262d;
             background: transparent;
             color: #e6edf3;
             cursor: pointer;
@@ -85,6 +110,17 @@
         .crm-notify-item.is-read { color: #8b949e; }
         .crm-notify-msg { font-size: 0.8125rem; line-height: 1.45; }
         .crm-notify-time { margin-top: 0.25rem; font-size: 0.6875rem; color: #8b949e; }
+        .crm-notify-del {
+            flex-shrink: 0;
+            align-self: center;
+            padding: 0.35rem 0.65rem;
+            border: 0;
+            background: transparent;
+            color: #8b949e;
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+        .crm-notify-del:hover { color: #f85149; }
         .crm-notify-empty { padding: 1rem 0.85rem; font-size: 0.8125rem; color: #8b949e; }
         .gh-nav-item { position: relative; }
         .gh-mega {
@@ -190,7 +226,7 @@
             top: 0;
             z-index: 5;
         }
-        .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer):not(.rms-sticky-serial):not(.rms-sticky-title):not(.rms-sticky-client):not(.rms-candidate-sticky-name) {
+        .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer):not(.rms-sticky-serial):not(.rms-sticky-title):not(.rms-sticky-client):not(.rms-candidate-sticky-name):not(.rms-offer-sticky-status):not(.rms-offer-sticky-candidate):not(.opp-sticky-name):not(.opp-sticky-client) {
             z-index: 3;
         }
         /* 三键操作列固定宽（colgroup + 单元格双保险） */
@@ -471,7 +507,11 @@
         .crm-table thead .rms-sticky-serial,
         .crm-table thead .rms-sticky-title,
         .crm-table thead .rms-sticky-client,
-        .crm-table thead .rms-candidate-sticky-name {
+        .crm-table thead .rms-candidate-sticky-name,
+        .crm-table thead .rms-offer-sticky-status,
+        .crm-table thead .rms-offer-sticky-candidate,
+        .crm-table thead .opp-sticky-name,
+        .crm-table thead .opp-sticky-client {
             background: #2f75b5;
             color: #fff;
             border-color: #1f5a94;
@@ -487,7 +527,11 @@
         .crm-table tbody .rms-sticky-serial,
         .crm-table tbody .rms-sticky-title,
         .crm-table tbody .rms-sticky-client,
-        .crm-table tbody .rms-candidate-sticky-name {
+        .crm-table tbody .rms-candidate-sticky-name,
+        .crm-table tbody .rms-offer-sticky-status,
+        .crm-table tbody .rms-offer-sticky-candidate,
+        .crm-table tbody .opp-sticky-name,
+        .crm-table tbody .opp-sticky-client {
             background: #fff;
         }
         .crm-table tbody tr:nth-child(even) .delivery-sticky-left-serial,
@@ -501,7 +545,11 @@
         .crm-table tbody tr:nth-child(even) .rms-sticky-serial,
         .crm-table tbody tr:nth-child(even) .rms-sticky-title,
         .crm-table tbody tr:nth-child(even) .rms-sticky-client,
-        .crm-table tbody tr:nth-child(even) .rms-candidate-sticky-name {
+        .crm-table tbody tr:nth-child(even) .rms-candidate-sticky-name,
+        .crm-table tbody tr:nth-child(even) .rms-offer-sticky-status,
+        .crm-table tbody tr:nth-child(even) .rms-offer-sticky-candidate,
+        .crm-table tbody tr:nth-child(even) .opp-sticky-name,
+        .crm-table tbody tr:nth-child(even) .opp-sticky-client {
             background: #f6f8fa;
         }
         .crm-table tbody tr:hover .delivery-sticky-left-serial,
@@ -515,7 +563,11 @@
         .crm-table tbody tr:hover .rms-sticky-serial,
         .crm-table tbody tr:hover .rms-sticky-title,
         .crm-table tbody tr:hover .rms-sticky-client,
-        .crm-table tbody tr:hover .rms-candidate-sticky-name {
+        .crm-table tbody tr:hover .rms-candidate-sticky-name,
+        .crm-table tbody tr:hover .rms-offer-sticky-status,
+        .crm-table tbody tr:hover .rms-offer-sticky-candidate,
+        .crm-table tbody tr:hover .opp-sticky-name,
+        .crm-table tbody tr:hover .opp-sticky-client {
             background: #eef6ff;
         }
         /* 表头列宽拖拽（与客户拜访记录一致） */
@@ -1359,7 +1411,10 @@
                         <div id="crm-notify-panel" class="crm-notify-panel hidden" role="dialog" aria-label="通知列表">
                             <div class="crm-notify-head">
                                 <span>通知</span>
-                                <span id="crm-notify-count" class="text-[#8b949e] font-normal"></span>
+                                <div class="crm-notify-head-actions">
+                                    <button type="button" id="crm-notify-delete-all" class="crm-notify-action hidden">删除全部</button>
+                                    <span id="crm-notify-count" class="text-[#8b949e] font-normal"></span>
+                                </div>
                             </div>
                             <div id="crm-notify-list"></div>
                         </div>
@@ -1482,14 +1537,19 @@
             return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
         };
 
+        window.crmNotifyIsUnread = function (item) {
+            return !(item && String(item.read_at || '').trim());
+        };
+
         window.crmRenderNotifications = function () {
             var wrap = document.getElementById('crm-notify-wrap');
             var badge = document.getElementById('crm-notify-badge');
             var countEl = document.getElementById('crm-notify-count');
+            var deleteAllBtn = document.getElementById('crm-notify-delete-all');
             var listEl = document.getElementById('crm-notify-list');
             if (!wrap || !badge || !countEl || !listEl) return;
             var items = window.crmNotifications || [];
-            var unread = items.filter(function (n) { return !n.read_at; }).length;
+            var unread = items.filter(function (n) { return window.crmNotifyIsUnread(n); }).length;
             wrap.classList.remove('hidden');
             if (unread > 0) {
                 badge.textContent = unread > 99 ? '99+' : String(unread);
@@ -1498,18 +1558,24 @@
                 badge.classList.add('hidden');
             }
             countEl.textContent = unread > 0 ? (unread + ' 条未读') : '暂无未读';
+            if (deleteAllBtn) {
+                deleteAllBtn.classList.toggle('hidden', !items.length);
+            }
             if (!items.length) {
                 listEl.innerHTML = '<div class="crm-notify-empty">暂无通知</div>';
                 return;
             }
             listEl.innerHTML = items.map(function (n) {
-                var cls = 'crm-notify-item' + (n.read_at ? ' is-read' : '');
+                var cls = 'crm-notify-item' + (window.crmNotifyIsUnread(n) ? '' : ' is-read');
                 var msg = String(n.message || '通知').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 var time = window.crmFormatNotifyTime(n.created_at);
-                return '<button type="button" class="' + cls + '" data-notify-id="' + n.id + '">'
+                return '<div class="crm-notify-row">'
+                    + '<button type="button" class="' + cls + '" data-notify-id="' + n.id + '">'
                     + '<div class="crm-notify-msg">' + msg + '</div>'
                     + (time ? '<div class="crm-notify-time">' + time + '</div>' : '')
-                    + '</button>';
+                    + '</button>'
+                    + '<button type="button" class="crm-notify-del" data-notify-del="' + n.id + '" aria-label="删除">删除</button>'
+                    + '</div>';
             }).join('');
         };
 
@@ -1521,12 +1587,52 @@
             btn.setAttribute('aria-expanded', open ? 'true' : 'false');
         };
 
+        window.crmDeleteNotification = async function (notificationId) {
+            try {
+                var r = await fetch('/api/notifications/' + notificationId, {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: window.crmAuthHeader(),
+                });
+                if (!r.ok) return;
+                window.crmNotifications = (window.crmNotifications || []).filter(function (n) {
+                    return Number(n.id) !== Number(notificationId);
+                });
+                window.crmRenderNotifications();
+            } catch (e) { /* ignore */ }
+        };
+
+        window.crmDeleteAllNotifications = async function () {
+            if (!window.crmNotifications || !window.crmNotifications.length) return;
+            var ok = false;
+            if (typeof window.crmConfirmDeleteDialog === 'function') {
+                ok = await window.crmConfirmDeleteDialog({
+                    title: '删除全部通知',
+                    targetText: '确定删除全部通知？',
+                    hint: '删除后将从通知列表移除。',
+                });
+            } else {
+                ok = window.confirm('确定删除全部通知？');
+            }
+            if (!ok) return;
+            try {
+                var r = await fetch('/api/notifications', {
+                    method: 'DELETE',
+                    credentials: 'same-origin',
+                    headers: window.crmAuthHeader(),
+                });
+                if (!r.ok) return;
+                window.crmNotifications = [];
+                window.crmRenderNotifications();
+            } catch (e) { /* ignore */ }
+        };
+
         window.crmOpenNotification = async function (notificationId) {
             var item = (window.crmNotifications || []).find(function (n) {
                 return Number(n.id) === Number(notificationId);
             });
             if (!item) return;
-            if (!item.read_at) {
+            if (window.crmNotifyIsUnread(item)) {
                 try {
                     await fetch('/api/notifications/' + item.id + '/read', {
                         method: 'POST',
@@ -1568,19 +1674,50 @@
             }
         };
 
+        window.crmStartNotificationPolling = function () {
+            if (window.__crmNotifyPollStarted) return;
+            window.__crmNotifyPollStarted = true;
+            var pollMs = 30000;
+            window.setInterval(function () {
+                if (document.hidden) return;
+                window.crmRefreshNotifications();
+            }, pollMs);
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden) window.crmRefreshNotifications();
+            });
+            window.addEventListener('focus', function () {
+                window.crmRefreshNotifications();
+            });
+        };
+
         window.crmInitNotifications = function () {
             if (window.__crmNotifyInited) return;
             window.__crmNotifyInited = true;
             var btn = document.getElementById('crm-notify-btn');
             var panel = document.getElementById('crm-notify-panel');
             var listEl = document.getElementById('crm-notify-list');
+            var deleteAllBtn = document.getElementById('crm-notify-delete-all');
             if (!btn || !panel || !listEl) return;
             btn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var open = panel.classList.contains('hidden');
                 window.crmSetNotifyPanelOpen(open);
+                if (open) window.crmRefreshNotifications();
             });
+            if (deleteAllBtn) {
+                deleteAllBtn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    window.crmDeleteAllNotifications();
+                });
+            }
             listEl.addEventListener('click', function (e) {
+                var delBtn = e.target.closest('[data-notify-del]');
+                if (delBtn) {
+                    e.stopPropagation();
+                    var delId = delBtn.getAttribute('data-notify-del');
+                    if (delId) window.crmDeleteNotification(delId);
+                    return;
+                }
                 var target = e.target.closest('[data-notify-id]');
                 if (!target) return;
                 var id = target.getAttribute('data-notify-id');
@@ -1592,6 +1729,7 @@
                 if (wrap.contains(e.target)) return;
                 window.crmSetNotifyPanelOpen(false);
             });
+            window.crmStartNotificationPolling();
         };
 
         window.crmFileAccessUrl = function (storedPath) {
@@ -1799,7 +1937,14 @@
                     if (field.label) {
                         var lbl = document.createElement('label');
                         lbl.className = 'block text-sm text-gray-600 mb-1';
-                        lbl.textContent = String(field.label);
+                        lbl.appendChild(document.createTextNode(String(field.label)));
+                        if (field.required) {
+                            var reqMark = document.createElement('span');
+                            reqMark.className = 'crm-field-required-mark';
+                            reqMark.setAttribute('aria-hidden', 'true');
+                            reqMark.textContent = '*';
+                            lbl.appendChild(reqMark);
+                        }
                         wrap.appendChild(lbl);
                     }
                     if (field.type === 'textarea') {
@@ -2476,6 +2621,6 @@
         })();
     </script>
     {% block page_scripts %}{% endblock %}
-    <script src="/static/js/crm-table-resize.js?v=25"></script>
+    <script src="/static/js/crm-table-resize.js?v=26"></script>
 </body>
 </html>

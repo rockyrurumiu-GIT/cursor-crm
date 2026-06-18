@@ -38,8 +38,6 @@ def _user_label(db: Session, user_id: Optional[int]) -> str:
         return ""
     dn = str(row[1] or "").strip()
     un = str(row[0] or "").strip()
-    if dn and un:
-        return f"{dn} · {un}"
     return dn or un
 
 

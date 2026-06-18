@@ -2,6 +2,62 @@
 {% block title %}商机 · ITO BMS{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    .crm-table[data-table-id="opportunity-leads"] {
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+        --opp-sticky-col0-width: 10rem;
+        --opp-sticky-col1-left: var(--opp-sticky-col0-width);
+    }
+    .crm-table[data-table-id="opportunity-leads"] col.opp-col-name {
+        width: var(--opp-sticky-col0-width) !important;
+        min-width: var(--opp-sticky-col0-width) !important;
+        max-width: var(--opp-sticky-col0-width) !important;
+    }
+    .crm-table[data-table-id="opportunity-leads"] col.opp-col-client {
+        width: var(--opp-sticky-col1-width, 8rem) !important;
+        min-width: var(--opp-sticky-col1-width, 8rem) !important;
+        max-width: var(--opp-sticky-col1-width, 8rem) !important;
+    }
+    .crm-table[data-table-id="opportunity-leads"] .opp-sticky-name,
+    .crm-table[data-table-id="opportunity-leads"] .opp-sticky-client {
+        position: sticky;
+        box-sizing: border-box;
+        background: #fff;
+        background-clip: padding-box;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    .crm-table[data-table-id="opportunity-leads"] .opp-sticky-name {
+        left: 0;
+        z-index: 12;
+    }
+    .crm-table[data-table-id="opportunity-leads"] .opp-sticky-client {
+        left: var(--opp-sticky-col1-left);
+        z-index: 11;
+        border-right: 1px solid #d0d7de;
+        box-shadow: 2px 0 6px -4px rgba(15, 23, 42, 0.12);
+    }
+    .crm-table[data-table-id="opportunity-leads"] thead .opp-sticky-name,
+    .crm-table[data-table-id="opportunity-leads"] thead .opp-sticky-client {
+        top: 0;
+        background: #2f75b5;
+    }
+    .crm-table[data-table-id="opportunity-leads"] thead .opp-sticky-name { z-index: 63; }
+    .crm-table[data-table-id="opportunity-leads"] thead .opp-sticky-client { z-index: 62; }
+    .crm-table[data-table-id="opportunity-leads"] tbody tr:nth-child(even) .opp-sticky-name,
+    .crm-table[data-table-id="opportunity-leads"] tbody tr:nth-child(even) .opp-sticky-client {
+        background: #f6f8fa;
+    }
+    .crm-table[data-table-id="opportunity-leads"] tbody tr:hover .opp-sticky-name,
+    .crm-table[data-table-id="opportunity-leads"] tbody tr:hover .opp-sticky-client {
+        background: #eef6ff;
+    }
+    .crm-table[data-table-id="opportunity-leads"] .crm-cell-clip:hover {
+        z-index: 3;
+    }
+</style>
 {% endblock %}
 {% block content %}
 {% raw %}
@@ -9,17 +65,20 @@
     <div class="flex flex-wrap justify-between gap-3 items-center">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">商机管理</h1>
-            <p class="text-sm text-gray-500 mt-1">赢单后可一键发起销售-交付交接。</p>
         </div>
         <button type="button" @click="openNewForm" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm">+ 新建商机</button>
     </div>
     <div class="bg-white border rounded-lg overflow-hidden">
         <div class="crm-h-scroll">
         <table class="crm-table w-full min-w-[1200px]" data-table-id="opportunity-leads">
+            <colgroup>
+                <col class="opp-col-name" />
+                <col class="opp-col-client" />
+            </colgroup>
             <thead>
                 <tr>
-                    <th class="crm-th">商机名称</th>
-                    <th class="crm-th">客户</th>
+                    <th class="crm-th opp-sticky-name">商机名称</th>
+                    <th class="crm-th opp-sticky-client">客户</th>
                     <th class="crm-th">预估单价(人月)</th>
                     <th class="crm-th">预估当年金额</th>
                     <th class="crm-th">赢单率</th>
@@ -34,8 +93,8 @@
             </thead>
             <tbody>
                 <tr v-for="o in items" :key="o.id">
-                    <td class="crm-td">{{ o.name || '—' }}</td>
-                    <td class="crm-td crm-name-cell">{{ o.client_name || '—' }}</td>
+                    <td class="crm-td opp-sticky-name">{{ o.name || '—' }}</td>
+                    <td class="crm-td opp-sticky-client crm-name-cell">{{ o.client_name || '—' }}</td>
                     <td class="crm-td">{{ displayAmount(o.amount) }}</td>
                     <td class="crm-td">{{ displayAmount(o.estimated_current_year_amount) }}</td>
                     <td class="crm-td">{{ displayWinRate(o.probability) }}</td>
@@ -250,6 +309,7 @@ createApp({
         const load = async () => {
             const r = await fetch('/api/opportunities', { headers: auth() });
             items.value = r.ok ? await r.json() : [];
+            nextTick(() => window.crmRefreshOpColumnWidths?.());
         };
 
         const displayAmount = (raw) => {
@@ -382,6 +442,15 @@ createApp({
 
         onMounted(async () => {
             await Promise.all([load(), loadClients(), loadContacts()]);
+            nextTick(() => {
+                const table = document.querySelector('#opp-app table[data-table-id="opportunity-leads"]');
+                if (table && window.crmInitTableColumnResize) {
+                    window.crmInitTableColumnResize(table);
+                }
+                const sync = () => window.crmRefreshOpColumnWidths?.();
+                sync();
+                requestAnimationFrame(sync);
+            });
         });
 
         return {

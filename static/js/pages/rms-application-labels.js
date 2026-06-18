@@ -317,6 +317,14 @@
     return String(value == null ? "" : value).trim();
   }
 
+  function normalizeUserLabel(label) {
+    var raw = textValue(label);
+    if (!raw) return "";
+    var sep = raw.indexOf(" · ");
+    if (sep > 0) return raw.slice(0, sep).trim();
+    return raw;
+  }
+
   function userLabelById(users, userId) {
     if (userId == null || userId === "") return "—";
     var id = Number(userId);
@@ -324,7 +332,6 @@
       if (Number(users[i].id) === id) {
         var dn = textValue(users[i].display_name);
         var un = textValue(users[i].username);
-        if (dn && un) return dn + " · " + un;
         return dn || un || String(id);
       }
     }
@@ -392,16 +399,16 @@
         return "—";
       },
       appRecommenderLabel: function (a) {
-        var direct = textValue(a && a.recommended_by_name);
+        var direct = normalizeUserLabel(a && a.recommended_by_name);
         if (direct) return direct;
         return userLabelById(getUsers(), a && a.recommended_by);
       },
       appDeliveryLabel: function (a) {
-        var direct = textValue(a && a.delivery_owner_label);
+        var direct = normalizeUserLabel(a && a.delivery_owner_label);
         if (direct) return direct;
 
         var job = a && a.job_id != null && a.job_id !== "" ? jobById(getJobs(), a.job_id) : null;
-        var jobDeliveryLabel = textValue(job && job.delivery_owner_label);
+        var jobDeliveryLabel = normalizeUserLabel(job && job.delivery_owner_label);
         if (jobDeliveryLabel) return jobDeliveryLabel;
         if (job && job.delivery_owner_user_id != null && job.delivery_owner_user_id !== "") {
           return userLabelById(getUsers(), job.delivery_owner_user_id);

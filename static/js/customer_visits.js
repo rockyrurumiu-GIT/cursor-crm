@@ -193,6 +193,7 @@ createApp({
                     edge: VISIT_COL_EDGE,
                 });
             }
+            nextTick(() => window.crmRefreshOpColumnWidths?.());
         });
 
         return {

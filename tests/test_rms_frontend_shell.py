@@ -396,7 +396,7 @@ const h = L.createAppDisplayHelpers({{
     location: "上海",
     client_id: 10,
     client_name: "ACME",
-    delivery_owner_label: "王五 · wangwu",
+    delivery_owner_label: "王五",
   }}],
   getCandidates: () => [{{ id: 2, name: "张三" }}],
   getUsers: () => [
@@ -417,8 +417,8 @@ const checks = [
   ["appClientName", "ACME"],
   ["appJobTitle", "后端工程师"],
   ["appJobLocation", "上海"],
-  ["appRecommenderLabel", "李四 · lisi"],
-  ["appDeliveryLabel", "王五 · wangwu"],
+  ["appRecommenderLabel", "李四"],
+  ["appDeliveryLabel", "王五"],
 ];
 for (const [name, want] of checks) {{
   const got = h[name](app);
@@ -454,12 +454,12 @@ const hJobUserId = L.createAppDisplayHelpers({{
   getUsers: () => [{{ id: 5, display_name: "赵六", username: "zhaoliu" }}],
 }});
 const fromJobUserId = hJobUserId.appDeliveryLabel({{ job_id: 2 }});
-if (fromJobUserId !== "赵六 · zhaoliu") {{
+if (fromJobUserId !== "赵六") {{
   console.error("job delivery_owner_user_id: got " + JSON.stringify(fromJobUserId));
   process.exit(1);
 }}
 const fromAppUserId = h.appDeliveryLabel({{ delivery_owner_user_id: 3 }});
-if (fromAppUserId !== "李四 · lisi") {{
+if (fromAppUserId !== "李四") {{
   console.error("app delivery_owner_user_id: got " + JSON.stringify(fromAppUserId));
   process.exit(1);
 }}
@@ -916,8 +916,12 @@ def test_rms_offer_management_shell():
     assert "Offer 管理" in rms_html
     assert 'data-rms-tab="offerManagement"' in rms_html
     assert "发起 Offer 审批" in rms_html
-    assert "弃offer原因 *" in offer_js
-    assert "在途流失原因 *" in offer_js
+    assert 'label: "弃offer原因"' in offer_js
+    assert 'label: "在途流失原因"' in offer_js
+    assert "required: true" in offer_js
+    base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
+    assert "crm-field-required-mark" in base_html
+    assert "field.required" in base_html
     assert "发起在途审批" not in rms_html
     assert "发起在途审批" not in offer_js
     assert "rms-offer-management.js" in rms_html
@@ -964,7 +968,12 @@ def test_rms_offer_management_shell():
     assert "data-table-id=\"rms-offer-management\"" in rms_html
     base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
     assert "crm-notify-wrap" in base_html
+    assert "await window.crmConfirmDeleteDialog({" in base_html
+    assert "title: '删除全部通知'" in base_html
+    assert "crmDeleteAllNotifications" in base_html
     assert "crmRefreshNotifications" in base_html
+    assert "crmStartNotificationPolling" in base_html
+    assert "crmNotifyIsUnread" in base_html
     assert "crmRmsNavigateToOffer" in (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
 
 

@@ -196,7 +196,7 @@
         var data = await r.json();
         assignUsers = data.users || [];
         var deptLabel = function (d) { return String(d.name || d.code || '').trim(); };
-        var userLabel = function (u) { return (u.display_name || u.username) + ' · ' + u.username; };
+        var userLabel = function (u) { return (u.display_name || u.username); };
         var defs = data.defaults || {};
         var sd = salesDeptId != null ? salesDeptId : defs.owner_dept_id;
         var su = salesOwnerId != null ? salesOwnerId : defs.owner_user_id;

@@ -122,3 +122,34 @@ def test_recommend_existing_candidate_requires_complete_profile(
     )
     assert fixed.status_code == 200, fixed.text
     assert _count_applications(rms_engine) == before + 1
+
+
+def test_recommend_existing_candidate_syncs_target_fields_on_master(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, job_id, cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, uniq
+    )
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_candidates SET target_job_id = NULL, target_client_id = NULL "
+                "WHERE id = :id"
+            ),
+            {"id": cand_id},
+        )
+
+    r = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert r.status_code == 200, r.text
+
+    detail = client_rbac.get(f"/api/rms/candidates/{cand_id}", cookies=login.cookies)
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["target_job_id"] == job_id
+    assert body["target_client_id"] == client_id
+    assert body["target_job_title"]
+    assert body["target_client_name"]

@@ -22,6 +22,8 @@
     const RMS_DELIVERY_REVIEW_STORAGE_VERSION = 'v2';
     /** 招聘管道「当前招聘进展」预设列宽后须 bump */
     const RMS_PIPELINE_STORAGE_VERSION = 'v1';
+    /** 需求清单 JD 固定 30 字宽；岗位名称冻结后须 bump */
+    const REQUIREMENTS_JOBS_STORAGE_VERSION = 'v2';
 
     function readCssLengthPx(varName, fallbackPx) {
         const root = getComputedStyle(document.documentElement);
@@ -134,18 +136,28 @@
         return th.classList.contains('roster-col-checkin');
     }
 
-    /** RMS 岗位 JD：crm-cell-clip 省略+悬停展开，初始宽取 CSS，不按全文测宽 */
+    /** RMS / 需求清单 JD：crm-cell-clip 省略+悬停展开，初始宽取 CSS，不按全文测宽 */
     function isRmsJdColumnTh(th) {
-        return th.classList.contains('rms-col-jd');
+        return th.classList.contains('rms-col-jd') || th.classList.contains('requirements-col-jd');
+    }
+
+    function jdHostTable(th) {
+        if (!th || !th.closest) return null;
+        return th.closest('.rms-jobs-table') || th.closest('table[data-table-id="requirements-jobs"]');
+    }
+
+    function isRequirementsJobsTable(table) {
+        return !!(table && table.dataset && table.dataset.tableId === 'requirements-jobs');
     }
 
     function rmsJdDefaultWidthPx(th) {
-        const table = th && th.closest ? th.closest('.rms-jobs-table') : null;
+        const table = jdHostTable(th);
         const fontPx = parseFloat(getComputedStyle(th || document.documentElement).fontSize)
             || parseFloat(getComputedStyle(document.documentElement).fontSize)
             || 16;
         if (table) {
-            const raw = getComputedStyle(table).getPropertyValue('--rms-jobs-jd-width').trim();
+            const raw = getComputedStyle(table).getPropertyValue('--rms-jobs-jd-width').trim()
+                || getComputedStyle(table).getPropertyValue('--requirements-jd-width').trim();
             const num = parseFloat(raw);
             if (Number.isFinite(num) && num > 0) {
                 if (raw.endsWith('em')) return Math.round(num * fontPx);
@@ -215,6 +227,7 @@
         else if (id === 'rms-candidates') version = RMS_CANDIDATES_STORAGE_VERSION;
         else if (id === 'rms-delivery-review') version = RMS_DELIVERY_REVIEW_STORAGE_VERSION;
         else if (id === 'rms-pipeline') version = RMS_PIPELINE_STORAGE_VERSION;
+        else if (id === 'requirements-jobs') version = REQUIREMENTS_JOBS_STORAGE_VERSION;
         return `crm-col-widths:${version}:${location.pathname}:${id}`;
     }
 
@@ -318,6 +331,28 @@
         if (table.classList.contains('rms-jobs-table')) {
             table.style.setProperty('--rms-jobs-sticky-serial-width', px(0));
             table.style.setProperty('--rms-jobs-sticky-title-width', px(1));
+            return;
+        }
+        if (table.dataset.tableId === 'customer-visits') {
+            const ths = table.querySelectorAll('thead th');
+            for (let i = 0; i < 5; i++) {
+                const th = ths[i];
+                if (!th) break;
+                table.style.setProperty(`--visit-sticky-col${i}-left`, `${th.offsetLeft}px`);
+                table.style.setProperty(`--visit-sticky-col${i}-width`, `${readColWidth(i)}px`);
+            }
+            return;
+        }
+        if (table.dataset.tableId === 'opportunity-leads') {
+            const ths = table.querySelectorAll('thead th');
+            if (ths[0]) {
+                table.style.setProperty('--opp-sticky-col0-width', `${ths[0].offsetWidth}px`);
+            }
+            if (ths[1]) {
+                table.style.setProperty('--opp-sticky-col1-width', `${ths[1].offsetWidth}px`);
+                table.style.setProperty('--opp-sticky-col1-left', `${ths[1].offsetLeft}px`);
+            }
+            return;
         }
     }
 
@@ -408,8 +443,10 @@
                 const def = rmsJdDefaultWidthPx(ths[i]);
                 const saved = Number(w) || 0;
                 const floor = minWidthForTh(ths[i], MIN_WIDTH) + COL_CONTENT_PAD;
-                if (!Number.isFinite(saved) || saved < floor) return def + COL_CONTENT_PAD;
-                if (saved > def * 2) return def + COL_CONTENT_PAD;
+                const cap = def + COL_CONTENT_PAD;
+                if (!Number.isFinite(saved) || saved < floor) return cap;
+                if (isRequirementsJobsTable(table) && saved > cap) return cap;
+                if (saved > def * 2) return cap;
                 return saved;
             }
             return Math.max(Number(w) || 0, mins[i]);
@@ -604,7 +641,11 @@
             if (rmsJdIdx >= 0) {
                 const def = rmsJdDefaultWidthPx(ths[rmsJdIdx]) + COL_CONTENT_PAD;
                 const saved = Number(next[rmsJdIdx]);
-                if (!Number.isFinite(saved) || saved < 120 || saved > def * 2) {
+                if (!Number.isFinite(saved) || saved < 120) {
+                    next[rmsJdIdx] = def;
+                } else if (isRequirementsJobsTable(table) && saved > def) {
+                    next[rmsJdIdx] = def;
+                } else if (saved > def * 2) {
                     next[rmsJdIdx] = def;
                 }
             }

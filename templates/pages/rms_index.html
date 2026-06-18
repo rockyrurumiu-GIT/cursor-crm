@@ -348,6 +348,114 @@
     .crm-table.rms-candidates-table thead .crm-sticky-right-op {
         z-index: 46 !important;
     }
+    /* Offer 管理：冻结列 + 统一字体 */
+    .crm-table[data-table-id="rms-offer-management"] {
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+        --rms-offer-font-size: 0.8125rem;
+        --rms-offer-sticky-status-width: 7.5rem;
+        --rms-offer-sticky-candidate-width: 8.5rem;
+        font-size: var(--rms-offer-font-size);
+        line-height: 1.35;
+    }
+    .crm-table[data-table-id="rms-offer-management"] thead th.crm-th {
+        font-size: var(--rms-offer-font-size);
+        font-weight: 700;
+        line-height: 1.35;
+        font-family: inherit;
+    }
+    .crm-table[data-table-id="rms-offer-management"] tbody td.crm-td {
+        font-size: var(--rms-offer-font-size);
+        font-weight: 400;
+        line-height: 1.35;
+        font-family: inherit;
+    }
+    .crm-table[data-table-id="rms-offer-management"] tbody td.crm-td.rms-offer-candidate-name {
+        color: #0969da;
+        font-weight: 700;
+    }
+    .crm-table[data-table-id="rms-offer-management"] .rms-offer-muted {
+        color: #57606a;
+        font-size: inherit;
+        font-weight: inherit;
+        line-height: inherit;
+    }
+    .crm-table[data-table-id="rms-offer-management"] .crm-op-btn-detail,
+    .crm-table[data-table-id="rms-offer-management"] .crm-op-btn-delete {
+        font-size: inherit;
+        line-height: inherit;
+        font-weight: 400;
+    }
+    .crm-table[data-table-id="rms-offer-management"] col.rms-offer-col-status {
+        width: var(--rms-offer-sticky-status-width) !important;
+        min-width: var(--rms-offer-sticky-status-width) !important;
+        max-width: var(--rms-offer-sticky-status-width) !important;
+    }
+    .crm-table[data-table-id="rms-offer-management"] col.rms-offer-col-candidate {
+        width: var(--rms-offer-sticky-candidate-width) !important;
+        min-width: var(--rms-offer-sticky-candidate-width) !important;
+        max-width: var(--rms-offer-sticky-candidate-width) !important;
+    }
+    .crm-table[data-table-id="rms-offer-management"] .rms-offer-sticky-status {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        width: var(--rms-offer-sticky-status-width);
+        min-width: var(--rms-offer-sticky-status-width);
+        max-width: var(--rms-offer-sticky-status-width);
+        background: #fff;
+        border-right: 1px solid #d0d7de;
+        background-clip: border-box;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    .crm-table[data-table-id="rms-offer-management"] .rms-offer-sticky-candidate {
+        position: sticky;
+        left: var(--rms-offer-sticky-status-width);
+        z-index: 1;
+        width: var(--rms-offer-sticky-candidate-width);
+        min-width: var(--rms-offer-sticky-candidate-width);
+        max-width: var(--rms-offer-sticky-candidate-width);
+        background: #fff;
+        border-right: 1px solid #d0d7de;
+        background-clip: border-box;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    .crm-table[data-table-id="rms-offer-management"] tbody tr:nth-child(even) .rms-offer-sticky-status,
+    .crm-table[data-table-id="rms-offer-management"] tbody tr:nth-child(even) .rms-offer-sticky-candidate {
+        background: #f6f8fa;
+    }
+    .crm-table[data-table-id="rms-offer-management"] tbody tr:hover .rms-offer-sticky-status,
+    .crm-table[data-table-id="rms-offer-management"] tbody tr:hover .rms-offer-sticky-candidate {
+        background: #eef6ff;
+    }
+    .crm-table-scroll .crm-table[data-table-id="rms-offer-management"] thead {
+        position: relative;
+        z-index: 40;
+    }
+    .crm-table-scroll .crm-table[data-table-id="rms-offer-management"] thead th.crm-th {
+        z-index: 41;
+    }
+    .crm-table[data-table-id="rms-offer-management"] thead .rms-offer-sticky-status,
+    .crm-table[data-table-id="rms-offer-management"] thead .rms-offer-sticky-candidate {
+        top: 0;
+        z-index: 45;
+        background: #2f75b5;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    .crm-table[data-table-id="rms-offer-management"] thead .rms-offer-sticky-status {
+        z-index: 46;
+    }
+    .crm-table[data-table-id="rms-offer-management"] td.crm-td.rms-offer-reason-loss {
+        color: #b91c1c;
+    }
+    .crm-table[data-table-id="rms-offer-management"] tbody tr:nth-child(even) td.crm-td.rms-offer-reason-loss,
+    .crm-table[data-table-id="rms-offer-management"] tbody tr:hover td.crm-td.rms-offer-reason-loss {
+        color: #b91c1c;
+    }
     /* 交付内审：操作列宽为全局 wide 的 3/4（独立 class，避免 col.crm-col-op-wide 的 !important 覆盖） */
     .crm-table[data-table-id="rms-delivery-review"] {
         --rms-delivery-review-op-col-width: 9.75rem;
@@ -1522,14 +1630,18 @@
         <div v-else-if="offerState.loading" class="text-sm text-gray-500 py-8 text-center">加载中…</div>
         <div v-else class="border border-gray-200 rounded-lg crm-table-scroll">
             <table class="crm-table rms-candidates-table" data-table-id="rms-offer-management">
+                <colgroup>
+                    <col class="rms-offer-col-status" />
+                    <col class="rms-offer-col-candidate" />
+                </colgroup>
                 <thead>
                     <tr>
-                        <th class="crm-th">状态</th>
+                        <th class="crm-th rms-offer-sticky-status">状态</th>
+                        <th class="crm-th rms-offer-sticky-candidate">候选人</th>
                         <th class="crm-th">当前审批节点</th>
                         <th class="crm-th">当前审批人</th>
                         <th class="crm-th">客户</th>
                         <th class="crm-th">岗位</th>
-                        <th class="crm-th">候选人</th>
                         <th class="crm-th">报价（含税）</th>
                         <th class="crm-th">人选薪资</th>
                         <th class="crm-th">试工期</th>
@@ -1546,12 +1658,12 @@
                 </thead>
                 <tbody>
                     <tr v-for="row in offerState.items" :key="'offer'+row.id">
-                        <td class="crm-td">{{ row.status_label }}</td>
+                        <td class="crm-td rms-offer-sticky-status">{{ row.status_label }}</td>
+                        <td class="crm-td rms-offer-candidate-name rms-offer-sticky-candidate">{{ row.candidate_name || '—' }}</td>
                         <td class="crm-td">{{ row.current_approval_node_label || '—' }}</td>
                         <td class="crm-td">{{ row.pending_approver_label || '—' }}</td>
                         <td class="crm-td">{{ row.client_name || '—' }}</td>
                         <td class="crm-td">{{ row.job_title || '—' }}</td>
-                        <td class="crm-td">{{ row.candidate_name || '—' }}</td>
                         <td class="crm-td">{{ formatOfferRowQuote(row) }}</td>
                         <td class="crm-td">{{ formatOfferListMoney(row.pre_tax_salary) }}</td>
                         <td class="crm-td">{{ row.probation_days || '—' }}</td>
@@ -1561,14 +1673,14 @@
                         <td class="crm-td">{{ row.planned_onboard_date || '—' }}</td>
                         <td class="crm-td">{{ row.recommended_by_label || '—' }}</td>
                         <td class="crm-td">{{ row.created_by_label || '—' }}</td>
-                        <td class="crm-td">{{ row.reason || '—' }}</td>
+                        <td class="crm-td" :class="{ 'rms-offer-reason-loss': row.status === 'offer_dropped' || row.status === 'onboarding_lost' }">{{ row.reason || '—' }}</td>
                         <td class="crm-td">{{ formatRmsDate(row.created_at) }}</td>
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div v-if="row.status === 'pending' && canApproveOfferRow(row)" class="crm-op-actions flex flex-nowrap items-center gap-1">
                                 <button type="button" class="crm-op-btn-detail" :disabled="offerActionSaving" @click="openOfferApproveModal(row)">通过</button>
                                 <button type="button" class="crm-op-btn-delete" :disabled="offerActionSaving" @click="openOfferRejectModal(row)">驳回</button>
                             </div>
-                            <span v-else class="text-[#57606a]">—</span>
+                            <span v-else class="rms-offer-muted">—</span>
                         </td>
                     </tr>
                     <tr v-if="!offerState.items.length">

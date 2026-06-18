@@ -683,14 +683,20 @@ createApp({
             return deptNameOnly(c.owner_dept_label, c.owner_dept_id);
         };
 
+        const userDisplayLabel = (userId, apiLabel, legacyText = '') => {
+            if (userId != null && userId !== '') {
+                const u = (assignOptions.value.users || []).find((x) => Number(x.id) === Number(userId));
+                if (u) return (u.display_name || u.username || '').trim();
+            }
+            let label = (apiLabel || legacyText || '').trim();
+            const sep = label.indexOf(' · ');
+            if (sep > 0) label = label.slice(0, sep).trim();
+            return label;
+        };
+
         const salesOwnerDisplay = (c) => {
             if (!c) return '';
-            const label = (c.owner_user_label || '').trim();
-            if (label) return label;
-            const id = c.owner_user_id;
-            if (id == null || id === '') return (c.owner || '').trim();
-            const u = (assignOptions.value.users || []).find((x) => Number(x.id) === Number(id));
-            return u ? `${(u.display_name || u.username)} · ${u.username}` : (c.owner || '').trim();
+            return userDisplayLabel(c.owner_user_id, c.owner_user_label, c.owner);
         };
 
         const deliveryDeptDisplay = (c) => {
@@ -700,12 +706,7 @@ createApp({
 
         const deliveryOwnerDisplay = (c) => {
             if (!c) return '';
-            const label = (c.delivery_owner_label || '').trim();
-            if (label) return label;
-            const id = c.delivery_owner_user_id;
-            if (id == null || id === '') return '';
-            const u = (assignOptions.value.users || []).find((x) => Number(x.id) === Number(id));
-            return u ? `${(u.display_name || u.username)} · ${u.username}` : '';
+            return userDisplayLabel(c.delivery_owner_user_id, c.delivery_owner_label);
         };
 
         const recruitmentDeptDisplay = (c) => {
@@ -715,12 +716,7 @@ createApp({
 
         const recruitmentOwnerDisplay = (c) => {
             if (!c) return '';
-            const label = (c.recruitment_owner_label || '').trim();
-            if (label) return label;
-            const id = c.recruitment_owner_user_id;
-            if (id == null || id === '') return '';
-            const u = (assignOptions.value.users || []).find((x) => Number(x.id) === Number(id));
-            return u ? `${(u.display_name || u.username)} · ${u.username}` : '';
+            return userDisplayLabel(c.recruitment_owner_user_id, c.recruitment_owner_label);
         };
 
         const fmtAmount = (c) => {

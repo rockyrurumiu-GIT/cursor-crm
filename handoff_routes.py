@@ -628,6 +628,31 @@ def register_handoff_routes(
             db.commit()
         return {"ok": True}
 
+    @app.delete("/api/notifications/{notification_id}")
+    async def delete_notification(
+        notification_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(_require_notification_user),
+    ):
+        n = db.query(CrmNotification).filter(CrmNotification.id == notification_id, CrmNotification.username == user).first()
+        if n:
+            db.delete(n)
+            db.commit()
+        return {"ok": True}
+
+    @app.delete("/api/notifications")
+    async def delete_all_notifications(
+        db: Session = Depends(get_db),
+        user: str = Depends(_require_notification_user),
+    ):
+        deleted = (
+            db.query(CrmNotification)
+            .filter(CrmNotification.username == user)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        return {"ok": True, "deleted": deleted}
+
     @app.get("/api/handoffs/{handoff_id}/export")
     async def export_handoff(
         handoff_id: int,

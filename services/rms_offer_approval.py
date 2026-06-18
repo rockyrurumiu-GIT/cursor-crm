@@ -54,19 +54,7 @@ def _display_name_for_user_id(db: Session, user_id: Optional[int]) -> str:
 
 
 def _user_label_for_user_id(db: Session, user_id: Optional[int]) -> str:
-    if user_id is None:
-        return ""
-    row = db.execute(
-        text("SELECT display_name, username FROM sys_user WHERE id = :uid LIMIT 1"),
-        {"uid": int(user_id)},
-    ).first()
-    if not row:
-        return ""
-    dn = (row[0] or "").strip()
-    un = (row[1] or "").strip()
-    if dn and un:
-        return f"{dn} · {un}"
-    return dn or un
+    return _display_name_for_user_id(db, user_id)
 
 
 def _offer_link(offer_record_id: int) -> str:

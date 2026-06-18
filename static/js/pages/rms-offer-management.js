@@ -385,7 +385,8 @@
         fields: [{
           type: "textarea",
           name: "reason",
-          label: "弃offer原因 *",
+          label: "弃offer原因",
+          required: true,
           placeholder: "必填",
         }],
         confirmText: "确认",
@@ -422,7 +423,8 @@
         fields: [{
           type: "textarea",
           name: "reason",
-          label: "在途流失原因 *",
+          label: "在途流失原因",
+          required: true,
           placeholder: "必填",
         }],
         confirmText: "确认",

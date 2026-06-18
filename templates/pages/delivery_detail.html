@@ -141,6 +141,101 @@
         white-space: nowrap !important;
         vertical-align: middle;
     }
+    /* 需求清单：JD 默认 30 汉字宽，超出省略，悬停原位展开 */
+    .crm-table[data-table-id="requirements-jobs"] {
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 0;
+        --rms-jobs-jd-width: 30em;
+        --req-sticky-title-width: 9rem;
+    }
+    .crm-table[data-table-id="requirements-jobs"] col.req-col-title {
+        width: var(--req-sticky-title-width) !important;
+        min-width: var(--req-sticky-title-width) !important;
+        max-width: var(--req-sticky-title-width) !important;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .req-sticky-title {
+        position: sticky;
+        left: 0;
+        z-index: 12;
+        box-sizing: border-box;
+        background: #fff;
+        background-clip: padding-box;
+        border-right: 1px solid #d0d7de;
+        box-shadow: 2px 0 6px -4px rgba(15, 23, 42, 0.12);
+        overflow: visible;
+        text-overflow: clip;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .crm-th.req-sticky-title,
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.req-sticky-title {
+        width: var(--req-sticky-title-width);
+        min-width: var(--req-sticky-title-width);
+        max-width: var(--req-sticky-title-width);
+    }
+    .crm-table[data-table-id="requirements-jobs"] thead .req-sticky-title {
+        top: 0;
+        z-index: 63;
+        background: #2f75b5;
+        color: #fff;
+        border-color: #1f5a94;
+    }
+    .crm-table[data-table-id="requirements-jobs"] tbody tr:nth-child(even) .req-sticky-title {
+        background: #f6f8fa;
+    }
+    .crm-table[data-table-id="requirements-jobs"] tbody tr:hover .req-sticky-title {
+        background: #eef6ff;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.req-sticky-title.crm-name-cell {
+        color: #0969da;
+        font-weight: 600;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.rms-col-jd,
+    .crm-table[data-table-id="requirements-jobs"] .crm-th.rms-col-jd,
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.requirements-col-jd,
+    .crm-table[data-table-id="requirements-jobs"] .crm-th.requirements-col-jd {
+        width: var(--rms-jobs-jd-width);
+        min-width: 4em;
+        max-width: var(--rms-jobs-jd-width);
+        box-sizing: border-box;
+        vertical-align: top;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .crm-th.rms-col-jd,
+    .crm-table[data-table-id="requirements-jobs"] .crm-th.requirements-col-jd {
+        overflow: hidden;
+        white-space: nowrap !important;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.rms-col-jd,
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.requirements-col-jd {
+        white-space: nowrap;
+        overflow: hidden;
+        line-height: 1.35;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .rms-col-jd .crm-cell-clip,
+    .crm-table[data-table-id="requirements-jobs"] .requirements-col-jd .crm-cell-clip {
+        max-width: 100%;
+        min-width: 0;
+        white-space: nowrap !important;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .rms-col-jd .crm-cell-clip:hover,
+    .crm-table[data-table-id="requirements-jobs"] .requirements-col-jd .crm-cell-clip:hover {
+        position: relative;
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        overflow: visible;
+        white-space: normal !important;
+        z-index: 4;
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+    }
+    .crm-table[data-table-id="requirements-jobs"] tbody tr:nth-child(even) .rms-col-jd .crm-cell-clip:hover,
+    .crm-table[data-table-id="requirements-jobs"] tbody tr:nth-child(even) .requirements-col-jd .crm-cell-clip:hover {
+        background: #f6f8fa;
+    }
+    .crm-table[data-table-id="requirements-jobs"] tbody tr:hover .rms-col-jd .crm-cell-clip:hover,
+    .crm-table[data-table-id="requirements-jobs"] tbody tr:hover .requirements-col-jd .crm-cell-clip:hover {
+        background: #eef6ff;
+    }
     .pipeline-filter-row {
         align-items: flex-end;
     }
@@ -1253,27 +1348,59 @@
                 </div>
             </div>
         </div>
-        <div v-else-if="moduleKey === 'requirements'" class="mt-4 space-y-4">
-            <div v-if="!requirementsSummary || !requirementsSummary.approved" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                该客户尚无<strong>已通过</strong>的销售-交付交接单。
-                <a :href="`/customers/${clientId}/handoff`" class="text-[#0969da] underline ml-1">前往填写交接 →</a>
+        <div v-else-if="moduleKey === 'requirements'" class="mt-4">
+            <div v-if="requirementJobsLoading" class="text-sm text-gray-500 py-8 text-center">加载中…</div>
+            <div v-else-if="requirementJobsForbidden" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                暂无权限查看招聘岗位需求。
+                <a href="/rms" class="text-[#0969da] underline ml-1">前往招聘模块 →</a>
             </div>
-            <div v-else class="space-y-4">
-                <div class="rounded-lg border border-green-200 bg-green-50 p-4">
-                    <p class="font-semibold text-green-900">{{ requirementsSummary.title }}</p>
-                    <p class="text-xs text-green-800 mt-1">审批通过：{{ requirementsSummary.approved_at || '—' }}</p>
-                </div>
-                <div v-if="requirementsSummary.brief_md" class="border rounded-lg p-4 bg-white">
-                    <h3 class="font-bold text-sm mb-2">项目启动前置需求书</h3>
-                    <pre class="whitespace-pre-wrap text-xs text-gray-700 max-h-96 overflow-y-auto">{{ requirementsSummary.brief_md }}</pre>
-                </div>
-                <div class="border rounded-lg p-4 bg-white text-sm">
-                    <h3 class="font-bold mb-2">岗位编制矩阵</h3>
-                    <ul class="space-y-1">
-                        <li v-for="(p,i) in (requirementsSummary.requirement?.positions||[])" :key="i">
-                            {{ p.role }} · {{ p.level }} × {{ p.headcount }} · 到岗 {{ p.start_date }}
-                        </li>
-                    </ul>
+            <div v-else-if="requirementJobsError" class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{{ requirementJobsError }}</div>
+            <div v-else class="bg-white border rounded-lg overflow-hidden">
+                <div class="crm-h-scroll">
+                    <table class="crm-table w-full min-w-[1400px]" data-table-id="requirements-jobs">
+                        <colgroup>
+                            <col class="req-col-title" />
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th class="crm-th req-sticky-title">岗位名称</th>
+                                <th class="crm-th">优先级</th>
+                                <th class="crm-th">状态</th>
+                                <th class="crm-th">招聘</th>
+                                <th class="crm-th">HC数</th>
+                                <th class="crm-th">薪资帽</th>
+                                <th class="crm-th">城市</th>
+                                <th class="crm-th">年限</th>
+                                <th class="crm-th">学历</th>
+                                <th class="crm-th">加班/差旅</th>
+                                <th class="crm-th">活跃推荐数</th>
+                                <th class="crm-th">历史推荐数</th>
+                                <th class="crm-th rms-col-jd" data-col-default-em="30">JD</th>
+                                <th class="crm-th crm-col-remarks" data-col-min="160">备注</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="j in requirementJobs" :key="j.id">
+                                <td class="crm-td req-sticky-title crm-name-cell">{{ j.title || '—' }}</td>
+                                <td class="crm-td">{{ jobPriorityLabel(j.priority) }}</td>
+                                <td class="crm-td">{{ jobStatusLabel(j.status) }}</td>
+                                <td class="crm-td">{{ normalizeOwnerLabel(j.recruitment_owner_label) }}</td>
+                                <td class="crm-td tabular-nums">{{ j.headcount ?? '—' }}</td>
+                                <td class="crm-td tabular-nums">{{ displayRequirementSalaryCap(j.salary_cap) }}</td>
+                                <td class="crm-td">{{ j.location || '—' }}</td>
+                                <td class="crm-td">{{ j.years_required || '—' }}</td>
+                                <td class="crm-td">{{ j.education || '—' }}</td>
+                                <td class="crm-td">{{ j.overtime_travel || '—' }}</td>
+                                <td class="crm-td tabular-nums">{{ j.active_recommendation_count ?? 0 }}</td>
+                                <td class="crm-td tabular-nums">{{ j.historical_recommendation_count ?? 0 }}</td>
+                                <td class="crm-td rms-col-jd"><div class="crm-cell-clip">{{ j.job_description || '—' }}</div></td>
+                                <td class="crm-td crm-col-remarks"><div class="crm-cell-clip">{{ j.note || '—' }}</div></td>
+                            </tr>
+                            <tr v-if="!requirementJobs.length">
+                                <td colspan="14" class="crm-td text-center text-gray-400 py-8">暂无岗位需求</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -1837,7 +1964,51 @@ createApp({
         const moduleTitle = cfg.moduleTitle;
         const clientId = cfg.clientId;
         const clientName = ref(`客户#${clientId}`);
-        const requirementsSummary = ref(null);
+        const requirementJobs = ref([]);
+        const requirementJobsLoading = ref(false);
+        const requirementJobsError = ref('');
+        const requirementJobsForbidden = ref(false);
+        const JOB_PRIORITY_LABELS = { high: '高', medium: '中', low: '低' };
+        const JOB_STATUS_LABELS = { open: 'open', closed: 'closed', freeze: 'freeze' };
+        const jobPriorityLabel = (value) => JOB_PRIORITY_LABELS[value] || value || '—';
+        const jobStatusLabel = (value) => JOB_STATUS_LABELS[value] || value || '—';
+        const displayRequirementSalaryCap = (value) => {
+            const digits = String(value == null ? '' : value).replace(/\D/g, '');
+            if (!digits) return '—';
+            const n = Number(digits);
+            return Number.isFinite(n) ? n.toLocaleString('zh-CN', { maximumFractionDigits: 0 }) : digits;
+        };
+        const normalizeOwnerLabel = (label) => {
+            const raw = String(label == null ? '' : label).trim();
+            if (!raw) return '—';
+            const sep = raw.indexOf(' · ');
+            if (sep > 0) return raw.slice(0, sep).trim();
+            return raw;
+        };
+        const loadRequirementJobs = async () => {
+            requirementJobsLoading.value = true;
+            requirementJobsError.value = '';
+            requirementJobsForbidden.value = false;
+            try {
+                const r = await fetch(`/api/rms/jobs?client_id=${clientId}`, { headers: window.crmAuthHeader() });
+                if (r.status === 403) {
+                    requirementJobsForbidden.value = true;
+                    requirementJobs.value = [];
+                    return;
+                }
+                if (!r.ok) {
+                    requirementJobsError.value = '加载岗位需求失败';
+                    requirementJobs.value = [];
+                    return;
+                }
+                requirementJobs.value = await r.json();
+            } catch (_) {
+                requirementJobsError.value = '加载岗位需求失败';
+                requirementJobs.value = [];
+            } finally {
+                requirementJobsLoading.value = false;
+            }
+        };
         const { fuzzyMatch, uniqueSorted } = window.CrmDeliveryDetail;
         const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
         const loadBrief = () => loadClientBrief(clientId, clientName);
@@ -2121,8 +2292,7 @@ createApp({
             }
             await mountHandbook();
             if (moduleKey === 'requirements') {
-                const rr = await fetch(`/api/clients/${clientId}/approved-handoff-summary`, { headers: window.crmAuthHeader() });
-                requirementsSummary.value = rr.ok ? await rr.json() : null;
+                await loadRequirementJobs();
             }
             window.crmScheduleTableColumnResize?.();
         });
@@ -2133,7 +2303,9 @@ createApp({
             unmountHandbook();
         });
         return {
-            moduleKey, moduleTitle, clientId, clientName, requirementsSummary,
+            moduleKey, moduleTitle, clientId, clientName,
+            requirementJobs, requirementJobsLoading, requirementJobsError, requirementJobsForbidden,
+            jobPriorityLabel, jobStatusLabel, displayRequirementSalaryCap, normalizeOwnerLabel,
             pipelineRows, pipelineFilter, pipelineDateOptions, pipelineSelectOptions, filteredPipelineRows, resetPipelineFilter,
             resumeScreeningDropdownOpen, resumeScreeningFilterRef, resumeScreeningSummary,
             pipelineFilterPeriodPickerRef, pipelineFilterPeriodDropdownOpen, pipelineFilterPeriodHoverMonth,

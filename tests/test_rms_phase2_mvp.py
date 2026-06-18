@@ -1295,6 +1295,14 @@ def test_patch_application_recomputes_client_id_when_job_changes(client_rbac, ad
     assert patched.status_code == 200
     assert patched.json()["client_id"] == cid_b
 
+    cand_detail = client_rbac.get(
+        f"/api/rms/candidates/{cand.json()['id']}",
+        cookies=login_del.cookies,
+    )
+    assert cand_detail.status_code == 200, cand_detail.text
+    assert cand_detail.json()["target_job_id"] == job_b.json()["id"]
+    assert cand_detail.json()["target_client_id"] == cid_b
+
 
 def _app_for_status(client, engine, admin_auth, suffix: str):
     login, job_id, cand_id, _ = _trial_job_and_candidate(client, engine, admin_auth, suffix)

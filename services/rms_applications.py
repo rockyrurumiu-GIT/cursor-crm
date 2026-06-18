@@ -648,6 +648,18 @@ def _validate_existing_candidate_report_profile(candidate: Any, data: Dict[str, 
             raise HTTPException(status_code=400, detail=f"请填写{label}")
 
 
+def _sync_candidate_target_from_job(
+    candidate: Any,
+    job: Any,
+    *,
+    now: str,
+) -> None:
+    """Align candidate master target fields with the latest recommendation job."""
+    candidate.target_job_id = int(job.id)
+    candidate.target_client_id = int(job.client_id)
+    candidate.updated_at = now
+
+
 def create_application(
     db: Session,
     ctx: AuthContext,
@@ -685,6 +697,7 @@ def create_application(
         updated_at=now,
     )
     db.add(row)
+    _sync_candidate_target_from_job(candidate, job, now=now)
     try:
         db.commit()
     except IntegrityError:
@@ -705,12 +718,13 @@ def update_application(
     Client: Type[Any],
 ) -> Dict[str, Any]:
     row = _get_writable_application(db, ctx, application_id, RmsApplication, Client)
+    job_for_sync = None
 
     if data.get("job_id") is not None:
         job_id = int(data["job_id"])
-        job = rms_ds.assert_job_writable(db, ctx, job_id, RmsJob, Client)
+        job_for_sync = rms_ds.assert_job_writable(db, ctx, job_id, RmsJob, Client)
         row.job_id = job_id
-        row.client_id = int(job.client_id)
+        row.client_id = int(job_for_sync.client_id)
 
     if data.get("candidate_id") is not None:
         candidate_id = int(data["candidate_id"])
@@ -723,6 +737,16 @@ def update_application(
         row.resume_id = data.get("resume_id")
 
     row.updated_at = utc_date_str()
+    if data.get("job_id") is not None or data.get("candidate_id") is not None:
+        if job_for_sync is None:
+            job_for_sync = db.query(RmsJob).filter(RmsJob.id == int(row.job_id)).first()
+        candidate = (
+            db.query(RmsCandidate)
+            .filter(RmsCandidate.id == int(row.candidate_id))
+            .first()
+        )
+        if job_for_sync and candidate:
+            _sync_candidate_target_from_job(candidate, job_for_sync, now=row.updated_at)
     try:
         db.commit()
     except IntegrityError:

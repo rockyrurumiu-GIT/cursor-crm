@@ -617,6 +617,29 @@ def test_notifications_username_isolation(client_rbac, admin_auth, rms_engine, u
     assert all(n.get("type") != "rms_offer_pending" for n in listed)
 
 
+def test_notifications_delete_single_and_all(client_rbac, admin_auth, rms_engine, uniq, approvers_config):
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"del_{uniq}")
+    dept_user = f"offer_dept_{uniq}"
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _advance_to_pending_offer(client_rbac, login, app_id)
+    _submit_offer(client_rbac, login, app_id)
+
+    dept_login = _login(client_rbac, dept_user)
+    items = client_rbac.get("/api/notifications", cookies=dept_login.cookies).json()
+    assert items
+    nid = items[0]["id"]
+
+    r = client_rbac.delete(f"/api/notifications/{nid}", cookies=dept_login.cookies)
+    assert r.status_code == 200, r.text
+    remaining = client_rbac.get("/api/notifications", cookies=dept_login.cookies).json()
+    assert all(n["id"] != nid for n in remaining)
+
+    r_all = client_rbac.delete("/api/notifications", cookies=dept_login.cookies)
+    assert r_all.status_code == 200, r_all.text
+    assert client_rbac.get("/api/notifications", cookies=dept_login.cookies).json() == []
+
+
 def test_pending_approver_lists_offer_without_application_read_scope(
     client_rbac, admin_auth, rms_engine, uniq, approvers_config
 ):

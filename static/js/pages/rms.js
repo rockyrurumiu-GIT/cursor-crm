@@ -473,7 +473,6 @@
       function userOptionLabel(u) {
         const dn = (u.display_name || "").trim();
         const un = (u.username || "").trim();
-        if (dn && un) return dn + " · " + un;
         return dn || un || String(u.id);
       }
 

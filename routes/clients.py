@@ -94,9 +94,7 @@ def _user_label(db: Session, user_id: Optional[int]) -> str:
     ).fetchone()
     if not row:
         return str(user_id)
-    display = str(row[0] or row[1] or user_id)
-    username = str(row[1] or row[0] or user_id)
-    return f"{display} · {username}"
+    return str(row[0] or row[1] or user_id).strip()
 
 
 def _serialize_client(db: Session, client) -> dict:
