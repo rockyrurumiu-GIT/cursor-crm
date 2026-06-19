@@ -629,7 +629,19 @@
 <div id="delivery-detail-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6" :class="moduleKey === 'interviews' ? 'py-3 sm:py-4' : 'py-4 sm:py-5'">
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="[moduleKey === 'interviews' ? 'p-4 sm:p-5' : 'p-5 sm:p-6', moduleKey === 'requirements' ? 'requirements-detail-card' : '']">
         <a :href="`/delivery/${moduleKey}`" class="text-sm text-blue-600 hover:underline shrink-0">← 返回{{ moduleTitle }}客户列表</a>
-        <h1 class="font-bold text-gray-900 shrink-0" :class="moduleKey === 'interviews' ? 'mt-1 text-xl sm:text-2xl' : 'mt-2 text-2xl'">{{ clientName }} · {{ moduleTitle }}</h1>
+        <div class="flex flex-wrap items-center justify-between gap-3 shrink-0" :class="moduleKey === 'interviews' ? 'mt-1' : 'mt-2'">
+            <h1 class="font-bold text-gray-900" :class="moduleKey === 'interviews' ? 'text-xl sm:text-2xl' : 'text-2xl'">{{ clientName }} · {{ moduleTitle }}</h1>
+            <div v-if="moduleKey === 'handbook'" class="flex flex-wrap items-center gap-2 shrink-0">
+                <span v-if="!handbookSelectedFiles.length" class="max-w-[14rem] truncate text-xs text-[#57606a]">未选择文件</span>
+                <span v-else class="inline-flex items-center gap-1 max-w-[16rem] rounded-lg border border-[#d0d7de] bg-white px-2 h-[2.25rem] min-h-[2.25rem] text-xs text-[#1f2328]">
+                    <span class="truncate min-w-0" :title="handbookSelectedFileSummary">{{ handbookSelectedFileSummary }}</span>
+                    <button type="button" class="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]" title="清除已选文件" aria-label="清除已选文件" @click="clearHandbookSelectedFiles">×</button>
+                </span>
+                <button type="button" class="crm-filter-item rounded-lg border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="handbookUploading" @click="handbookFileInput && handbookFileInput.click()">选择文件</button>
+                <button type="button" class="crm-filter-item rounded-lg bg-[#0969da] px-3 text-xs font-medium text-white hover:bg-[#0860ca] disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="handbookUploading || !handbookSelectedFiles.length" @click="uploadSelectedHandbookFiles">{{ handbookUploading ? '上传中…' : '上传' }}</button>
+                <input ref="handbookFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookFilesSelected" />
+            </div>
+        </div>
         <div v-if="moduleKey === 'pipeline'" class="mt-4 flex flex-col flex-1 min-h-0 gap-3">
             <div class="flex items-end justify-between gap-3 flex-wrap shrink-0">
                 <input v-model.trim="pipelineFilter.full_name" type="text" placeholder="姓名（模糊）" title="姓名（模糊）" class="crm-filter-item crm-filter-control pipeline-filter-control w-[10rem]" />
@@ -1315,49 +1327,23 @@
             </div>
         </div>
         <div v-else-if="moduleKey === 'handbook'" class="mt-4 flex flex-col flex-1 min-h-0 gap-4">
-            <div class="rounded-lg border border-gray-200 bg-slate-50/80 p-4 space-y-3 shrink-0">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 text-xs">
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">版本号（选填）</span><input v-model="handbookUploadMeta.version_label" type="text" class="crm-form-control" placeholder="如 V2.0" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">状态 <span class="text-red-500">*</span></span>
-                        <select v-model="handbookUploadMeta.status" class="crm-form-control">
-                            <option value="">请选择状态</option>
+            <div v-if="handbookUploadError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shrink-0">{{ handbookUploadError }}</div>
+            <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3 shrink-0">
+                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <div class="crm-filter-row flex-1 min-w-0">
+                        <input v-model.trim="handbookFilter.keyword" type="text" class="crm-filter-item crm-filter-control w-[12rem]" placeholder="关键字模糊查询" title="关键字模糊查询" />
+                        <select v-model="handbookStatusFilter" class="crm-filter-item crm-filter-control w-[10rem]" title="状态">
+                            <option value="">状态</option>
                             <option value="draft">草稿</option>
                             <option value="published">已发布</option>
                             <option value="deprecated">已作废</option>
                         </select>
-                    </label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">标签（必填，逗号分隔） <span class="text-red-500">*</span></span><input v-model="handbookUploadMeta.tags" type="text" class="crm-form-control" placeholder="招聘流程, 财务报销" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">阅读·部门 <span class="text-red-500">*</span></span><input v-model="handbookUploadMeta.permission_departments" type="text" class="crm-form-control" placeholder="如 交付部" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-gray-600">阅读·级别 <span class="text-red-500">*</span></span>
-                        <select v-model="handbookUploadMeta.permission_levels" class="crm-form-control">
-                            <option value="">请选择级别</option>
-                            <option value="1">1</option>
-                            <option value="2">2</option>
-                            <option value="3">3</option>
-                            <option value="4">4</option>
-                            <option value="5">5</option>
-                        </select>
-                    </label>
-                    <div class="flex flex-col gap-1">
-                        <span class="truncate text-gray-600" :title="handbookSelectedFileSummary">{{ handbookSelectedFileSummary || '未选择文件' }}</span>
-                        <div class="flex gap-2">
-                            <button type="button" class="min-h-[2.5rem] flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50" :disabled="handbookUploading" @click="handbookFileInput && handbookFileInput.click()">选择文件</button>
-                            <button type="button" class="min-h-[2.5rem] flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50" :disabled="handbookUploading || !handbookSelectedFiles.length" @click="uploadSelectedHandbookFiles">{{ handbookUploading ? '上传中…' : '上传' }}</button>
-                        </div>
+                        <button type="button" class="crm-filter-item crm-filter-reset" @click="resetHandbookFilter">清除筛选</button>
                     </div>
+                    <p class="text-sm font-semibold text-[#1f2328] shrink-0">
+                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredHandbookFiles.length }}</span> 条
+                    </p>
                 </div>
-                <input ref="handbookFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookFilesSelected" />
-            </div>
-            <div v-if="handbookUploadError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shrink-0">{{ handbookUploadError }}</div>
-            <div class="flex flex-wrap items-center gap-3 shrink-0">
-                <label class="text-xs text-gray-600 flex items-center gap-2">列表筛选
-                    <select v-model="handbookStatusFilter" class="crm-form-control w-32">
-                        <option value="">全部状态</option>
-                        <option value="draft">草稿</option>
-                        <option value="published">已发布</option>
-                        <option value="deprecated">已作废</option>
-                    </select>
-                </label>
             </div>
             <div class="border border-gray-200 rounded-lg overflow-hidden flex flex-col flex-1 min-h-0 bg-white">
                 <div v-if="!filteredHandbookFiles.length" class="p-10 text-center text-gray-400 text-sm">暂无手册，请上传。</div>
@@ -2455,7 +2441,7 @@ createApp({
             downloadBlob: window.crmDownloadBlob,
         });
         const {
-            handbookUploadMeta, handbookStatusFilter, filteredHandbookFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
+            handbookFilter, handbookStatusFilter, filteredHandbookFiles, resetHandbookFilter, clearHandbookSelectedFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
             handbookPdfSearchQuery, handbookPdfSearchResults, handbookPdfSearchCount, handbookPdfSearchActive,
             handbookPdfRenderedPageSrc, handbookPdfRenderedPageUrl, handbookPdfRenderBusy,
             handbookPdfTextBusy, handbookPdfTextError, loadHandbookPdfText, clearHandbookPdfSearch,
@@ -2547,7 +2533,7 @@ createApp({
             showOnlyCheckedPipeline, toggleShowOnlyCheckedPipeline,
             isPipelineRowChecked, setPipelineRowChecked,
             pipelineFields, pipelineCompactFields, pipelineTextareaFields, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput,
-            handbookUploadMeta, handbookStatusFilter, filteredHandbookFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
+            handbookFilter, handbookStatusFilter, filteredHandbookFiles, resetHandbookFilter, clearHandbookSelectedFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
             handbookPdfSearchQuery, handbookPdfSearchResults, handbookPdfSearchCount, handbookPdfSearchActive,
             handbookPdfRenderedPageSrc, handbookPdfRenderedPageUrl, handbookPdfRenderBusy,
             handbookPdfTextBusy, handbookPdfTextError, loadHandbookPdfText, clearHandbookPdfSearch,

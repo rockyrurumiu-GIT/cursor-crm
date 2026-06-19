@@ -289,9 +289,17 @@
       var to = parseDateOnly(filters.date_to);
       if (from && (!recDate || recDate < from)) continue;
       if (to && (!recDate || recDate > to)) continue;
-      if (!matchTextFilter(helpers.appJobLocation(a), filters.city)) continue;
-      if (!matchTextFilter(helpers.appDeliveryLabel(a), filters.delivery)) continue;
-      if (!matchTextFilter(helpers.appRecommenderLabel(a), filters.recommender)) continue;
+      var keyword = String(filters.keyword == null ? "" : filters.keyword).trim();
+      if (keyword) {
+        var loc = helpers.appJobLocation(a);
+        var del = helpers.appDeliveryLabel(a);
+        var rec = helpers.appRecommenderLabel(a);
+        if (!matchTextFilter(loc, keyword) && !matchTextFilter(del, keyword) && !matchTextFilter(rec, keyword)) continue;
+      } else {
+        if (!matchTextFilter(helpers.appJobLocation(a), filters.city)) continue;
+        if (!matchTextFilter(helpers.appDeliveryLabel(a), filters.delivery)) continue;
+        if (!matchTextFilter(helpers.appRecommenderLabel(a), filters.recommender)) continue;
+      }
       out.push(a);
     }
     return out;

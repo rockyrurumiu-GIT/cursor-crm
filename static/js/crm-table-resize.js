@@ -400,8 +400,13 @@
             return;
         }
         if (table.classList.contains('roster-table')) {
-            table.style.setProperty('--roster-sticky-serial-width', px(0));
-            table.style.setProperty('--roster-sticky-name-width', px(1));
+            const ths = leafHeaderCells(table);
+            // 姓名列 left = 序号列实际渲染宽；勿用 ths[1].offsetLeft（列宽变更后可能尚未 reflow）
+            void table.offsetHeight;
+            const serialW = ths[0]?.offsetWidth > 0 ? ths[0].offsetWidth : readColWidth(0);
+            table.style.setProperty('--roster-sticky-serial-width', `${Math.round(serialW)}px`);
+            const nameW = ths[1]?.offsetWidth > 0 ? ths[1].offsetWidth : readColWidth(1);
+            table.style.setProperty('--roster-sticky-name-width', `${Math.round(nameW)}px`);
             return;
         }
         if (table.classList.contains('turnover-table')) {

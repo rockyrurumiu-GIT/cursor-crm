@@ -5,7 +5,6 @@
   "use strict";
 
   var OFFER_STATUS_FILTER_OPTIONS = [
-    { value: "", label: "全部" },
     { value: "pending", label: "审批中" },
     { value: "approved", label: "已通过" },
     { value: "offer_dropped", label: "弃offer" },
@@ -15,6 +14,7 @@
   function createOfferManagementState(deps) {
     var ref = deps.ref;
     var reactive = deps.reactive;
+    var computed = deps.computed;
     var activeTab = deps.activeTab;
     var me = deps.me;
     var rmsRequest = deps.rmsRequest;
@@ -39,11 +39,30 @@
     var offerApprovalSaving = ref(false);
     var offerApprovalError = ref("");
     var offerActionSaving = ref(false);
+    var Labels = deps.Labels || {};
+    var parseDateOnly = Labels.parseDateOnly || function (str) {
+      var s = String(str || "").trim();
+      if (!s) return null;
+      var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!m) return null;
+      return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    };
+
     var offerState = reactive({
       items: [],
       loading: false,
       error: "",
       statusFilter: "",
+    });
+    var offerFilterPanelExpanded = ref(false);
+    var offerScrollWrap = ref(null);
+    var offerFilter = reactive({
+      keyword: "",
+      probation: "",
+      gmAmount: "",
+      gmPct: "",
+      onboardDateFrom: "",
+      onboardDateTo: "",
     });
 
     function resetOfferApprovalForm() {
@@ -109,6 +128,104 @@
       var s = String(v == null ? "" : v).replace(/[￥¥,\s]/g, "").trim();
       var n = Number(s);
       return Number.isFinite(n) ? n : null;
+    }
+
+    function parseProbationDays(val) {
+      var s = String(val == null ? "" : val).trim();
+      if (!s) return 0;
+      var n = Number(s.replace(/[^\d.-]/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function parseGmPctNumber(val) {
+      var s = stripOfferGmPct(val);
+      if (!s) return null;
+      var n = Number(s);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function matchesOfferKeyword(row, keyword) {
+      var q = String(keyword || "").trim().toLowerCase();
+      if (!q) return true;
+      var haystack = [
+        row.candidate_name,
+        row.client_name,
+        row.job_title,
+        row.status_label,
+        row.current_approval_node_label,
+        row.pending_approver_label,
+        row.recommended_by_label,
+        row.created_by_label,
+        row.reason,
+      ].join(" ").toLowerCase();
+      return haystack.indexOf(q) !== -1;
+    }
+
+    var filteredOfferRecords = computed(function () {
+      var rows = offerState.items.slice();
+      if (offerFilter.probation === "yes") {
+        rows = rows.filter(function (row) {
+          return parseProbationDays(row.probation_days) !== 0;
+        });
+      } else if (offerFilter.probation === "no") {
+        rows = rows.filter(function (row) {
+          return parseProbationDays(row.probation_days) === 0;
+        });
+      }
+      if (offerFilter.gmAmount === "gte3000") {
+        rows = rows.filter(function (row) {
+          var n = normalizeMoneyValue(row.gm_amount);
+          return n != null && n >= 3000;
+        });
+      } else if (offerFilter.gmAmount === "lt3000") {
+        rows = rows.filter(function (row) {
+          var n = normalizeMoneyValue(row.gm_amount);
+          return n != null && n < 3000;
+        });
+      }
+      if (offerFilter.gmPct === "gte15") {
+        rows = rows.filter(function (row) {
+          var n = parseGmPctNumber(row.gm_pct);
+          return n != null && n >= 15;
+        });
+      } else if (offerFilter.gmPct === "lt15") {
+        rows = rows.filter(function (row) {
+          var n = parseGmPctNumber(row.gm_pct);
+          return n != null && n < 15;
+        });
+      }
+      var from = parseDateOnly(offerFilter.onboardDateFrom);
+      var to = parseDateOnly(offerFilter.onboardDateTo);
+      if (from || to) {
+        rows = rows.filter(function (row) {
+          var onboardDate = parseDateOnly(row.planned_onboard_date);
+          if (from && (!onboardDate || onboardDate < from)) return false;
+          if (to && (!onboardDate || onboardDate > to)) return false;
+          return true;
+        });
+      }
+      if (String(offerFilter.keyword || "").trim()) {
+        rows = rows.filter(function (row) {
+          return matchesOfferKeyword(row, offerFilter.keyword);
+        });
+      }
+      return rows;
+    });
+
+    function resetOfferFilter() {
+      offerState.statusFilter = "";
+      offerFilter.keyword = "";
+      offerFilter.probation = "";
+      offerFilter.gmAmount = "";
+      offerFilter.gmPct = "";
+      offerFilter.onboardDateFrom = "";
+      offerFilter.onboardDateTo = "";
+      loadOfferRecords();
+    }
+
+    function scrollOffersToTop() {
+      var el = offerScrollWrap.value;
+      if (el) el.scrollTop = 0;
     }
 
     function moneySame(a, b) {
@@ -456,7 +573,13 @@
     }
 
     return {
+      offerFilterPanelExpanded: offerFilterPanelExpanded,
+      offerScrollWrap: offerScrollWrap,
+      scrollOffersToTop: scrollOffersToTop,
       offerState: offerState,
+      offerFilter: offerFilter,
+      filteredOfferRecords: filteredOfferRecords,
+      resetOfferFilter: resetOfferFilter,
       offerStatusFilterOptions: OFFER_STATUS_FILTER_OPTIONS,
       offerApprovalModal: offerApprovalModal,
       offerApprovalForm: offerApprovalForm,

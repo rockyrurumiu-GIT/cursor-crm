@@ -180,20 +180,8 @@
         min-width: 100%;
     }
     /* 岗位：仅序号列冻结；候选人：仅姓名列冻结 */
-    .rms-jobs-panel {
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        height: calc(100vh - 9.5rem);
-        max-height: calc(100vh - 9.5rem);
-    }
-    .rms-jobs-scroll.rms-jobs-scroll-fill {
-        flex: 1 1 0;
-        min-height: 0;
-        max-height: none !important;
-        overflow-x: auto;
-        overflow-y: auto;
-        padding-bottom: 22px;
+    .rms-jobs-scroll.rms-candidates-table-scroll {
+        max-height: calc(2.32rem * 11);
     }
     .crm-table.rms-jobs-table {
         table-layout: fixed;
@@ -962,14 +950,17 @@
     </div>
 
     <!-- Jobs -->
-    <section v-show="activeTab === 'jobs' && viewMode !== 'candidateReport'" class="rms-jobs-panel bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5 flex flex-col gap-2 min-h-0 overflow-hidden">
-        <div class="shrink-0">
+    <section v-show="activeTab === 'jobs' && viewMode !== 'candidateReport'">
+        <div class="mb-3">
+            <h2 class="text-lg font-medium text-[#1f2328]">岗位</h2>
+        </div>
+        <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3 shrink-0">
             <div
                 v-if="!jobFilterPanelExpanded"
                 class="flex flex-wrap items-center justify-between gap-2"
             >
-                <p class="text-sm font-semibold text-gray-700 min-w-0">
-                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredJobs.length }}</span> 条
+                <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                    合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredJobs.length }}</span> 条
                 </p>
                 <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
                     <button
@@ -1005,11 +996,11 @@
                     <button type="button" class="crm-filter-item crm-filter-reset" @click="resetJobFilter">清除筛选</button>
                 </div>
                 <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-sm font-semibold text-gray-700 min-w-0">
-                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredJobs.length }}</span> 条
+                    <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredJobs.length }}</span> 条
                     </p>
                     <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                        <button v-if="canWriteJobs" type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" @click="openJobModal">新建岗位</button>
+                        <button v-if="canWriteJobs" type="button" class="rounded-lg bg-[#0969da] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0860ca]" @click="openJobModal">新建岗位</button>
                         <button
                             type="button"
                             class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
@@ -1031,9 +1022,10 @@
             </div>
         </div>
 
-        <div v-if="jobsState.error" data-rms-error class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shrink-0">{{ jobsState.error }}</div>
-        <div v-else-if="jobsState.loading" class="text-sm text-gray-500 py-8 text-center shrink-0">加载中…</div>
-        <div v-else ref="jobsScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll rms-jobs-scroll rms-jobs-scroll-fill flex-1 min-h-0">
+        <div v-if="jobsState.error" data-rms-error class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 mb-3">{{ jobsState.error }}</div>
+        <div v-else-if="jobsState.loading" class="text-sm text-[#57606a] py-8 text-center">加载中…</div>
+        <div v-else class="rms-candidates-frame border border-[#d0d7de]">
+            <div ref="jobsScrollWrap" class="rms-jobs-scroll rms-candidates-table-scroll crm-table-scroll">
             <table class="crm-table rms-jobs-table" data-table-id="rms-jobs">
                 <thead>
                     <tr>
@@ -1100,6 +1092,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </section>
 
@@ -1314,7 +1307,7 @@
                     </div>
                     <button
                         type="button"
-                        class="crm-filter-item rounded-lg border border-amber-300 px-3 text-sm font-medium text-amber-800 h-[2.25rem] min-h-[2.25rem] whitespace-nowrap"
+                        class="crm-filter-item rounded-lg border border-amber-300 px-3 text-xs font-medium text-amber-800 h-[2.25rem] min-h-[2.25rem] whitespace-nowrap"
                         :class="applicationsFilter.hide_roster_converted ? 'bg-amber-100' : 'bg-amber-50 hover:bg-amber-100'"
                         @click="applicationsFilter.hide_roster_converted = !applicationsFilter.hide_roster_converted"
                     >隐藏已转花名册</button>
@@ -1494,14 +1487,25 @@
                 <p class="text-sm font-semibold text-[#1f2328] min-w-0">
                     合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredPipelineApplications.length }}</span> 条
                 </p>
-                <button
-                    type="button"
-                    class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 shrink-0"
-                    @click="pipelineFilterPanelExpanded = true"
-                >展开筛选</button>
+                <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                        @click="pipelineFilterPanelExpanded = true"
+                    >展开筛选</button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="回到顶部"
+                        @click="scrollPipelineToTop"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
             </div>
             <div v-else class="space-y-2">
                 <div class="crm-filter-row">
+                    <input v-model.trim="pipelineFilter.keyword" type="text" class="crm-filter-item crm-filter-control w-[12rem]" placeholder="城市/交付/推荐人" title="关键词（模糊）" />
                     <select v-model="pipelineFilter.client_id" class="crm-filter-item crm-filter-control w-[10rem]" title="客户">
                         <option value="">客户</option>
                         <option v-for="c in clientOptions" :key="'pc'+c.id" :value="String(c.id)">{{ c.name }}</option>
@@ -1510,9 +1514,6 @@
                         <option value="">岗位</option>
                         <option v-for="j in jobsState.items" :key="'pj'+j.id" :value="String(j.id)">{{ j.title || ('#'+j.id) }}</option>
                     </select>
-                    <input v-model.trim="pipelineFilter.city" type="text" class="crm-filter-item crm-filter-control w-[8rem]" placeholder="城市（模糊）" title="城市" />
-                    <input v-model.trim="pipelineFilter.delivery" type="text" class="crm-filter-item crm-filter-control w-[8rem]" placeholder="交付（模糊）" title="交付" />
-                    <input v-model.trim="pipelineFilter.recommender" type="text" class="crm-filter-item crm-filter-control w-[8rem]" placeholder="实际推荐人（模糊）" title="实际推荐人" />
                     <div class="crm-filter-item rms-pipeline-status-filter">
                         <button type="button"
                             class="crm-filter-control w-[9rem] text-left flex items-center justify-between"
@@ -1546,25 +1547,37 @@
                         <span class="crm-filter-date-label">推荐日止</span>
                         <input v-model="pipelineFilter.date_to" type="date" class="crm-filter-date-input" title="推荐日止" />
                     </div>
-                    <label class="crm-filter-item crm-filter-control inline-flex w-auto items-center gap-1.5 cursor-pointer"
-                           title="默认仅显示活动态；取消勾选后包含内筛 fail、客筛 fail 等终态">
-                        <input v-model="pipelineFilter.activeOnly" type="checkbox" class="rounded border-[#d0d7de]" />
-                        <span>只看活动状态</span>
-                    </label>
+                    <button
+                        type="button"
+                        class="crm-filter-item rounded-lg border border-amber-300 px-3 text-xs font-medium text-amber-800 h-[2.25rem] min-h-[2.25rem] whitespace-nowrap"
+                        :class="pipelineFilter.activeOnly ? 'bg-amber-100' : 'bg-amber-50 hover:bg-amber-100'"
+                        title="默认仅显示活动态；再次点击后包含内筛 fail、客筛 fail 等终态"
+                        @click="pipelineFilter.activeOnly = !pipelineFilter.activeOnly"
+                    >只看活动状态</button>
                     <button type="button" class="crm-filter-item crm-filter-reset" @click="resetPipelineFilter">清除筛选</button>
                 </div>
                 <div class="flex flex-wrap items-center justify-between gap-2">
                     <p class="text-sm font-semibold text-[#1f2328] min-w-0">
                         合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredPipelineApplications.length }}</span> 条
                     </p>
-                    <button
-                        type="button"
-                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 shrink-0"
-                        title="收起筛选区"
-                        @click="pipelineFilterPanelExpanded = false"
-                    >
-                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
-                    </button>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="收起筛选区"
+                            @click="pipelineFilterPanelExpanded = false"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="回到顶部"
+                            @click="scrollPipelineToTop"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1572,7 +1585,7 @@
         <div v-else-if="applicationsState.loading" class="text-sm text-[#57606a]">加载中…</div>
         <div v-else-if="!filteredPipelineApplications.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无符合条件的 pipeline 记录</div>
         <div v-else class="rms-candidates-frame border border-[#d0d7de]">
-            <div class="rms-candidates-scroll crm-table-scroll">
+            <div ref="pipelineScrollWrap" class="rms-candidates-scroll crm-table-scroll">
             <table class="crm-table rms-candidates-table" data-table-id="rms-pipeline">
                 <thead>
                     <tr>
@@ -1656,16 +1669,95 @@
     </section>
 
     <!-- Offer management -->
-    <section v-show="activeTab === 'offerManagement' && viewMode !== 'candidateReport'" class="bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5">
-        <div class="flex flex-wrap items-center gap-2 mb-4">
-            <select v-model="offerState.statusFilter" class="crm-filter-control w-[10rem]" @change="loadOfferRecords">
-                <option v-for="opt in offerStatusFilterOptions" :key="'of'+opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
-            <button type="button" class="crm-filter-reset" @click="offerState.statusFilter = ''; loadOfferRecords()">清除筛选</button>
+    <section v-show="activeTab === 'offerManagement' && viewMode !== 'candidateReport'">
+        <div class="mb-3">
+            <h2 class="text-lg font-medium text-[#1f2328]">Offer 管理</h2>
+        </div>
+        <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3">
+            <div
+                v-if="!offerFilterPanelExpanded"
+                class="flex flex-wrap items-center justify-between gap-2"
+            >
+                <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                    合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredOfferRecords.length }}</span> 条
+                </p>
+                <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                        @click="offerFilterPanelExpanded = true"
+                    >展开筛选</button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="回到顶部"
+                        @click="scrollOffersToTop"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+            </div>
+            <div v-else class="space-y-2">
+                <div class="crm-filter-row">
+                    <input v-model.trim="offerFilter.keyword" type="text" class="crm-filter-item crm-filter-control w-[9rem]" placeholder="关键字模糊查询" title="关键字模糊查询" />
+                    <select v-model="offerState.statusFilter" class="crm-filter-item crm-filter-control w-[7rem]" title="状态" @change="loadOfferRecords">
+                        <option value="">状态</option>
+                        <option v-for="opt in offerStatusFilterOptions" :key="'of'+opt.value" :value="opt.value">{{ opt.label }}</option>
+                    </select>
+                    <select v-model="offerFilter.probation" class="crm-filter-item crm-filter-control w-[7rem]" title="试工期">
+                        <option value="">试工期</option>
+                        <option value="yes">有</option>
+                        <option value="no">无</option>
+                    </select>
+                    <select v-model="offerFilter.gmAmount" class="crm-filter-item crm-filter-control w-[7rem]" title="GM$">
+                        <option value="">GM$</option>
+                        <option value="gte3000">≥ 3,000</option>
+                        <option value="lt3000">&lt; 3,000</option>
+                    </select>
+                    <select v-model="offerFilter.gmPct" class="crm-filter-item crm-filter-control w-[6.5rem]" title="GM%">
+                        <option value="">GM%</option>
+                        <option value="gte15">≥ 15%</option>
+                        <option value="lt15">&lt; 15%</option>
+                    </select>
+                    <div class="crm-filter-item crm-filter-date">
+                        <span class="crm-filter-date-label">入职日起</span>
+                        <input v-model="offerFilter.onboardDateFrom" type="date" class="crm-filter-date-input" title="入职日起" />
+                    </div>
+                    <div class="crm-filter-item crm-filter-date">
+                        <span class="crm-filter-date-label">入职日止</span>
+                        <input v-model="offerFilter.onboardDateTo" type="date" class="crm-filter-date-input" title="入职日止" />
+                    </div>
+                    <button type="button" class="crm-filter-item crm-filter-reset shrink-0" @click="resetOfferFilter">清除筛选</button>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredOfferRecords.length }}</span> 条
+                    </p>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="收起筛选区"
+                            @click="offerFilterPanelExpanded = false"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="回到顶部"
+                            @click="scrollOffersToTop"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
         <div v-if="offerState.error" class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 mb-3">{{ offerState.error }}</div>
-        <div v-else-if="offerState.loading" class="text-sm text-gray-500 py-8 text-center">加载中…</div>
-        <div v-else class="border border-gray-200 rounded-lg crm-table-scroll">
+        <div v-else-if="offerState.loading" class="text-sm text-[#57606a] py-8 text-center">加载中…</div>
+        <div v-else class="rms-candidates-frame border border-[#d0d7de]">
+            <div ref="offerScrollWrap" class="rms-candidates-scroll crm-table-scroll">
             <table class="crm-table rms-candidates-table" data-table-id="rms-offer-management">
                 <colgroup>
                     <col class="rms-offer-col-status" />
@@ -1694,7 +1786,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in offerState.items" :key="'offer'+row.id">
+                    <tr v-for="row in filteredOfferRecords" :key="'offer'+row.id">
                         <td class="crm-td rms-offer-sticky-status">{{ row.status_label }}</td>
                         <td class="crm-td rms-offer-candidate-name rms-offer-sticky-candidate">{{ row.candidate_name || '—' }}</td>
                         <td class="crm-td">{{ row.current_approval_node_label || '—' }}</td>
@@ -1720,11 +1812,12 @@
                             <span v-else class="rms-offer-muted">—</span>
                         </td>
                     </tr>
-                    <tr v-if="!offerState.items.length">
-                        <td class="crm-td text-center text-[#57606a]" colspan="17">暂无 Offer 记录</td>
+                    <tr v-if="!filteredOfferRecords.length">
+                        <td class="crm-td text-center text-[#57606a]" colspan="17">{{ offerState.items.length ? '暂无符合条件的 Offer 记录' : '暂无 Offer 记录' }}</td>
                     </tr>
                 </tbody>
             </table>
+            </div>
         </div>
     </section>
 
@@ -2363,15 +2456,15 @@
 <script src="/static/js/vendor/vue.global.prod.js"></script>
 <script src="/static/js/core/crm-api.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
-<script src="/static/js/pages/rms-application-labels.js?v=offer-approval-hint-20260618"></script>
+<script src="/static/js/pages/rms-application-labels.js?v=rms-filters-20260619"></script>
 <script src="/static/js/pages/rms-core.js?v=offer-hint-popover-20260618"></script>
 <script src="/static/js/pages/rms-candidate-report.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-jobs.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-candidates.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-applications.js?v=hide-roster-converted-20260618"></script>
-<script src="/static/js/pages/rms-pipeline.js?v=r3c3-pipeline-terminal-20260615"></script>
+<script src="/static/js/pages/rms-pipeline.js?v=rms-filters-20260619"></script>
 <script src="/static/js/pages/rms-delivery-review.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-roster-conversion.js?v=roster-offer-lock-20260618"></script>
-<script src="/static/js/pages/rms-offer-management.js?v=offer-approval-no-super-20260618"></script>
-<script src="/static/js/pages/rms.js?v=offer-hint-popover-20260618"></script>
+<script src="/static/js/pages/rms-offer-management.js?v=rms-filters-20260619"></script>
+<script src="/static/js/pages/rms.js?v=rms-filters-20260619"></script>
 {% endblock %}

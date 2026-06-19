@@ -1335,7 +1335,11 @@ const rosterDetailApp = createApp({
             window.crmScheduleTableColumnResize?.();
             nextTick(() => {
                 const table = document.querySelector('.roster-table');
-                if (table) window.crmFitTableColumnsToContent?.(table);
+                if (!table) return;
+                window.crmFitTableColumnsToContent?.(table);
+                requestAnimationFrame(() => {
+                    window.crmRefreshOpColumnWidths?.(document);
+                });
             });
         });
         return {

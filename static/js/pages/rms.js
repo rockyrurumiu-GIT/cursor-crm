@@ -405,6 +405,8 @@
       const offerManagement = window.CrmRmsOfferManagement.createOfferManagementState({
         ref: ref,
         reactive: reactive,
+        computed: computed,
+        Labels: Labels,
         activeTab: activeTab,
         me: me,
         rmsRequest: rmsRequest,

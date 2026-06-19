@@ -35,12 +35,8 @@ function flattenHandbookOutline(nodes, depth = 0) {
         const fetchAuthBlob = (path) => (typeof fetchBlob === 'function' ? fetchBlob(path) : window.crmFetchAuthenticatedBlob(path));
         const dlBlob = (blob, mime, name) => (typeof downloadBlob === 'function' ? downloadBlob(blob, mime, name) : window.crmDownloadBlob(blob, mime, name));
 
-                const handbookUploadMeta = reactive({
-                    version_label: '',
-                    status: '',
-                    tags: '',
-                    permission_departments: '',
-                    permission_levels: '',
+                const handbookFilter = reactive({
+                    keyword: '',
                 });
                 const handbookStatusFilter = ref('');
                 const handbookFiles = ref([]);
@@ -90,8 +86,47 @@ function flattenHandbookOutline(nodes, depth = 0) {
                     let rows = Array.isArray(handbookFiles.value) ? [...handbookFiles.value] : [];
                     const st = handbookStatusFilter.value;
                     if (st) rows = rows.filter((r) => r.status === st);
+                    const keyword = String(handbookFilter.keyword || '').trim().toLowerCase();
+                    if (keyword) {
+                        rows = rows.filter((r) => matchesHandbookKeyword(r, keyword));
+                    }
                     return rows;
                 });
+                function matchesHandbookKeyword(row, keyword) {
+                    const q = String(keyword || '').trim().toLowerCase();
+                    if (!q) return true;
+                    const tags = Array.isArray(row.tags) ? row.tags.join(' ') : '';
+                    const depts = Array.isArray(row.permission_departments) ? row.permission_departments.join(' ') : '';
+                    const levels = Array.isArray(row.permission_levels) ? row.permission_levels.join(' ') : '';
+                    const haystack = [
+                        row.original_filename,
+                        row.version_label,
+                        tags,
+                        depts,
+                        levels,
+                        handbookStatusLabel(row.status),
+                    ].join(' ').toLowerCase();
+                    return haystack.indexOf(q) !== -1;
+                }
+                function resetHandbookFilter() {
+                    handbookFilter.keyword = '';
+                    handbookStatusFilter.value = '';
+                }
+                function clearHandbookSelectedFiles() {
+                    handbookSelectedFiles.value = [];
+                    handbookUploadError.value = '';
+                    if (handbookFileInput.value) handbookFileInput.value = '';
+                }
+                function buildHandbookUploadMetaFromFiles(files) {
+                    const names = (files || []).map((f) => String(f.name || '').replace(/\.[^.]+$/, '').trim()).filter(Boolean);
+                    const tagSource = names.length ? names.join(', ') : '手册';
+                    return {
+                        version_label: '',
+                        tags: tagSource,
+                        permission_departments: '交付部',
+                        permission_levels: '1',
+                    };
+                }
                 const handbookSelectedFileSummary = computed(() => {
                     const files = Array.isArray(handbookSelectedFiles.value) ? handbookSelectedFiles.value : [];
                     if (!files.length) return '';
@@ -672,10 +707,6 @@ function flattenHandbookOutline(nodes, depth = 0) {
                 };
                 const validateHandbookUploadMeta = () => {
                     if (!handbookSelectedFiles.value.length) return '请选择文件';
-                    if (!String(handbookUploadMeta.status || '').trim()) return '请选择状态';
-                    if (!String(handbookUploadMeta.tags || '').trim()) return '请填写标签';
-                    if (!String(handbookUploadMeta.permission_departments || '').trim()) return '请填写阅读部门';
-                    if (!String(handbookUploadMeta.permission_levels || '').trim()) return '请选择阅读级别';
                     return '';
                 };
                 const uploadSelectedHandbookFiles = async () => {
@@ -685,16 +716,17 @@ function flattenHandbookOutline(nodes, depth = 0) {
                         handbookUploadError.value = validationMsg;
                         return;
                     }
+                    const uploadMeta = buildHandbookUploadMetaFromFiles(list);
                     handbookUploadError.value = '';
                     handbookUploading.value = true;
                     try {
                         const fd = new FormData();
                         list.forEach((file) => fd.append('files', file));
-                        fd.append('version_label', handbookUploadMeta.version_label || '');
-                        fd.append('status', handbookUploadMeta.status || '');
-                        fd.append('tags', handbookUploadMeta.tags || '');
-                        fd.append('permission_departments', handbookUploadMeta.permission_departments || '');
-                        fd.append('permission_levels', handbookUploadMeta.permission_levels || '');
+                        fd.append('version_label', uploadMeta.version_label || '');
+                        fd.append('status', 'draft');
+                        fd.append('tags', uploadMeta.tags || '');
+                        fd.append('permission_departments', uploadMeta.permission_departments || '');
+                        fd.append('permission_levels', uploadMeta.permission_levels || '');
                         const r = await fetch(`/api/clients/${clientId}/delivery/handbooks`, {
                             method: 'POST',
                             headers: hdr(),
@@ -766,7 +798,7 @@ function flattenHandbookOutline(nodes, depth = 0) {
         };
 
         return {
-            handbookUploadMeta, handbookStatusFilter, filteredHandbookFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
+            handbookFilter, handbookStatusFilter, filteredHandbookFiles, resetHandbookFilter, clearHandbookSelectedFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
             handbookPdfSearchQuery, handbookPdfSearchResults, handbookPdfSearchCount, handbookPdfSearchActive,
             handbookPdfRenderedPageSrc, handbookPdfRenderedPageUrl, handbookPdfRenderBusy,
             handbookPdfTextBusy, handbookPdfTextError, loadHandbookPdfText, clearHandbookPdfSearch,

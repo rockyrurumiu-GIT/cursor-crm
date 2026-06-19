@@ -46,17 +46,16 @@
     var appJobTitle = deps.appJobTitle;
 
     var pipelineFilterPanelExpanded = ref(false);
+    var pipelineScrollWrap = ref(null);
 
     function progressLabel(status) {
       return Labels.progressLabel ? Labels.progressLabel(status) : status;
     }
 
     var pipelineFilter = reactive({
+      keyword: "",
       client_id: "",
       job_id: "",
-      city: "",
-      delivery: "",
-      recommender: "",
       statuses: [],
       activeOnly: true,
       date_from: "",
@@ -80,11 +79,9 @@
       var appliedStatuses = (pipelineFilter.statuses || []).slice();
       var rows = Labels.filterPipelineApplications(applicationsState.items, {
         filters: {
+          keyword: pipelineFilter.keyword,
           client_id: pipelineFilter.client_id,
           job_id: pipelineFilter.job_id,
-          city: pipelineFilter.city,
-          delivery: pipelineFilter.delivery,
-          recommender: pipelineFilter.recommender,
           statuses: [],
           activeOnly: appliedStatuses.length ? false : pipelineFilter.activeOnly,
           date_from: pipelineFilter.date_from,
@@ -102,17 +99,20 @@
     });
 
     function resetPipelineFilter() {
+      pipelineFilter.keyword = "";
       pipelineFilter.client_id = "";
       pipelineFilter.job_id = "";
-      pipelineFilter.city = "";
-      pipelineFilter.delivery = "";
-      pipelineFilter.recommender = "";
       pipelineFilter.statuses.splice(0, pipelineFilter.statuses.length);
       pipelineStatusDraft.value = [];
       pipelineFilter.activeOnly = true;
       pipelineStatusDropdownOpen.value = false;
       pipelineFilter.date_from = "";
       pipelineFilter.date_to = "";
+    }
+
+    function scrollPipelineToTop() {
+      var el = pipelineScrollWrap.value;
+      if (el) el.scrollTop = 0;
     }
 
     function togglePipelineStatusDropdown() {
@@ -300,6 +300,8 @@
 
     return {
       pipelineFilterPanelExpanded: pipelineFilterPanelExpanded,
+      pipelineScrollWrap: pipelineScrollWrap,
+      scrollPipelineToTop: scrollPipelineToTop,
       pipelineFilter: pipelineFilter,
       pipelineStatusDropdownOpen: pipelineStatusDropdownOpen,
       pipelineStatusDraft: pipelineStatusDraft,

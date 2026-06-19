@@ -110,10 +110,10 @@ def test_rms_frontend_js_assets_exist():
     assert "r3a-20260614" not in rms_html
     assert "r3b-20260614" not in rms_html
     assert "r3c-20260614" not in rms_html
-    assert rms_html.count("r3c3-pipeline-terminal-20260615") == 9
+    assert rms_html.count("r3c3-pipeline-terminal-20260615") == 4
     assert "rms-delivery-review.js?v=r3c3-pipeline-terminal-20260615" in rms_html
-    assert "rms-roster-conversion.js?v=r3c3-pipeline-terminal-20260615" in rms_html
-    assert "rms.js?v=offer-approval-20260618" in rms_html
+    assert "rms-roster-conversion.js?v=roster-offer-lock-20260618" in rms_html
+    assert "rms.js?v=rms-filters-20260619" in rms_html
 
     for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError"):
         assert sym in core_src, f"missing core symbol: {sym}"
@@ -365,7 +365,7 @@ def test_rms_frontend_js_assets_exist():
     assert "openCandidateDetail" in rms_html
     assert "candidateFilter.name" in rms_html
     assert "关键词" in rms_html
-    assert "姓名/学校/专业/公司/简历关键词" in rms_html
+    assert "姓名/学校/专业/公司/城市/简历关键词" in rms_html
     assert "暂无符合条件的候选人" in rms_html
     assert "openDeliveryReviewFailModal" in rms_html
     assert "reviewFailPromptOpen" in rms_html
@@ -755,7 +755,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "crm-sticky-right-op" in html
     assert "crm-right-drawer" in html
     assert "maritalOptions" in html or "未婚" in html
-    assert "rms-jobs-scroll-fill" in html
+    assert "rms-jobs-scroll" in html
+    assert 'ref="jobsScrollWrap"' in html
     assert "crm-table" in html
     assert "/static/js/pages/rms-application-labels.js" in html
     assert "/static/js/pages/rms-core.js" in html
@@ -928,6 +929,18 @@ def test_rms_offer_management_shell():
     assert "offerManagement" in rms_js
     assert "createOfferManagementState" in offer_js
     assert "offerState = reactive" in offer_js
+    assert "offerFilter = reactive" in offer_js
+    assert "filteredOfferRecords" in offer_js
+    assert "resetOfferFilter" in offer_js
+    assert "offerFilterPanelExpanded" in offer_js
+    assert "scrollOffersToTop" in offer_js
+    assert "合计（符合筛选条件）" in rms_html
+    assert "scrollOffersToTop" in rms_html
+    assert "关键字模糊查询" in rms_html
+    assert "入职日起" in rms_html
+    assert "入职日止" in rms_html
+    assert 'option value="">状态</option>' in rms_html
+    assert 'option value="">试工期</option>' in rms_html
     assert "offer_approval_pending" in labels_js
     assert "/api/rms/offers" in offer_js
     assert "/offer-approval" in offer_js
