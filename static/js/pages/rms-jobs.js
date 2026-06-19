@@ -40,7 +40,7 @@
     var JOB_SALARY_CAP_MAX = Core.JOB_SALARY_CAP_MAX;
 
     var jobsState = reactive({ loading: false, items: [], error: "" });
-    var jobFilterPanelExpanded = ref(true);
+    var jobFilterPanelExpanded = ref(false);
     var jobsScrollWrap = ref(null);
     var jobFilter = reactive({
       title: "",

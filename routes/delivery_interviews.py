@@ -13,7 +13,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from auth.deps import require_permission
+from auth.deps import get_current_context, require_permission
+from auth.service import AuthContext
 from schemas.delivery_interviews import (
     INTERVIEW_EXPORT_HEADERS,
     INTERVIEW_HEADER_MAP,
@@ -345,7 +346,13 @@ def register_delivery_interviews_routes(
     # --- Logs ---
 
     @app.get("/api/clients/{client_id}/delivery/interviews/logs")
-    async def interview_logs(client_id: int, db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.read"))):
+    async def interview_logs(
+        client_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+    ):
+        if not ctx.is_super:
+            raise HTTPException(status_code=403, detail="仅超级管理员可查看日志")
         logs = (
             db.query(AuditLog)
             .filter(AuditLog.client_id == client_id)

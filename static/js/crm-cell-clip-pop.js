@@ -67,14 +67,22 @@
         if (!isTruncated(textEl)) return;
         el.classList.add('is-pop-open');
         const cell = el.closest('td, .visit-td');
-        if (cell) cell.classList.add('crm-cell-clip-td-open');
+        if (cell) {
+            cell.classList.add('crm-cell-clip-td-open');
+            const row = cell.closest('tr');
+            if (row) row.classList.add('crm-cell-clip-tr-open');
+        }
     }
 
     function closePop(el) {
         if (!el) return;
         el.classList.remove('is-pop-open');
         const cell = el.closest('td, .visit-td');
-        if (cell) cell.classList.remove('crm-cell-clip-td-open');
+        if (cell) {
+            cell.classList.remove('crm-cell-clip-td-open');
+            const row = cell.closest('tr');
+            if (row) row.classList.remove('crm-cell-clip-tr-open');
+        }
     }
 
     function scan(root) {

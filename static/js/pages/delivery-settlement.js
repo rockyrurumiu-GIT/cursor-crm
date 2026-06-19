@@ -157,6 +157,8 @@ function endOfMonthAfterOffset(raw, monthOffset) {
 createApp({
     setup() {
         const rows = ref([]);
+        const filterPanelExpanded = ref(false);
+        const canViewLogs = computed(() => !!window.crmIsSuper);
         const customerFilterOpen = ref(false);
         const customerFilterRoot = ref(null);
         const filters = reactive({
@@ -425,6 +427,7 @@ createApp({
             }
         };
         const openLogs = async () => {
+            if (!canViewLogs.value) return;
             showLogs.value = true;
             logsLoading.value = true;
             try {
@@ -691,7 +694,7 @@ createApp({
         });
         return {
             rows, settlementCustomerNames, customerFilterSelectAll, customerFilterOpen, customerFilterRoot, customerFilterSummary,
-            filters, filteredRows, fields, detailCompactFields: DETAIL_COMPACT_FIELDS, detailTextareaFields: DETAIL_TEXTAREA_FIELDS, fileInput, showLogs, logsLoading, logs,
+            filterPanelExpanded, canViewLogs, filters, filteredRows, fields, detailCompactFields: DETAIL_COMPACT_FIELDS, detailTextareaFields: DETAIL_TEXTAREA_FIELDS, fileInput, showLogs, logsLoading, logs,
             totalAmountDisplay, totalAmountAllDisplay,
             expectedPaymentFilterWarning, onExpectedPaymentFilterStartDateInput, onExpectedPaymentFilterEndDateInput,
             showForm, editingId, formDetailReadonly, form, hasErrors,

@@ -278,6 +278,8 @@ const rosterDetailApp = createApp({
         const brief = ref({ name: '', owner: '' });
         const loading = ref(true);
         const showOnlyChecked = ref(false);
+        const filterPanelExpanded = ref(false);
+        const rosterScrollWrap = ref(null);
         const checkedRowIds = reactive({});
         const showForm = ref(false);
         const editingId = ref(null);
@@ -1078,6 +1080,10 @@ const rosterDetailApp = createApp({
             filters.preTaxSalaryAbove = '';
             filters.preTaxSalaryBelow = '';
         };
+        function scrollRosterToTop() {
+            const el = rosterScrollWrap.value;
+            if (el) el.scrollTop = 0;
+        }
         const toggleShowCheckedOnly = () => {
             showOnlyChecked.value = !showOnlyChecked.value;
         };
@@ -1340,7 +1346,7 @@ const rosterDetailApp = createApp({
             showRegReminder, regReminderFindings, regReminderCopied,
             regDetailRow, regDetailFields, isWideDetailField, rosterDetailValue, openRegDetail, closeRegDetail,
             canRegularizeRow, doRegularize, regularizingId,
-            missingRequiredFields, hasBlockingErrors, showOnlyChecked, displayCountHint, emptyStateText,
+            missingRequiredFields, hasBlockingErrors, showOnlyChecked, filterPanelExpanded, rosterScrollWrap, scrollRosterToTop, displayCountHint, emptyStateText,
             IS_GLOBAL_ROSTER,
             canViewRosterLogs,
             rosterCustomerSelectOptions,

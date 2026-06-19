@@ -44,12 +44,11 @@
 
     var candidatesState = reactive({ loading: false, items: [], error: "" });
     var candidatesScrollWrap = ref(null);
+    var candidateFilterPanelExpanded = ref(false);
     var candidateFilter = reactive({
       name: "",
       client_id: "",
       job_id: "",
-      city: "",
-      source: "",
       education_level: "",
       date_from: "",
       date_to: "",
@@ -130,17 +129,6 @@
         var jid = Number(candidateFilter.job_id);
         rows = rows.filter(function (c) {
           return Number(c.target_job_id) === jid;
-        });
-      }
-      var city = (candidateFilter.city || "").trim().toLowerCase();
-      if (city) {
-        rows = rows.filter(function (c) {
-          return String(c.city || "").toLowerCase().indexOf(city) !== -1;
-        });
-      }
-      if (candidateFilter.source) {
-        rows = rows.filter(function (c) {
-          return c.source === candidateFilter.source;
         });
       }
       if (candidateFilter.education_level) {
@@ -373,13 +361,16 @@
       candidateFilter.name = "";
       candidateFilter.client_id = "";
       candidateFilter.job_id = "";
-      candidateFilter.city = "";
-      candidateFilter.source = "";
       candidateFilter.education_level = "";
       candidateFilter.date_from = "";
       candidateFilter.date_to = "";
       await loadCandidates();
       suppressCandidateSearchWatch = false;
+    }
+
+    function scrollCandidatesToTop() {
+      var el = candidatesScrollWrap.value;
+      if (el) el.scrollTop = 0;
     }
 
     function candidateParseSummaryEmpty(row) {
@@ -697,6 +688,7 @@
     return {
       candidatesState: candidatesState,
       candidatesScrollWrap: candidatesScrollWrap,
+      candidateFilterPanelExpanded: candidateFilterPanelExpanded,
       candidateFilter: candidateFilter,
       candidateModalMode: candidateModalMode,
       editingCandidateId: editingCandidateId,
@@ -737,6 +729,7 @@
       scheduleCandidatesTableColumnFit: scheduleCandidatesTableColumnFit,
       loadCandidates: loadCandidates,
       resetCandidateFilter: resetCandidateFilter,
+      scrollCandidatesToTop: scrollCandidatesToTop,
       candidateParseSummaryEmpty: candidateParseSummaryEmpty,
       candidateParseSummaryValue: candidateParseSummaryValue,
       openCandidateDetail: openCandidateDetail,

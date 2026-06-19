@@ -99,7 +99,16 @@
   box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.35);
 }
 .rms-dash-filter-row {
-  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: flex-end; width: 100%;
+  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; width: 100%;
+}
+.rms-filter-placeholder { color: #9ca3af; }
+.rms-dash-filter-row .field.field-date.crm-filter-date {
+  height: 2.5rem;
+  min-height: 2.5rem;
+  padding-right: 0.25rem;
+}
+.rms-dash-filter-row .field.field-date .crm-filter-date-input {
+  font-size: 0.875rem;
 }
 .rms-dash-filter-row .field { flex: 0 1 9.5rem; min-width: 9.5rem; max-width: 9.5rem; }
 .rms-dash-filter-row .field.field-compact {
@@ -426,19 +435,17 @@
                     <template v-if="item.block === 'filter'">
                         <div class="rms-dash-filter-row">
                             <div class="field field-compact">
-                                <label>{{ clientFieldLabel }}</label>
-                                <select v-if="clientOptions.length" v-model="filters.client_id">
-                                    <option value="">全部</option>
+                                <select v-if="clientOptions.length" v-model="filters.client_id" :title="clientFieldLabel">
+                                    <option value="">{{ clientFieldLabel }}</option>
                                     <option v-for="c in clientOptions" :key="c.id" :value="String(c.id)">{{ c.name }}</option>
                                 </select>
-                                <input v-else v-model="filters.client_id" type="number" placeholder="ID" />
+                                <input v-else v-model="filters.client_id" type="number" :placeholder="clientFieldLabel" />
                             </div>
                             <div class="field field-job-dropdown" ref="jobFilterRef">
-                                <label>{{ jobFieldLabel }}</label>
                                 <template v-if="filteredJobOptions.length">
                                     <div class="rms-job-filter-control">
                                         <button type="button" class="rms-job-filter-trigger" @click.stop="toggleJobFilterDropdown">
-                                            <span class="truncate">{{ jobFilterSummary }}</span>
+                                            <span class="truncate" :class="!(jobFilterDropdownOpen ? jobIdsDraft : appliedFilters.job_ids || []).length ? 'rms-filter-placeholder' : ''">{{ jobFilterSummary }}</span>
                                         </button>
                                     </div>
                                     <div v-if="jobFilterDropdownOpen" class="rms-job-filter-panel" @click.stop>
@@ -462,34 +469,37 @@
                                         </div>
                                     </div>
                                 </template>
-                                <input v-else v-model="filters.job_ids_text" placeholder="岗位ID，逗号分隔" />
+                                <input v-else v-model="filters.job_ids_text" :placeholder="jobFieldLabel" />
                             </div>
                             <div class="field field-compact">
-                                <label>城市</label>
-                                <select v-if="cityOptions.length" v-model="filters.city">
-                                    <option value="">全部</option>
+                                <select v-if="cityOptions.length" v-model="filters.city" title="城市">
+                                    <option value="">城市</option>
                                     <option v-for="c in cityOptions" :key="c" :value="c">{{ c }}</option>
                                 </select>
                                 <input v-else v-model="filters.city" placeholder="城市" />
                             </div>
                             <div class="field field-compact">
-                                <label>{{ deliveryFieldLabel }}</label>
-                                <select v-if="userOptions.length" v-model="filters.delivery_user_id">
-                                    <option value="">全部</option>
+                                <select v-if="userOptions.length" v-model="filters.delivery_user_id" :title="deliveryFieldLabel">
+                                    <option value="">{{ deliveryFieldLabel }}</option>
                                     <option v-for="u in userOptions" :key="'d'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
                                 </select>
-                                <input v-else v-model="filters.delivery_user_id" type="number" placeholder="ID" />
+                                <input v-else v-model="filters.delivery_user_id" type="number" :placeholder="deliveryFieldLabel" />
                             </div>
                             <div class="field field-compact">
-                                <label>{{ recruiterFieldLabel }}</label>
-                                <select v-if="userOptions.length" v-model="filters.recruiter_user_id">
-                                    <option value="">全部</option>
+                                <select v-if="userOptions.length" v-model="filters.recruiter_user_id" :title="recruiterFieldLabel">
+                                    <option value="">{{ recruiterFieldLabel }}</option>
                                     <option v-for="u in userOptions" :key="'r'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
                                 </select>
-                                <input v-else v-model="filters.recruiter_user_id" type="number" placeholder="ID" />
+                                <input v-else v-model="filters.recruiter_user_id" type="number" :placeholder="recruiterFieldLabel" />
                             </div>
-                            <div class="field field-date"><label>统计周期起</label><input v-model="filters.date_from" type="date" /></div>
-                            <div class="field field-date"><label>统计周期止</label><input v-model="filters.date_to" type="date" /></div>
+                            <div class="field field-date crm-filter-date">
+                                <span class="crm-filter-date-label">统计周期起</span>
+                                <input v-model="filters.date_from" type="date" class="crm-filter-date-input" title="统计周期起" />
+                            </div>
+                            <div class="field field-date crm-filter-date">
+                                <span class="crm-filter-date-label">统计周期止</span>
+                                <input v-model="filters.date_to" type="date" class="crm-filter-date-input" title="统计周期止" />
+                            </div>
                             <div class="field rms-dash-filter-actions">
                                 <span class="rms-dash-filter-actions-spacer" aria-hidden="true">占位</span>
                                 <div class="rms-dash-filter-actions-btns">

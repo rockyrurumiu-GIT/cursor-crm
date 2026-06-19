@@ -225,7 +225,12 @@ def register_delivery_settlement_routes(
         return response
 
     @app.get("/api/delivery/settlement/logs")
-    async def settlement_logs(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.settlement.read"))):
+    async def settlement_logs(
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+    ):
+        if not ctx.is_super:
+            raise HTTPException(status_code=403, detail="仅超级管理员可查看日志")
         logs = (
             db.query(AuditLog)
             .filter(AuditLog.action.like("结算回款%"))

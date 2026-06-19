@@ -987,42 +987,46 @@
                     </button>
                 </div>
             </div>
-            <div v-else class="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <input v-model.trim="jobFilter.title" type="text" placeholder="输入岗位名称关键词" class="crm-filter-item crm-filter-control w-[12rem]" title="岗位名称（模糊）" />
-                <select v-model="jobFilter.client_id" class="crm-filter-item crm-filter-control w-[10rem]" title="客户">
-                    <option value="">客户</option>
-                    <option v-for="c in clientOptions" :key="'fc'+c.id" :value="String(c.id)">{{ c.name }}</option>
-                </select>
-                <select v-model="jobFilter.priority" class="crm-filter-item crm-filter-control w-[6rem]" title="优先级">
-                    <option value="">优先级</option>
-                    <option v-for="p in priorityOptions" :key="'fp'+p.value" :value="p.value">{{ p.label }}</option>
-                </select>
-                <select v-model="jobFilter.status" class="crm-filter-item crm-filter-control w-[7rem]" title="状态">
-                    <option value="">状态</option>
-                    <option v-for="s in statusOptions" :key="'fs'+s.value" :value="s.value">{{ s.label }}</option>
-                </select>
-                <button type="button" class="crm-filter-item crm-filter-reset" @click="resetJobFilter">清除筛选</button>
-                <p class="text-sm font-semibold text-gray-700 crm-filter-item">
-                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredJobs.length }}</span> 条
-                </p>
-                <div class="flex flex-wrap items-center gap-1.5 ml-auto shrink-0">
-                    <button v-if="canWriteJobs" type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" @click="openJobModal">新建岗位</button>
-                    <button
-                        type="button"
-                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                        title="收起筛选区"
-                        @click="jobFilterPanelExpanded = false"
-                    >
-                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
-                    </button>
-                    <button
-                        type="button"
-                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                        title="回到顶部"
-                        @click="scrollJobsToTop"
-                    >
-                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
-                    </button>
+            <div v-else class="space-y-2">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <input v-model.trim="jobFilter.title" type="text" placeholder="输入岗位名称关键词" class="crm-filter-item crm-filter-control w-[12rem]" title="岗位名称（模糊）" />
+                    <select v-model="jobFilter.client_id" class="crm-filter-item crm-filter-control w-[10rem]" title="客户">
+                        <option value="">客户</option>
+                        <option v-for="c in clientOptions" :key="'fc'+c.id" :value="String(c.id)">{{ c.name }}</option>
+                    </select>
+                    <select v-model="jobFilter.priority" class="crm-filter-item crm-filter-control w-[6rem]" title="优先级">
+                        <option value="">优先级</option>
+                        <option v-for="p in priorityOptions" :key="'fp'+p.value" :value="p.value">{{ p.label }}</option>
+                    </select>
+                    <select v-model="jobFilter.status" class="crm-filter-item crm-filter-control w-[7rem]" title="状态">
+                        <option value="">状态</option>
+                        <option v-for="s in statusOptions" :key="'fs'+s.value" :value="s.value">{{ s.label }}</option>
+                    </select>
+                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetJobFilter">清除筛选</button>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-gray-700 min-w-0">
+                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredJobs.length }}</span> 条
+                    </p>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                        <button v-if="canWriteJobs" type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" @click="openJobModal">新建岗位</button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="收起筛选区"
+                            @click="jobFilterPanelExpanded = false"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="回到顶部"
+                            @click="scrollJobsToTop"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1104,62 +1108,79 @@
         <div class="mb-3">
             <h2 class="text-lg font-medium text-[#1f2328]">候选人</h2>
         </div>
-        <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3">
-            <div class="flex flex-wrap items-end justify-between gap-2 mb-2">
-                <p class="text-sm font-semibold text-[#1f2328]">
+        <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3 shrink-0">
+            <div
+                v-if="!candidateFilterPanelExpanded"
+                class="flex flex-wrap items-center justify-between gap-2"
+            >
+                <p class="text-sm font-semibold text-[#1f2328] min-w-0">
                     合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredCandidates.length }}</span> 条
                 </p>
-                <div class="flex flex-wrap items-center gap-2">
-                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetCandidateFilter">清除筛选</button>
-                    <button v-if="canWriteCandidates" type="button" @click="openCandidateModal"
-                        class="text-sm bg-[#0969da] text-white px-3 py-1.5 rounded-md hover:bg-[#0860ca]">新建候选人</button>
+                <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                        @click="candidateFilterPanelExpanded = true"
+                    >展开筛选</button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="回到顶部"
+                        @click="scrollCandidatesToTop"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                    </button>
                 </div>
             </div>
-            <div class="crm-filter-row">
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">关键词</span>
-                    <input v-model.trim="candidateFilter.name" type="text" class="crm-filter-control w-[8rem]" placeholder="姓名/学校/专业/公司/简历关键词" />
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">应聘项目</span>
-                    <select v-model="candidateFilter.client_id" class="crm-filter-control w-[10rem]">
-                        <option value="">全部</option>
+            <div v-else class="space-y-2">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <input v-model.trim="candidateFilter.name" type="text" class="crm-filter-item crm-filter-control w-[14rem]" placeholder="姓名/学校/专业/公司/城市/简历关键词" title="关键词（含城市）" />
+                    <select v-model="candidateFilter.client_id" class="crm-filter-item crm-filter-control w-[10rem]" title="应聘项目">
+                        <option value="">应聘项目</option>
                         <option v-for="c in clientOptions" :key="'cc'+c.id" :value="String(c.id)">{{ c.name }}</option>
                     </select>
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">应聘岗位</span>
-                    <select v-model="candidateFilter.job_id" class="crm-filter-control w-[10rem]">
-                        <option value="">全部</option>
+                    <select v-model="candidateFilter.job_id" class="crm-filter-item crm-filter-control w-[10rem]" title="应聘岗位">
+                        <option value="">应聘岗位</option>
                         <option v-for="j in jobsState.items" :key="'cj'+j.id" :value="String(j.id)">{{ j.title || ('#'+j.id) }}</option>
                     </select>
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">城市</span>
-                    <input v-model.trim="candidateFilter.city" type="text" class="crm-filter-control w-[8rem]" placeholder="模糊" />
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">来源</span>
-                    <select v-model="candidateFilter.source" class="crm-filter-control w-[8rem]">
-                        <option value="">全部</option>
-                        <option v-for="s in sourceOptions" :key="'cs'+s" :value="s">{{ s }}</option>
-                    </select>
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">学历</span>
-                    <select v-model="candidateFilter.education_level" class="crm-filter-control w-[8rem]">
-                        <option value="">全部</option>
+                    <select v-model="candidateFilter.education_level" class="crm-filter-item crm-filter-control w-[8rem]" title="学历">
+                        <option value="">学历</option>
                         <option v-for="e in educationOptions" :key="'ce'+e" :value="e">{{ e }}</option>
                     </select>
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">推荐日起</span>
-                    <input v-model="candidateFilter.date_from" type="date" class="crm-filter-control w-[9rem]" />
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">推荐日止</span>
-                    <input v-model="candidateFilter.date_to" type="date" class="crm-filter-control w-[9rem]" />
-                </label>
+                    <div class="crm-filter-item crm-filter-date">
+                        <span class="crm-filter-date-label">推荐日起</span>
+                        <input v-model="candidateFilter.date_from" type="date" class="crm-filter-date-input" title="推荐日起" />
+                    </div>
+                    <div class="crm-filter-item crm-filter-date">
+                        <span class="crm-filter-date-label">推荐日止</span>
+                        <input v-model="candidateFilter.date_to" type="date" class="crm-filter-date-input" title="推荐日止" />
+                    </div>
+                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetCandidateFilter">清除筛选</button>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredCandidates.length }}</span> 条
+                    </p>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                        <button v-if="canWriteCandidates" type="button" class="rounded-lg bg-[#0969da] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0860ca]" @click="openCandidateModal">新建候选人</button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="收起筛选区"
+                            @click="candidateFilterPanelExpanded = false"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="回到顶部"
+                            @click="scrollCandidatesToTop"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
         <div v-if="candidatesState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ candidatesState.error }}</div>
@@ -1245,52 +1266,83 @@
             <h2 class="text-lg font-medium text-[#1f2328]">推荐记录</h2>
         </div>
         <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3">
-            <div class="flex flex-wrap items-end justify-between gap-2 mb-2">
-                <p class="text-sm font-semibold text-[#1f2328]">
+            <div
+                v-if="!applicationFilterPanelExpanded"
+                class="flex flex-wrap items-center justify-between gap-2"
+            >
+                <p class="text-sm font-semibold text-[#1f2328] min-w-0">
                     合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredApplications.length }}</span> 条
                 </p>
-                <div class="flex flex-wrap items-center gap-2">
-                    <label class="crm-filter-item crm-filter-reset inline-flex items-center gap-1.5 cursor-pointer">
-                        <input v-model="applicationsFilter.hide_roster_converted" type="checkbox" class="rounded border-[#d0d7de]" />
-                        <span>隐藏已转花名册</span>
-                    </label>
-                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetApplicationFilter">清除筛选</button>
+                <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                        @click="applicationFilterPanelExpanded = true"
+                    >展开筛选</button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="回到顶部"
+                        @click="scrollApplicationsToTop"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                    </button>
                 </div>
             </div>
-            <div class="crm-filter-row">
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">关键词</span>
-                    <input v-model.trim="applicationsFilter.keyword" type="text" class="crm-filter-control w-[8rem]" placeholder="候选人/客户/岗位" />
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">客户</span>
-                    <select v-model="applicationsFilter.client_id" class="crm-filter-control w-[10rem]">
-                        <option value="">全部</option>
+            <div v-else class="space-y-2">
+                <div class="crm-filter-row">
+                    <input v-model.trim="applicationsFilter.keyword" type="text" class="crm-filter-item crm-filter-control w-[10rem]" placeholder="候选人/客户/岗位" title="关键词" />
+                    <select v-model="applicationsFilter.client_id" class="crm-filter-item crm-filter-control w-[10rem]" title="客户">
+                        <option value="">客户</option>
                         <option v-for="c in clientOptions" :key="'ac'+c.id" :value="String(c.id)">{{ c.name }}</option>
                     </select>
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">推荐岗位</span>
-                    <select v-model="applicationsFilter.job_id" class="crm-filter-control w-[10rem]">
-                        <option value="">全部</option>
+                    <select v-model="applicationsFilter.job_id" class="crm-filter-item crm-filter-control w-[10rem]" title="推荐岗位">
+                        <option value="">推荐岗位</option>
                         <option v-for="j in jobsState.items" :key="'aj'+j.id" :value="String(j.id)">{{ j.title || ('#'+j.id) }}</option>
                     </select>
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">招聘进展</span>
-                    <select v-model="applicationsFilter.status" class="crm-filter-control w-[10rem]">
-                        <option value="">全部</option>
+                    <select v-model="applicationsFilter.status" class="crm-filter-item crm-filter-control w-[10rem]" title="招聘进展">
+                        <option value="">招聘进展</option>
                         <option v-for="p in applicationProgressOptions" :key="'ap'+p.value" :value="p.value">{{ p.label }}</option>
                     </select>
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">推荐日起</span>
-                    <input v-model="applicationsFilter.date_from" type="date" class="crm-filter-control w-[9rem]" />
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">推荐日止</span>
-                    <input v-model="applicationsFilter.date_to" type="date" class="crm-filter-control w-[9rem]" />
-                </label>
+                    <div class="crm-filter-item crm-filter-date">
+                        <span class="crm-filter-date-label">推荐日起</span>
+                        <input v-model="applicationsFilter.date_from" type="date" class="crm-filter-date-input" title="推荐日起" />
+                    </div>
+                    <div class="crm-filter-item crm-filter-date">
+                        <span class="crm-filter-date-label">推荐日止</span>
+                        <input v-model="applicationsFilter.date_to" type="date" class="crm-filter-date-input" title="推荐日止" />
+                    </div>
+                    <button
+                        type="button"
+                        class="crm-filter-item rounded-lg border border-amber-300 px-3 text-sm font-medium text-amber-800 h-[2.25rem] min-h-[2.25rem] whitespace-nowrap"
+                        :class="applicationsFilter.hide_roster_converted ? 'bg-amber-100' : 'bg-amber-50 hover:bg-amber-100'"
+                        @click="applicationsFilter.hide_roster_converted = !applicationsFilter.hide_roster_converted"
+                    >隐藏已转花名册</button>
+                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetApplicationFilter">清除筛选</button>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredApplications.length }}</span> 条
+                    </p>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="收起筛选区"
+                            @click="applicationFilterPanelExpanded = false"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="回到顶部"
+                            @click="scrollApplicationsToTop"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
         <div v-if="applicationsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ applicationsState.error }}</div>
@@ -1298,7 +1350,7 @@
         <div v-else-if="!applicationsState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无推荐记录</div>
         <div v-else-if="!filteredApplications.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无符合条件的推荐记录</div>
         <div v-else class="rms-candidates-frame border border-[#d0d7de]">
-            <div class="rms-candidates-scroll crm-table-scroll">
+            <div ref="applicationsScrollWrap" class="rms-candidates-scroll crm-table-scroll">
             <table class="crm-table rms-candidates-table" data-table-id="rms-applications">
                 <thead>
                     <tr>
@@ -1435,79 +1487,85 @@
             <h2 class="text-lg font-medium text-[#1f2328]">招聘pipeline-候选人状态（交付）</h2>
         </div>
         <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3">
-            <div class="flex flex-wrap items-end justify-between gap-2 mb-2">
-                <p class="text-sm font-semibold text-[#1f2328]">
+            <div
+                v-if="!pipelineFilterPanelExpanded"
+                class="flex flex-wrap items-center justify-between gap-2"
+            >
+                <p class="text-sm font-semibold text-[#1f2328] min-w-0">
                     合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredPipelineApplications.length }}</span> 条
                 </p>
-                <div class="flex flex-wrap items-center gap-2">
-                    <label class="crm-filter-item crm-filter-reset inline-flex items-center gap-1.5 cursor-pointer"
+                <button
+                    type="button"
+                    class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 shrink-0"
+                    @click="pipelineFilterPanelExpanded = true"
+                >展开筛选</button>
+            </div>
+            <div v-else class="space-y-2">
+                <div class="crm-filter-row">
+                    <select v-model="pipelineFilter.client_id" class="crm-filter-item crm-filter-control w-[10rem]" title="客户">
+                        <option value="">客户</option>
+                        <option v-for="c in clientOptions" :key="'pc'+c.id" :value="String(c.id)">{{ c.name }}</option>
+                    </select>
+                    <select v-model="pipelineFilter.job_id" class="crm-filter-item crm-filter-control w-[10rem]" title="岗位">
+                        <option value="">岗位</option>
+                        <option v-for="j in jobsState.items" :key="'pj'+j.id" :value="String(j.id)">{{ j.title || ('#'+j.id) }}</option>
+                    </select>
+                    <input v-model.trim="pipelineFilter.city" type="text" class="crm-filter-item crm-filter-control w-[8rem]" placeholder="城市（模糊）" title="城市" />
+                    <input v-model.trim="pipelineFilter.delivery" type="text" class="crm-filter-item crm-filter-control w-[8rem]" placeholder="交付（模糊）" title="交付" />
+                    <input v-model.trim="pipelineFilter.recommender" type="text" class="crm-filter-item crm-filter-control w-[8rem]" placeholder="实际推荐人（模糊）" title="实际推荐人" />
+                    <div class="crm-filter-item rms-pipeline-status-filter">
+                        <button type="button"
+                            class="crm-filter-control w-[9rem] text-left flex items-center justify-between"
+                            title="当前招聘进展"
+                            @click="togglePipelineStatusDropdown">
+                            <span class="truncate" :class="!(pipelineFilter.statuses || []).length ? 'text-[#9ca3af]' : ''">{{ pipelineStatusFilterSummary }}</span>
+                            <span class="text-[#57606a] ml-1 shrink-0">{{ pipelineStatusDropdownOpen ? '▴' : '▾' }}</span>
+                        </button>
+                        <div v-if="pipelineStatusDropdownOpen" class="rms-pipeline-status-filter-panel" @click.stop>
+                            <label v-for="p in progressOptions" :key="'pp'+p.value" class="rms-pipeline-status-filter-item">
+                                <input type="checkbox" class="rounded border-[#d0d7de]"
+                                    :checked="pipelineStatusDraft.includes(p.value)"
+                                    @change="togglePipelineStatusDraft(p.value)" />
+                                <span class="truncate">{{ p.label }}</span>
+                            </label>
+                            <div class="flex border-t border-[#d0d7de] mt-1 pt-1 px-1 gap-1">
+                                <button type="button"
+                                    class="flex-1 py-1 text-xs text-[#57606a] hover:bg-[#f6f8fa] rounded"
+                                    @click="clearPipelineStatusDraft">清空</button>
+                                <button type="button"
+                                    class="flex-1 py-1 text-xs text-white bg-[#0969da] hover:bg-[#0860ca] rounded"
+                                    @click="applyPipelineStatusFilter">确定</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="crm-filter-item crm-filter-date">
+                        <span class="crm-filter-date-label">推荐日起</span>
+                        <input v-model="pipelineFilter.date_from" type="date" class="crm-filter-date-input" title="推荐日起" />
+                    </div>
+                    <div class="crm-filter-item crm-filter-date">
+                        <span class="crm-filter-date-label">推荐日止</span>
+                        <input v-model="pipelineFilter.date_to" type="date" class="crm-filter-date-input" title="推荐日止" />
+                    </div>
+                    <label class="crm-filter-item crm-filter-control inline-flex w-auto items-center gap-1.5 cursor-pointer"
                            title="默认仅显示活动态；取消勾选后包含内筛 fail、客筛 fail 等终态">
                         <input v-model="pipelineFilter.activeOnly" type="checkbox" class="rounded border-[#d0d7de]" />
                         <span>只看活动状态</span>
                     </label>
                     <button type="button" class="crm-filter-item crm-filter-reset" @click="resetPipelineFilter">清除筛选</button>
                 </div>
-            </div>
-            <div class="crm-filter-row">
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">客户</span>
-                    <select v-model="pipelineFilter.client_id" class="crm-filter-control w-[10rem]">
-                        <option value="">全部</option>
-                        <option v-for="c in clientOptions" :key="'pc'+c.id" :value="String(c.id)">{{ c.name }}</option>
-                    </select>
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">岗位</span>
-                    <select v-model="pipelineFilter.job_id" class="crm-filter-control w-[10rem]">
-                        <option value="">全部</option>
-                        <option v-for="j in jobsState.items" :key="'pj'+j.id" :value="String(j.id)">{{ j.title || ('#'+j.id) }}</option>
-                    </select>
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">城市</span>
-                    <input v-model.trim="pipelineFilter.city" type="text" class="crm-filter-control w-[8rem]" placeholder="模糊" />
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">交付</span>
-                    <input v-model.trim="pipelineFilter.delivery" type="text" class="crm-filter-control w-[8rem]" placeholder="模糊" />
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">实际推荐人</span>
-                    <input v-model.trim="pipelineFilter.recommender" type="text" class="crm-filter-control w-[8rem]" placeholder="模糊" />
-                </label>
-                <div class="crm-filter-item flex flex-col gap-1 text-xs rms-pipeline-status-filter">
-                    <span class="text-[#57606a]">当前招聘进展</span>
-                    <button type="button"
-                        class="crm-filter-control w-[9rem] text-left flex items-center justify-between"
-                        @click="togglePipelineStatusDropdown">
-                        <span class="truncate">{{ pipelineStatusFilterSummary }}</span>
-                        <span class="text-[#57606a] ml-1 shrink-0">{{ pipelineStatusDropdownOpen ? '▴' : '▾' }}</span>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredPipelineApplications.length }}</span> 条
+                    </p>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 shrink-0"
+                        title="收起筛选区"
+                        @click="pipelineFilterPanelExpanded = false"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
                     </button>
-                    <div v-if="pipelineStatusDropdownOpen" class="rms-pipeline-status-filter-panel" @click.stop>
-                        <label v-for="p in progressOptions" :key="'pp'+p.value" class="rms-pipeline-status-filter-item">
-                            <input type="checkbox" class="rounded border-[#d0d7de]"
-                                :checked="pipelineStatusDraft.includes(p.value)"
-                                @change="togglePipelineStatusDraft(p.value)" />
-                            <span class="truncate">{{ p.label }}</span>
-                        </label>
-                        <div class="flex border-t border-[#d0d7de] mt-1 pt-1 px-1 gap-1">
-                            <button type="button"
-                                class="flex-1 py-1 text-xs text-[#57606a] hover:bg-[#f6f8fa] rounded"
-                                @click="clearPipelineStatusDraft">清空</button>
-                            <button type="button"
-                                class="flex-1 py-1 text-xs text-white bg-[#0969da] hover:bg-[#0860ca] rounded"
-                                @click="applyPipelineStatusFilter">确定</button>
-                        </div>
-                    </div>
                 </div>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">推荐日起</span>
-                    <input v-model="pipelineFilter.date_from" type="date" class="crm-filter-control w-[9rem]" />
-                </label>
-                <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                    <span class="text-[#57606a]">推荐日止</span>
-                    <input v-model="pipelineFilter.date_to" type="date" class="crm-filter-control w-[9rem]" />
-                </label>
             </div>
         </div>
         <div v-if="applicationsState.error" data-rms-error class="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{{ applicationsState.error }}</div>

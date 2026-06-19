@@ -25,7 +25,7 @@
     /** 招聘管道「当前招聘进展」预设列宽后须 bump */
     const RMS_PIPELINE_STORAGE_VERSION = 'v1';
     /** 需求清单 JD 固定 30 字宽；岗位名称冻结后须 bump */
-    const REQUIREMENTS_JOBS_STORAGE_VERSION = 'v2';
+    const REQUIREMENTS_JOBS_STORAGE_VERSION = 'v3';
     /** 花名册备注列固定 15 字宽后须 bump，避免 localStorage 沿用按全文测出的旧宽 */
     const ROSTER_STORAGE_VERSION = 'v2';
     /** 员工访谈长文本列固定 20 字宽后须 bump */
@@ -150,6 +150,21 @@
 
     function isInterviewTextWideColumnTh(th) {
         return th.classList.contains('interview-col-text-wide');
+    }
+
+    function isReqStickyTitleTh(th) {
+        return th && th.classList.contains('req-sticky-title');
+    }
+
+    function reqStickyTitleWidthPx(th) {
+        const table = th && th.closest ? th.closest('table[data-table-id="requirements-jobs"]') : null;
+        if (!table) return null;
+        const fontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const raw = getComputedStyle(table).getPropertyValue('--req-sticky-title-width').trim();
+        const num = parseFloat(raw);
+        if (!Number.isFinite(num) || num <= 0) return Math.round(9 * fontPx);
+        if (raw.includes('rem') || raw.endsWith('em')) return Math.round(num * fontPx);
+        return Math.round(num);
     }
 
     function rosterRemarksColumnWidthPx(th) {
@@ -369,6 +384,12 @@
         tagRosterRemarksColElement(col, widthPx);
     }
 
+    function tagReqStickyTitleColElement(col, widthPx) {
+        if (!col) return;
+        col.classList.add('req-col-title');
+        tagRosterRemarksColElement(col, widthPx);
+    }
+
     /** 冻结列 left/width 依赖 CSS 变量，拖拽后须与 colgroup 同步 */
     function syncStickyColumnVars(table, readColWidth) {
         const px = (i) => `${readColWidth(i)}px`;
@@ -396,6 +417,10 @@
             table.style.setProperty('--rms-jobs-sticky-title-width', px(1));
             return;
         }
+        if (table.dataset.tableId === 'requirements-jobs') {
+            table.style.setProperty('--req-sticky-title-width', px(0));
+            return;
+        }
         if (table.dataset.tableId === 'customer-visits') {
             const ths = table.querySelectorAll('thead th');
             for (let i = 0; i < 5; i++) {
@@ -421,7 +446,7 @@
 
     function tableScrollContainerWidth(table) {
         const wrap = table && table.closest
-            ? table.closest('.crm-table-scroll, .rms-candidates-scroll, .rms-jobs-scroll')
+            ? table.closest('.crm-table-scroll, .rms-candidates-scroll, .rms-jobs-scroll, .requirements-jobs-scroll')
             : null;
         if (!wrap) return 0;
         const w = wrap.clientWidth || 0;
@@ -528,6 +553,7 @@
             const pipelinePreset = rmsPipelinePresetColumnWidthPx(ths[i]);
             if (isOpColumnTh(ths[i])) return opColumnWidthPx(ths[i]);
             if (isCheckinColumnTh(ths[i])) return CHECKIN_COL_WIDTH;
+            if (isReqStickyTitleTh(ths[i])) return reqStickyTitleWidthPx(ths[i]);
             if (isRosterRemarksColumnTh(ths[i])) return rosterRemarksColumnWidthPx(ths[i]);
             if (isInterviewTextWideColumnTh(ths[i])) return interviewTextWideColumnWidthPx(ths[i]);
             if (isRmsJdColumnTh(ths[i])) {
@@ -546,6 +572,8 @@
                 tagOpColElement(cols[i], ths[i]);
             } else if (isCheckinColumnTh(ths[i])) {
                 tagCheckinColElement(cols[i]);
+            } else if (isReqStickyTitleTh(ths[i])) {
+                tagReqStickyTitleColElement(cols[i], reqStickyTitleWidthPx(ths[i]));
             } else if (isRosterRemarksColumnTh(ths[i])) {
                 tagRosterRemarksColElement(cols[i], rosterRemarksColumnWidthPx(ths[i]));
             } else if (isInterviewTextWideColumnTh(ths[i])) {
@@ -581,13 +609,13 @@
             let extra = target - total;
             if (extra > 0.5) {
                 const flexIdx = flexGrowColumnIndex(ths);
-                if (flexIdx >= 0 && !isOpColumnTh(ths[flexIdx]) && !isCheckinColumnTh(ths[flexIdx]) && !isRosterRemarksColumnTh(ths[flexIdx]) && !isInterviewTextWideColumnTh(ths[flexIdx]) && !isRmsJdColumnTh(ths[flexIdx])) {
+                if (flexIdx >= 0 && !isOpColumnTh(ths[flexIdx]) && !isCheckinColumnTh(ths[flexIdx]) && !isReqStickyTitleTh(ths[flexIdx]) && !isRosterRemarksColumnTh(ths[flexIdx]) && !isInterviewTextWideColumnTh(ths[flexIdx]) && !isRmsJdColumnTh(ths[flexIdx])) {
                     setColWidth(flexIdx, readColWidth(flexIdx) + extra);
                     total = target;
                 } else {
                     const growable = [];
                     for (let i = 0; i < cols.length; i += 1) {
-                        if (!isOpColumnTh(ths[i]) && !isCheckinColumnTh(ths[i]) && !isRosterRemarksColumnTh(ths[i]) && !isInterviewTextWideColumnTh(ths[i]) && !isRmsJdColumnTh(ths[i])) growable.push(i);
+                        if (!isOpColumnTh(ths[i]) && !isCheckinColumnTh(ths[i]) && !isReqStickyTitleTh(ths[i]) && !isRosterRemarksColumnTh(ths[i]) && !isInterviewTextWideColumnTh(ths[i]) && !isRmsJdColumnTh(ths[i])) growable.push(i);
                     }
                     if (growable.length) {
                         const share = extra / growable.length;
@@ -677,7 +705,7 @@
         const cols = ensureColgroup(table, ths.length);
         ths.forEach((th, i) => {
             th.dataset.col = String(i);
-            if (!isOpColumnTh(th) && !isCheckinColumnTh(th) && !isRosterRemarksColumnTh(th) && !isInterviewTextWideColumnTh(th)) th.classList.add('crm-th-resizable');
+            if (!isOpColumnTh(th) && !isCheckinColumnTh(th) && !isRosterRemarksColumnTh(th) && !isInterviewTextWideColumnTh(th) && !isReqStickyTitleTh(th)) th.classList.add('crm-th-resizable');
         });
 
         const minW = options?.minWidth ?? MIN_WIDTH;
@@ -706,6 +734,7 @@
         const opIdx = opColumnIndex(ths);
         const checkinIdx = checkinColumnIndex(ths);
         const remarksIdx = ths.findIndex(isRosterRemarksColumnTh);
+        const reqStickyIdx = ths.findIndex(isReqStickyTitleTh);
         const interviewTextWideIndices = ths.map((th, i) => (isInterviewTextWideColumnTh(th) ? i : -1)).filter((i) => i >= 0);
         const contentWidths = () => measureContentWidths(table, ths, cols);
         const normalizeSaved = (widths) => {
@@ -714,6 +743,7 @@
                 if (isOpColumnTh(th)) next[i] = opColumnWidthPx(th);
             });
             if (checkinIdx >= 0) next[checkinIdx] = CHECKIN_COL_WIDTH;
+            if (reqStickyIdx >= 0) next[reqStickyIdx] = reqStickyTitleWidthPx(ths[reqStickyIdx]);
             if (remarksIdx >= 0) next[remarksIdx] = rosterRemarksColumnWidthPx(ths[remarksIdx]);
             interviewTextWideIndices.forEach((idx) => {
                 next[idx] = interviewTextWideColumnWidthPx(ths[idx]);
@@ -752,6 +782,7 @@
         if (!hasBodyRows) {
             applyAllOpColumnWidths(ths, setColWidth);
             if (checkinIdx >= 0) setColWidth(checkinIdx, CHECKIN_COL_WIDTH);
+            if (reqStickyIdx >= 0) setColWidth(reqStickyIdx, reqStickyTitleWidthPx(ths[reqStickyIdx]));
             if (remarksIdx >= 0) setColWidth(remarksIdx, rosterRemarksColumnWidthPx(ths[remarksIdx]));
             interviewTextWideIndices.forEach((idx) => {
                 setColWidth(idx, interviewTextWideColumnWidthPx(ths[idx]));
@@ -765,6 +796,7 @@
                 if (isOpColumnTh(th)) payload[i] = opColumnWidthPx(th);
             });
             if (checkinIdx >= 0) payload[checkinIdx] = CHECKIN_COL_WIDTH;
+            if (reqStickyIdx >= 0) payload[reqStickyIdx] = reqStickyTitleWidthPx(ths[reqStickyIdx]);
             if (remarksIdx >= 0) payload[remarksIdx] = rosterRemarksColumnWidthPx(ths[remarksIdx]);
             interviewTextWideIndices.forEach((idx) => {
                 payload[idx] = interviewTextWideColumnWidthPx(ths[idx]);
@@ -773,7 +805,7 @@
         };
 
         const startResize = (th, colIndex, startX) => {
-            if (isOpColumnTh(ths[colIndex]) || isCheckinColumnTh(ths[colIndex]) || isRosterRemarksColumnTh(ths[colIndex]) || isInterviewTextWideColumnTh(ths[colIndex])) return;
+            if (isOpColumnTh(ths[colIndex]) || isCheckinColumnTh(ths[colIndex]) || isReqStickyTitleTh(ths[colIndex]) || isRosterRemarksColumnTh(ths[colIndex]) || isInterviewTextWideColumnTh(ths[colIndex])) return;
             const startW = readColWidth(colIndex);
             th.classList.add('is-resizing');
             document.body.style.cursor = 'col-resize';
@@ -798,7 +830,7 @@
         table.querySelectorAll('thead th.crm-th-resizable[data-col], thead th.visit-th-resizable[data-col]').forEach((th) => {
             const colIndex = Number(th.dataset.col);
             if (!Number.isFinite(colIndex) || colIndex < 0 || colIndex >= cols.length) return;
-            if (isOpColumnTh(th) || isCheckinColumnTh(th) || isRosterRemarksColumnTh(th) || isInterviewTextWideColumnTh(th)) return;
+            if (isOpColumnTh(th) || isCheckinColumnTh(th) || isReqStickyTitleTh(th) || isRosterRemarksColumnTh(th) || isInterviewTextWideColumnTh(th)) return;
 
             th.addEventListener('mousedown', (e) => {
                 const rect = th.getBoundingClientRect();
@@ -809,6 +841,8 @@
             });
         });
 
+        if (isRequirementsJobsTable(table)) syncRequirementsJobsStickyHeader(table);
+
         return true;
     }
 
@@ -817,6 +851,9 @@
         const selector = options?.selector || 'table.crm-table, table.visit-table';
         scope.querySelectorAll(selector).forEach((table) => {
             initCrmTableColumnResize(table, options);
+            if (table.dataset.tableId === 'requirements-jobs') {
+                ensureRequirementsJobsTableColumns(table);
+            }
         });
         refreshOpColumnWidths(scope);
     }
@@ -824,6 +861,47 @@
     function schedule(root) {
         const run = () => initAll(root || document);
         requestAnimationFrame(run);
+    }
+
+    function syncRequirementsJobsStickyHeader(table) {
+        if (!table || table.dataset.tableId !== 'requirements-jobs') return;
+        table.querySelectorAll('thead th.req-sticky-title').forEach((th) => {
+            th.classList.remove('crm-th-resizable');
+            th.style.position = 'sticky';
+            th.style.left = '0';
+            th.style.top = '0';
+            th.style.zIndex = '45';
+        });
+    }
+
+    function ensureRequirementsJobsTableColumns(table) {
+        if (!table || table.dataset.tableId !== 'requirements-jobs') return false;
+        if (table.dataset.colResizeReady !== '1') {
+            const ok = initCrmTableColumnResize(table);
+            syncRequirementsJobsStickyHeader(table);
+            return ok;
+        }
+        if (!isTableLayoutVisible(table)) return false;
+        const ths = leafHeaderCells(table);
+        if (!ths.length) return false;
+        let cols = [...table.querySelectorAll('colgroup col')];
+        if (cols.length !== ths.length) cols = ensureColgroup(table, ths.length);
+        const { readColWidth, setColWidth, syncTableWidth } = buildColumnHelpers(table, ths, cols, {});
+        const reqIdx = ths.findIndex(isReqStickyTitleTh);
+        if (reqIdx >= 0) {
+            setColWidth(reqIdx, reqStickyTitleWidthPx(ths[reqIdx]));
+        }
+        const rmsJdIdx = ths.findIndex(isRmsJdColumnTh);
+        if (rmsJdIdx >= 0) {
+            const def = rmsJdDefaultWidthPx(ths[rmsJdIdx]) + COL_CONTENT_PAD;
+            const current = readColWidth(rmsJdIdx);
+            if (!Number.isFinite(current) || current < 120 || current > def * 2) {
+                setColWidth(rmsJdIdx, def);
+            }
+        }
+        syncTableWidth();
+        syncRequirementsJobsStickyHeader(table);
+        return true;
     }
 
     function ensureRmsJobsTableColumns(table) {
@@ -931,6 +1009,7 @@
     window.crmInitTableColumnResize = initCrmTableColumnResize;
     window.crmEnsureRmsCandidatesTableColumns = ensureRmsCandidatesTableColumns;
     window.crmEnsureRmsPipelineTableColumns = ensureRmsPipelineTableColumns;
+    window.crmEnsureRequirementsJobsTableColumns = ensureRequirementsJobsTableColumns;
     window.crmEnsureRmsJobsTableColumns = ensureRmsJobsTableColumns;
     window.crmInitAllTableColumnResize = initAll;
     window.crmScheduleTableColumnResize = schedule;

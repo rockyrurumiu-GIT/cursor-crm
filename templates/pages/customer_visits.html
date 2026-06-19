@@ -167,41 +167,58 @@
         <button type="button" @click="openCreate" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm shrink-0">+ 新增拜访记录</button>
     </div>
 
-    <div class="bg-white border rounded-lg p-4 flex flex-wrap gap-3 items-end">
-        <div class="min-w-[140px]">
-            <label class="crm-field-label">按销售查看</label>
-            <select v-model="filterSales" @change="load" class="crm-form-control">
-                <option value="">全部销售</option>
+    <div class="bg-white border rounded-lg p-4 shrink-0">
+        <div
+            v-if="!filterPanelExpanded"
+            class="flex flex-wrap items-center justify-between gap-2"
+        >
+            <p class="text-sm font-semibold text-gray-700 min-w-0">
+                合计（符合筛选条件）：<span class="text-blue-700">{{ items.length }}</span> 条
+            </p>
+            <button
+                type="button"
+                class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 shrink-0"
+                @click="filterPanelExpanded = true"
+            >展开筛选</button>
+        </div>
+        <div v-else class="space-y-2">
+            <div class="crm-filter-row items-center">
+            <select v-model="filterSales" @change="load" class="crm-filter-item crm-filter-control w-[10rem]" title="按销售查看">
+                <option value="">按销售查看</option>
                 <option v-for="s in filters.salespeople" :key="s" :value="s">{{ s }}</option>
             </select>
-        </div>
-        <div class="min-w-[140px]">
-            <label class="crm-field-label">按区域查看</label>
-            <select v-model="filterRegion" @change="load" class="crm-form-control">
-                <option value="">全部区域</option>
+            <select v-model="filterRegion" @change="load" class="crm-filter-item crm-filter-control w-[10rem]" title="按区域查看">
+                <option value="">按区域查看</option>
                 <option value="东区">东区</option>
                 <option value="北区">北区</option>
                 <option value="西区">西区</option>
                 <option value="南区">南区</option>
                 <option value="中区">中区</option>
             </select>
-        </div>
-        <div class="min-w-[180px]">
-            <label class="crm-field-label">按客户查看</label>
-            <select v-model="filterClientId" @change="load" class="crm-form-control">
-                <option value="">全部客户</option>
+            <select v-model="filterClientId" @change="load" class="crm-filter-item crm-filter-control w-[11rem]" title="按客户查看">
+                <option value="">按客户查看</option>
                 <option v-for="c in filters.clients" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
-        </div>
-        <div class="min-w-[200px]">
-            <label class="crm-field-label">拜访时间</label>
-            <select v-model="filterWeek" @change="load" class="crm-form-control">
-                <option value="">全部周次</option>
+            <select v-model="filterWeek" @change="load" class="crm-filter-item crm-filter-control w-[11rem]" title="拜访时间">
+                <option value="">拜访时间</option>
                 <option v-for="w in filters.weeks" :key="w.value" :value="w.value">{{ w.label }}</option>
             </select>
+            <button type="button" @click="clearFilters" class="crm-filter-item crm-filter-reset">清除筛选</button>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-gray-700 min-w-0">
+                    合计（符合筛选条件）：<span class="text-blue-700">{{ items.length }}</span> 条
+                </p>
+                <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 shrink-0"
+                    title="收起筛选区"
+                    @click="filterPanelExpanded = false"
+                >
+                    <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                </button>
+            </div>
         </div>
-        <button type="button" @click="clearFilters" class="text-sm text-[#0969da] hover:underline py-1.5">清除筛选</button>
-        <span class="text-xs text-gray-400 ml-auto">共 {{ items.length }} 条</span>
     </div>
 
     <div class="bg-white border rounded-lg overflow-hidden">

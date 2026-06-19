@@ -45,6 +45,8 @@
     var appCandidateName = deps.appCandidateName;
     var appJobTitle = deps.appJobTitle;
 
+    var pipelineFilterPanelExpanded = ref(false);
+
     function progressLabel(status) {
       return Labels.progressLabel ? Labels.progressLabel(status) : status;
     }
@@ -68,7 +70,7 @@
     var pipelineStatusDraft = ref([]);
     var pipelineStatusFilterSummary = computed(function () {
       var sel = pipelineFilter.statuses || [];
-      if (!sel.length) return "全部";
+      if (!sel.length) return "当前招聘进展";
       if (sel.length === 1) return progressLabel(sel[0]);
       return "已选" + sel.length + "项";
     });
@@ -297,6 +299,7 @@
     }
 
     return {
+      pipelineFilterPanelExpanded: pipelineFilterPanelExpanded,
       pipelineFilter: pipelineFilter,
       pipelineStatusDropdownOpen: pipelineStatusDropdownOpen,
       pipelineStatusDraft: pipelineStatusDraft,

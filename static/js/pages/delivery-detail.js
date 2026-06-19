@@ -86,9 +86,9 @@
         return s;
     }
 
-    function multiSelectSummary(selected) {
+    function multiSelectSummary(selected, emptyLabel) {
         const values = Array.isArray(selected) ? selected : [];
-        if (!values.length) return '全部';
+        if (!values.length) return emptyLabel || '全部';
         if (values.length === 1) return values[0];
         return `已选${values.length}项`;
     }

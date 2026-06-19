@@ -39,17 +39,17 @@
         padding-bottom: 22px;
     }
     .roster-filter-row {
-        overflow: hidden;
+        overflow: visible;
     }
     .roster-filter-control {
-        min-width: 80px;
+        min-width: 72px;
     }
     .roster-filter-number {
-        min-width: 96px;
-        width: 96px;
+        min-width: 84px;
+        width: 84px;
     }
     .roster-filter-date {
-        min-width: 132px;
+        min-width: 120px;
     }
     .roster-filter-date-label {
         white-space: nowrap;
@@ -61,14 +61,9 @@
         align-items: center;
         gap: 6px;
     }
-    .roster-filter-reset {
-        white-space: nowrap;
-        padding-left: 8px;
-        padding-right: 8px;
-    }
     .roster-filter-keyword {
-        min-width: 9rem;
-        width: 9rem;
+        min-width: 8rem;
+        width: 8rem;
     }
     /* 中诺：岗位列宽约 15 个汉字 */
     .crm-table .crm-th.roster-col-position-zntx,
@@ -487,7 +482,32 @@
                 <button type="button" @click="restoreLatestBackup" class="crm-btn-rollback">回滚</button>
             </div>
         </div>
-        <div class="mb-3 crm-filter-row roster-filter-row text-sm shrink-0">
+        <div class="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-3 shrink-0">
+            <div
+                v-if="!filterPanelExpanded"
+                class="flex flex-wrap items-center justify-between gap-2"
+            >
+                <p class="text-sm font-semibold text-gray-700 min-w-0">
+                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredRows.length }}</span> 条
+                </p>
+                <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                        @click="filterPanelExpanded = true"
+                    >展开筛选</button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="回到顶部"
+                        @click="scrollRosterToTop"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+            </div>
+            <div v-else class="space-y-2">
+            <div class="crm-filter-row roster-filter-row text-sm">
             <input
                 v-if="hasFilterField('keyword')"
                 v-model.trim="filters.keyword"
@@ -520,13 +540,36 @@
                 <option value="">岗位（全部）</option>
                 <option v-for="v in positionTitleOptions" :key="`pt-${v}`" :value="v">{{ v }}</option>
             </select>
-            <div class="crm-filter-item roster-filter-item roster-filter-actions">
-                <button type="button" class="crm-filter-reset roster-filter-reset shrink-0" @click="clearFilters">重置</button>
+            <button type="button" class="crm-filter-item roster-filter-item crm-filter-reset shrink-0" @click="clearFilters">清除筛选</button>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-gray-700 min-w-0">
+                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredRows.length }}</span> 条
+                </p>
+                <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="收起筛选区"
+                        @click="filterPanelExpanded = false"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                    </button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="回到顶部"
+                        @click="scrollRosterToTop"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+            </div>
             </div>
         </div>
 
         <div class="rounded-xl border border-gray-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_24px_-4px_rgba(15,23,42,0.06)] overflow-hidden flex-1 min-h-0 flex flex-col">
-            <div class="crm-h-scroll roster-wrap crm-table-scroll roster-table-scroll-fill flex-1 min-h-0">
+            <div ref="rosterScrollWrap" class="crm-h-scroll roster-wrap crm-table-scroll roster-table-scroll-fill flex-1 min-h-0">
                 <table class="crm-table roster-table text-sm text-gray-800" data-table-id="roster" data-table-min-width="2280" data-roster-content-fit="1">
                     <thead>
                         <tr>

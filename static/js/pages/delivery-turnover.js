@@ -87,6 +87,8 @@ createApp({
     setup() {
         const rows = ref([]);
         const showOnlyChecked = ref(false);
+        const filterPanelExpanded = ref(false);
+        const canViewLogs = computed(() => !!window.crmIsSuper);
         const checkedRowIds = reactive({});
         const loading = ref(true);
         const fileInput = ref(null);
@@ -934,6 +936,7 @@ createApp({
             }
         };
         const openLogs = async () => {
+            if (!canViewLogs.value) return;
             showLogs.value = true;
             await loadLogs();
         };
@@ -975,7 +978,7 @@ createApp({
             rows, filteredRows, loading,
             filters, positionTitleOptions, workLocationOptions, customerNameOptions, separationTypeOptions,
             clearFilters,
-            showOnlyChecked, displayCountHint, emptyStateText,
+            showOnlyChecked, filterPanelExpanded, canViewLogs, displayCountHint, emptyStateText,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,
             totalCompensation, totalQuote, totalProfit, totalProfitRate, formatAmount, parseAmount,
             fileInput, triggerImport, onImportFile, exportCsv, restoreLatestBackup,

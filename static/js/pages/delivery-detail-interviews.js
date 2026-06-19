@@ -144,7 +144,6 @@ function emptyInterviewFilter() {
         full_name: '',
         employment_status: '',
         position: [],
-        employee_q1: [],
         onboarding_start: '',
         onboarding_end: '',
         satisfaction: [],
@@ -241,53 +240,36 @@ function emptyInterviewFilter() {
             });
         });
         const interviewPositionDropdownOpen = ref(false);
-        const interviewQ1DropdownOpen = ref(false);
         const interviewSatisfactionDropdownOpen = ref(false);
-        const interviewFilterPanelExpanded = ref(true);
+        const interviewFilterPanelExpanded = ref(false);
         const toggleInterviewFilterPanel = () => {
             interviewFilterPanelExpanded.value = !interviewFilterPanelExpanded.value;
             if (!interviewFilterPanelExpanded.value) {
                 interviewPositionDropdownOpen.value = false;
-                interviewQ1DropdownOpen.value = false;
                 interviewSatisfactionDropdownOpen.value = false;
             }
         };
         const interviewOptionSearch = reactive({
             position: '',
-            employee_q1: '',
             satisfaction: '',
         });
         const interviewPositionFilterRef = ref(null);
-        const interviewQ1FilterRef = ref(null);
         const interviewSatisfactionFilterRef = ref(null);
         const interviewSelectOptions = computed(() => ({
             position: uniqueSorted(interviewRows.value, 'position'),
-            employee_q1: uniqueSorted(interviewRows.value, 'employee_q1'),
             satisfaction: uniqueSorted(interviewRows.value, 'satisfaction'),
         }));
         const filteredInterviewPositionOptions = computed(() => {
             return interviewSelectOptions.value.position.filter((v) => fuzzyMatch(v, interviewOptionSearch.position));
         });
-        const filteredInterviewQ1Options = computed(() => {
-            return interviewSelectOptions.value.employee_q1.filter((v) => fuzzyMatch(v, interviewOptionSearch.employee_q1));
-        });
         const filteredInterviewSatisfactionOptions = computed(() => {
             return interviewSelectOptions.value.satisfaction.filter((v) => fuzzyMatch(v, interviewOptionSearch.satisfaction));
         });
-        const interviewPositionSummary = computed(() => multiSelectSummary(interviewFilter.position));
-        const interviewQ1Summary = computed(() => multiSelectSummary(interviewFilter.employee_q1));
-        const interviewSatisfactionSummary = computed(() => multiSelectSummary(interviewFilter.satisfaction));
+        const interviewPositionSummary = computed(() => multiSelectSummary(interviewFilter.position, '岗位'));
+        const interviewSatisfactionSummary = computed(() => multiSelectSummary(interviewFilter.satisfaction, '满意度'));
         const toggleInterviewPositionDropdown = () => {
             interviewPositionDropdownOpen.value = !interviewPositionDropdownOpen.value;
             if (interviewPositionDropdownOpen.value) {
-                interviewQ1DropdownOpen.value = false;
-                interviewSatisfactionDropdownOpen.value = false;
-            }
-        };
-        const toggleInterviewQ1Dropdown = () => {
-            interviewQ1DropdownOpen.value = !interviewQ1DropdownOpen.value;
-            if (interviewQ1DropdownOpen.value) {
-                interviewPositionDropdownOpen.value = false;
                 interviewSatisfactionDropdownOpen.value = false;
             }
         };
@@ -295,7 +277,6 @@ function emptyInterviewFilter() {
             interviewSatisfactionDropdownOpen.value = !interviewSatisfactionDropdownOpen.value;
             if (interviewSatisfactionDropdownOpen.value) {
                 interviewPositionDropdownOpen.value = false;
-                interviewQ1DropdownOpen.value = false;
             }
         };
         const toggleInterviewMultiOption = (key, value) => {
@@ -321,10 +302,6 @@ function emptyInterviewFilter() {
                     const positionValue = String(row.position || '').trim();
                     if (!f.position.includes(positionValue)) return false;
                 }
-                if (Array.isArray(f.employee_q1) && f.employee_q1.length) {
-                    const q1Value = String(row.employee_q1 || '').trim();
-                    if (!f.employee_q1.includes(q1Value)) return false;
-                }
                 if (Array.isArray(f.satisfaction) && f.satisfaction.length) {
                     const satisfactionValue = String(row.satisfaction || '').trim();
                     if (!f.satisfaction.includes(satisfactionValue)) return false;
@@ -342,10 +319,8 @@ function emptyInterviewFilter() {
         const resetInterviewFilter = () => {
             Object.assign(interviewFilter, emptyInterviewFilter());
             interviewOptionSearch.position = '';
-            interviewOptionSearch.employee_q1 = '';
             interviewOptionSearch.satisfaction = '';
             interviewPositionDropdownOpen.value = false;
-            interviewQ1DropdownOpen.value = false;
             interviewSatisfactionDropdownOpen.value = false;
         };
         const loadInterviewRows = async () => {
@@ -814,6 +789,7 @@ function emptyInterviewFilter() {
             window.crmDownloadBlob(blob, disposition, `员工访谈_${Date.now()}.csv`);
         };
         const openInterviewLogs = async () => {
+            if (!window.crmIsSuper) return;
             showInterviewLogs.value = true;
             interviewLogsLoading.value = true;
             try {
@@ -893,10 +869,6 @@ function emptyInterviewFilter() {
             if (interviewPositionDropdownOpen.value && interviewPositionRoot && !rootContainsTarget(interviewPositionRoot, target)) {
                 interviewPositionDropdownOpen.value = false;
             }
-            const interviewQ1Root = interviewQ1FilterRef.value;
-            if (interviewQ1DropdownOpen.value && interviewQ1Root && !rootContainsTarget(interviewQ1Root, target)) {
-                interviewQ1DropdownOpen.value = false;
-            }
             const interviewSatisfactionRoot = interviewSatisfactionFilterRef.value;
             if (interviewSatisfactionDropdownOpen.value && interviewSatisfactionRoot && !rootContainsTarget(interviewSatisfactionRoot, target)) {
                 interviewSatisfactionDropdownOpen.value = false;
@@ -935,23 +907,18 @@ function emptyInterviewFilter() {
             interviewLogs,
             interviewDisplayRows,
             interviewPositionDropdownOpen,
-            interviewQ1DropdownOpen,
             interviewSatisfactionDropdownOpen,
             interviewFilterPanelExpanded,
             toggleInterviewFilterPanel,
             interviewOptionSearch,
             interviewPositionFilterRef,
-            interviewQ1FilterRef,
             interviewSatisfactionFilterRef,
             interviewSelectOptions,
             filteredInterviewPositionOptions,
-            filteredInterviewQ1Options,
             filteredInterviewSatisfactionOptions,
             interviewPositionSummary,
-            interviewQ1Summary,
             interviewSatisfactionSummary,
             toggleInterviewPositionDropdown,
-            toggleInterviewQ1Dropdown,
             toggleInterviewSatisfactionDropdown,
             toggleInterviewMultiOption,
             clearInterviewMultiOption,

@@ -171,15 +171,19 @@
         overflow: visible;
         text-overflow: clip;
     }
-    .crm-table[data-table-id="requirements-jobs"] .crm-th.req-sticky-title,
-    .crm-table[data-table-id="requirements-jobs"] .crm-td.req-sticky-title {
-        width: var(--req-sticky-title-width);
-        min-width: var(--req-sticky-title-width);
-        max-width: var(--req-sticky-title-width);
+    .crm-table-scroll .crm-table[data-table-id="requirements-jobs"] thead {
+        position: relative;
+        z-index: 40;
     }
-    .crm-table[data-table-id="requirements-jobs"] thead .req-sticky-title {
+    .crm-table-scroll .crm-table[data-table-id="requirements-jobs"] thead th.crm-th {
+        z-index: 41;
+    }
+    /* 表头须高于 crm-th-resizable 的 position:relative，否则横向滚动时首列表头不冻结 */
+    .crm-table[data-table-id="requirements-jobs"] thead th.crm-th.req-sticky-title {
+        position: sticky;
+        left: 0;
         top: 0;
-        z-index: 63;
+        z-index: 45;
         background: #2f75b5;
         color: #fff;
         border-color: #1f5a94;
@@ -189,6 +193,12 @@
     }
     .crm-table[data-table-id="requirements-jobs"] tbody tr:hover .req-sticky-title {
         background: #eef6ff;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .crm-th.req-sticky-title,
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.req-sticky-title {
+        width: var(--req-sticky-title-width);
+        min-width: var(--req-sticky-title-width);
+        max-width: var(--req-sticky-title-width);
     }
     .crm-table[data-table-id="requirements-jobs"] .crm-td.req-sticky-title.crm-name-cell {
         color: #0969da;
@@ -220,6 +230,115 @@
         max-width: 100%;
         min-width: 0;
         white-space: nowrap !important;
+    }
+    .requirements-jobs-module .requirements-jobs-wrap {
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        box-sizing: border-box;
+    }
+    .requirements-jobs-scroll {
+        flex: 1 1 auto;
+        min-height: calc(100vh - 18rem);
+        max-height: calc(100vh - 18rem);
+        overflow-x: auto;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 22px;
+        box-sizing: border-box;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .crm-cell-clip-pop {
+        left: 0;
+        right: auto;
+        min-width: 100%;
+        max-width: 100%;
+        width: auto;
+        max-height: 14rem;
+        overflow-y: auto;
+        z-index: 16;
+        box-sizing: border-box;
+    }
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.crm-cell-clip-td-open,
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.rms-col-jd.crm-cell-clip-td-open,
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.crm-col-remarks.crm-cell-clip-td-open {
+        overflow: visible !important;
+        position: relative;
+        z-index: 15;
+    }
+    .crm-table[data-table-id="requirements-jobs"] tbody tr.crm-cell-clip-tr-open {
+        position: relative;
+        z-index: 15;
+    }
+    /* 需求清单外层白框：与 RMS 岗位 tab 类似，拉高白框供 JD 悬停纵向展开 */
+    .requirements-detail-card {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: min(calc(100vh - 10rem), 44rem);
+        overflow: hidden;
+    }
+    .requirements-jobs-module {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+    .req-job-title-btn {
+        color: #0969da;
+        font-weight: 600;
+        text-align: left;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        margin: 0;
+        cursor: pointer;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: block;
+    }
+    .req-job-title-btn:hover {
+        text-decoration: underline;
+    }
+    .req-job-drawer-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 0.75rem 1rem 1rem;
+    }
+    .req-job-drawer-body > section + section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #d0d7de;
+    }
+    .req-job-drawer-section-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #57606a;
+        margin-bottom: 0.5rem;
+    }
+    .req-job-drawer-field {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.35rem 0;
+        font-size: 0.875rem;
+    }
+    .req-job-drawer-field-label {
+        flex: 0 0 5.5rem;
+        color: #57606a;
+    }
+    .req-job-drawer-field-value {
+        flex: 1 1 auto;
+        min-width: 0;
+        color: #1f2328;
+        word-break: break-word;
+    }
+    .req-job-drawer-field-value.pre-wrap {
+        white-space: pre-wrap;
     }
     .pipeline-filter-row {
         align-items: flex-end;
@@ -508,15 +627,12 @@
 {% block content %}
 {% raw %}
 <div id="delivery-detail-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6" :class="moduleKey === 'interviews' ? 'py-3 sm:py-4' : 'py-4 sm:py-5'">
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="moduleKey === 'interviews' ? 'p-4 sm:p-5' : 'p-5 sm:p-6'">
+    <div class="bg-white rounded-xl border border-gray-200 shadow-sm max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="[moduleKey === 'interviews' ? 'p-4 sm:p-5' : 'p-5 sm:p-6', moduleKey === 'requirements' ? 'requirements-detail-card' : '']">
         <a :href="`/delivery/${moduleKey}`" class="text-sm text-blue-600 hover:underline shrink-0">← 返回{{ moduleTitle }}客户列表</a>
         <h1 class="font-bold text-gray-900 shrink-0" :class="moduleKey === 'interviews' ? 'mt-1 text-xl sm:text-2xl' : 'mt-2 text-2xl'">{{ clientName }} · {{ moduleTitle }}</h1>
         <div v-if="moduleKey === 'pipeline'" class="mt-4 flex flex-col flex-1 min-h-0 gap-3">
             <div class="flex items-end justify-between gap-3 flex-wrap shrink-0">
-                <label class="flex flex-col gap-1 text-xs">
-                    <span class="text-gray-600">姓名（模糊）</span>
-                    <input v-model.trim="pipelineFilter.full_name" type="text" placeholder="输入姓名关键词" class="pipeline-filter-control border border-gray-300 rounded px-2 text-sm bg-white w-[10rem]" />
-                </label>
+                <input v-model.trim="pipelineFilter.full_name" type="text" placeholder="姓名（模糊）" title="姓名（模糊）" class="crm-filter-item crm-filter-control pipeline-filter-control w-[10rem]" />
                 <div class="flex justify-end gap-2">
                 <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openPipelineAdd">新增</button>
                 <a :href="`/delivery/pipeline/${clientId}/insight`" class="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">数据透析</a>
@@ -530,7 +646,7 @@
                 <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerPipelineImport">导入</button>
                 <input ref="pipelineFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onPipelineImportFile" />
                 <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportPipelineCsv">导出</button>
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openPipelineLogs">日志</button>
+                <button v-if="canViewDeliveryLogs" type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openPipelineLogs">日志</button>
                 <button type="button" class="crm-btn-rollback" @click="restorePipelineLatestBackup">回滚</button>
                 <button
                     type="button"
@@ -545,18 +661,34 @@
                 </button>
                 </div>
             </div>
-            <div class="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4 space-y-3 shrink-0">
+            <div class="rounded-lg border border-gray-200 bg-gray-50 shrink-0">
+                <div
+                    v-if="!pipelineFilterPanelExpanded"
+                    class="flex flex-wrap items-center justify-between gap-2 px-2 py-2 sm:px-3 sm:py-2.5"
+                >
+                    <p class="text-sm font-semibold text-gray-700 min-w-0">
+                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredPipelineRows.length }}</span> 条
+                    </p>
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 shrink-0"
+                        title="展开筛选区"
+                        aria-label="展开筛选区"
+                        @click="togglePipelineFilterPanel"
+                    >展开筛选</button>
+                </div>
+                <div v-else class="p-3 sm:p-4 space-y-2">
                 <div class="crm-filter-row pipeline-filter-row">
-                    <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">日期</span>
+                    <div class="crm-filter-item pipeline-filter-item">
                         <div ref="pipelineFilterPeriodPickerRef" class="relative">
                             <button
                                 type="button"
                                 class="crm-filter-control pipeline-filter-control flex w-[6.8rem] items-center justify-between text-left"
+                                title="日期"
                                 @click="togglePipelineFilterPeriodDropdown"
                             >
                                 <span :class="pipelineFilter.date ? 'text-gray-900' : 'text-gray-400'">
-                                    {{ pipelineFilter.date ? pipelinePeriodDisplay(pipelineFilter.date) : '全部' }}
+                                    {{ pipelineFilter.date ? pipelinePeriodDisplay(pipelineFilter.date) : '日期' }}
                                 </span>
                                 <span class="ml-2 shrink-0 text-[10px] text-gray-500">{{ pipelineFilterPeriodDropdownOpen ? '▲' : '▼' }}</span>
                             </button>
@@ -602,33 +734,24 @@
                                 </div>
                             </div>
                         </div>
-                    </label>
-                    <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">岗位（模糊）</span>
-                        <input v-model.trim="pipelineFilter.position" type="text" placeholder="包含即匹配" class="crm-filter-control pipeline-filter-control w-[7.2rem]" />
-                    </label>
-                    <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">地域</span>
-                        <select v-model="pipelineFilter.region" class="crm-filter-control pipeline-filter-control w-[5.8rem]">
-                            <option value="">全部</option>
-                            <option v-for="v in pipelineSelectOptions.region" :key="v" :value="v">{{ v }}</option>
-                        </select>
-                    </label>
-                    <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">招聘</span>
-                        <select v-model="pipelineFilter.recruiter" class="crm-filter-control pipeline-filter-control w-[5.8rem]">
-                            <option value="">全部</option>
-                            <option v-for="v in pipelineSelectOptions.recruiter" :key="v" :value="v">{{ v }}</option>
-                        </select>
-                    </label>
-                    <label ref="resumeScreeningFilterRef" class="crm-filter-item pipeline-filter-item pipeline-filter-dropdown flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">简历筛选</span>
+                    </div>
+                    <input v-model.trim="pipelineFilter.position" type="text" placeholder="岗位（模糊）" title="岗位（模糊）" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[7.2rem]" />
+                    <select v-model="pipelineFilter.region" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[5.8rem]" title="地域">
+                        <option value="">地域</option>
+                        <option v-for="v in pipelineSelectOptions.region" :key="v" :value="v">{{ v }}</option>
+                    </select>
+                    <select v-model="pipelineFilter.recruiter" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[5.8rem]" title="招聘">
+                        <option value="">招聘</option>
+                        <option v-for="v in pipelineSelectOptions.recruiter" :key="v" :value="v">{{ v }}</option>
+                    </select>
+                    <div ref="resumeScreeningFilterRef" class="crm-filter-item pipeline-filter-item pipeline-filter-dropdown relative">
                         <button
                             type="button"
                             class="crm-filter-control pipeline-filter-control w-[7.2rem] text-left flex items-center justify-between"
+                            title="简历筛选"
                             @click="toggleResumeScreeningDropdown"
                         >
-                            <span class="truncate">{{ resumeScreeningSummary }}</span>
+                            <span class="truncate" :class="!(pipelineFilter.resume_screening || []).length ? 'text-gray-400' : ''">{{ resumeScreeningSummary }}</span>
                             <span class="text-gray-400 ml-2">{{ resumeScreeningDropdownOpen ? '▴' : '▾' }}</span>
                         </button>
                         <div v-if="resumeScreeningDropdownOpen" class="pipeline-filter-dropdown-panel">
@@ -647,40 +770,40 @@
                                 @click="clearResumeScreeningOption"
                             >清空</button>
                         </div>
-                    </label>
-                    <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">是否面试</span>
-                        <select v-model="pipelineFilter.interviewed" class="crm-filter-control pipeline-filter-control w-[6.0rem]">
-                            <option value="">全部</option>
-                            <option v-for="v in pipelineSelectOptions.interviewed" :key="v" :value="v">{{ v }}</option>
-                        </select>
-                    </label>
-                    <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">面试结果</span>
-                        <select v-model="pipelineFilter.result" class="crm-filter-control pipeline-filter-control w-[5.8rem]">
-                            <option value="">全部</option>
-                            <option v-for="v in pipelineSelectOptions.result" :key="v" :value="v">{{ v }}</option>
-                        </select>
-                    </label>
-                    <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">是否拿offer</span>
-                        <select v-model="pipelineFilter.got_offer" class="crm-filter-control pipeline-filter-control w-[6.4rem]">
-                            <option value="">全部</option>
-                            <option v-for="v in pipelineSelectOptions.got_offer" :key="v" :value="v">{{ v }}</option>
-                        </select>
-                    </label>
-                    <label class="crm-filter-item pipeline-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">是否入职（模糊）</span>
-                        <input v-model.trim="pipelineFilter.onboarded" type="text" placeholder="包含即匹配" class="crm-filter-control pipeline-filter-control w-[7.2rem]" />
-                    </label>
-                    <button type="button" class="crm-filter-item pipeline-filter-item crm-filter-reset pipeline-filter-control" @click="resetPipelineFilter">清除筛选</button>
+                    </div>
+                    <select v-model="pipelineFilter.interviewed" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[6.0rem]" title="是否面试">
+                        <option value="">是否面试</option>
+                        <option v-for="v in pipelineSelectOptions.interviewed" :key="v" :value="v">{{ v }}</option>
+                    </select>
+                    <select v-model="pipelineFilter.result" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[5.8rem]" title="面试结果">
+                        <option value="">面试结果</option>
+                        <option v-for="v in pipelineSelectOptions.result" :key="v" :value="v">{{ v }}</option>
+                    </select>
+                    <select v-model="pipelineFilter.got_offer" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[6.4rem]" title="是否拿offer">
+                        <option value="">是否拿offer</option>
+                        <option v-for="v in pipelineSelectOptions.got_offer" :key="v" :value="v">{{ v }}</option>
+                    </select>
+                    <input v-model.trim="pipelineFilter.onboarded" type="text" placeholder="是否入职（模糊）" title="是否入职（模糊）" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[7.2rem]" />
+                    <button type="button" class="crm-filter-item pipeline-filter-item crm-filter-reset" @click="resetPipelineFilter">清除筛选</button>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-gray-700 min-w-0">
+                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredPipelineRows.length }}</span> 条
+                    </p>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 shrink-0"
+                        title="收起筛选区"
+                        aria-label="收起筛选区"
+                        @click="togglePipelineFilterPanel"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
                 </div>
             </div>
             <div class="flex items-center justify-between gap-3 shrink-0">
                 <h2 class="text-sm font-semibold text-gray-700">简历raw data（共 {{ pipelineRows.length }} 条）</h2>
-                <p class="text-sm font-semibold text-gray-700">
-                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredPipelineRows.length }}</span> 条
-                </p>
             </div>
             <div ref="pipelineScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
             <table class="crm-table pipeline-table" data-table-id="pipeline" data-table-min-width="2400">
@@ -786,6 +909,15 @@
             </div>
         </div>
         <div v-else-if="moduleKey === 'interviews'" class="mt-2 flex flex-col flex-1 min-h-0 gap-2">
+            <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                <button type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" @click="openInterviewAdd">新增行</button>
+                <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100" @click="runInterviewRosterHints">提示</button>
+                <button v-if="canViewDeliveryLogs" type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openInterviewLogs">日志</button>
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerInterviewImport">导入</button>
+                <input ref="interviewFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onInterviewImportFile" />
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportInterviewCsv">导出</button>
+                <button type="button" class="crm-btn-rollback !py-1.5 !px-3 !text-sm" @click="restoreInterviewLatestBackup">回滚</button>
+            </div>
             <div class="rounded-lg border border-gray-200 bg-gray-50 shrink-0">
                 <div
                     v-if="!interviewFilterPanelExpanded"
@@ -821,65 +953,21 @@
                     </div>
                 </div>
                 <div v-else class="p-2 sm:p-3 space-y-2">
-                <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
-                    <div class="flex flex-wrap items-end gap-3 min-w-0">
-                        <label class="flex flex-col gap-0.5 text-xs">
-                            <span class="text-gray-600">员工姓名（模糊）</span>
-                            <input v-model.trim="interviewFilter.full_name" type="text" placeholder="输入员工姓名关键词" class="crm-filter-control w-[12rem]" />
-                        </label>
-                        <p class="text-sm font-semibold text-gray-700">
-                            合计（符合筛选条件）：<span class="text-blue-700">{{ filteredInterviewRows.length }}</span> 条
-                        </p>
-                    </div>
-                    <div class="flex flex-wrap justify-end gap-1.5 lg:shrink-0">
-                        <button type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" @click="openInterviewAdd">新增行</button>
-                        <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100" @click="runInterviewRosterHints">提示</button>
-                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openInterviewLogs">日志</button>
-                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerInterviewImport">导入</button>
-                        <input ref="interviewFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onInterviewImportFile" />
-                        <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportInterviewCsv">导出</button>
-                        <button type="button" class="crm-btn-rollback !py-1.5 !px-3 !text-sm" @click="restoreInterviewLatestBackup">回滚</button>
-                        <button
-                            type="button"
-                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                            title="收起筛选区（仅保留合计与展开）"
-                            aria-label="收起筛选区"
-                            @click="toggleInterviewFilterPanel"
-                        >
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-                                <path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                            title="回到顶部"
-                            aria-label="回到顶部"
-                            @click="scrollToTop"
-                        >
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-                                <path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
                 <div class="crm-filter-row interview-filter-row">
-                    <label class="crm-filter-item flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">在职/离职</span>
-                        <select v-model="interviewFilter.employment_status" class="crm-filter-control w-[7.2rem]">
-                            <option value="">全部</option>
-                            <option value="在职">在职</option>
-                            <option value="离职">离职</option>
-                        </select>
-                    </label>
-                    <label ref="interviewPositionFilterRef" class="crm-filter-item pipeline-filter-dropdown flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">岗位</span>
+                    <input v-model.trim="interviewFilter.full_name" type="text" placeholder="员工姓名（模糊）" title="员工姓名（模糊）" class="crm-filter-item crm-filter-control w-[12rem]" />
+                    <select v-model="interviewFilter.employment_status" class="crm-filter-item crm-filter-control w-[7.2rem]" title="在职/离职">
+                        <option value="">在职/离职</option>
+                        <option value="在职">在职</option>
+                        <option value="离职">离职</option>
+                    </select>
+                    <div ref="interviewPositionFilterRef" class="crm-filter-item pipeline-filter-dropdown relative">
                         <button
                             type="button"
                             class="crm-filter-control w-[8.4rem] text-left flex items-center justify-between"
+                            title="岗位"
                             @click="toggleInterviewPositionDropdown"
                         >
-                            <span class="truncate">{{ interviewPositionSummary }}</span>
+                            <span class="truncate" :class="!interviewFilter.position.length ? 'text-gray-400' : ''">{{ interviewPositionSummary }}</span>
                             <span class="text-gray-400 ml-2">{{ interviewPositionDropdownOpen ? '▴' : '▾' }}</span>
                         </button>
                         <div v-if="interviewPositionDropdownOpen" class="pipeline-filter-dropdown-panel">
@@ -906,58 +994,23 @@
                                 @click="clearInterviewMultiOption('position')"
                             >清空</button>
                         </div>
-                    </label>
-                    <label ref="interviewQ1FilterRef" class="crm-filter-item pipeline-filter-dropdown flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">员工加1</span>
+                    </div>
+                    <div class="crm-filter-item crm-filter-date interview-filter-date">
+                        <span class="crm-filter-date-label">入职起点</span>
+                        <input v-model="interviewFilter.onboarding_start" type="date" class="crm-filter-date-input" title="入职时间起点" />
+                    </div>
+                    <div class="crm-filter-item crm-filter-date interview-filter-date">
+                        <span class="crm-filter-date-label">入职终点</span>
+                        <input v-model="interviewFilter.onboarding_end" type="date" class="crm-filter-date-input" title="入职时间终点" />
+                    </div>
+                    <div ref="interviewSatisfactionFilterRef" class="crm-filter-item pipeline-filter-dropdown relative">
                         <button
                             type="button"
                             class="crm-filter-control w-[8.4rem] text-left flex items-center justify-between"
-                            @click="toggleInterviewQ1Dropdown"
-                        >
-                            <span class="truncate">{{ interviewQ1Summary }}</span>
-                            <span class="text-gray-400 ml-2">{{ interviewQ1DropdownOpen ? '▴' : '▾' }}</span>
-                        </button>
-                        <div v-if="interviewQ1DropdownOpen" class="pipeline-filter-dropdown-panel">
-                            <div class="px-2 py-1">
-                                <input
-                                    v-model.trim="interviewOptionSearch.employee_q1"
-                                    type="text"
-                                    placeholder="搜索员工加1"
-                                    class="crm-filter-control w-full"
-                                />
-                            </div>
-                            <label v-for="v in filteredInterviewQ1Options" :key="`interview-q1-${v}`" class="pipeline-filter-dropdown-item">
-                                <input
-                                    type="checkbox"
-                                    :checked="interviewFilter.employee_q1.includes(v)"
-                                    @change="toggleInterviewMultiOption('employee_q1', v)"
-                                />
-                                <span class="truncate">{{ v }}</span>
-                            </label>
-                            <div v-if="!filteredInterviewQ1Options.length" class="pipeline-filter-dropdown-empty">暂无可选项</div>
-                            <button
-                                type="button"
-                                class="w-full text-left px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
-                                @click="clearInterviewMultiOption('employee_q1')"
-                            >清空</button>
-                        </div>
-                    </label>
-                    <div class="crm-filter-item crm-filter-date interview-filter-date">
-                        <span class="crm-filter-date-label">入职时间起点</span>
-                        <input v-model="interviewFilter.onboarding_start" type="date" class="crm-filter-date-input" />
-                    </div>
-                    <div class="crm-filter-item crm-filter-date interview-filter-date">
-                        <span class="crm-filter-date-label">入职时间终点</span>
-                        <input v-model="interviewFilter.onboarding_end" type="date" class="crm-filter-date-input" />
-                    </div>
-                    <label ref="interviewSatisfactionFilterRef" class="crm-filter-item pipeline-filter-dropdown flex flex-col gap-1 text-xs">
-                        <span class="text-gray-600">满意度</span>
-                        <button
-                            type="button"
-                            class="crm-filter-control w-[8.4rem] text-left flex items-center justify-between"
+                            title="满意度"
                             @click="toggleInterviewSatisfactionDropdown"
                         >
-                            <span class="truncate">{{ interviewSatisfactionSummary }}</span>
+                            <span class="truncate" :class="!interviewFilter.satisfaction.length ? 'text-gray-400' : ''">{{ interviewSatisfactionSummary }}</span>
                             <span class="text-gray-400 ml-2">{{ interviewSatisfactionDropdownOpen ? '▴' : '▾' }}</span>
                         </button>
                         <div v-if="interviewSatisfactionDropdownOpen" class="pipeline-filter-dropdown-panel">
@@ -984,8 +1037,37 @@
                                 @click="clearInterviewMultiOption('satisfaction')"
                             >清空</button>
                         </div>
-                    </label>
+                    </div>
                     <button type="button" class="crm-filter-item crm-filter-reset" @click="resetInterviewFilter">清除筛选</button>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-gray-700 min-w-0">
+                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredInterviewRows.length }}</span> 条
+                    </p>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                            title="收起筛选区"
+                            aria-label="收起筛选区"
+                            @click="toggleInterviewFilterPanel"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                                <path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
+                            title="回到顶部"
+                            aria-label="回到顶部"
+                            @click="scrollToTop"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
+                                <path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 </div>
             </div>
@@ -1333,15 +1415,15 @@
                 </div>
             </div>
         </div>
-        <div v-else-if="moduleKey === 'requirements'" class="mt-4">
+        <div v-else-if="moduleKey === 'requirements'" class="requirements-jobs-module flex flex-col flex-1 min-h-0 mt-4">
             <div v-if="requirementJobsLoading" class="text-sm text-gray-500 py-8 text-center">加载中…</div>
             <div v-else-if="requirementJobsForbidden" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 暂无权限查看招聘岗位需求。
                 <a href="/rms" class="text-[#0969da] underline ml-1">前往招聘模块 →</a>
             </div>
             <div v-else-if="requirementJobsError" class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{{ requirementJobsError }}</div>
-            <div v-else class="bg-white border rounded-lg overflow-hidden">
-                <div class="crm-h-scroll">
+            <div v-else class="bg-white border rounded-lg requirements-jobs-wrap flex flex-col flex-1 min-h-0">
+                <div class="crm-table-scroll requirements-jobs-scroll">
                     <table class="crm-table w-full min-w-[1400px]" data-table-id="requirements-jobs">
                         <colgroup>
                             <col class="req-col-title" />
@@ -1366,7 +1448,9 @@
                         </thead>
                         <tbody>
                             <tr v-for="j in requirementJobs" :key="j.id">
-                                <td class="crm-td req-sticky-title crm-name-cell">{{ j.title || '—' }}</td>
+                                <td class="crm-td req-sticky-title">
+                                    <button type="button" class="req-job-title-btn" :title="j.title || '—'" @click="openRequirementJobDetail(j)">{{ j.title || '—' }}</button>
+                                </td>
                                 <td class="crm-td">{{ jobPriorityLabel(j.priority) }}</td>
                                 <td class="crm-td">{{ jobStatusLabel(j.status) }}</td>
                                 <td class="crm-td">{{ normalizeOwnerLabel(j.recruitment_owner_label) }}</td>
@@ -1903,6 +1987,108 @@
             </div>
         </div>
     </div>
+
+    <div v-if="requirementJobDetailOpen" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeRequirementJobDetail"></div>
+    <aside v-if="requirementJobDetailOpen" class="crm-esc-modal crm-right-drawer open" data-delivery-region="requirement-job-detail">
+        <div class="flex items-center justify-between gap-2 border-b border-[#d0d7de] px-4 py-3 shrink-0">
+            <h3 class="text-lg font-semibold text-[#1f2328] truncate">岗位需求详情</h3>
+            <button type="button" @click="closeRequirementJobDetail" class="text-2xl leading-none text-[#57606a] hover:text-[#1f2328] shrink-0" aria-label="关闭">&times;</button>
+        </div>
+        <div class="req-job-drawer-body text-sm">
+            <p v-if="requirementJobDetailError" class="text-sm text-red-700">{{ requirementJobDetailError }}</p>
+            <p v-else-if="requirementJobDetailLoading && !requirementJobDetailRow" class="text-sm text-[#57606a]">加载中…</p>
+            <template v-else-if="requirementJobDetailRow">
+                <section>
+                    <div class="req-job-drawer-section-title">基本信息</div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">岗位名称</div>
+                        <div class="req-job-drawer-field-value">{{ requirementJobDetailRow.title || '—' }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">客户</div>
+                        <div class="req-job-drawer-field-value">{{ requirementJobDetailRow.client_name || clientName || '—' }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">优先级</div>
+                        <div class="req-job-drawer-field-value">{{ jobPriorityLabel(requirementJobDetailRow.priority) }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">状态</div>
+                        <div class="req-job-drawer-field-value">{{ jobStatusLabel(requirementJobDetailRow.status) }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">客户部门</div>
+                        <div class="req-job-drawer-field-value">{{ requirementJobDetailRow.department || '—' }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">面试官</div>
+                        <div class="req-job-drawer-field-value">{{ requirementJobDetailRow.interviewer || '—' }}</div>
+                    </div>
+                </section>
+                <section>
+                    <div class="req-job-drawer-section-title">招聘要求</div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">招聘</div>
+                        <div class="req-job-drawer-field-value">{{ normalizeOwnerLabel(requirementJobDetailRow.recruitment_owner_label) }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">HC数</div>
+                        <div class="req-job-drawer-field-value tabular-nums">{{ requirementJobDetailRow.headcount ?? '—' }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">薪资帽</div>
+                        <div class="req-job-drawer-field-value tabular-nums">{{ displayRequirementSalaryCap(requirementJobDetailRow.salary_cap) }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">城市</div>
+                        <div class="req-job-drawer-field-value">{{ requirementJobDetailRow.location || '—' }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">年限</div>
+                        <div class="req-job-drawer-field-value">{{ requirementJobDetailRow.years_required || '—' }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">学历</div>
+                        <div class="req-job-drawer-field-value">{{ requirementJobDetailRow.education || '—' }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">加班/差旅</div>
+                        <div class="req-job-drawer-field-value">{{ requirementJobDetailRow.overtime_travel || '—' }}</div>
+                    </div>
+                </section>
+                <section>
+                    <div class="req-job-drawer-section-title">推荐统计</div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">活跃推荐数</div>
+                        <div class="req-job-drawer-field-value tabular-nums">{{ requirementJobDetailRow.active_recommendation_count ?? 0 }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">历史推荐数</div>
+                        <div class="req-job-drawer-field-value tabular-nums">{{ requirementJobDetailRow.historical_recommendation_count ?? 0 }}</div>
+                    </div>
+                </section>
+                <section>
+                    <div class="req-job-drawer-section-title">负责人</div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">销售</div>
+                        <div class="req-job-drawer-field-value">{{ normalizeOwnerLabel(requirementJobDetailRow.sales_owner_label) }}</div>
+                    </div>
+                    <div class="req-job-drawer-field">
+                        <div class="req-job-drawer-field-label">交付</div>
+                        <div class="req-job-drawer-field-value">{{ normalizeOwnerLabel(requirementJobDetailRow.delivery_owner_label) }}</div>
+                    </div>
+                </section>
+                <section>
+                    <div class="req-job-drawer-section-title">JD</div>
+                    <div class="req-job-drawer-field-value pre-wrap">{{ requirementJobDetailRow.job_description || '—' }}</div>
+                </section>
+                <section>
+                    <div class="req-job-drawer-section-title">备注</div>
+                    <div class="req-job-drawer-field-value pre-wrap">{{ requirementJobDetailRow.note || '—' }}</div>
+                </section>
+            </template>
+        </div>
+    </aside>
 </div>
 {% endraw %}
 <script>
@@ -1915,6 +2101,25 @@ window.__CRM_DELIVERY_DETAIL__ = {
 </script>
 {% endblock %}
 {% block page_scripts %}
+<style>
+    /* 需求清单：表头「岗位名称」须与数据行同步横向冻结（覆盖 base 中 crm-th-resizable 等规则） */
+    .crm-table-scroll .crm-table[data-table-id="requirements-jobs"] thead th.crm-th.req-sticky-title {
+        position: sticky !important;
+        left: 0 !important;
+        top: 0 !important;
+        z-index: 45 !important;
+        overflow: visible !important;
+        background: #2f75b5 !important;
+        color: #fff !important;
+        border-color: #1f5a94 !important;
+    }
+    .crm-table-scroll .crm-table[data-table-id="requirements-jobs"] tbody td.crm-td.req-sticky-title {
+        position: sticky !important;
+        left: 0 !important;
+        z-index: 12 !important;
+        overflow: visible !important;
+    }
+</style>
 <script src="/static/js/core/crm-api.js"></script>
 <script src="/static/js/core/crm-download.js"></script>
 <script src="/static/js/pages/delivery-detail.js"></script>
@@ -1953,6 +2158,10 @@ createApp({
         const requirementJobsLoading = ref(false);
         const requirementJobsError = ref('');
         const requirementJobsForbidden = ref(false);
+        const requirementJobDetailOpen = ref(false);
+        const requirementJobDetailRow = ref(null);
+        const requirementJobDetailLoading = ref(false);
+        const requirementJobDetailError = ref('');
         const JOB_PRIORITY_LABELS = { high: '高', medium: '中', low: '低' };
         const JOB_STATUS_LABELS = { open: 'open', closed: 'closed', freeze: 'freeze' };
         const jobPriorityLabel = (value) => JOB_PRIORITY_LABELS[value] || value || '—';
@@ -1969,6 +2178,31 @@ createApp({
             const sep = raw.indexOf(' · ');
             if (sep > 0) return raw.slice(0, sep).trim();
             return raw;
+        };
+        const openRequirementJobDetail = async (job) => {
+            if (!job || !job.id) return;
+            requirementJobDetailOpen.value = true;
+            requirementJobDetailLoading.value = true;
+            requirementJobDetailError.value = '';
+            requirementJobDetailRow.value = job;
+            try {
+                const r = await fetch(`/api/rms/jobs/${job.id}`, { headers: window.crmAuthHeader() });
+                if (!r.ok) {
+                    requirementJobDetailError.value = '加载岗位详情失败';
+                    return;
+                }
+                requirementJobDetailRow.value = await r.json();
+            } catch (_) {
+                requirementJobDetailError.value = '加载岗位详情失败';
+            } finally {
+                requirementJobDetailLoading.value = false;
+            }
+        };
+        const closeRequirementJobDetail = () => {
+            requirementJobDetailOpen.value = false;
+            requirementJobDetailRow.value = null;
+            requirementJobDetailLoading.value = false;
+            requirementJobDetailError.value = '';
         };
         const loadRequirementJobs = async () => {
             requirementJobsLoading.value = true;
@@ -1996,6 +2230,7 @@ createApp({
         };
         const { fuzzyMatch, uniqueSorted } = window.CrmDeliveryDetail;
         const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
+        const canViewDeliveryLogs = computed(() => !!window.crmIsSuper);
         const loadBrief = () => loadClientBrief(clientId, clientName);
         const settlement = window.CrmDeliveryDetailSettlement.createSettlementState({
             ref,
@@ -2047,6 +2282,8 @@ createApp({
             pipelineDateOptions,
             pipelineSelectOptions,
             filteredPipelineRows,
+            pipelineFilterPanelExpanded,
+            togglePipelineFilterPanel,
             resetPipelineFilter,
             resumeScreeningDropdownOpen,
             resumeScreeningFilterRef,
@@ -2162,23 +2399,18 @@ createApp({
             interviewDisplayRows,
             filteredInterviewRows,
             interviewPositionDropdownOpen,
-            interviewQ1DropdownOpen,
             interviewSatisfactionDropdownOpen,
             interviewFilterPanelExpanded,
             toggleInterviewFilterPanel,
             interviewOptionSearch,
             interviewPositionFilterRef,
-            interviewQ1FilterRef,
             interviewSatisfactionFilterRef,
             interviewSelectOptions,
             filteredInterviewPositionOptions,
-            filteredInterviewQ1Options,
             filteredInterviewSatisfactionOptions,
             interviewPositionSummary,
-            interviewQ1Summary,
             interviewSatisfactionSummary,
             toggleInterviewPositionDropdown,
-            toggleInterviewQ1Dropdown,
             toggleInterviewSatisfactionDropdown,
             toggleInterviewMultiOption,
             clearInterviewMultiOption,
@@ -2261,10 +2493,17 @@ createApp({
             closePipelineDropdownsForTarget(event.target);
             closeInterviewDropdownsForTarget(event.target);
         };
+        const handleRequirementJobDetailEscape = (event) => {
+            if (event.key !== 'Escape' || event.defaultPrevented) return;
+            if (!requirementJobDetailOpen.value) return;
+            event.preventDefault();
+            closeRequirementJobDetail();
+        };
         onMounted(async () => {
             document.addEventListener('click', handleDocumentClick);
             document.addEventListener('focusin', handleDocumentFocusIn);
             document.addEventListener('keydown', onHandbookReaderEscape);
+            document.addEventListener('keydown', handleRequirementJobDetailEscape);
             await loadBrief();
             await loadSettlementRows();
             await loadPipelineRows();
@@ -2278,6 +2517,10 @@ createApp({
             await mountHandbook();
             if (moduleKey === 'requirements') {
                 await loadRequirementJobs();
+                await nextTick();
+                document.querySelectorAll('table[data-table-id="requirements-jobs"]').forEach((table) => {
+                    window.crmEnsureRequirementsJobsTableColumns?.(table);
+                });
             }
             window.crmScheduleTableColumnResize?.();
         });
@@ -2285,13 +2528,16 @@ createApp({
             document.removeEventListener('click', handleDocumentClick);
             document.removeEventListener('focusin', handleDocumentFocusIn);
             document.removeEventListener('keydown', onHandbookReaderEscape);
+            document.removeEventListener('keydown', handleRequirementJobDetailEscape);
             unmountHandbook();
         });
         return {
             moduleKey, moduleTitle, clientId, clientName,
             requirementJobs, requirementJobsLoading, requirementJobsError, requirementJobsForbidden,
+            requirementJobDetailOpen, requirementJobDetailRow, requirementJobDetailLoading, requirementJobDetailError,
+            openRequirementJobDetail, closeRequirementJobDetail,
             jobPriorityLabel, jobStatusLabel, displayRequirementSalaryCap, normalizeOwnerLabel,
-            pipelineRows, pipelineFilter, pipelineDateOptions, pipelineSelectOptions, filteredPipelineRows, resetPipelineFilter,
+            pipelineRows, pipelineFilter, pipelineDateOptions, pipelineSelectOptions, filteredPipelineRows, pipelineFilterPanelExpanded, togglePipelineFilterPanel, resetPipelineFilter,
             resumeScreeningDropdownOpen, resumeScreeningFilterRef, resumeScreeningSummary,
             pipelineFilterPeriodPickerRef, pipelineFilterPeriodDropdownOpen, pipelineFilterPeriodHoverMonth,
             togglePipelineFilterPeriodDropdown, setPipelineFilterPeriodHoverMonth, selectPipelineFilterPeriod, clearPipelineFilterPeriod,
@@ -2330,12 +2576,12 @@ createApp({
             openPipelineAdd, openPipelineEdit, savePipelineForm, removePipelineRow,
             interviewRows, interviewDisplayRows, filteredInterviewRows, interviewFields, interviewCompactFields, interviewTextareaFields,
             interviewFilter, interviewSelectOptions, interviewOptionSearch,
-            interviewPositionDropdownOpen, interviewQ1DropdownOpen, interviewSatisfactionDropdownOpen,
+            interviewPositionDropdownOpen, interviewSatisfactionDropdownOpen,
             interviewFilterPanelExpanded, toggleInterviewFilterPanel,
-            interviewPositionFilterRef, interviewQ1FilterRef, interviewSatisfactionFilterRef,
-            filteredInterviewPositionOptions, filteredInterviewQ1Options, filteredInterviewSatisfactionOptions,
-            interviewPositionSummary, interviewQ1Summary, interviewSatisfactionSummary,
-            toggleInterviewPositionDropdown, toggleInterviewQ1Dropdown, toggleInterviewSatisfactionDropdown,
+            interviewPositionFilterRef, interviewSatisfactionFilterRef,
+            filteredInterviewPositionOptions, filteredInterviewSatisfactionOptions,
+            interviewPositionSummary, interviewSatisfactionSummary,
+            toggleInterviewPositionDropdown, toggleInterviewSatisfactionDropdown,
             toggleInterviewMultiOption, clearInterviewMultiOption, resetInterviewFilter,
             rosterRows, interviewHints, interviewHintRan, interviewHintTotal, interviewHintBannerRef, interviewScrollWrap,
             runInterviewRosterHints, goRosterAddForInterviewHint, markInterviewHintLeftForName,
@@ -2345,7 +2591,7 @@ createApp({
             openInterviewAdd, openInterviewAddForHintName, onInterviewFormCompactBlur, openInterviewEdit, openInterviewDetail, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
             triggerInterviewImport, onInterviewImportFile,
             exportInterviewCsv, openInterviewLogs, restoreInterviewLatestBackup, copyInterviewHints, exportInterviewHintsCsv,
-            triggerPipelineImport, onPipelineImportFile, exportPipelineCsv, openPipelineLogs, restorePipelineLatestBackup, formatDate, canDeletePermission,
+            triggerPipelineImport, onPipelineImportFile, exportPipelineCsv, openPipelineLogs, restorePipelineLatestBackup, formatDate, canDeletePermission, canViewDeliveryLogs,
             scrollToTop, clearPipelineDateField, clearSettlementDateField, displayDateSlash,
             openAdd, openEdit, openSettlementDetail, saveForm, removeRow,
         };

@@ -203,10 +203,25 @@
             <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerImport">导入</button>
             <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
             <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportCsv">导出</button>
-            <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openLogs">日志</button>
+            <button v-if="canViewLogs" type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openLogs">日志</button>
             <button type="button" class="crm-btn-rollback" @click="restoreLatestBackup">回滚</button>
         </div>
-        <div class="crm-filter-row settlement-filter-row shrink-0">
+        <div class="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-3 shrink-0">
+            <div
+                v-if="!filterPanelExpanded"
+                class="flex flex-wrap items-center justify-between gap-2"
+            >
+                <p class="text-sm font-semibold text-gray-700 min-w-0">
+                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredRows.length }}</span> 条
+                </p>
+                <button
+                    type="button"
+                    class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 shrink-0"
+                    @click="filterPanelExpanded = true"
+                >展开筛选</button>
+            </div>
+            <div v-else class="space-y-2">
+            <div class="crm-filter-row settlement-filter-row">
             <div ref="customerFilterRoot" class="crm-filter-item settlement-filter-item relative settlement-filter-text">
                 <button
                     type="button"
@@ -280,6 +295,21 @@
                 />
             </div>
             <button type="button" class="crm-filter-item settlement-filter-item crm-filter-reset settlement-filter-reset" @click="clearFilters">重置</button>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-gray-700 min-w-0">
+                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredRows.length }}</span> 条
+                </p>
+                <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 shrink-0"
+                    title="收起筛选区"
+                    @click="filterPanelExpanded = false"
+                >
+                    <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                </button>
+            </div>
+            </div>
         </div>
         <p v-if="expectedPaymentFilterWarning" class="text-sm text-amber-700 shrink-0">{{ expectedPaymentFilterWarning }}</p>
         <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-scroll-fill flex-1 min-h-0">

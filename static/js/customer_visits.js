@@ -65,6 +65,7 @@ createApp({
         const filterRegion = ref('');
         const filterClientId = ref('');
         const filterWeek = ref('');
+        const filterPanelExpanded = ref(false);
         const showForm = ref(false);
         const form = ref(emptyForm());
         const detailRow = ref(null);
@@ -203,6 +204,7 @@ createApp({
             filterRegion,
             filterClientId,
             filterWeek,
+            filterPanelExpanded,
             showForm,
             form,
             detailRow,

@@ -132,12 +132,20 @@ function emptyPipelineFilter() {
         const pipelineFilterPeriodPickerRef = ref(null);
         const pipelineFilterPeriodDropdownOpen = ref(false);
         const pipelineFilterPeriodHoverMonth = ref(1);
+        const pipelineFilterPanelExpanded = ref(false);
+        const togglePipelineFilterPanel = () => {
+            pipelineFilterPanelExpanded.value = !pipelineFilterPanelExpanded.value;
+            if (!pipelineFilterPanelExpanded.value) {
+                resumeScreeningDropdownOpen.value = false;
+                pipelineFilterPeriodDropdownOpen.value = false;
+            }
+        };
         const pipelinePeriodPickerRef = ref(null);
         const pipelinePeriodDropdownOpen = ref(false);
         const pipelinePeriodHoverMonth = ref(1);
         const resumeScreeningSummary = computed(() => {
             const selected = Array.isArray(pipelineFilter.resume_screening) ? pipelineFilter.resume_screening : [];
-            if (!selected.length) return '全部';
+            if (!selected.length) return '简历筛选';
             if (selected.length === 1) return selected[0];
             return `已选${selected.length}项`;
         });
@@ -538,6 +546,7 @@ function emptyPipelineFilter() {
             window.crmDownloadBlob(blob, disposition, `管道数据_${Date.now()}.csv`);
         };
         const openPipelineLogs = async () => {
+            if (!window.crmIsSuper) return;
             showPipelineLogs.value = true;
             pipelineLogsLoading.value = true;
             try {
@@ -619,6 +628,8 @@ function emptyPipelineFilter() {
             pipelineDateOptions,
             pipelineSelectOptions,
             filteredPipelineRows,
+            pipelineFilterPanelExpanded,
+            togglePipelineFilterPanel,
             resetPipelineFilter,
             resumeScreeningDropdownOpen,
             resumeScreeningFilterRef,

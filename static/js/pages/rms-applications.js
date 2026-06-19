@@ -29,6 +29,8 @@
     var statusMatchesFilter = Labels.statusMatchesFilter || function () { return true; };
     var jobById = Labels.jobById || function () { return null; };
 
+    var applicationFilterPanelExpanded = ref(false);
+    var applicationsScrollWrap = ref(null);
     var applicationsState = reactive({ loading: false, items: [], error: "" });
     var applicationsFilter = reactive({
       keyword: "",
@@ -265,7 +267,15 @@
       await Promise.all([loadApplications(), loadCandidates(), loadDeliveryReview()]);
     }
 
+    function scrollApplicationsToTop() {
+      var el = applicationsScrollWrap.value;
+      if (el) el.scrollTop = 0;
+    }
+
     return {
+      applicationFilterPanelExpanded: applicationFilterPanelExpanded,
+      applicationsScrollWrap: applicationsScrollWrap,
+      scrollApplicationsToTop: scrollApplicationsToTop,
       applicationsState: applicationsState,
       applicationsFilter: applicationsFilter,
       applicationProgressOptions: applicationProgressOptions,

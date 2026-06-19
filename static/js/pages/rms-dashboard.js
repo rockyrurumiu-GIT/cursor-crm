@@ -273,7 +273,7 @@
           var selected = jobFilterDropdownOpen.value
             ? jobIdsDraft.value
             : (Array.isArray(appliedFilters.job_ids) ? appliedFilters.job_ids : []);
-          if (!selected.length) return "全部";
+          if (!selected.length) return "岗位";
           if (selected.length === 1) {
             var job = jobOptions.value.find(function (j) { return String(j.id) === String(selected[0]); });
             return job ? (job.title || ("岗位#" + job.id)) : String(selected[0]);

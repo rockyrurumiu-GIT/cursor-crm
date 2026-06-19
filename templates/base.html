@@ -220,14 +220,14 @@
             overscroll-behavior: contain;
             -webkit-overflow-scrolling: touch;
         }
-        /* 默认表头吸顶；有左右冻结列时，非冻结表头必须低于冻结角，否则横向滚动会盖住冻结表头 */
+        /* 默认表头吸顶；层级须高于 .crm-cell-clip-td-open(20)，避免悬停浮层盖住表头 */
         .crm-table-scroll .crm-table thead th.crm-th {
             position: sticky;
             top: 0;
-            z-index: 5;
+            z-index: 30;
         }
-        .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer):not(.rms-sticky-serial):not(.rms-sticky-title):not(.rms-sticky-client):not(.rms-candidate-sticky-name):not(.rms-offer-sticky-status):not(.rms-offer-sticky-candidate):not(.opp-sticky-name):not(.opp-sticky-client) {
-            z-index: 3;
+        .crm-table-scroll .crm-table thead th.crm-th:not(.crm-sticky-right-op):not(.delivery-sticky-left-serial):not(.delivery-sticky-left-key):not(.roster-sticky-left-serial):not(.roster-sticky-left-key):not(.settlement-sticky-serial):not(.settlement-sticky-date):not(.settlement-sticky-customer):not(.rms-sticky-serial):not(.rms-sticky-title):not(.rms-sticky-client):not(.rms-candidate-sticky-name):not(.rms-offer-sticky-status):not(.rms-offer-sticky-candidate):not(.opp-sticky-name):not(.opp-sticky-client):not(.req-sticky-title) {
+            z-index: 28;
         }
         /* 三键操作列固定宽（colgroup + 单元格双保险） */
         :root {
@@ -329,7 +329,7 @@
         .visit-table thead .crm-sticky-right-op {
             top: 0;
             right: 0;
-            z-index: 15 !important;
+            z-index: 32 !important;
             background: #2f75b5;
             color: #fff;
             border-color: #1f5a94;
@@ -506,6 +506,7 @@
         .crm-table thead .turnover-sticky-right-actions,
         .crm-table thead .rms-sticky-serial,
         .crm-table thead .rms-sticky-title,
+        .crm-table thead .req-sticky-title,
         .crm-table thead .rms-sticky-client,
         .crm-table thead .rms-candidate-sticky-name,
         .crm-table thead .rms-offer-sticky-status,
@@ -526,6 +527,7 @@
         .crm-table tbody .turnover-sticky-right-actions,
         .crm-table tbody .rms-sticky-serial,
         .crm-table tbody .rms-sticky-title,
+        .crm-table tbody .req-sticky-title,
         .crm-table tbody .rms-sticky-client,
         .crm-table tbody .rms-candidate-sticky-name,
         .crm-table tbody .rms-offer-sticky-status,
@@ -544,6 +546,7 @@
         .crm-table tbody tr:nth-child(even) .turnover-sticky-right-actions,
         .crm-table tbody tr:nth-child(even) .rms-sticky-serial,
         .crm-table tbody tr:nth-child(even) .rms-sticky-title,
+        .crm-table tbody tr:nth-child(even) .req-sticky-title,
         .crm-table tbody tr:nth-child(even) .rms-sticky-client,
         .crm-table tbody tr:nth-child(even) .rms-candidate-sticky-name,
         .crm-table tbody tr:nth-child(even) .rms-offer-sticky-status,
@@ -562,6 +565,7 @@
         .crm-table tbody tr:hover .turnover-sticky-right-actions,
         .crm-table tbody tr:hover .rms-sticky-serial,
         .crm-table tbody tr:hover .rms-sticky-title,
+        .crm-table tbody tr:hover .req-sticky-title,
         .crm-table tbody tr:hover .rms-sticky-client,
         .crm-table tbody tr:hover .rms-candidate-sticky-name,
         .crm-table tbody tr:hover .rms-offer-sticky-status,
@@ -571,7 +575,7 @@
             background: #eef6ff;
         }
         /* 表头列宽拖拽（与客户拜访记录一致） */
-        .crm-table th.crm-th-resizable,
+        .crm-table th.crm-th-resizable:not(.req-sticky-title):not(.rms-sticky-serial):not(.rms-sticky-title),
         .visit-table th.crm-th-resizable,
         .visit-table th.visit-th-resizable {
             position: relative;
@@ -857,7 +861,8 @@
         /* 全局筛选条：列表页顶部筛选控件统一高度、边框和按钮风格 */
         .crm-filter-row {
             display: flex;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
+            align-items: center;
             gap: 0.5rem;
             overflow-x: visible;
             overflow-y: visible;
@@ -881,19 +886,21 @@
         .crm-filter-control::placeholder {
             color: #9ca3af;
         }
-        .crm-filter-reset {
+        button.crm-filter-reset {
             height: 2.25rem;
             min-height: 2.25rem;
-            border: 1px solid #d1d5db;
-            border-radius: 0.375rem;
-            background: #ffffff;
+            border: 1px solid #93c5fd;
+            border-radius: 0.5rem;
+            background: #eff6ff;
             padding: 0 0.75rem;
             font-size: 0.75rem;
-            color: #374151;
+            font-weight: 500;
+            color: #1e40af;
             white-space: nowrap;
+            cursor: pointer;
         }
-        .crm-filter-reset:hover {
-            background: #f9fafb;
+        button.crm-filter-reset:hover {
+            background: #dbeafe;
         }
         .crm-filter-date {
             height: 2.25rem;
@@ -2647,7 +2654,7 @@
         })();
     </script>
     {% block page_scripts %}{% endblock %}
-    <script src="/static/js/crm-table-resize.js?v=27"></script>
-    <script src="/static/js/crm-cell-clip-pop.js?v=2"></script>
+    <script src="/static/js/crm-table-resize.js?v=28"></script>
+    <script src="/static/js/crm-cell-clip-pop.js?v=5"></script>
 </body>
 </html>
