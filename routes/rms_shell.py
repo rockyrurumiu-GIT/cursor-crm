@@ -34,6 +34,13 @@ def register_rms_shell_routes(app, *, page_renderer: Callable):
     ):
         return page_renderer("pages/rms_import_help.html", request)
 
+    @app.get("/rms/recommend-help", response_class=HTMLResponse)
+    async def page_rms_recommend_help(
+        request: Request,
+        _user: str = Depends(require_permission("rms.applications.write")),
+    ):
+        return page_renderer("pages/rms_recommend_help.html", request)
+
     @app.get("/api/rms/health")
     async def api_rms_health(_user: str = Depends(require_permission("rms.jobs.read"))):
         return {"status": "ok", "phase": 2}

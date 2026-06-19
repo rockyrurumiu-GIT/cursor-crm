@@ -1108,8 +1108,8 @@
                         <td class="crm-td rms-col-note"><div class="crm-cell-clip">{{ j.note || '—' }}</div></td>
                         <td class="crm-td whitespace-nowrap rms-col-manage crm-op-col">
                             <div class="crm-op-actions">
-                                <button v-if="canWriteJobs" type="button" class="crm-op-btn-edit" @click="openJobEdit(j)">修改</button>
-                                <button v-if="canDeleteJobs" type="button" class="crm-op-btn-delete" @click="removeJob(j)">删除</button>
+                                <button v-if="j.can_write" type="button" class="crm-op-btn-edit" @click="openJobEdit(j)">修改</button>
+                                <button v-if="j.can_delete" type="button" class="crm-op-btn-delete" @click="removeJob(j)">删除</button>
                             </div>
                         </td>
                         <td class="crm-td whitespace-nowrap rms-sticky-recommend crm-sticky-right-op crm-op-col-xl">

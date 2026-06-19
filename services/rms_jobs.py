@@ -96,12 +96,31 @@ def _job_core_dict(job: Any) -> Dict[str, Any]:
     }
 
 
+def _job_action_allowed(
+    db: Session,
+    ctx: AuthContext,
+    job_id: int,
+    RmsJob: Type[Any],
+    Client: Type[Any],
+    *,
+    action: str,
+) -> bool:
+    row = (
+        rms_ds.scoped_jobs_query(db, ctx, RmsJob, Client, action=action)
+        .filter(RmsJob.id == job_id)
+        .first()
+    )
+    return row is not None
+
+
 def job_to_dict(
     job: Any,
     *,
     client: Any = None,
     db: Optional[Session] = None,
     recommendation_counts: Optional[Dict[str, int]] = None,
+    can_write: bool = False,
+    can_delete: bool = False,
 ) -> Dict[str, Any]:
     d = _job_core_dict(job)
     sales_uid = None
@@ -126,6 +145,8 @@ def job_to_dict(
     counts = recommendation_counts or {}
     d["active_recommendation_count"] = int(counts.get("active_recommendation_count", 0) or 0)
     d["historical_recommendation_count"] = int(counts.get("historical_recommendation_count", 0) or 0)
+    d["can_write"] = bool(can_write)
+    d["can_delete"] = bool(can_delete)
     return d
 
 
@@ -194,6 +215,8 @@ def list_jobs(
             client=client_map.get(int(r.client_id)),
             db=db,
             recommendation_counts=count_map.get(int(r.id)),
+            can_write=_job_action_allowed(db, ctx, int(r.id), RmsJob, Client, action="write"),
+            can_delete=_job_action_allowed(db, ctx, int(r.id), RmsJob, Client, action="delete"),
         )
         for r in rows
     ]
@@ -216,7 +239,14 @@ def get_job(
         count_map = _application_recommendation_counts_by_job(
             db, ctx, RmsApplication, Client, {int(job_id)}
         )
-    return job_to_dict(row, client=client, db=db, recommendation_counts=count_map.get(int(job_id)))
+    return job_to_dict(
+        row,
+        client=client,
+        db=db,
+        recommendation_counts=count_map.get(int(job_id)),
+        can_write=_job_action_allowed(db, ctx, int(job_id), RmsJob, Client, action="write"),
+        can_delete=_job_action_allowed(db, ctx, int(job_id), RmsJob, Client, action="delete"),
+    )
 
 
 def _apply_client_owners_from_job_data(db: Session, client: Any, data: Dict[str, Any]) -> None:
@@ -292,7 +322,13 @@ def create_job(
     db.commit()
     db.refresh(job)
     db.refresh(client)
-    return job_to_dict(job, client=client, db=db)
+    return job_to_dict(
+        job,
+        client=client,
+        db=db,
+        can_write=_job_action_allowed(db, ctx, int(job.id), RmsJob, Client, action="write"),
+        can_delete=_job_action_allowed(db, ctx, int(job.id), RmsJob, Client, action="delete"),
+    )
 
 
 def _sync_applications_client_for_job(
@@ -342,4 +378,10 @@ def update_job(
     db.commit()
     db.refresh(job)
     client = db.query(Client).filter(Client.id == job.client_id).first()
-    return job_to_dict(job, client=client, db=db)
+    return job_to_dict(
+        job,
+        client=client,
+        db=db,
+        can_write=_job_action_allowed(db, ctx, int(job_id), RmsJob, Client, action="write"),
+        can_delete=_job_action_allowed(db, ctx, int(job_id), RmsJob, Client, action="delete"),
+    )

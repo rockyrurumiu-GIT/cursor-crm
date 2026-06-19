@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}推荐非本人需求 · ITO BMS{% endblock %}
+{% block content %}
+<style>
+    .help-page {
+        background: #f6f8fa;
+        min-height: 100%;
+    }
+    .help-card {
+        border-radius: 12px;
+        background: #fff;
+        border-left: 4px solid #1a56ad;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.04);
+        padding: 1rem 1.15rem 1.1rem;
+    }
+    .help-card-title {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-bottom: 0.6rem;
+    }
+    .help-card-dot {
+        flex: 0 0 auto;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 9999px;
+        background: #1a56ad;
+    }
+    .help-card-name {
+        color: #1a56ad;
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
+    .help-card-tag {
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: #64748b;
+        white-space: nowrap;
+    }
+    .help-card-text {
+        margin: 0;
+        color: #333;
+        font-size: 0.86rem;
+        line-height: 1.6;
+    }
+    .help-card-text + .help-card-text,
+    .help-card-text + .help-code,
+    .help-code + .help-card-text,
+    .help-card-list + .help-card-text {
+        margin-top: 0.55rem;
+    }
+    .help-card-label {
+        color: #1a56ad;
+        font-weight: 700;
+    }
+    .help-card-list {
+        margin: 0.55rem 0 0;
+        padding-left: 1.15rem;
+        list-style: disc;
+        color: #333;
+        font-size: 0.86rem;
+        line-height: 1.7;
+    }
+    .help-card code,
+    .help-card-text code,
+    .help-card-list code {
+        background: #eef2f7;
+        border-radius: 0.3rem;
+        padding: 0.05rem 0.35rem;
+        font-size: 0.82em;
+        color: #1a56ad;
+    }
+</style>
+<div class="help-page">
+<div class="container mx-auto p-6 max-w-[960px]">
+    <div class="mb-5">
+        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">招聘模块</p>
+        <h1 class="text-2xl font-bold text-gray-900 mb-2">推荐非本人需求</h1>
+        <p class="text-sm text-gray-500">如何给一个非本人创建的岗位推荐候选人：只要设置能看到岗位就能成功推荐</p>
+    </div>
+
+    <div class="flex flex-col gap-3.5">
+        <article class="help-card">
+            <div class="help-card-title">
+                <span class="help-card-dot" aria-hidden="true"></span>
+                <span class="help-card-name">当前规则</span>
+                <span class="help-card-tag">一句话概括</span>
+            </div>
+            <p class="help-card-text">能看到岗位 + 有 <code>rms.applications.write</code> 功能权限 + 岗位是 <code>open</code> 状态，就可以给这个岗位推荐候选人。</p>
+            <p class="help-card-text">也就是说，岗位<strong>不必</strong>是你本人负责的需求，只要在你的可见范围内即可推荐。</p>
+        </article>
+
+        <article class="help-card">
+            <div class="help-card-title">
+                <span class="help-card-dot" aria-hidden="true"></span>
+                <span class="help-card-name">更准确地说</span>
+                <span class="help-card-tag">条件拆解</span>
+            </div>
+            <ul class="help-card-list">
+                <li><span class="help-card-label">岗位可见：</span>走 <code>rms.job/read</code>（数据权限）的可见范围。</li>
+                <li><span class="help-card-label">推荐动作：</span>要求 <code>rms.applications.write</code>（功能权限）。</li>
+                <li><span class="help-card-label">岗位状态：</span>必须是 <code>open</code>。</li>
+                <li><span class="help-card-label">候选人：</span>必须在当前用户的候选人 read 可见范围内。</li>
+            </ul>
+        </article>
+
+        <article class="help-card">
+            <div class="help-card-title">
+                <span class="help-card-dot" aria-hidden="true"></span>
+                <span class="help-card-name">不要求的条件</span>
+                <span class="help-card-tag">无需以下权限</span>
+            </div>
+            <ul class="help-card-list">
+                <li>不要求用户有 <code>rms.job/write</code>（数据权限）。</li>
+                <li>不要求用户能编辑这个岗位。</li>
+                <li>不要求用户能修改这条推荐记录后续状态。</li>
+            </ul>
+        </article>
+    </div>
+
+    <a href="/rms" class="inline-block mt-6 text-sm text-[#0969da] hover:underline">← 返回需求&amp;人才库</a>
+</div>
+</div>
+{% endblock %}

@@ -720,6 +720,14 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert 'v-if="canWriteCandidates" type="button" class="crm-op-btn-edit" @click="openCandidateEdit(c)"' not in candidate_table_slice
     assert 'v-if="canDeleteCandidates" type="button" class="crm-op-btn-delete"' not in candidate_table_slice
 
+    jobs_table_marker = '<table class="crm-table rms-jobs-table" data-table-id="rms-jobs">'
+    jobs_table_start = html.index(jobs_table_marker)
+    jobs_table_slice = html[jobs_table_start : jobs_table_start + 7000]
+    assert 'v-if="j.can_write" type="button" class="crm-op-btn-edit" @click="openJobEdit(j)"' in jobs_table_slice
+    assert 'v-if="j.can_delete" type="button" class="crm-op-btn-delete"' in jobs_table_slice
+    assert 'v-if="canWriteJobs" type="button" class="crm-op-btn-edit" @click="openJobEdit(j)"' not in jobs_table_slice
+    assert 'v-if="canDeleteJobs" type="button" class="crm-op-btn-delete"' not in jobs_table_slice
+
     assert "editingCandidateCanDownloadResume" in html
     assert 'v-if="editingCandidateCanDownloadResume"' in html
     assert 'v-if="candidateDetailRow.can_download_resume" :href="resumeDownloadUrl(candidateDetailRow)"' in html

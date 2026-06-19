@@ -771,6 +771,9 @@ def test_cross_team_recruiter_can_recommend_to_visible_job_not_edit(
     jobs_r = client_rbac.get("/api/rms/jobs", cookies=login_leiz.cookies)
     assert jobs_r.status_code == 200, jobs_r.text
     assert job_id in {j["id"] for j in jobs_r.json()}
+    visible_job = next(j for j in jobs_r.json() if j["id"] == job_id)
+    assert visible_job["can_write"] is False
+    assert visible_job["can_delete"] is False
 
     cand_r = client_rbac.post(
         "/api/rms/candidates",
