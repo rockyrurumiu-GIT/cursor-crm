@@ -59,17 +59,33 @@
       items: [],
       loading: false,
       error: "",
-      statusFilter: "",
     });
     var offerFilterPanelExpanded = ref(false);
     var offerScrollWrap = ref(null);
     var offerFilter = reactive({
       keyword: "",
+      statuses: [],
       probation: "",
       gmAmount: "",
       gmPct: "",
       onboardDateFrom: "",
       onboardDateTo: "",
+    });
+    var offerStatusDropdownOpen = ref(false);
+    var offerStatusDraft = ref([]);
+    function offerStatusLabel(status) {
+      for (var i = 0; i < OFFER_STATUS_FILTER_OPTIONS.length; i++) {
+        if (OFFER_STATUS_FILTER_OPTIONS[i].value === status) {
+          return OFFER_STATUS_FILTER_OPTIONS[i].label;
+        }
+      }
+      return status || "";
+    }
+    var offerStatusFilterSummary = computed(function () {
+      var sel = offerFilter.statuses || [];
+      if (!sel.length) return "状态";
+      if (sel.length === 1) return offerStatusLabel(sel[0]);
+      return "已选" + sel.length + "项";
     });
 
     function resetOfferApprovalForm() {
@@ -269,6 +285,12 @@
 
     var filteredOfferRecords = computed(function () {
       var rows = offerState.items.slice();
+      if ((offerFilter.statuses || []).length) {
+        var selectedStatuses = offerFilter.statuses;
+        rows = rows.filter(function (row) {
+          return selectedStatuses.indexOf(row.status) !== -1;
+        });
+      }
       if (offerFilter.probation === "yes") {
         rows = rows.filter(function (row) {
           return parseProbationDays(row.probation_days) !== 0;
@@ -319,14 +341,42 @@
     });
 
     function resetOfferFilter() {
-      offerState.statusFilter = "";
       offerFilter.keyword = "";
+      offerFilter.statuses.splice(0, offerFilter.statuses.length);
+      offerStatusDraft.value = [];
+      offerStatusDropdownOpen.value = false;
       offerFilter.probation = "";
       offerFilter.gmAmount = "";
       offerFilter.gmPct = "";
       offerFilter.onboardDateFrom = "";
       offerFilter.onboardDateTo = "";
-      loadOfferRecords();
+    }
+
+    function toggleOfferStatusDropdown() {
+      if (!offerStatusDropdownOpen.value) {
+        offerStatusDraft.value = (offerFilter.statuses || []).slice();
+      }
+      offerStatusDropdownOpen.value = !offerStatusDropdownOpen.value;
+    }
+
+    function toggleOfferStatusDraft(value) {
+      var list = offerStatusDraft.value;
+      var idx = list.indexOf(value);
+      if (idx >= 0) list.splice(idx, 1);
+      else list.push(value);
+    }
+
+    function clearOfferStatusDraft() {
+      offerStatusDraft.value = [];
+    }
+
+    function applyOfferStatusFilter() {
+      var next = offerStatusDraft.value.slice();
+      offerFilter.statuses.splice(0, offerFilter.statuses.length);
+      next.forEach(function (v) {
+        offerFilter.statuses.push(v);
+      });
+      offerStatusDropdownOpen.value = false;
     }
 
     function scrollOffersToTop() {
@@ -413,8 +463,7 @@
       offerState.loading = true;
       offerState.error = "";
       try {
-        var q = offerState.statusFilter ? "?status=" + encodeURIComponent(offerState.statusFilter) : "";
-        var r = await rmsRequest("GET", "/api/rms/offers" + q);
+        var r = await rmsRequest("GET", "/api/rms/offers");
         if (!r.ok) {
           offerState.error = r.message || "加载失败";
           offerState.items = [];
@@ -685,6 +734,13 @@
       filteredOfferRecords: filteredOfferRecords,
       resetOfferFilter: resetOfferFilter,
       offerStatusFilterOptions: OFFER_STATUS_FILTER_OPTIONS,
+      offerStatusDropdownOpen: offerStatusDropdownOpen,
+      offerStatusDraft: offerStatusDraft,
+      offerStatusFilterSummary: offerStatusFilterSummary,
+      toggleOfferStatusDropdown: toggleOfferStatusDropdown,
+      toggleOfferStatusDraft: toggleOfferStatusDraft,
+      clearOfferStatusDraft: clearOfferStatusDraft,
+      applyOfferStatusFilter: applyOfferStatusFilter,
       offerApprovalModal: offerApprovalModal,
       offerApprovalForm: offerApprovalForm,
       offerApprovalSaving: offerApprovalSaving,

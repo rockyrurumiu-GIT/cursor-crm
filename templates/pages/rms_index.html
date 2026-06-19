@@ -982,8 +982,9 @@
 
     <!-- Jobs -->
     <section v-show="activeTab === 'jobs' && viewMode !== 'candidateReport'">
-        <div class="mb-3">
+        <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 class="text-lg font-medium text-[#1f2328]">岗位</h2>
+            <button v-if="canWriteJobs" type="button" class="rounded-lg bg-[#0969da] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0860ca] shrink-0" @click="openJobModal">新建岗位</button>
         </div>
         <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3 shrink-0">
             <div
@@ -1031,7 +1032,6 @@
                         合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredJobs.length }}</span> 条
                     </p>
                     <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                        <button v-if="canWriteJobs" type="button" class="rounded-lg bg-[#0969da] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0860ca]" @click="openJobModal">新建岗位</button>
                         <button
                             type="button"
                             class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
@@ -1752,10 +1752,31 @@
             <div v-else class="space-y-2">
                 <div class="crm-filter-row">
                     <input v-model.trim="offerFilter.keyword" type="text" class="crm-filter-item crm-filter-control w-[9rem]" placeholder="关键字模糊查询" title="关键字模糊查询" />
-                    <select v-model="offerState.statusFilter" class="crm-filter-item crm-filter-control w-[7rem]" title="状态" @change="loadOfferRecords">
-                        <option value="">状态</option>
-                        <option v-for="opt in offerStatusFilterOptions" :key="'of'+opt.value" :value="opt.value">{{ opt.label }}</option>
-                    </select>
+                    <div class="crm-filter-item rms-pipeline-status-filter">
+                        <button type="button"
+                            class="crm-filter-control w-[7rem] text-left flex items-center justify-between"
+                            title="状态"
+                            @click="toggleOfferStatusDropdown">
+                            <span class="truncate" :class="!(offerFilter.statuses || []).length ? 'text-[#9ca3af]' : ''">{{ offerStatusFilterSummary }}</span>
+                            <span class="text-[#57606a] ml-1 shrink-0">{{ offerStatusDropdownOpen ? '▴' : '▾' }}</span>
+                        </button>
+                        <div v-if="offerStatusDropdownOpen" class="rms-pipeline-status-filter-panel" @click.stop>
+                            <label v-for="opt in offerStatusFilterOptions" :key="'of'+opt.value" class="rms-pipeline-status-filter-item">
+                                <input type="checkbox" class="rounded border-[#d0d7de]"
+                                    :checked="offerStatusDraft.includes(opt.value)"
+                                    @change="toggleOfferStatusDraft(opt.value)" />
+                                <span class="truncate">{{ opt.label }}</span>
+                            </label>
+                            <div class="flex border-t border-[#d0d7de] mt-1 pt-1 px-1 gap-1">
+                                <button type="button"
+                                    class="flex-1 py-1 text-xs text-[#57606a] hover:bg-[#f6f8fa] rounded"
+                                    @click="clearOfferStatusDraft">清空</button>
+                                <button type="button"
+                                    class="flex-1 py-1 text-xs text-white bg-[#0969da] hover:bg-[#0860ca] rounded"
+                                    @click="applyOfferStatusFilter">确定</button>
+                            </div>
+                        </div>
+                    </div>
                     <select v-model="offerFilter.probation" class="crm-filter-item crm-filter-control w-[7rem]" title="试工期">
                         <option value="">试工期</option>
                         <option value="yes">有</option>
@@ -2582,6 +2603,6 @@
 <script src="/static/js/pages/rms-pipeline.js?v=rms-filters-20260619"></script>
 <script src="/static/js/pages/rms-delivery-review.js?v=r3c3-pipeline-terminal-20260615"></script>
 <script src="/static/js/pages/rms-roster-conversion.js?v=roster-offer-lock-20260618"></script>
-<script src="/static/js/pages/rms-offer-management.js?v=rms-filters-20260619"></script>
+<script src="/static/js/pages/rms-offer-management.js?v=offer-status-checkbox-20260619"></script>
 <script src="/static/js/pages/rms.js?v=rms-filters-20260619"></script>
 {% endblock %}
