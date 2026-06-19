@@ -84,7 +84,7 @@
     .settlement-table tbody tr:last-child td {
         border-bottom: 1px solid #d1d5db;
     }
-    /* 员工访谈：列宽随内容；长文本列限定宽度、竖向完整展示 */
+    /* 员工访谈：列宽随内容；长文本列固定 20 汉字宽、悬停浮层展开 */
     .crm-table.interview-table {
         table-layout: auto;
         width: max-content;
@@ -93,6 +93,7 @@
         border-spacing: 0;
         --interview-sticky-serial-width: 4.5rem;
         --interview-sticky-name-width: 7.5rem;
+        --interview-text-wide-width: 20em;
     }
     .crm-table.interview-table .crm-td.interview-col-tight,
     .crm-table.interview-table .crm-th.interview-col-tight {
@@ -126,20 +127,24 @@
         overflow-wrap: anywhere;
         vertical-align: top;
     }
-    /* 交付判断 / 员工诉求 / 交付待办：默认单行省略，悬停展开（见 base .crm-cell-clip） */
+    /* 交付判断 / 员工诉求 / 交付待办：固定 20 汉字宽，单行省略，悬停浮层展开 */
+    .crm-table.interview-table .crm-th.interview-col-text-wide,
     .crm-table.interview-table .crm-td.interview-col-text-wide {
-        width: 30rem;
-        min-width: 24rem;
-        max-width: 34rem;
+        width: var(--interview-text-wide-width);
+        min-width: var(--interview-text-wide-width);
+        max-width: var(--interview-text-wide-width);
         box-sizing: border-box;
-        overflow: hidden;
-        line-height: 1.35;
         vertical-align: top;
     }
     .crm-table.interview-table .crm-th.interview-col-text-wide {
-        max-width: 34rem;
         white-space: nowrap !important;
-        vertical-align: middle;
+    }
+    .crm-table.interview-table .crm-td.interview-col-text-wide {
+        overflow: hidden;
+        line-height: 1.35;
+    }
+    .crm-table.interview-table .crm-cell-clip-pop {
+        max-width: 30em;
     }
     /* 需求清单：JD 默认 30 汉字宽，超出省略，悬停原位展开 */
     .crm-table[data-table-id="requirements-jobs"] {
@@ -215,26 +220,6 @@
         max-width: 100%;
         min-width: 0;
         white-space: nowrap !important;
-    }
-    .crm-table[data-table-id="requirements-jobs"] .rms-col-jd .crm-cell-clip:hover,
-    .crm-table[data-table-id="requirements-jobs"] .requirements-col-jd .crm-cell-clip:hover {
-        position: relative;
-        width: auto;
-        min-width: 0;
-        max-width: none;
-        overflow: visible;
-        white-space: normal !important;
-        z-index: 4;
-        background: #fff;
-        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
-    }
-    .crm-table[data-table-id="requirements-jobs"] tbody tr:nth-child(even) .rms-col-jd .crm-cell-clip:hover,
-    .crm-table[data-table-id="requirements-jobs"] tbody tr:nth-child(even) .requirements-col-jd .crm-cell-clip:hover {
-        background: #f6f8fa;
-    }
-    .crm-table[data-table-id="requirements-jobs"] tbody tr:hover .rms-col-jd .crm-cell-clip:hover,
-    .crm-table[data-table-id="requirements-jobs"] tbody tr:hover .requirements-col-jd .crm-cell-clip:hover {
-        background: #eef6ff;
     }
     .pipeline-filter-row {
         align-items: flex-end;

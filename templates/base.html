@@ -598,27 +598,53 @@
         .visit-table th.visit-th-resizable.is-resizing::after {
             background: rgba(255, 255, 255, 0.35);
         }
-        /* 表格长文本：默认单行省略，悬停原位展开（勿用 title，避免浏览器灰色提示框） */
+        /* 表格长文本：单行省略；展示不全时悬停灰色浮层（见 crm-cell-clip-pop.js） */
         .crm-cell-clip {
+            position: relative;
             display: block;
             max-width: 100%;
+            min-width: 0;
+        }
+        .crm-cell-clip-text {
+            display: block;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        .crm-cell-clip:hover {
-            position: relative;
-            z-index: 4;
+        .crm-cell-clip-pop {
+            display: none;
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 25;
+            min-width: max(100%, 12em);
+            max-width: min(28em, calc(100vw - 4rem));
+            padding: 0.5rem 0.625rem;
+            border: 1px solid #9ca3af;
+            border-radius: 0.375rem;
+            background: #ececec;
+            color: #1f2937;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
             white-space: normal;
-            overflow: visible;
-            background: #fff;
-            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+            word-break: break-word;
+            line-height: 1.45;
+            pointer-events: none;
         }
-        .crm-table tbody tr:nth-child(even) .crm-cell-clip:hover {
-            background: #f6f8fa;
+        .crm-cell-clip--anchor-right > .crm-cell-clip-pop {
+            left: auto;
+            right: 0;
         }
-        .crm-table tbody tr:hover .crm-cell-clip:hover {
-            background: #eef6ff;
+        .crm-cell-clip.is-pop-open > .crm-cell-clip-text {
+            visibility: hidden;
+        }
+        .crm-cell-clip.is-pop-open > .crm-cell-clip-pop {
+            display: block;
+        }
+        .crm-td.crm-cell-clip-td-open,
+        .visit-td.crm-cell-clip-td-open {
+            overflow: visible !important;
+            position: relative;
+            z-index: 20;
         }
         .crm-table tfoot td.crm-td {
             background: #f8fafc;
@@ -2621,6 +2647,7 @@
         })();
     </script>
     {% block page_scripts %}{% endblock %}
-    <script src="/static/js/crm-table-resize.js?v=26"></script>
+    <script src="/static/js/crm-table-resize.js?v=27"></script>
+    <script src="/static/js/crm-cell-clip-pop.js?v=2"></script>
 </body>
 </html>

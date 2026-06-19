@@ -97,8 +97,11 @@
     .visit-table[data-table-id="customer-visits"] thead .visit-sticky-city { z-index: 62; }
     .visit-table[data-table-id="customer-visits"] thead .visit-sticky-sales { z-index: 61; }
     .visit-table[data-table-id="customer-visits"] thead .visit-sticky-client { z-index: 60; }
-    /* 长文本悬停展开：层级低于左侧冻结列，避免盖住时间～客户名称 */
-    .visit-table[data-table-id="customer-visits"] .crm-cell-clip:hover {
+    /* 长文本悬停浮层：层级低于左侧冻结列，避免盖住时间～客户名称 */
+    .visit-table[data-table-id="customer-visits"] .crm-cell-clip-pop {
+        z-index: 3;
+    }
+    .visit-table[data-table-id="customer-visits"] .visit-td.crm-cell-clip-td-open {
         z-index: 3;
     }
     .visit-table[data-table-id="customer-visits"] tbody tr:nth-child(even) .visit-sticky-time,
@@ -151,8 +154,6 @@
     }
     .visit-table tbody tr:nth-child(even) td.visit-td { background: #f6f8fa; }
     .visit-table tbody tr:hover td.visit-td { background: #eef6ff; }
-    .visit-table tbody tr:nth-child(even) .crm-cell-clip:hover { background: #f6f8fa; }
-    .visit-table tbody tr:hover .crm-cell-clip:hover { background: #eef6ff; }
 </style>
 {% endblock %}
 {% block content %}

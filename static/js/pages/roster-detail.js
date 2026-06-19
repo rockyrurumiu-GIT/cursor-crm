@@ -37,6 +37,9 @@ const STANDARD_FORM_FIELDS = [
 ];
 /** 下列客户（及整体花名册）表格与表单不展示这三项，与中诺视图一致不占列 */
 const HIDE_RELEASE_LEAVE_FIELD_KEYS = ['project_release_date', 'company_resign_date', 'leave_reason'];
+/** 新增行时不展示、无需填写 */
+const ROSTER_FORM_HIDDEN_FIELD_KEYS = new Set(['serial_no']);
+const ROSTER_ADD_ONLY_HIDDEN_FIELD_KEYS = new Set(HIDE_RELEASE_LEAVE_FIELD_KEYS);
 function standardFormFieldsWithoutReleaseLeave() {
     return STANDARD_FORM_FIELDS.filter((f) => !HIDE_RELEASE_LEAVE_FIELD_KEYS.includes(f.key));
 }
@@ -216,21 +219,21 @@ function formatGmPctWithSymbol(raw) {
 const GM_PCT_COMPLETE_RE = /^(100(?:\.0{1,2})?|[1-9]?\d(?:\.\d{1,2})?)$/;
 const ONBOARDING_CHANNEL_OPTIONS = ['内部RMS', 'Boss', 'linkedin', '猎聘', '内推', '挂靠', '外协', '其他'];
 const ONBOARDING_CHANNEL_LEGACY = { 平台: '内部RMS' };
-const ONBOARDING_CHANNEL_PRESETS = new Set(
-    ONBOARDING_CHANNEL_OPTIONS.filter((s) => s !== '其他'),
-);
-function resolveOnboardingChannelForForm(storedChannel) {
+function normalizeOnboardingChannelForForm(storedChannel) {
     const s = String(storedChannel || '').trim();
-    if (!s) return { channel: '', channel_other: '' };
-    if (ONBOARDING_CHANNEL_LEGACY[s]) return { channel: ONBOARDING_CHANNEL_LEGACY[s], channel_other: '' };
-    if (ONBOARDING_CHANNEL_PRESETS.has(s)) return { channel: s, channel_other: '' };
-    return { channel: '其他', channel_other: s };
+    if (!s) return '';
+    if (ONBOARDING_CHANNEL_LEGACY[s]) return ONBOARDING_CHANNEL_LEGACY[s];
+    return s;
 }
-function resolveOnboardingChannelForSave(channel, channelOther) {
-    const sel = String(channel || '').trim();
-    if (!sel) return '';
-    if (sel === '其他') return String(channelOther || '').trim();
-    return sel;
+function buildOnboardingChannelSelectOptions(currentChannel) {
+    const options = [...ONBOARDING_CHANNEL_OPTIONS];
+    const current = normalizeOnboardingChannelForForm(currentChannel);
+    if (current && !options.includes(current)) {
+        const otherIdx = options.indexOf('其他');
+        if (otherIdx >= 0) options.splice(otherIdx, 0, current);
+        else options.push(current);
+    }
+    return options;
 }
 /** 比率转百分比展示，与行内「79.55%」形式一致 */
 function formatRatioAsPercent(ratio) {
@@ -562,6 +565,18 @@ const rosterDetailApp = createApp({
         });
         const detailCompactFields = computed(() => activeFormFields.value.filter((f) => !DETAIL_TEXTAREA_KEYS.has(f.key)));
         const detailTextareaFields = computed(() => activeFormFields.value.filter((f) => DETAIL_TEXTAREA_KEYS.has(f.key)));
+        const formInputFields = computed(() => {
+            let fields = activeFormFields.value.filter((f) => !ROSTER_FORM_HIDDEN_FIELD_KEYS.has(f.key));
+            if (!editingId.value) {
+                fields = fields.filter((f) => !ROSTER_ADD_ONLY_HIDDEN_FIELD_KEYS.has(f.key));
+            }
+            return fields;
+        });
+        const onboardingChannelSelectOptions = computed(() =>
+            buildOnboardingChannelSelectOptions(form.zntx_onboarding_channel)
+        );
+        const formCompactFields = computed(() => formInputFields.value.filter((f) => !DETAIL_TEXTAREA_KEYS.has(f.key)));
+        const formTextareaFields = computed(() => formInputFields.value.filter((f) => DETAIL_TEXTAREA_KEYS.has(f.key)));
         const requiredFieldLabelMap = computed(() => {
             const map = {};
             activeFormFields.value.forEach((f) => { map[f.key] = f.label; });
@@ -711,10 +726,29 @@ const rosterDetailApp = createApp({
             if (!s) return;
             parts.push(`${key}=${encodeURIComponent(s)}`);
         };
+        const resolveClientIdForGmCalc = () => {
+            if (!IS_GLOBAL_ROSTER) {
+                return CLIENT_ID || null;
+            }
+            if (editingId.value) {
+                const row = rows.value.find((r) => Number(r.id) === Number(editingId.value));
+                if (row?.client_id != null) return row.client_id;
+            }
+            const name = String(form.customer_name || '').trim();
+            if (!name) return null;
+            const client = (crmClients.value || []).find(
+                (c) => String(c?.name || '').trim() === name,
+            );
+            return client?.id != null ? client.id : null;
+        };
         const openRosterGmCalculatorFromRosterForm = () => {
-            if (IS_GLOBAL_ROSTER) return;
+            const targetClientId = resolveClientIdForGmCalc();
+            if (!targetClientId) {
+                alert(IS_GLOBAL_ROSTER ? '请先选择客户后再使用毛利测算器' : '无法打开毛利测算器');
+                return;
+            }
             const parts = ['return_to=roster', 'roster_add=1'];
-            appendGmCalcQueryPart(parts, 'targetClientId', CLIENT_ID);
+            appendGmCalcQueryPart(parts, 'targetClientId', targetClientId);
             appendGmCalcQueryPart(parts, 'full_name', form.full_name);
             appendGmCalcQueryPart(parts, 'work_location', form.work_location);
             appendGmCalcQueryPart(parts, 'position', form.position_title);
@@ -759,9 +793,8 @@ const rosterDetailApp = createApp({
                     form[f.key] = raw;
                 }
             });
-            const channelParts = resolveOnboardingChannelForForm(row.zntx_onboarding_channel || '');
-            form.zntx_onboarding_channel = channelParts.channel;
-            form.zntx_onboarding_channel_other = channelParts.channel_other;
+            form.zntx_onboarding_channel = normalizeOnboardingChannelForForm(row.zntx_onboarding_channel || '');
+            form.zntx_onboarding_channel_other = '';
             clearTouched();
             showForm.value = true;
         };
@@ -852,17 +885,9 @@ const rosterDetailApp = createApp({
                 alert(bizError);
                 return;
             }
-            if (form.zntx_onboarding_channel === '其他' &&
-                !String(form.zntx_onboarding_channel_other || '').trim()) {
-                alert('请填写具体入职渠道');
-                return;
-            }
             const payload = {};
             FORM_FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
-            payload.zntx_onboarding_channel = resolveOnboardingChannelForSave(
-                form.zntx_onboarding_channel,
-                form.zntx_onboarding_channel_other,
-            );
+            payload.zntx_onboarding_channel = String(form.zntx_onboarding_channel || '').trim();
             // 提交前规范化金额文本，兼容用户输入千分位/货币符号
             payload.monthly_quote_tax = normalizeAmountText(payload.monthly_quote_tax);
             payload.pre_tax_salary = normalizeAmountText(payload.pre_tax_salary);
@@ -897,6 +922,22 @@ const rosterDetailApp = createApp({
         };
         const doDelete = async (row) => {
             if (!row) return;
+            if (typeof window.crmConfirmDeleteDialog !== 'function') {
+                alert('确认对话框不可用');
+                return;
+            }
+            const name = String(row.full_name || '').trim() || `#${row.id}`;
+            let targetText = `将删除：${name}`;
+            if (IS_GLOBAL_ROSTER) {
+                const customer = String(row.customer_name || '').trim();
+                if (customer) targetText = `将删除：${name}（${customer}）`;
+            }
+            const ok = await window.crmConfirmDeleteDialog({
+                title: '确认删除记录',
+                targetText,
+                hint: '删除后将从当前花名册列表移除。',
+            });
+            if (!ok) return;
             const id = row.id;
             const r = await fetch(`/api/roster/${id}`, { method: 'DELETE', headers: authHeader() });
             if (r.ok) {
@@ -1152,8 +1193,11 @@ const rosterDetailApp = createApp({
             showRegReminder.value = false;
             regReminderCopied.value = false;
         };
-        const regDetailFields = computed(() => [...detailCompactFields.value, ...detailTextareaFields.value]);
-        const isWideDetailField = (key) => DETAIL_TEXTAREA_KEYS.has(key);
+        const REG_DETAIL_WIDE_KEYS = new Set(['leave_reason']);
+        const regDetailFields = computed(() =>
+            activeFormFields.value.filter((f) => f.key !== 'serial_no')
+        );
+        const isWideDetailField = (key) => REG_DETAIL_WIDE_KEYS.has(key);
         const rosterDetailValue = (row, key) => {
             if (!row) return '—';
             const raw = row[key];
@@ -1179,13 +1223,11 @@ const rosterDetailApp = createApp({
         const showRosterValidation = async () => {
             const scope = IS_GLOBAL_ROSTER ? '整体客户' : (String(brief.value?.name || '').trim() || '当前客户');
             const findings = buildRosterValidationFindings();
-            if (!findings.length) {
-                alert('当前筛选范围内暂无校验问题');
-                return;
-            }
             validationScope.value = scope;
             validationFindings.value = findings;
-            validationCopied.value = await copyTextToClipboard(buildRosterValidationText(findings, scope));
+            validationCopied.value = findings.length
+                ? await copyTextToClipboard(buildRosterValidationText(findings, scope))
+                : false;
             showValidation.value = true;
         };
         const showRegularizationReminder = async () => {
@@ -1292,7 +1334,7 @@ const rosterDetailApp = createApp({
         });
         return {
             rows, filteredRows, filters, workLocationOptions, positionTitleOptions,
-            brief, loading, showForm, editingId, form, formFields: activeFormFields, detailCompactFields, detailTextareaFields,
+            brief, loading, showForm, editingId, form, formFields: activeFormFields, formCompactFields, formTextareaFields, detailCompactFields, detailTextareaFields,
             fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
             showLogs, logsLoading, logs, showValidation, validationScope, validationFindings, validationCopied,
             showRegReminder, regReminderFindings, regReminderCopied,
@@ -1302,7 +1344,7 @@ const rosterDetailApp = createApp({
             IS_GLOBAL_ROSTER,
             canViewRosterLogs,
             rosterCustomerSelectOptions,
-            onboardingChannelOptions: ONBOARDING_CHANNEL_OPTIONS,
+            onboardingChannelSelectOptions,
             openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, canUseGmCalc, saveForm, doDelete, canDeletePermission,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
             showRosterValidation, closeValidation, copyValidationResults,

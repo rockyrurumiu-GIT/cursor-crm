@@ -206,7 +206,7 @@
                     <td class="crm-td">{{ c.acquisition_channel || '—' }}</td>
                     <td class="crm-td">{{ c.superior_contact || '—' }}</td>
                     <td class="crm-td text-gray-500 whitespace-nowrap">{{ formatDateTime(c.created_at) }}</td>
-                    <td class="crm-td crm-col-remarks"><div class="crm-cell-clip" :title="c.description || ''">{{ c.description || '—' }}</div></td>
+                    <td class="crm-td crm-col-remarks"><div class="crm-cell-clip">{{ c.description || '—' }}</div></td>
                     <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                         <div class="crm-op-actions">
                             <button type="button" class="crm-op-btn-detail" @click="openDetail(c)">详情</button>
