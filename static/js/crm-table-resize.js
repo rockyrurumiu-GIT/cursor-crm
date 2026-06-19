@@ -440,6 +440,18 @@
             }
             return;
         }
+        if (table.dataset.tableId === 'contacts') {
+            // 冻结前三列（姓名/客户/职位）：left = 之前各列宽度累加，须用列宽而非
+            // th.offsetLeft（offsetParent 为 body 时会带上卡片/侧栏偏移导致留白）。
+            let acc = 0;
+            for (let i = 0; i < 3; i++) {
+                const w = readColWidth(i);
+                if (!Number.isFinite(w) || w <= 0) break;
+                table.style.setProperty(`--contacts-sticky-col${i}-left`, `${acc}px`);
+                acc += w;
+            }
+            return;
+        }
         if (table.dataset.tableId === 'opportunity-leads') {
             const ths = table.querySelectorAll('thead th');
             if (ths[0]) {

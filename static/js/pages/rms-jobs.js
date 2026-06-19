@@ -228,6 +228,67 @@
       return String(n);
     }
 
+    function isBlankJobSelect(value) {
+      return value === "" || value == null;
+    }
+
+    function validateJobForm() {
+      if (jobModalMode.value !== "create") {
+        return { ok: true, message: "" };
+      }
+      var checks = [
+        { label: "岗位名称", value: (jobForm.title || "").trim() },
+        {
+          label: "客户",
+          value: jobForm.client_id,
+          test: function (v) {
+            return !isBlankJobSelect(v);
+          },
+        },
+        { label: "JD", value: (jobForm.job_description || "").trim() },
+        { label: "薪资帽", value: stripJobSalaryCapInput(jobForm.salary_cap) },
+        { label: "年限", value: (jobForm.years_required || "").trim() },
+        { label: "城市", value: (jobForm.location || "").trim() },
+        { label: "学历", value: (jobForm.education || "").trim() },
+        { label: "加班/差旅", value: (jobForm.overtime_travel || "").trim() },
+        { label: "客户部门", value: (jobForm.department || "").trim() },
+        { label: "面试官", value: (jobForm.interviewer || "").trim() },
+        {
+          label: "招聘",
+          value: jobForm.owner_user_id,
+          test: function (v) {
+            return !isBlankJobSelect(v);
+          },
+        },
+        {
+          label: "销售",
+          value: jobForm.sales_owner_user_id,
+          test: function (v) {
+            return !isBlankJobSelect(v);
+          },
+        },
+        {
+          label: "交付",
+          value: jobForm.delivery_owner_user_id,
+          test: function (v) {
+            return !isBlankJobSelect(v);
+          },
+        },
+      ];
+      var hc = Number(jobForm.headcount);
+      if (!Number.isFinite(hc) || hc < 1) {
+        return { ok: false, message: "请填写 HC数" };
+      }
+      for (var i = 0; i < checks.length; i++) {
+        var c = checks[i];
+        var pass = c.test ? c.test(c.value) : String(c.value || "").trim() !== "";
+        if (!pass) {
+          return { ok: false, message: "请填写" + c.label };
+        }
+      }
+      return { ok: true, message: "" };
+    }
+
     function buildJobBody() {
       return {
         client_id: Number(jobForm.client_id),
@@ -351,6 +412,11 @@
       modalError.value = "";
       try {
         formatJobSalaryCapField();
+        var formValidation = validateJobForm();
+        if (!formValidation.ok) {
+          modalError.value = formValidation.message;
+          return;
+        }
         var salaryCap = validateJobSalaryCap();
         if (salaryCap === null) {
           modalError.value =

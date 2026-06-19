@@ -66,33 +66,34 @@
         padding-right: 2rem;
         width: 100%;
     }
-    #page-app .customers-handoff-filter {
+    #page-app .customers-multi-filter {
         position: relative;
-        min-width: 7.5rem;
     }
-    #page-app .customers-handoff-filter-panel {
+    #page-app .customers-multi-filter-panel {
         position: absolute;
-        right: 0;
+        left: 0;
         top: calc(100% + 4px);
-        z-index: 40;
-        width: 9rem;
-        border: 1px solid #d1d5db;
-        border-radius: 0.5rem;
+        z-index: 50;
+        width: 11rem;
+        max-height: 14rem;
+        overflow-y: auto;
+        border: 1px solid #d0d7de;
+        border-radius: 0.375rem;
         background: #fff;
         box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
         padding: 0.25rem 0;
     }
-    #page-app .customers-handoff-filter-item {
+    #page-app .customers-multi-filter-item {
         display: flex;
         align-items: center;
         gap: 0.5rem;
-        padding: 0.4rem 0.65rem;
-        font-size: 0.875rem;
-        color: #374151;
+        padding: 0.35rem 0.6rem;
+        font-size: 12px;
+        color: #1f2328;
         cursor: pointer;
     }
-    #page-app .customers-handoff-filter-item:hover {
-        background: #f9fafb;
+    #page-app .customers-multi-filter-item:hover {
+        background: #f6f8fa;
     }
     /* 客户全景档案弹窗：参考花名册校验的层次化卡片风 */
     #page-app .cp-modal {
@@ -363,49 +364,153 @@
         <div class="flex justify-between items-center flex-wrap gap-2">
             <h1 class="text-2xl font-bold text-gray-900">客户列表</h1>
             <div class="flex items-center flex-wrap gap-2 customers-toolbar">
-                <span v-if="filterPhase" class="inline-flex items-center h-9 bg-blue-100 text-blue-700 px-3 rounded-lg text-sm font-medium">
-                    筛选: {{ filterPhase }} <button type="button" @click="clearPhase" class="ml-1 text-red-500">×</button>
-                </span>
-                <span v-if="filterHandoffStatuses.length" class="inline-flex items-center h-9 bg-amber-100 text-amber-800 px-3 rounded-lg text-sm font-medium">
-                    交接: {{ handoffFilterLabel }} <button type="button" @click="clearHandoffFilter" class="ml-1 text-red-500">×</button>
-                </span>
-                <div ref="handoffFilterRef" class="customers-handoff-filter shrink-0">
-                    <button
-                        type="button"
-                        class="crm-form-control customers-toolbar-control w-full text-left flex items-center justify-between"
-                        @click="toggleHandoffFilterDropdown"
-                    >
-                        <span class="truncate">{{ handoffFilterSummary }}</span>
-                        <span class="text-gray-400 ml-1 shrink-0">{{ handoffFilterDropdownOpen ? '▴' : '▾' }}</span>
-                    </button>
-                    <div v-if="handoffFilterDropdownOpen" class="customers-handoff-filter-panel">
-                        <label
-                            v-for="opt in handoffFilterOptions"
-                            :key="opt.value"
-                            class="customers-handoff-filter-item"
-                            @click.prevent="toggleHandoffFilterOption(opt.value)"
-                        >
-                            <input
-                                type="checkbox"
-                                tabindex="-1"
-                                :checked="filterHandoffStatuses.includes(opt.value)"
-                                @click.prevent
-                            />
-                            <span>{{ opt.label }}</span>
-                        </label>
-                        <button
-                            type="button"
-                            class="w-full text-left px-2.5 py-1.5 text-xs text-blue-600 hover:bg-blue-50 border-t border-gray-100"
-                            @click="clearHandoffFilter"
-                        >清空</button>
-                    </div>
-                </div>
                 <a v-if="canWriteClients" href="/customers/new"
                     class="customers-toolbar-control border border-blue-600 bg-blue-600 text-white hover:bg-blue-700">+ 新增客户</a>
                 <a v-if="canReviewHandoff" href="/customers/reviews"
                     class="customers-toolbar-control border border-amber-500 bg-white text-amber-700 hover:bg-amber-50">待审交接</a>
                 <button v-if="canExportClients" type="button" @click="exportCSV"
                     class="customers-toolbar-control border border-blue-600 bg-white text-blue-600 hover:bg-blue-50">导出全量名单 (CSV)</button>
+            </div>
+        </div>
+
+        <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] p-2 sm:p-3">
+            <div
+                v-if="!filterPanelExpanded"
+                class="flex flex-wrap items-center justify-between gap-2"
+            >
+                <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                    合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredClients.length }}</span> 条
+                </p>
+                <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    <button
+                        type="button"
+                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                        @click="filterPanelExpanded = true"
+                    >展开筛选</button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="回到顶部"
+                        @click="scrollCustomersToTop"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+            </div>
+            <div v-else class="space-y-2">
+                <div class="crm-filter-row">
+                    <input
+                        v-model.trim="filterKeyword"
+                        type="text"
+                        placeholder="输入客户名称关键词"
+                        class="crm-filter-item crm-filter-control w-[12rem]"
+                        title="客户名称（模糊）"
+                    />
+                    <div ref="handoffFilterRef" class="crm-filter-item customers-multi-filter">
+                        <button
+                            type="button"
+                            class="crm-filter-control w-[9rem] text-left flex items-center justify-between"
+                            title="交接状态"
+                            @click="toggleHandoffFilterDropdown"
+                        >
+                            <span class="truncate" :class="!filterHandoffStatuses.length ? 'text-[#9ca3af]' : ''">{{ handoffFilterSummary }}</span>
+                            <span class="text-[#57606a] ml-1 shrink-0">{{ handoffFilterDropdownOpen ? '▴' : '▾' }}</span>
+                        </button>
+                        <div v-if="handoffFilterDropdownOpen" class="customers-multi-filter-panel" @click.stop>
+                            <label
+                                v-for="opt in handoffFilterOptions"
+                                :key="'ho-' + opt.value"
+                                class="customers-multi-filter-item"
+                            >
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-[#d0d7de]"
+                                    :checked="handoffFilterDraft.includes(opt.value)"
+                                    @change="toggleHandoffFilterDraft(opt.value)"
+                                />
+                                <span class="truncate">{{ opt.label }}</span>
+                            </label>
+                            <div class="flex border-t border-[#d0d7de] mt-1 pt-1 px-1 gap-1">
+                                <button
+                                    type="button"
+                                    class="flex-1 py-1 text-xs text-[#57606a] hover:bg-[#f6f8fa] rounded"
+                                    @click="clearHandoffFilterDraft"
+                                >清空</button>
+                                <button
+                                    type="button"
+                                    class="flex-1 py-1 text-xs text-white bg-[#0969da] hover:bg-[#0860ca] rounded"
+                                    @click="applyHandoffFilter"
+                                >确定</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div ref="phaseFilterRef" class="crm-filter-item customers-multi-filter">
+                        <button
+                            type="button"
+                            class="crm-filter-control w-[9rem] text-left flex items-center justify-between"
+                            title="开拓阶段"
+                            @click="togglePhaseFilterDropdown"
+                        >
+                            <span class="truncate" :class="!filterPhases.length ? 'text-[#9ca3af]' : ''">{{ phaseFilterSummary }}</span>
+                            <span class="text-[#57606a] ml-1 shrink-0">{{ phaseFilterDropdownOpen ? '▴' : '▾' }}</span>
+                        </button>
+                        <div v-if="phaseFilterDropdownOpen" class="customers-multi-filter-panel" @click.stop>
+                            <label
+                                v-for="p in phaseFilterOptions"
+                                :key="'ph-' + p"
+                                class="customers-multi-filter-item"
+                            >
+                                <input
+                                    type="checkbox"
+                                    class="rounded border-[#d0d7de]"
+                                    :checked="phaseFilterDraft.includes(p)"
+                                    @change="togglePhaseFilterDraft(p)"
+                                />
+                                <span class="truncate">{{ p }}</span>
+                            </label>
+                            <div class="flex border-t border-[#d0d7de] mt-1 pt-1 px-1 gap-1">
+                                <button
+                                    type="button"
+                                    class="flex-1 py-1 text-xs text-[#57606a] hover:bg-[#f6f8fa] rounded"
+                                    @click="clearPhaseFilterDraft"
+                                >清空</button>
+                                <button
+                                    type="button"
+                                    class="flex-1 py-1 text-xs text-white bg-[#0969da] hover:bg-[#0860ca] rounded"
+                                    @click="applyPhaseFilter"
+                                >确定</button>
+                            </div>
+                        </div>
+                    </div>
+                    <select v-model="filterSalesOwnerId" class="crm-filter-item crm-filter-control w-[9rem]" title="销售主责">
+                        <option value="">销售主责</option>
+                        <option v-for="u in salesOwnerOptions" :key="'so-' + u.value" :value="u.value">{{ u.label }}</option>
+                    </select>
+                    <button type="button" class="crm-filter-item crm-filter-reset" @click="clearFilters">清除筛选</button>
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredClients.length }}</span> 条
+                    </p>
+                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="收起筛选区"
+                            @click="filterPanelExpanded = false"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                            title="回到顶部"
+                            @click="scrollCustomersToTop"
+                        >
+                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -433,7 +538,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="c in clients" :key="c.id">
+                    <tr v-for="c in filteredClients" :key="c.id">
                         <td class="crm-td crm-name-cell">{{ c.name }}</td>
                         <td class="crm-td">{{ c.scale }}</td>
                         <td class="crm-td">
@@ -690,7 +795,7 @@
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 
 const HANDOFF_FILTER_OPTIONS = [
     { value: 'pending_review', label: '待审' },
@@ -700,9 +805,11 @@ const HANDOFF_FILTER_OPTIONS = [
     { value: 'none', label: '未提交' },
 ];
 
-function parseHandoffStatusesFromParams(params) {
+const PHASE_FILTER_OPTIONS = ['初步接触', '方案/报价', '合同签订', '成交'];
+
+function parseListFromParams(params, key) {
     const parts = [];
-    params.getAll('handoff_status').forEach((v) => {
+    params.getAll(key).forEach((v) => {
         String(v).split(',').forEach((s) => {
             const t = s.trim();
             if (t) parts.push(t);
@@ -724,25 +831,36 @@ function formatAmountThousands(raw) {
 createApp({
     setup() {
         const params = new URLSearchParams(window.location.search);
-        const clients = ref([]);
+        const allClients = ref([]);
         const me = ref({ permissions: [], roles: [], is_super: false });
         const meLoaded = ref(false);
         const assignOptions = ref({ depts: [], users: [] });
         const handoffMap = ref({});
         const opportunitiesByClient = ref({});
-        const filterPhase = ref(params.get('phase') || '');
-        const filterHandoffStatuses = ref(parseHandoffStatusesFromParams(params));
+        const filterKeyword = ref(params.get('q') || '');
+        const filterPhases = ref(parseListFromParams(params, 'phase'));
+        const filterHandoffStatuses = ref(parseListFromParams(params, 'handoff_status'));
+        const filterSalesOwnerId = ref(params.get('sales_owner') || '');
+        const filterPanelExpanded = ref(false);
         const handoffFilterLabels = Object.fromEntries(HANDOFF_FILTER_OPTIONS.map((o) => [o.value, o.label]));
-        const handoffFilterLabel = computed(() =>
-            filterHandoffStatuses.value.map((s) => handoffFilterLabels[s] || s).join('、'));
+        const handoffFilterDropdownOpen = ref(false);
+        const handoffFilterDraft = ref([]);
+        const handoffFilterRef = ref(null);
+        const phaseFilterDropdownOpen = ref(false);
+        const phaseFilterDraft = ref([]);
+        const phaseFilterRef = ref(null);
         const handoffFilterSummary = computed(() => {
             const sel = filterHandoffStatuses.value;
             if (!sel.length) return '交接状态';
             if (sel.length === 1) return handoffFilterLabels[sel[0]] || sel[0];
             return `已选${sel.length}项`;
         });
-        const handoffFilterDropdownOpen = ref(false);
-        const handoffFilterRef = ref(null);
+        const phaseFilterSummary = computed(() => {
+            const sel = filterPhases.value;
+            if (!sel.length) return '开拓阶段';
+            if (sel.length === 1) return sel[0];
+            return `已选${sel.length}项`;
+        });
         const showDetail = ref(false);
         const showAddVisit = ref(false);
         const showDelete = ref(false);
@@ -822,12 +940,8 @@ createApp({
         };
 
         const loadClients = async () => {
-            let url = '/api/clients';
-            if (filterPhase.value) {
-                url += '?phase=' + encodeURIComponent(filterPhase.value);
-            }
             const [clientsRes, handoffRes, oppRes, assignRes] = await Promise.all([
-                fetch(url, { headers: authHeader() }),
+                fetch('/api/clients', { headers: authHeader() }),
                 fetch('/api/clients/handoff-summary', { headers: authHeader() }),
                 fetch('/api/opportunities', { headers: authHeader() }),
                 fetch('/api/clients/assign-options', { headers: authHeader() }),
@@ -841,12 +955,7 @@ createApp({
             } else {
                 handoffMap.value = {};
             }
-            let rows = clientsRes.ok ? await clientsRes.json() : [];
-            if (filterHandoffStatuses.value.length) {
-                const allowed = new Set(filterHandoffStatuses.value);
-                rows = rows.filter((c) => allowed.has(resolveHandoffStatus(c.id)));
-            }
-            clients.value = rows;
+            allClients.value = clientsRes.ok ? await clientsRes.json() : [];
             if (oppRes.ok) {
                 const opps = await oppRes.json();
                 const map = {};
@@ -880,39 +989,83 @@ createApp({
             relatedClient.value = null;
         };
 
-        const applyHandoffFilter = () => {
-            const qs = new URLSearchParams();
-            if (filterPhase.value) qs.set('phase', filterPhase.value);
-            filterHandoffStatuses.value.forEach((s) => qs.append('handoff_status', s));
-            window.history.replaceState({}, '', qs.toString() ? '/customers?' + qs : '/customers');
-            loadClients();
-        };
-
         const toggleHandoffFilterDropdown = () => {
+            if (!handoffFilterDropdownOpen.value) {
+                handoffFilterDraft.value = filterHandoffStatuses.value.slice();
+                phaseFilterDropdownOpen.value = false;
+            }
             handoffFilterDropdownOpen.value = !handoffFilterDropdownOpen.value;
         };
 
-        const toggleHandoffFilterOption = (value) => {
-            const sel = filterHandoffStatuses.value;
-            const idx = sel.indexOf(value);
+        const toggleHandoffFilterDraft = (value) => {
+            const list = handoffFilterDraft.value;
+            const idx = list.indexOf(value);
             if (idx >= 0) {
-                filterHandoffStatuses.value = sel.filter((v) => v !== value);
+                handoffFilterDraft.value = list.filter((v) => v !== value);
             } else {
-                filterHandoffStatuses.value = [...sel, value];
+                handoffFilterDraft.value = [...list, value];
             }
-            applyHandoffFilter();
         };
 
-        const clearHandoffFilter = () => {
-            filterHandoffStatuses.value = [];
+        const clearHandoffFilterDraft = () => {
+            handoffFilterDraft.value = [];
+        };
+
+        const applyHandoffFilter = () => {
+            filterHandoffStatuses.value = handoffFilterDraft.value.slice();
             handoffFilterDropdownOpen.value = false;
-            applyHandoffFilter();
+            syncFilterUrl();
+        };
+
+        const togglePhaseFilterDropdown = () => {
+            if (!phaseFilterDropdownOpen.value) {
+                phaseFilterDraft.value = filterPhases.value.slice();
+                handoffFilterDropdownOpen.value = false;
+            }
+            phaseFilterDropdownOpen.value = !phaseFilterDropdownOpen.value;
+        };
+
+        const togglePhaseFilterDraft = (phase) => {
+            const list = phaseFilterDraft.value;
+            const idx = list.indexOf(phase);
+            if (idx >= 0) {
+                phaseFilterDraft.value = list.filter((v) => v !== phase);
+            } else {
+                phaseFilterDraft.value = [...list, phase];
+            }
+        };
+
+        const clearPhaseFilterDraft = () => {
+            phaseFilterDraft.value = [];
+        };
+
+        const applyPhaseFilter = () => {
+            filterPhases.value = phaseFilterDraft.value.slice();
+            phaseFilterDropdownOpen.value = false;
+            syncFilterUrl();
+        };
+
+        const clearFilters = () => {
+            filterKeyword.value = '';
+            filterPhases.value = [];
+            filterHandoffStatuses.value = [];
+            filterSalesOwnerId.value = '';
+            handoffFilterDraft.value = [];
+            phaseFilterDraft.value = [];
+            handoffFilterDropdownOpen.value = false;
+            phaseFilterDropdownOpen.value = false;
+            syncFilterUrl();
         };
 
         const onDocumentClick = (e) => {
-            if (!handoffFilterDropdownOpen.value) return;
-            const root = handoffFilterRef.value;
-            if (root && !root.contains(e.target)) handoffFilterDropdownOpen.value = false;
+            if (handoffFilterDropdownOpen.value) {
+                const root = handoffFilterRef.value;
+                if (root && !root.contains(e.target)) handoffFilterDropdownOpen.value = false;
+            }
+            if (phaseFilterDropdownOpen.value) {
+                const root = phaseFilterRef.value;
+                if (root && !root.contains(e.target)) phaseFilterDropdownOpen.value = false;
+            }
         };
 
         const handoffEntry = (cid) => handoffMap.value[String(cid)] || null;
@@ -929,12 +1082,6 @@ createApp({
             rejected: 'bg-red-100 text-red-800',
             approved: 'bg-green-100 text-green-800',
         }[s] || 'bg-gray-100 text-gray-600');
-
-        const clearPhase = () => {
-            filterPhase.value = '';
-            window.history.replaceState({}, '', '/customers');
-            loadClients();
-        };
 
         const phaseColor = (p) => {
             const m = {
@@ -978,6 +1125,84 @@ createApp({
         const salesOwnerDisplay = (c) => {
             if (!c) return '';
             return userDisplayLabel(c.owner_user_id, c.owner_user_label, c.owner);
+        };
+
+        const salesOwnerOptions = computed(() => {
+            const byLabel = new Map();
+            for (const c of allClients.value) {
+                const label = salesOwnerDisplay(c);
+                if (!label) continue;
+                const norm = label.trim().toLowerCase();
+                const id = c.owner_user_id;
+                const hasId = id != null && id !== '';
+                const existing = byLabel.get(norm);
+                if (!existing) {
+                    byLabel.set(norm, {
+                        value: hasId ? String(id) : `legacy:${label}`,
+                        label,
+                    });
+                } else if (hasId && existing.value.startsWith('legacy:')) {
+                    byLabel.set(norm, { value: String(id), label });
+                }
+            }
+            return [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
+        });
+
+        const clientMatchesKeyword = (c, kw) => {
+            const fields = [
+                c.name,
+                c.city,
+                c.industry,
+                c.contact_name,
+                c.contact_info,
+                c.contact_title,
+                c.owner,
+                salesOwnerDisplay(c),
+                salesDeptDisplay(c),
+            ];
+            return fields.some((v) => String(v || '').toLowerCase().includes(kw));
+        };
+
+        const clientMatchesSalesOwner = (c, ownerKey) => {
+            if (!ownerKey) return true;
+            if (ownerKey.startsWith('legacy:')) {
+                return salesOwnerDisplay(c) === ownerKey.slice(7);
+            }
+            if (String(c.owner_user_id || '') === ownerKey) return true;
+            const u = (assignOptions.value.users || []).find((x) => String(x.id) === ownerKey);
+            if (!u) return false;
+            const display = (u.display_name || u.username || '').trim();
+            if (!display) return false;
+            return !c.owner_user_id && salesOwnerDisplay(c) === display;
+        };
+
+        const filteredClients = computed(() => {
+            let rows = allClients.value;
+            const kw = filterKeyword.value.trim().toLowerCase();
+            if (kw) rows = rows.filter((c) => clientMatchesKeyword(c, kw));
+            if (filterPhases.value.length) {
+                const allowed = new Set(filterPhases.value);
+                rows = rows.filter((c) => allowed.has(c.phase));
+            }
+            if (filterHandoffStatuses.value.length) {
+                const allowed = new Set(filterHandoffStatuses.value);
+                rows = rows.filter((c) => allowed.has(resolveHandoffStatus(c.id)));
+            }
+            if (filterSalesOwnerId.value) {
+                const ownerKey = filterSalesOwnerId.value;
+                rows = rows.filter((c) => clientMatchesSalesOwner(c, ownerKey));
+            }
+            return rows;
+        });
+
+        const syncFilterUrl = () => {
+            const qs = new URLSearchParams();
+            const kw = filterKeyword.value.trim();
+            if (kw) qs.set('q', kw);
+            filterPhases.value.forEach((p) => qs.append('phase', p));
+            filterHandoffStatuses.value.forEach((s) => qs.append('handoff_status', s));
+            if (filterSalesOwnerId.value) qs.set('sales_owner', filterSalesOwnerId.value);
+            window.history.replaceState({}, '', qs.toString() ? '/customers?' + qs : '/customers');
         };
 
         const deliveryDeptDisplay = (c) => {
@@ -1194,6 +1419,10 @@ createApp({
         const isImage = (path) => /\.(jpg|jpeg|png|gif|webp)$/i.test(path);
         const viewFull = (path) => window.crmOpenAuthenticatedFile(path);
 
+        const scrollCustomersToTop = () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
         onMounted(async () => {
             await loadMe();
             await loadClients();
@@ -1201,16 +1430,25 @@ createApp({
         });
         onUnmounted(() => document.removeEventListener('click', onDocumentClick));
 
+        watch(filterKeyword, () => syncFilterUrl());
+        watch(filterSalesOwnerId, () => syncFilterUrl());
+
         return {
-            clients, handoffMap, filterPhase, filterHandoffStatuses, handoffFilterOptions: HANDOFF_FILTER_OPTIONS,
+            allClients, filteredClients, handoffMap,
+            filterKeyword, filterPhases, filterHandoffStatuses, filterSalesOwnerId, filterPanelExpanded,
+            handoffFilterOptions: HANDOFF_FILTER_OPTIONS, phaseFilterOptions: PHASE_FILTER_OPTIONS,
+            handoffFilterSummary, handoffFilterDropdownOpen, handoffFilterDraft, handoffFilterRef,
+            phaseFilterSummary, phaseFilterDropdownOpen, phaseFilterDraft, phaseFilterRef,
+            salesOwnerOptions,
             canWriteClients, canDeleteClients, canReadContacts, canReadVisits, canWriteVisits,
             canExportClients, canOpenHandoff, canReviewHandoff,
-            handoffFilterLabel, handoffFilterSummary, handoffFilterDropdownOpen, handoffFilterRef,
-            toggleHandoffFilterDropdown, toggleHandoffFilterOption,
+            toggleHandoffFilterDropdown, toggleHandoffFilterDraft, clearHandoffFilterDraft, applyHandoffFilter,
+            togglePhaseFilterDropdown, togglePhaseFilterDraft, clearPhaseFilterDraft, applyPhaseFilter,
+            clearFilters, scrollCustomersToTop,
             showDetail, showAddVisit, showDelete, showOppDrawer, selectedOpp, relatedClient,
             selectedClient, details,
             deleteCaptcha, deleteInput, visitForm, onVisitFileChange,
-            loadClients, clearPhase, applyHandoffFilter, clearHandoffFilter, phaseColor,
+            loadClients, phaseColor,
             handoffEntry, handoffStatusLabel, resolveHandoffStatus, handoffBadge,
             clientOpportunities, openOppDrawer, closeOppDrawer,
             fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, displayAmount, displayWinRate, oppStageBadgeClass, hasPrimaryContact,

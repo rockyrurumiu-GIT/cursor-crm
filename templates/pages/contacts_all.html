@@ -7,10 +7,56 @@
         width: 100%;
         min-width: 100%;
         table-layout: fixed;
+        --contacts-sticky-col0-left: 0px;
+        --contacts-sticky-col1-left: 80px;
+        --contacts-sticky-col2-left: 176px;
     }
     #contacts-app .contacts-table th.crm-col-remarks,
     #contacts-app .contacts-table td.crm-col-remarks {
         min-width: var(--crm-col-remarks-min);
+    }
+    /* 冻结前三列：姓名 / 客户 / 职位（left 偏移由拖拽脚本与 colgroup 同步） */
+    #contacts-app .contacts-table .contacts-sticky-col0,
+    #contacts-app .contacts-table .contacts-sticky-col1,
+    #contacts-app .contacts-table .contacts-sticky-col2 {
+        position: sticky;
+        box-sizing: border-box;
+        background: #fff;
+        background-clip: padding-box;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    #contacts-app .contacts-table .contacts-sticky-col0 {
+        left: var(--contacts-sticky-col0-left);
+        z-index: 13;
+    }
+    #contacts-app .contacts-table .contacts-sticky-col1 {
+        left: var(--contacts-sticky-col1-left);
+        z-index: 12;
+    }
+    #contacts-app .contacts-table .contacts-sticky-col2 {
+        left: var(--contacts-sticky-col2-left);
+        z-index: 11;
+        border-right: 1px solid #d0d7de;
+        box-shadow: 2px 0 6px -4px rgba(15, 23, 42, 0.12);
+    }
+    #contacts-app .contacts-table thead .contacts-sticky-col0,
+    #contacts-app .contacts-table thead .contacts-sticky-col1,
+    #contacts-app .contacts-table thead .contacts-sticky-col2 {
+        background: #2f75b5;
+    }
+    #contacts-app .contacts-table thead .contacts-sticky-col0 { z-index: 33; }
+    #contacts-app .contacts-table thead .contacts-sticky-col1 { z-index: 32; }
+    #contacts-app .contacts-table thead .contacts-sticky-col2 { z-index: 31; }
+    #contacts-app .contacts-table tbody tr:nth-child(even) .contacts-sticky-col0,
+    #contacts-app .contacts-table tbody tr:nth-child(even) .contacts-sticky-col1,
+    #contacts-app .contacts-table tbody tr:nth-child(even) .contacts-sticky-col2 {
+        background: #f6f8fa;
+    }
+    #contacts-app .contacts-table tbody tr:hover .contacts-sticky-col0,
+    #contacts-app .contacts-table tbody tr:hover .contacts-sticky-col1,
+    #contacts-app .contacts-table tbody tr:hover .contacts-sticky-col2 {
+        background: #eef6ff;
     }
     #contacts-app .contacts-copy-field {
         position: relative;
@@ -131,13 +177,80 @@
     <div class="flex flex-wrap justify-between gap-3 items-center">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">联系人</h1>
-            <p class="text-sm text-gray-500 mt-1">关联客户接口人，可在交接单中引用。</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
             <button type="button" @click="triggerImport" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导入</button>
             <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
             <button type="button" @click="exportCsv" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50">导出</button>
             <button type="button" @click="openNew" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm">+ 新增联系人</button>
+        </div>
+    </div>
+    <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] p-2 sm:p-3">
+        <div
+            v-if="!filterPanelExpanded"
+            class="flex flex-wrap items-center justify-between gap-2"
+        >
+            <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredItems.length }}</span> 条
+            </p>
+            <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                <button
+                    type="button"
+                    class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                    @click="filterPanelExpanded = true"
+                >展开筛选</button>
+                <button
+                    type="button"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                    title="回到顶部"
+                    @click="scrollContactsToTop"
+                >
+                    <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                </button>
+            </div>
+        </div>
+        <div v-else class="space-y-2">
+            <div class="crm-filter-row">
+                <input
+                    v-model.trim="filterKeyword"
+                    type="text"
+                    placeholder="输入姓名、客户等关键词"
+                    class="crm-filter-item crm-filter-control w-[12rem]"
+                    title="关键词（模糊）"
+                />
+                <select v-model="filterCreatedBy" class="crm-filter-item crm-filter-control w-[9rem]" title="创建人">
+                    <option value="">创建人</option>
+                    <option v-for="u in createdByOptions" :key="'cb-' + u.value" :value="u.value">{{ u.label }}</option>
+                </select>
+                <select v-model="filterAcquisitionChannel" class="crm-filter-item crm-filter-control w-[9rem]" title="获客渠道">
+                    <option value="">获客渠道</option>
+                    <option v-for="ch in acquisitionChannelOptions" :key="'ch-' + ch" :value="ch">{{ ch }}</option>
+                </select>
+                <button type="button" class="crm-filter-item crm-filter-reset" @click="clearFilters">清除筛选</button>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-[#1f2328] min-w-0">
+                    合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredItems.length }}</span> 条
+                </p>
+                <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="收起筛选区"
+                        @click="filterPanelExpanded = false"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
+                    </button>
+                    <button
+                        type="button"
+                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                        title="回到顶部"
+                        @click="scrollContactsToTop"
+                    >
+                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
     <div class="bg-white border rounded-lg overflow-hidden">
@@ -150,9 +263,9 @@
             </colgroup>
             <thead>
                 <tr>
-                    <th class="crm-th crm-th-resizable" data-col="0">姓名</th>
-                    <th class="crm-th crm-th-resizable" data-col="1">客户</th>
-                    <th class="crm-th crm-th-resizable" data-col="2">职位</th>
+                    <th class="crm-th crm-th-resizable contacts-sticky-col0" data-col="0">姓名</th>
+                    <th class="crm-th crm-th-resizable contacts-sticky-col1" data-col="1">客户</th>
+                    <th class="crm-th crm-th-resizable contacts-sticky-col2" data-col="2">职位</th>
                     <th class="crm-th crm-th-resizable" data-col="3">城市</th>
                     <th class="crm-th crm-th-resizable" data-col="4">创建人</th>
                     <th class="crm-th crm-th-resizable" data-col="5">电话</th>
@@ -166,12 +279,12 @@
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="c in items" :key="c.id">
-                    <td class="crm-td crm-name-cell">
+                <tr v-for="c in filteredItems" :key="c.id">
+                    <td class="crm-td crm-name-cell contacts-sticky-col0">
                         <button type="button" class="crm-name-link" @click="openDetail(c)">{{ c.name }}</button>
                     </td>
-                    <td class="crm-td">{{ c.client_name || '—' }}</td>
-                    <td class="crm-td">{{ c.title || '—' }}</td>
+                    <td class="crm-td contacts-sticky-col1">{{ c.client_name || '—' }}</td>
+                    <td class="crm-td contacts-sticky-col2">{{ c.title || '—' }}</td>
                     <td class="crm-td">{{ c.city || '—' }}</td>
                     <td class="crm-td">{{ c.created_by || '—' }}</td>
                     <td class="crm-td">
@@ -215,7 +328,7 @@
                         </div>
                     </td>
                 </tr>
-                <tr v-if="!items.length"><td colspan="13" class="crm-td text-center text-gray-400 py-8">暂无联系人</td></tr>
+                <tr v-if="!filteredItems.length"><td colspan="13" class="crm-td text-center text-gray-400 py-8">暂无联系人</td></tr>
             </tbody>
         </table>
         </div>
@@ -402,11 +515,17 @@
 {% block page_scripts %}
 <script src="/static/js/core/crm-toast.js"></script>
 <script>
-const { createApp, ref, onMounted } = Vue;
+const { createApp, ref, computed, onMounted } = Vue;
 createApp({
     setup() {
         const items = ref([]);
         const clients = ref([]);
+        const createdByOptions = ref([]);
+        const acquisitionChannelOptions = ref([]);
+        const filterKeyword = ref('');
+        const filterCreatedBy = ref('');
+        const filterAcquisitionChannel = ref('');
+        const filterPanelExpanded = ref(false);
         const fileInput = ref(null);
         const showForm = ref(false);
         const detailRow = ref(null);
@@ -471,6 +590,25 @@ createApp({
             items.value = r.ok ? await r.json() : [];
             setTimeout(syncContactsTableLayout, 0);
         };
+        const loadFilterOptions = async () => {
+            const r = await authFetch('/api/contacts/filter-options');
+            if (!r.ok) {
+                createdByOptions.value = [];
+                acquisitionChannelOptions.value = [];
+                return;
+            }
+            const data = await r.json();
+            createdByOptions.value = Array.isArray(data.created_by_options) ? data.created_by_options : [];
+            acquisitionChannelOptions.value = Array.isArray(data.acquisition_channels) ? data.acquisition_channels : [];
+        };
+        const clearFilters = () => {
+            filterKeyword.value = '';
+            filterCreatedBy.value = '';
+            filterAcquisitionChannel.value = '';
+        };
+        const scrollContactsToTop = () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
         const loadClients = async () => {
             const r = await authFetch('/api/clients');
             if (!r.ok) { clients.value = []; return; }
@@ -500,6 +638,37 @@ createApp({
             if (tags === '一般') return 'bg-gray-100 text-gray-600';
             return '';
         };
+        const contactMatchesKeyword = (c, kw) => {
+            const fields = [
+                c.name,
+                c.client_name,
+                c.title,
+                c.city,
+                c.phone,
+                c.email,
+                c.created_by,
+                c.acquisition_channel,
+                c.superior_contact,
+                c.description,
+                contactRelationship(c),
+                contactGroupLabel(c.tags),
+            ];
+            return fields.some((v) => String(v || '').toLowerCase().includes(kw));
+        };
+        const filteredItems = computed(() => {
+            let rows = items.value;
+            const kw = filterKeyword.value.trim().toLowerCase();
+            if (kw) rows = rows.filter((c) => contactMatchesKeyword(c, kw));
+            if (filterCreatedBy.value) {
+                const creator = filterCreatedBy.value;
+                rows = rows.filter((c) => (c.created_by || '').trim() === creator);
+            }
+            if (filterAcquisitionChannel.value) {
+                const channel = filterAcquisitionChannel.value;
+                rows = rows.filter((c) => (c.acquisition_channel || '') === channel);
+            }
+            return rows;
+        });
         const tagsToForm = (tags) => {
             if (isPrimaryContactTag(tags)) return '首要';
             if (tags === '次要' || tags === '一般') return tags;
@@ -675,12 +844,15 @@ createApp({
             }
         };
         onMounted(async () => {
-            await Promise.all([load(), loadClients()]);
+            await Promise.all([load(), loadClients(), loadFilterOptions()]);
             setTimeout(syncContactsTableLayout, 0);
             setTimeout(syncContactsTableLayout, 200);
         });
         return {
-            items, clients, showForm, form, detailRow,
+            items, filteredItems, clients, showForm, form, detailRow,
+            createdByOptions, acquisitionChannelOptions,
+            filterKeyword, filterCreatedBy, filterAcquisitionChannel, filterPanelExpanded,
+            clearFilters, scrollContactsToTop,
             formatDateTime, contactAvatarInitial,
             contactRelationship, contactGroupLabel, contactGroupBadgeClass,
             fileInput, triggerImport, onImportFile, exportCsv,

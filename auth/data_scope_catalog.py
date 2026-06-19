@@ -266,6 +266,9 @@ RESOURCE_SCOPE_ANCHOR: Mapping[str, ResourceScopeAnchor] = {
         inherit_via_client=True,
         client_fk=CLIENT_FK,
     ),
+    # RMS job read visibility is extended in services/rms_scope.py:
+    # legacy delivery client scope OR recruitment ownership/dept scope.
+    # write/delete/export still use this delivery anchor.
     RESOURCE_RMS_JOB: ResourceScopeAnchor(
         resource_code=RESOURCE_RMS_JOB,
         primary_table="rms_jobs",

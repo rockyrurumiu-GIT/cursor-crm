@@ -2257,66 +2257,65 @@
             <template v-if="modal === 'job'">
                 <p v-if="jobFormOptionsError" class="mb-2 text-xs text-amber-800 shrink-0">{{ jobFormOptionsError }}</p>
                 <div class="overflow-y-auto flex-1 min-h-0 text-sm rms-job-form-grid">
-                    <label class="block"><span class="text-[#57606a]">岗位名称</span>
+                    <label class="block"><span class="text-[#57606a]">岗位名称 <span class="rms-required-mark">*</span></span>
                         <input v-model="jobForm.title" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50" /></label>
-                    <label class="block"><span class="text-[#57606a]">客户</span>
+                    <label class="block"><span class="text-[#57606a]">客户 <span class="rms-required-mark">*</span></span>
                         <select v-model.number="jobForm.client_id" :disabled="jobModalReadonly" @change="onJobClientChange"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white disabled:bg-gray-50">
                             <option :value="''" disabled>请选择客户</option>
                             <option v-for="c in clientOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
                         </select>
                     </label>
-                    <label class="block"><span class="text-[#57606a]">优先级</span>
+                    <label class="block"><span class="text-[#57606a]">优先级 <span class="rms-required-mark">*</span></span>
                         <select v-model="jobForm.priority" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white disabled:bg-gray-50">
                             <option v-for="p in priorityOptions" :key="p.value" :value="p.value">{{ p.label }}</option>
                         </select>
                     </label>
-                    <label class="block"><span class="text-[#57606a]">状态</span>
+                    <label class="block"><span class="text-[#57606a]">状态 <span class="rms-required-mark">*</span></span>
                         <select v-model="jobForm.status" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white disabled:bg-gray-50">
                             <option v-for="s in statusOptions" :key="s.value" :value="s.value">{{ s.label }}</option>
                         </select>
                     </label>
-                    <label class="block"><span class="text-[#57606a]">HC数</span>
+                    <label class="block"><span class="text-[#57606a]">HC数 <span class="rms-required-mark">*</span></span>
                         <input v-model.number="jobForm.headcount" :disabled="jobModalReadonly" type="number" min="1"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50" /></label>
-                    <label class="block rms-field-full"><span class="text-[#57606a]">JD</span>
+                    <label class="block rms-field-full"><span class="text-[#57606a]">JD <span class="rms-required-mark">*</span></span>
                         <textarea v-model="jobForm.job_description" :disabled="jobModalReadonly" rows="3"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 resize-y disabled:bg-gray-50"
                             placeholder="岗位职责与要求"></textarea></label>
-                    <label class="block"><span class="text-[#57606a]">薪资帽</span>
+                    <label class="block"><span class="text-[#57606a]">薪资帽 <span class="rms-required-mark">*</span></span>
                         <input v-model="jobForm.salary_cap" :disabled="jobModalReadonly" inputmode="numeric"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 tabular-nums disabled:bg-gray-50"
                             placeholder="1,000–99,999"
                             @input="onJobSalaryCapInput" @blur="formatJobSalaryCapField" /></label>
-                    <label class="block"><span class="text-[#57606a]">年限</span>
+                    <label class="block"><span class="text-[#57606a]">年限 <span class="rms-required-mark">*</span></span>
                         <input v-model="jobForm.years_required" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50"
                             placeholder="如 3-5年" /></label>
-                    <label class="block"><span class="text-[#57606a]">城市</span>
+                    <label class="block"><span class="text-[#57606a]">城市 <span class="rms-required-mark">*</span></span>
                         <input v-model="jobForm.location" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50" /></label>
-                    <label class="block"><span class="text-[#57606a]">学历</span>
+                    <label class="block"><span class="text-[#57606a]">学历 <span class="rms-required-mark">*</span></span>
                         <input v-model="jobForm.education" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50"
                             placeholder="如 本科及以上" /></label>
-                    <label class="block"><span class="text-[#57606a]">加班/差旅</span>
+                    <label class="block"><span class="text-[#57606a]">加班/差旅 <span class="rms-required-mark">*</span></span>
                         <input v-model="jobForm.overtime_travel" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50" /></label>
-                    <label class="block"><span class="text-[#57606a]">客户部门</span>
+                    <label class="block"><span class="text-[#57606a]">客户部门 <span class="rms-required-mark">*</span></span>
                         <input v-model="jobForm.department" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50" /></label>
-                    <label class="block"><span class="text-[#57606a]">面试官</span>
+                    <label class="block"><span class="text-[#57606a]">面试官 <span class="rms-required-mark">*</span></span>
                         <input v-model="jobForm.interviewer" :disabled="jobModalReadonly" class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 disabled:bg-gray-50" /></label>
                     <template v-if="jobModalMode === 'create'">
-                        <label class="block"><span class="text-[#57606a]">销售</span>
+                        <label class="block"><span class="text-[#57606a]">销售 <span class="rms-required-mark">*</span></span>
                             <select v-model.number="jobForm.sales_owner_user_id"
                                 class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
-                                <option value="">未指定</option>
+                                <option value="" disabled>请选择</option>
                                 <option v-for="u in userOptions" :key="'s'+u.id" :value="u.id">{{ userOptionLabel(u) }}</option>
                             </select>
                         </label>
-                        <label class="block"><span class="text-[#57606a]">交付</span>
+                        <label class="block"><span class="text-[#57606a]">交付 <span class="rms-required-mark">*</span></span>
                             <select v-model.number="jobForm.delivery_owner_user_id"
                                 class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white">
-                                <option value="">未指定</option>
+                                <option value="" disabled>请选择</option>
                                 <option v-for="u in userOptions" :key="'d'+u.id" :value="u.id">{{ userOptionLabel(u) }}</option>
                             </select>
-                            <span class="text-xs text-[#656d76] mt-0.5 block">客户首个岗位时通常必填</span>
                         </label>
                     </template>
                     <template v-else>
@@ -2325,7 +2324,7 @@
                         <label class="block"><span class="text-[#57606a]">交付</span>
                             <input :value="jobForm.delivery_owner_label" disabled class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-gray-50" /></label>
                     </template>
-                    <label class="block"><span class="text-[#57606a]">招聘</span>
+                    <label class="block"><span class="text-[#57606a]">招聘 <span class="rms-required-mark">*</span></span>
                         <select v-model.number="jobForm.owner_user_id" :disabled="jobModalReadonly"
                             class="mt-1 w-full border border-[#d0d7de] rounded px-2 py-1.5 bg-white disabled:bg-gray-50">
                             <option value="" disabled>请选择</option>

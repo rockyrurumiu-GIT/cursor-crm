@@ -442,6 +442,42 @@ def register_phase2_routes(
         db.commit()
         return {"ok": True, "settlement_entry_id": entry_id}
 
+    @app.get("/api/contacts/filter-options")
+    async def contact_filter_options(
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.contacts.read")),
+    ):
+        from sqlalchemy import text
+
+        created_by_options: List[Dict[str, str]] = []
+        sales_row = db.execute(text("SELECT id FROM sys_dept WHERE code = 'SALES' LIMIT 1")).fetchone()
+        if sales_row:
+            subtree = ds._dept_subtree_ids(db, [int(sales_row[0])])
+            if subtree:
+                dept_sql = ",".join(str(int(d)) for d in sorted(subtree))
+                rows = db.execute(
+                    text(
+                        "SELECT u.id, u.username, u.display_name "
+                        "FROM sys_user u "
+                        "INNER JOIN sys_user_dept ud ON ud.user_id = u.id "
+                        f"WHERE u.status = 'active' AND ud.dept_id IN ({dept_sql}) "
+                        "GROUP BY u.id, u.username, u.display_name "
+                        "ORDER BY u.display_name, u.username"
+                    )
+                ).fetchall()
+                seen: set[str] = set()
+                for r in rows:
+                    label = str(r[2] or r[1] or "").strip()
+                    if not label or label in seen:
+                        continue
+                    seen.add(label)
+                    created_by_options.append({"value": label, "label": label})
+        return {
+            "created_by_options": created_by_options,
+            "acquisition_channels": sorted(CONTACT_ACQUISITION_CHANNELS),
+        }
+
     @app.get("/api/contacts")
     async def list_contacts(
         client_id: Optional[int] = None,

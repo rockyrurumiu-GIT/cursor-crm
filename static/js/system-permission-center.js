@@ -931,7 +931,20 @@
                 await loadUsers();
             } catch (e) { showMsg(e.message, false); }
         } else if (ev.target.classList.contains('btn-disable-user')) {
-            if (!confirm('确认禁用该用户？')) return;
+            if (!user) return;
+            var username = user.display_name || user.username || ('#' + id);
+            var ok = false;
+            if (typeof window.crmConfirmDeleteDialog === 'function') {
+                ok = await window.crmConfirmDeleteDialog({
+                    title: '确认禁用',
+                    targetText: '将禁用用户：' + username,
+                    hint: '禁用后该用户将无法登录，可在列表中重新启用。',
+                    confirmText: '确认禁用',
+                });
+            } else {
+                ok = confirm('确认禁用该用户？');
+            }
+            if (!ok) return;
             try {
                 await api('/api/system/users/' + id + '/status', { method: 'POST', body: JSON.stringify({ status: 'disabled' }) });
                 await loadUsers();

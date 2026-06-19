@@ -1,10 +1,10 @@
 """RMS data scope and visibility helpers (Phase 2)."""
 from __future__ import annotations
 
-from typing import Any, Optional, Set, Type
+from typing import Any, List, Optional, Set, Tuple, Type
 
 from fastapi import HTTPException
-from sqlalchemy import or_
+from sqlalchemy import column, or_, select, table
 from sqlalchemy.orm import Query, Session
 
 from auth import data_scope as ds
@@ -22,6 +22,52 @@ from auth.service import AuthContext
 from auth.permissions import ROLE_DELIVERY
 
 
+def _recruitment_job_read_conditions(
+    db: Session,
+    ctx: AuthContext,
+    RmsJob: Type[Any],
+    Client: Type[Any],
+) -> Tuple[bool, List[Any]]:
+    """Return (recruitment_all, clauses) for read OR merge. none contributes nothing."""
+    scope = ds.get_effective_data_scope(ctx, RESOURCE_RMS_JOB, "read")
+    if scope == ds.SCOPE_ALL:
+        return True, []
+    if scope == ds.SCOPE_NONE or ctx.user_id is None:
+        return False, []
+
+    if scope in (ds.SCOPE_SELF, ds.SCOPE_ASSIGNED):
+        return False, [RmsJob.owner_user_id == ctx.user_id]
+
+    if scope == ds.SCOPE_DEPT:
+        visible_depts = ctx.dept_ids or ([ctx.primary_dept_id] if ctx.primary_dept_id else [])
+    elif scope == ds.SCOPE_DEPT_AND_CHILD:
+        visible_depts = list(
+            ds._dept_subtree_ids(
+                db,
+                ctx.dept_ids or ([ctx.primary_dept_id] if ctx.primary_dept_id else []),
+            )
+        )
+    else:
+        return False, []
+
+    if not visible_depts:
+        return False, []
+
+    recruit_dept_col = getattr(Client, CLIENT_RECRUITMENT_DEPT_COL, None)
+    user_dept = table("sys_user_dept", column("user_id"), column("dept_id"))
+    owner_in_depts = RmsJob.owner_user_id.in_(
+        select(user_dept.c.user_id).where(user_dept.c.dept_id.in_(visible_depts))
+    )
+    recruitment_clauses: List[Any] = [owner_in_depts]
+    if recruit_dept_col is not None:
+        recruitment_clauses.append(
+            RmsJob.client_id.in_(
+                db.query(Client.id).filter(recruit_dept_col.in_(visible_depts))
+            )
+        )
+    return False, [or_(*recruitment_clauses)]
+
+
 def scoped_jobs_query(
     db: Session,
     ctx: AuthContext,
@@ -31,16 +77,38 @@ def scoped_jobs_query(
     action: str = "read",
 ) -> Query:
     q = db.query(RmsJob)
-    allowed = ds.scoped_client_ids(db, ctx, RESOURCE_RMS_JOB, action, Client)
-    if allowed is None:
-        return q
-    if not allowed:
+    if action != "read":
+        allowed = ds.scoped_client_ids(db, ctx, RESOURCE_RMS_JOB, action, Client)
+        if allowed is None:
+            return q
+        if not allowed:
+            if ctx.user_id is None:
+                return q.filter(RmsJob.id == -1)
+            return q.filter(or_(RmsJob.owner_user_id == ctx.user_id, RmsJob.id == -1))
         if ctx.user_id is None:
-            return q.filter(RmsJob.id == -1)
-        return q.filter(or_(RmsJob.owner_user_id == ctx.user_id, RmsJob.id == -1))
-    if ctx.user_id is None:
-        return q.filter(RmsJob.client_id.in_(allowed))
-    return q.filter(or_(RmsJob.client_id.in_(allowed), RmsJob.owner_user_id == ctx.user_id))
+            return q.filter(RmsJob.client_id.in_(allowed))
+        return q.filter(or_(RmsJob.client_id.in_(allowed), RmsJob.owner_user_id == ctx.user_id))
+
+    if ctx.is_super:
+        return q
+
+    allowed = ds.scoped_client_ids(db, ctx, RESOURCE_RMS_JOB, "read", Client)
+    recruitment_all, recruitment_clauses = _recruitment_job_read_conditions(
+        db, ctx, RmsJob, Client
+    )
+    if allowed is None or recruitment_all:
+        return q
+
+    clauses: List[Any] = []
+    if allowed:
+        clauses.append(RmsJob.client_id.in_(allowed))
+    if ctx.user_id is not None:
+        clauses.append(RmsJob.owner_user_id == ctx.user_id)
+    clauses.extend(recruitment_clauses)
+
+    if not clauses:
+        return q.filter(RmsJob.id == -1)
+    return q.filter(or_(*clauses))
 
 
 def scoped_applications_query(
