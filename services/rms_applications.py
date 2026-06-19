@@ -671,7 +671,7 @@ def create_application(
 ) -> Dict[str, Any]:
     job_id = int(data["job_id"])
     candidate_id = int(data["candidate_id"])
-    job = rms_ds.assert_job_writable(db, ctx, job_id, RmsJob, Client)
+    job = rms_ds.assert_job_recommendable(db, ctx, job_id, RmsJob, Client)
     rms_ds.assert_candidate_usable_for_application(
         db, ctx, candidate_id, RmsCandidate, RmsApplication, Client
     )

@@ -253,6 +253,22 @@ def assert_job_writable(
     return job
 
 
+def assert_job_recommendable(
+    db: Session,
+    ctx: AuthContext,
+    job_id: int,
+    RmsJob: Type[Any],
+    Client: Type[Any],
+):
+    """Create-recommendation path: job must be readable (rms.job/read) and open."""
+    job = scoped_jobs_query(db, ctx, RmsJob, Client, action="read").filter(RmsJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="岗位不存在")
+    if (job.status or "").strip() != "open":
+        raise HTTPException(status_code=400, detail="应聘岗位须为 open 状态")
+    return job
+
+
 def _user_manages_client_delivery_dept(
     db: Session,
     ctx: AuthContext,

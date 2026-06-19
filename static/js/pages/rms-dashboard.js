@@ -154,7 +154,8 @@
 
         var clientOptions = ref([]);
         var jobOptions = ref([]);
-        var userOptions = ref([]);
+        var deliveryUserOptions = ref([]);
+        var recruiterUserOptions = ref([]);
         var jobFilterDropdownOpen = ref(false);
         var jobFilterRef = ref(null);
         var jobIdsDraft = ref([]);
@@ -399,8 +400,8 @@
 
         var clientFieldLabel = computed(function () { return clientOptions.value.length ? "客户" : "客户ID"; });
         var jobFieldLabel = computed(function () { return filteredJobOptions.value.length ? "岗位" : "岗位ID"; });
-        var deliveryFieldLabel = computed(function () { return userOptions.value.length ? "交付" : "交付用户ID"; });
-        var recruiterFieldLabel = computed(function () { return userOptions.value.length ? "推荐人" : "推荐人用户ID"; });
+        var deliveryFieldLabel = computed(function () { return deliveryUserOptions.value.length ? "交付" : "交付用户ID"; });
+        var recruiterFieldLabel = computed(function () { return recruiterUserOptions.value.length ? "推荐人" : "推荐人用户ID"; });
 
         var RMS_DASHBOARD_API_BLOCKS = {
           filter: true,
@@ -919,10 +920,12 @@
           }).catch(function () {
             jobOptions.value = [];
           });
-          apiGetOptional("/api/clients/assign-options").then(function (assign) {
-            userOptions.value = assign && Array.isArray(assign.users) ? assign.users : [];
+          apiGetOptional("/api/rms/dashboard/filter-options").then(function (opts) {
+            deliveryUserOptions.value = opts && Array.isArray(opts.delivery_users) ? opts.delivery_users : [];
+            recruiterUserOptions.value = opts && Array.isArray(opts.recruiter_users) ? opts.recruiter_users : [];
           }).catch(function () {
-            userOptions.value = [];
+            deliveryUserOptions.value = [];
+            recruiterUserOptions.value = [];
           });
         }
 
@@ -1200,7 +1203,8 @@
           jobOptions: jobOptions,
           filteredJobOptions: filteredJobOptions,
           cityOptions: cityOptions,
-          userOptions: userOptions,
+          deliveryUserOptions: deliveryUserOptions,
+          recruiterUserOptions: recruiterUserOptions,
           jobFilterRef: jobFilterRef,
           jobFilterDropdownOpen: jobFilterDropdownOpen,
           jobIdsDraft: jobIdsDraft,

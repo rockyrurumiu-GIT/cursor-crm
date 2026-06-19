@@ -89,6 +89,7 @@ RESOURCE_DELIVERY_ROSTER = "delivery.roster"
 RESOURCE_DELIVERY_PIPELINE = "delivery.pipeline"
 RESOURCE_DELIVERY_INTERVIEWS = "delivery.interviews"
 RESOURCE_DELIVERY_HANDBOOK = "delivery.handbook"
+RESOURCE_DELIVERY_EMPLOYEE_FILES = "delivery.employee_files"
 RESOURCE_DELIVERY_HANDOFF = "delivery.handoff"
 RESOURCE_DELIVERY_SETTLEMENT = "delivery.settlement"
 RESOURCE_RMS_JOB = "rms.job"
@@ -106,6 +107,7 @@ RESOURCE_CODES: Tuple[str, ...] = (
     RESOURCE_DELIVERY_PIPELINE,
     RESOURCE_DELIVERY_INTERVIEWS,
     RESOURCE_DELIVERY_HANDBOOK,
+    RESOURCE_DELIVERY_EMPLOYEE_FILES,
     RESOURCE_DELIVERY_HANDOFF,
     RESOURCE_DELIVERY_SETTLEMENT,
     RESOURCE_RMS_JOB,
@@ -160,6 +162,9 @@ PERMISSION_TO_RESOURCE: Dict[str, str] = {
     "delivery.handbook.read": RESOURCE_DELIVERY_HANDBOOK,
     "delivery.handbook.write": RESOURCE_DELIVERY_HANDBOOK,
     "delivery.handbook.delete": RESOURCE_DELIVERY_HANDBOOK,
+    "delivery.employee_files.read": RESOURCE_DELIVERY_EMPLOYEE_FILES,
+    "delivery.employee_files.write": RESOURCE_DELIVERY_EMPLOYEE_FILES,
+    "delivery.employee_files.delete": RESOURCE_DELIVERY_EMPLOYEE_FILES,
     "delivery.handoff.read": RESOURCE_DELIVERY_HANDOFF,
     "delivery.handoff.write": RESOURCE_DELIVERY_HANDOFF,
     "delivery.handoff.review": RESOURCE_DELIVERY_HANDOFF,
@@ -246,6 +251,13 @@ RESOURCE_SCOPE_ANCHOR: Mapping[str, ResourceScopeAnchor] = {
     RESOURCE_DELIVERY_HANDBOOK: ResourceScopeAnchor(
         resource_code=RESOURCE_DELIVERY_HANDBOOK,
         primary_table="delivery_handbook_files",
+        scope_mode="delivery",
+        inherit_via_client=True,
+        client_fk=CLIENT_FK,
+    ),
+    RESOURCE_DELIVERY_EMPLOYEE_FILES: ResourceScopeAnchor(
+        resource_code=RESOURCE_DELIVERY_EMPLOYEE_FILES,
+        primary_table="delivery_employee_files",
         scope_mode="delivery",
         inherit_via_client=True,
         client_fk=CLIENT_FK,

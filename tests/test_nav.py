@@ -41,3 +41,18 @@ def test_rms_nav_entry():
     assert "帮助文件" in nav
     assert 'href="/rms/import-help"' in nav
     assert 'data-crm-nav-perm="rms.candidates.read">批量导入帮助' in nav
+
+
+def test_delivery_nav_structure():
+    nav = _nav_html()
+    assert "综合管理" in nav
+    assert "需求管理" not in nav
+    roster_idx = nav.index('href="/customers/roster"')
+    requirements_idx = nav.index('href="/delivery/requirements"')
+    pipeline_idx = nav.index('href="/delivery/pipeline"')
+    assert roster_idx < requirements_idx < pipeline_idx
+    employee_files_idx = nav.index('href="/delivery/employee_files"')
+    interviews_idx = nav.index('href="/delivery/interviews"')
+    turnover_idx = nav.index('href="/delivery/turnover"')
+    assert employee_files_idx < interviews_idx < turnover_idx
+    assert "员工文件" in nav

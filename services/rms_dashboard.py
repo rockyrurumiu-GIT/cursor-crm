@@ -880,6 +880,110 @@ def _client_job_stage_summary(
     }
 
 
+def _active_users_in_dept_ids(db: Session, dept_ids: Set[int]) -> List[Dict[str, Any]]:
+    from sqlalchemy import text
+
+    if not dept_ids:
+        return []
+
+    dept_sql = ",".join(str(int(d)) for d in sorted(dept_ids))
+    rows = db.execute(
+        text(
+            "SELECT u.id, u.username, u.display_name "
+            "FROM sys_user u "
+            "INNER JOIN sys_user_dept ud ON ud.user_id = u.id "
+            f"WHERE u.status = 'active' AND ud.dept_id IN ({dept_sql}) "
+            "GROUP BY u.id, u.username, u.display_name "
+            "ORDER BY COALESCE(u.display_name, u.username), u.username"
+        )
+    ).mappings().all()
+    return [
+        {
+            "id": int(row["id"]),
+            "username": str(row["username"]),
+            "display_name": str(row["display_name"] or row["username"]),
+        }
+        for row in rows
+    ]
+
+
+def _list_dept_subtree_users(
+    db: Session,
+    ctx: AuthContext,
+    Client: Type[Any],
+    *,
+    client_dept_attr: str,
+) -> List[Dict[str, Any]]:
+    """Active users in dept subtrees tied to visible clients (for dashboard filters)."""
+    from auth import data_scope as ds
+    from services.clients import scoped_client_query
+
+    clients = scoped_client_query(db, ctx, Client, action="read").all()
+    dept_ids: Set[int] = set()
+    for client in clients:
+        dept_id = getattr(client, client_dept_attr, None)
+        if dept_id is not None:
+            dept_ids.add(int(dept_id))
+    if not dept_ids:
+        return []
+
+    expanded = ds._dept_subtree_ids(db, list(dept_ids))
+    return _active_users_in_dept_ids(db, expanded)
+
+
+def _list_org_dept_subtree_users(
+    db: Session,
+    *,
+    dept_where_sql: str,
+    dept_params: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Active users in org dept subtrees matching dept_where_sql (for dashboard filters)."""
+    from sqlalchemy import text
+
+    from auth import data_scope as ds
+
+    rows = db.execute(
+        text(
+            "SELECT id FROM sys_dept WHERE status = 'active' "
+            f"AND ({dept_where_sql})"
+        ),
+        dept_params,
+    ).fetchall()
+    dept_ids = [int(r[0]) for r in rows]
+    if not dept_ids:
+        return []
+
+    expanded = ds._dept_subtree_ids(db, dept_ids)
+    return _active_users_in_dept_ids(db, expanded)
+
+
+def list_recruitment_dept_users(
+    db: Session,
+    ctx: AuthContext,
+    Client: Type[Any],
+) -> List[Dict[str, Any]]:
+    """Active users in recruitment-dept subtrees (for dashboard 推荐人 filter)."""
+    return _list_dept_subtree_users(
+        db, ctx, Client, client_dept_attr="recruitment_dept_id"
+    )
+
+
+def list_delivery_dept_users(
+    db: Session,
+    ctx: AuthContext,
+    Client: Type[Any],
+) -> List[Dict[str, Any]]:
+    """Active users in 交付部 org dept subtrees (for dashboard 交付 filter)."""
+    _ = ctx, Client
+    return _list_org_dept_subtree_users(
+        db,
+        dept_where_sql=(
+            "name LIKE :pat OR code = 'DELIVERY' OR dept_type = 'delivery'"
+        ),
+        dept_params={"pat": "%交付部%"},
+    )
+
+
 def compute_rms_dashboard(
     db: Session,
     ctx: AuthContext,

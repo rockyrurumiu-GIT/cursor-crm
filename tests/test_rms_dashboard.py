@@ -96,6 +96,87 @@ def test_dashboard_page_accessible(client_rbac, admin_auth, rms_engine, uniq):
     assert "rms-dashboard.js" in r.text
 
 
+def test_dashboard_filter_options_delivery_users(client_rbac, admin_auth, rms_engine, uniq):
+    from tests.test_rms_phase2_mvp import (
+        _ensure_dept,
+        _set_user_dept,
+        _create_user,
+    )
+
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    assert login.status_code == 200
+    suffix = uniq
+    delivery_dept = 991000 + (int(suffix[:6], 16) % 10000)
+    other_dept = delivery_dept + 1
+    _ensure_dept(
+        rms_engine,
+        delivery_dept,
+        f"华东交付部_{suffix}",
+        path=f"ROOT/DELIVERY_{delivery_dept}",
+    )
+    _ensure_dept(
+        rms_engine,
+        other_dept,
+        f"OtherDel_{suffix}",
+        path=f"ROOT/OTHER_DEL_{other_dept}",
+    )
+
+    delivery_uid = _create_user(client_rbac, admin_auth, f"del_{suffix}", [ROLE_DELIVERY])
+    other_uid = _create_user(client_rbac, admin_auth, f"oth_del_{suffix}", [ROLE_DELIVERY])
+    _set_user_dept(rms_engine, delivery_uid, delivery_dept)
+    _set_user_dept(rms_engine, other_uid, other_dept)
+
+    r = client_rbac.get("/api/rms/dashboard/filter-options", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    ids = {u["id"] for u in r.json()["delivery_users"]}
+    assert delivery_uid in ids
+    assert other_uid not in ids
+
+
+def test_dashboard_filter_options_recruitment_users(client_rbac, admin_auth, rms_engine, uniq):
+    from tests.test_rms_phase2_mvp import (
+        _create_client_admin,
+        _ensure_dept,
+        _set_client_recruitment,
+        _set_user_dept,
+        _create_user,
+    )
+
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    assert login.status_code == 200
+    suffix = uniq
+    recruit_dept = 990000 + (int(suffix[:6], 16) % 10000)
+    other_dept = recruit_dept + 1
+    _ensure_dept(
+        rms_engine,
+        recruit_dept,
+        f"Recruit_{suffix}",
+        path=f"ROOT/RECRUIT_{recruit_dept}",
+    )
+    _ensure_dept(
+        rms_engine,
+        other_dept,
+        f"Other_{suffix}",
+        path=f"ROOT/OTHER_{other_dept}",
+    )
+
+    recruit_uid = _create_user(client_rbac, admin_auth, f"rec_{suffix}", [ROLE_DELIVERY])
+    other_uid = _create_user(client_rbac, admin_auth, f"oth_{suffix}", [ROLE_DELIVERY])
+    _set_user_dept(rms_engine, recruit_uid, recruit_dept)
+    _set_user_dept(rms_engine, other_uid, other_dept)
+
+    cid = _create_client_admin(client_rbac, admin_auth, f"DashRecruit_{suffix}")
+    _set_client_recruitment(rms_engine, cid, recruitment_dept_id=recruit_dept)
+
+    r = client_rbac.get("/api/rms/dashboard/filter-options", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    ids = {u["id"] for u in r.json()["recruiter_users"]}
+    assert recruit_uid in ids
+    assert other_uid not in ids
+
+
 def test_hired_roster_check_summary(client_rbac, admin_auth, rms_engine, uniq):
     login = _delivery_login(client_rbac, admin_auth, uniq)
     r = client_rbac.get("/api/rms/applications/hired-roster-check", cookies=login.cookies)

@@ -232,6 +232,14 @@ def _assert_forbidden(resp, code: str):
         ),
         (
             None,
+            "delivery.employee_files.read",
+            "patch",
+            None,
+            "delivery.employee_files.write",
+            lambda cid: {"status": "published"},
+        ),
+        (
+            None,
             "delivery.interviews.read",
             "post",
             None,
@@ -301,6 +309,8 @@ def test_restricted_module_forbidden(
             read_path = f"/api/clients/{cid}/delivery/pipeline"
         elif "handbook" in read_perm:
             read_path = f"/api/clients/{cid}/delivery/handbooks"
+        elif "employee_files" in read_perm:
+            read_path = f"/api/clients/{cid}/delivery/employee-files"
         elif "interviews" in read_perm:
             read_path = f"/api/clients/{cid}/delivery/interviews"
     _assert_forbidden(client.get(read_path, cookies=cookies), read_perm)
@@ -312,6 +322,8 @@ def test_restricted_module_forbidden(
             write_path = f"/api/clients/{cid}/delivery/pipeline"
         elif "handbook" in write_perm:
             write_path = f"/api/clients/{cid}/delivery/handbooks/999999"
+        elif "employee_files" in write_perm:
+            write_path = f"/api/clients/{cid}/delivery/employee-files/999999"
         elif "interviews" in write_perm:
             write_path = f"/api/clients/{cid}/delivery/interviews"
         elif "handoff" in write_perm:

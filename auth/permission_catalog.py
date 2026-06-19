@@ -79,6 +79,16 @@ _MATRIX_ROWS: List[Dict[str, Any]] = [
     {
         "module": "delivery",
         "module_label": "交付",
+        "label": "员工文件",
+        "read": ["delivery.employee_files.read"],
+        "write": ["delivery.employee_files.write"],
+        "delete": ["delivery.employee_files.delete"],
+        "import_export": ["delivery.employee_files.write"],
+        "approve": [],
+    },
+    {
+        "module": "delivery",
+        "module_label": "交付",
         "label": "访谈记录",
         "read": ["delivery.interviews.read"],
         "write": ["delivery.interviews.write"],

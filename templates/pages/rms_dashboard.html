@@ -66,58 +66,33 @@
 .state-forbidden { color: #cf222e; }
 .field { margin-bottom: 0; }
 .field > label { display: block; font-size: 0.78rem; color: #5b6370; margin-bottom: 0.25rem; }
-.rms-dash-filter-row .field input:not([type="checkbox"]),
-.rms-dash-filter-row .field select,
-.rms-dash-filter-row .rms-job-filter-control {
-  box-sizing: border-box;
+.rms-dash-filter-row {
+  overflow: visible;
   width: 100%;
-  height: 2.5rem;
-  min-height: 2.5rem;
-  border: 1px solid #a5b4fc;
-  border-radius: 0.5rem;
-  padding: 0.5rem 2rem 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  background-color: #ffffff;
-  color: #1f2937;
-  vertical-align: middle;
 }
-.rms-dash-filter-row .field select {
-  appearance: none;
-  -webkit-appearance: none;
-  background-repeat: no-repeat;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 10'%3E%3Cpath d='M4 0.5 7.5 4.5H0.5Z' fill='%23374151'/%3E%3Cpath d='M4 9.5 0.5 5.5h7Z' fill='%23374151'/%3E%3C/svg%3E");
-  background-size: 0.5rem 0.625rem;
-  background-position: right 0.65rem center;
-  cursor: pointer;
+.rms-filter-placeholder { color: #9ca3af; }
+.rms-dash-filter-compact {
+  width: 6.5rem;
+  min-width: 6.5rem;
 }
-.rms-dash-filter-row .field input:not([type="checkbox"]):focus,
-.rms-dash-filter-row .field select:focus,
-.rms-dash-filter-row .rms-job-filter-control:focus-within {
+.rms-dash-filter-job {
+  width: 10rem;
+  min-width: 10rem;
+  max-width: 12.5rem;
+}
+.rms-dash-filter-date {
+  min-width: 8rem;
+}
+.rms-job-filter-dropdown {
+  position: relative;
+}
+.rms-job-filter-dropdown > button.crm-filter-control {
+  border-color: #a5b4fc;
+}
+.rms-job-filter-dropdown > button.crm-filter-control:focus {
   outline: none;
   border-color: #818cf8;
   box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.35);
-}
-.rms-dash-filter-row {
-  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; width: 100%;
-}
-.rms-filter-placeholder { color: #9ca3af; }
-.rms-dash-filter-row .field.field-date.crm-filter-date {
-  height: 2.5rem;
-  min-height: 2.5rem;
-  padding-right: 0.25rem;
-  padding-bottom: 0.5rem;
-  font-size: 0.875rem;
-}
-.rms-dash-filter-row .field { flex: 0 1 9.5rem; min-width: 9.5rem; max-width: 9.5rem; }
-.rms-dash-filter-row .field.field-compact {
-  flex: 0 1 6.5rem; min-width: 6.5rem; max-width: 6.5rem;
-}
-.rms-dash-filter-row .field.field-date {
-  flex: 0 1 8rem; min-width: 8rem; max-width: 8rem;
-}
-.rms-dash-filter-row .field.field-job-dropdown {
-  flex: 1 1 10rem; min-width: 10rem; max-width: 12.5rem; position: relative;
 }
 .rms-stage-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 .rms-stage-table thead th {
@@ -153,19 +128,8 @@
   width: 2.6rem; min-width: 2.6rem; max-width: 3rem;
   text-align: center; padding-left: 0.3rem; padding-right: 0.3rem;
 }
-.rms-job-filter-control {
-  position: relative; display: block; padding: 0; cursor: pointer;
-  background-repeat: no-repeat;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 10'%3E%3Cpath d='M4 0.5 7.5 4.5H0.5Z' fill='%23374151'/%3E%3Cpath d='M4 9.5 0.5 5.5h7Z' fill='%23374151'/%3E%3C/svg%3E");
-  background-size: 0.5rem 0.625rem;
-  background-position: right 0.65rem center;
-}
-.rms-job-filter-trigger {
-  width: 100%; height: 100%; min-height: 0; max-height: none;
-  border: none; padding: 0.5rem 2rem 0.5rem 0.75rem; background: transparent; color: inherit; margin: 0;
-  font-family: inherit; font-size: inherit; line-height: inherit; text-align: left;
-  display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; cursor: pointer;
-  -webkit-appearance: none; appearance: none;
+.rms-dash-filter-row button.crm-filter-control {
+  cursor: pointer;
 }
 .rms-job-filter-panel {
   position: absolute; left: 0; top: calc(100% + 4px); z-index: 50; min-width: 100%; width: max-content;
@@ -197,14 +161,19 @@
   color: #fff; background: #0969da;
 }
 .rms-job-filter-footer-btn-primary:hover { background: #0860ca; }
-.rms-dash-filter-actions-spacer {
-  display: block; height: 1.03rem; margin-bottom: 0.25rem; visibility: hidden;
+.rms-dash-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
-.rms-dash-filter-row .field.rms-dash-filter-actions { flex: 0 1 auto; min-width: 0; max-width: none; }
-.rms-dash-filter-actions { display: flex; flex-direction: column; align-items: flex-start; }
-.rms-dash-filter-actions-btns { display: flex; gap: 0.4rem; align-items: center; height: 2.5rem; }
-.rms-dash-filter-actions-btns .tbtn {
-  min-width: 3.75rem; height: 2.5rem; padding: 0 0.65rem; flex: 0 0 auto;
+.rms-dash-filter-actions .tbtn {
+  min-width: 3.75rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0 0.65rem;
+  font-size: 0.75rem;
+  border-radius: 0.375rem;
+  flex: 0 0 auto;
 }
 .rms-filter-summary { font-size: 0.78rem; color: #6b7280; line-height: 1.6; }
 .rms-filter-summary dt { color: #98a2b3; display: inline; }
@@ -432,21 +401,21 @@
                           @pointerdown="onCardResizePointerDown(item, $event)"></span>
                     <template v-if="item.widget.widget_type === 'rms_block'">
                     <template v-if="item.block === 'filter'">
-                        <div class="rms-dash-filter-row">
-                            <div class="field field-compact">
-                                <select v-if="clientOptions.length" v-model="filters.client_id" :title="clientFieldLabel">
-                                    <option value="">{{ clientFieldLabel }}</option>
-                                    <option v-for="c in clientOptions" :key="c.id" :value="String(c.id)">{{ c.name }}</option>
-                                </select>
-                                <input v-else v-model="filters.client_id" type="number" :placeholder="clientFieldLabel" />
-                            </div>
-                            <div class="field field-job-dropdown" ref="jobFilterRef">
+                        <div class="crm-filter-row rms-dash-filter-row text-sm">
+                            <select v-if="clientOptions.length" v-model="filters.client_id" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :title="clientFieldLabel">
+                                <option value="">{{ clientFieldLabel }}</option>
+                                <option v-for="c in clientOptions" :key="c.id" :value="String(c.id)">{{ c.name }}</option>
+                            </select>
+                            <input v-else v-model="filters.client_id" type="number" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :placeholder="clientFieldLabel" />
+                            <div class="crm-filter-item rms-job-filter-dropdown" ref="jobFilterRef">
                                 <template v-if="filteredJobOptions.length">
-                                    <div class="rms-job-filter-control">
-                                        <button type="button" class="rms-job-filter-trigger" @click.stop="toggleJobFilterDropdown">
-                                            <span class="truncate" :class="!(jobFilterDropdownOpen ? jobIdsDraft : appliedFilters.job_ids || []).length ? 'rms-filter-placeholder' : ''">{{ jobFilterSummary }}</span>
-                                        </button>
-                                    </div>
+                                    <button type="button"
+                                        class="crm-filter-control rms-dash-filter-job text-left flex items-center justify-between"
+                                        :title="jobFieldLabel"
+                                        @click.stop="toggleJobFilterDropdown">
+                                        <span class="truncate" :class="!(jobFilterDropdownOpen ? jobIdsDraft : appliedFilters.job_ids || []).length ? 'rms-filter-placeholder' : ''">{{ jobFilterSummary }}</span>
+                                        <span class="text-[#57606a] ml-1 shrink-0">{{ jobFilterDropdownOpen ? '▴' : '▾' }}</span>
+                                    </button>
                                     <div v-if="jobFilterDropdownOpen" class="rms-job-filter-panel" @click.stop>
                                         <label
                                             v-for="j in filteredJobOptions"
@@ -468,43 +437,34 @@
                                         </div>
                                     </div>
                                 </template>
-                                <input v-else v-model="filters.job_ids_text" :placeholder="jobFieldLabel" />
+                                <input v-else v-model="filters.job_ids_text" class="crm-filter-control rms-dash-filter-job" :placeholder="jobFieldLabel" />
                             </div>
-                            <div class="field field-compact">
-                                <select v-if="cityOptions.length" v-model="filters.city" title="城市">
-                                    <option value="">城市</option>
-                                    <option v-for="c in cityOptions" :key="c" :value="c">{{ c }}</option>
-                                </select>
-                                <input v-else v-model="filters.city" placeholder="城市" />
-                            </div>
-                            <div class="field field-compact">
-                                <select v-if="userOptions.length" v-model="filters.delivery_user_id" :title="deliveryFieldLabel">
-                                    <option value="">{{ deliveryFieldLabel }}</option>
-                                    <option v-for="u in userOptions" :key="'d'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
-                                </select>
-                                <input v-else v-model="filters.delivery_user_id" type="number" :placeholder="deliveryFieldLabel" />
-                            </div>
-                            <div class="field field-compact">
-                                <select v-if="userOptions.length" v-model="filters.recruiter_user_id" :title="recruiterFieldLabel">
-                                    <option value="">{{ recruiterFieldLabel }}</option>
-                                    <option v-for="u in userOptions" :key="'r'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
-                                </select>
-                                <input v-else v-model="filters.recruiter_user_id" type="number" :placeholder="recruiterFieldLabel" />
-                            </div>
-                            <div class="field field-date crm-filter-date">
+                            <select v-if="cityOptions.length" v-model="filters.city" class="crm-filter-item crm-filter-control rms-dash-filter-compact" title="城市">
+                                <option value="">城市</option>
+                                <option v-for="c in cityOptions" :key="c" :value="c">{{ c }}</option>
+                            </select>
+                            <input v-else v-model="filters.city" class="crm-filter-item crm-filter-control rms-dash-filter-compact" placeholder="城市" />
+                            <select v-if="deliveryUserOptions.length" v-model="filters.delivery_user_id" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :title="deliveryFieldLabel">
+                                <option value="">{{ deliveryFieldLabel }}</option>
+                                <option v-for="u in deliveryUserOptions" :key="'d'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                            </select>
+                            <input v-else v-model="filters.delivery_user_id" type="number" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :placeholder="deliveryFieldLabel" />
+                            <select v-if="recruiterUserOptions.length" v-model="filters.recruiter_user_id" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :title="recruiterFieldLabel">
+                                <option value="">{{ recruiterFieldLabel }}</option>
+                                <option v-for="u in recruiterUserOptions" :key="'r'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                            </select>
+                            <input v-else v-model="filters.recruiter_user_id" type="number" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :placeholder="recruiterFieldLabel" />
+                            <div class="crm-filter-item crm-filter-date rms-dash-filter-date">
                                 <span class="crm-filter-date-label">统计周期起</span>
                                 <input v-model="filters.date_from" type="date" class="crm-filter-date-input" title="统计周期起" />
                             </div>
-                            <div class="field field-date crm-filter-date">
+                            <div class="crm-filter-item crm-filter-date rms-dash-filter-date">
                                 <span class="crm-filter-date-label">统计周期止</span>
                                 <input v-model="filters.date_to" type="date" class="crm-filter-date-input" title="统计周期止" />
                             </div>
-                            <div class="field rms-dash-filter-actions">
-                                <span class="rms-dash-filter-actions-spacer" aria-hidden="true">占位</span>
-                                <div class="rms-dash-filter-actions-btns">
-                                    <button type="button" class="tbtn" :disabled="loading" @click.stop="cancelFilters">取消</button>
-                                    <button type="button" class="tbtn tbtn-primary" :disabled="loading" @click.stop="applyFilters">应用</button>
-                                </div>
+                            <div class="crm-filter-item rms-dash-filter-actions">
+                                <button type="button" class="tbtn" :disabled="loading" @click.stop="cancelFilters">取消</button>
+                                <button type="button" class="tbtn tbtn-primary" :disabled="loading" @click.stop="applyFilters">应用</button>
                             </div>
                         </div>
                     </template>

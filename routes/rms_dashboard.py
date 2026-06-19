@@ -100,6 +100,17 @@ def register_rms_dashboard_routes(
     ):
         return build_rms_metadata()
 
+    @app.get("/api/rms/dashboard/filter-options")
+    async def api_rms_dashboard_filter_options(
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.analytics.read")),
+    ):
+        return {
+            "delivery_users": dash_svc.list_delivery_dept_users(db, ctx, Client),
+            "recruiter_users": dash_svc.list_recruitment_dept_users(db, ctx, Client),
+        }
+
     @app.get("/api/rms/dashboard")
     async def api_rms_dashboard(
         client_id: Optional[int] = None,

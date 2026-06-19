@@ -712,6 +712,245 @@ def test_job_read_recruitment_dept_and_child_cross_team(
     assert patch_r.status_code == 404
 
 
+def test_cross_team_recruiter_can_recommend_to_visible_job_not_edit(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    suffix = uniq
+    parent_dept = 892000 + (int(suffix[:6], 16) % 10000)
+    group1 = parent_dept + 1
+    group2 = parent_dept + 2
+    parent_path = f"ROOT/RECRUIT_REC_{parent_dept}"
+    _ensure_dept(rms_engine, parent_dept, f"RecruitParentR_{suffix}", path=parent_path)
+    _ensure_dept(
+        rms_engine,
+        group1,
+        f"RecruitG1R_{suffix}",
+        path=f"{parent_path}/G1_{group1}",
+        parent_id=parent_dept,
+    )
+    _ensure_dept(
+        rms_engine,
+        group2,
+        f"RecruitG2R_{suffix}",
+        path=f"{parent_path}/G2_{group2}",
+        parent_id=parent_dept,
+    )
+
+    qianq = f"rms2_qrec_{suffix}"
+    leiz = f"rms2_lrec_{suffix}"
+    delivery = f"rms2_drec_{suffix}"
+    sales = f"rms2_srec_{suffix}"
+    qianq_uid = _create_user(client_rbac, admin_auth, qianq, [ROLE_DELIVERY])
+    leiz_uid = _create_user(client_rbac, admin_auth, leiz, [ROLE_DELIVERY])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_SALES])
+    _set_user_dept(rms_engine, qianq_uid, group1)
+    _set_user_dept(rms_engine, leiz_uid, parent_dept)
+
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "read", SCOPE_DEPT_AND_CHILD)
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "write", SCOPE_NONE)
+
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS Recommend {suffix}")
+    _set_client_owner(rms_engine, cid, sales_uid, delivery_owner_user_id=delivery_uid)
+    _set_client_recruitment(rms_engine, cid, recruitment_dept_id=parent_dept)
+
+    admin_user, admin_pwd = admin_auth
+    job_r = client_rbac.post(
+        "/api/rms/jobs",
+        headers=auth_header(admin_user, admin_pwd),
+        json={
+            "client_id": cid,
+            "title": f"Qianq Recommend Job {suffix}",
+            "owner_user_id": qianq_uid,
+        },
+    )
+    assert job_r.status_code == 200, job_r.text
+    job_id = job_r.json()["id"]
+
+    login_leiz = _login(client_rbac, leiz)
+    jobs_r = client_rbac.get("/api/rms/jobs", cookies=login_leiz.cookies)
+    assert jobs_r.status_code == 200, jobs_r.text
+    assert job_id in {j["id"] for j in jobs_r.json()}
+
+    cand_r = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_leiz.cookies,
+        json=_candidate_json(job_id, name=f"Rec Cand {suffix}"),
+    )
+    assert cand_r.status_code == 200, cand_r.text
+    cand_id = cand_r.json()["id"]
+
+    recommend_r = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_leiz.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert recommend_r.status_code == 200, recommend_r.text
+    body = recommend_r.json()
+    assert body["job_id"] == job_id
+    assert body["candidate_id"] == cand_id
+    assert body["recommended_by"] == leiz_uid
+
+    patch_r = client_rbac.patch(
+        f"/api/rms/jobs/{job_id}",
+        cookies=login_leiz.cookies,
+        json={"title": "Hacked"},
+    )
+    assert patch_r.status_code == 404
+
+
+def test_cross_team_recommend_invisible_job_404(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    parent_dept = 893000 + (int(suffix[:6], 16) % 10000)
+    group1 = parent_dept + 1
+    group2 = parent_dept + 2
+    parent_path = f"ROOT/RECRUIT_INV_{parent_dept}"
+    _ensure_dept(rms_engine, parent_dept, f"RecruitParentI_{suffix}", path=parent_path)
+    _ensure_dept(
+        rms_engine,
+        group1,
+        f"RecruitG1I_{suffix}",
+        path=f"{parent_path}/G1_{group1}",
+        parent_id=parent_dept,
+    )
+    _ensure_dept(
+        rms_engine,
+        group2,
+        f"RecruitG2I_{suffix}",
+        path=f"{parent_path}/G2_{group2}",
+        parent_id=parent_dept,
+    )
+
+    qianq = f"rms2_qinv_{suffix}"
+    leiz = f"rms2_linv_{suffix}"
+    delivery = f"rms2_dinv_{suffix}"
+    sales = f"rms2_sinv_{suffix}"
+    qianq_uid = _create_user(client_rbac, admin_auth, qianq, [ROLE_DELIVERY])
+    leiz_uid = _create_user(client_rbac, admin_auth, leiz, [ROLE_DELIVERY])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_SALES])
+    _set_user_dept(rms_engine, qianq_uid, group1)
+    _set_user_dept(rms_engine, leiz_uid, group2)
+
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "read", SCOPE_DEPT_AND_CHILD)
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "write", SCOPE_NONE)
+
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS Invisible {suffix}")
+    _set_client_owner(rms_engine, cid, sales_uid, delivery_owner_user_id=delivery_uid)
+    _set_client_recruitment(rms_engine, cid, recruitment_dept_id=group1)
+
+    admin_user, admin_pwd = admin_auth
+    job_r = client_rbac.post(
+        "/api/rms/jobs",
+        headers=auth_header(admin_user, admin_pwd),
+        json={
+            "client_id": cid,
+            "title": f"Qianq Invisible Job {suffix}",
+            "owner_user_id": qianq_uid,
+        },
+    )
+    assert job_r.status_code == 200, job_r.text
+    job_id = job_r.json()["id"]
+
+    login_leiz = _login(client_rbac, leiz)
+    jobs_r = client_rbac.get("/api/rms/jobs", cookies=login_leiz.cookies)
+    assert jobs_r.status_code == 200, jobs_r.text
+    assert job_id not in {j["id"] for j in jobs_r.json()}
+
+    cand_r = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_leiz.cookies,
+        json=_candidate_json(job_id, name=f"Inv Cand {suffix}", target_job_id=None),
+    )
+    assert cand_r.status_code == 200, cand_r.text
+    cand_id = cand_r.json()["id"]
+
+    recommend_r = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_leiz.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert recommend_r.status_code == 404
+
+
+def test_cross_team_recommend_closed_job_400(client_rbac, admin_auth, rms_engine, uniq):
+    suffix = uniq
+    parent_dept = 894000 + (int(suffix[:6], 16) % 10000)
+    group1 = parent_dept + 1
+    parent_path = f"ROOT/RECRUIT_CLS_{parent_dept}"
+    _ensure_dept(rms_engine, parent_dept, f"RecruitParentC_{suffix}", path=parent_path)
+    _ensure_dept(
+        rms_engine,
+        group1,
+        f"RecruitG1C_{suffix}",
+        path=f"{parent_path}/G1_{group1}",
+        parent_id=parent_dept,
+    )
+
+    qianq = f"rms2_qcls_{suffix}"
+    leiz = f"rms2_lcls_{suffix}"
+    delivery = f"rms2_dcls_{suffix}"
+    sales = f"rms2_scls_{suffix}"
+    qianq_uid = _create_user(client_rbac, admin_auth, qianq, [ROLE_DELIVERY])
+    leiz_uid = _create_user(client_rbac, admin_auth, leiz, [ROLE_DELIVERY])
+    delivery_uid = _create_user(client_rbac, admin_auth, delivery, [ROLE_DELIVERY])
+    sales_uid = _create_user(client_rbac, admin_auth, sales, [ROLE_SALES])
+    _set_user_dept(rms_engine, qianq_uid, group1)
+    _set_user_dept(rms_engine, leiz_uid, parent_dept)
+
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "read", SCOPE_DEPT_AND_CHILD)
+    _set_role_data_scope(rms_engine, ROLE_DELIVERY, RESOURCE_RMS_JOB, "write", SCOPE_NONE)
+
+    cid = _create_client_admin(client_rbac, admin_auth, f"RMS Closed {suffix}")
+    _set_client_owner(rms_engine, cid, sales_uid, delivery_owner_user_id=delivery_uid)
+    _set_client_recruitment(rms_engine, cid, recruitment_dept_id=parent_dept)
+
+    admin_user, admin_pwd = admin_auth
+    job_r = client_rbac.post(
+        "/api/rms/jobs",
+        headers=auth_header(admin_user, admin_pwd),
+        json={
+            "client_id": cid,
+            "title": f"Qianq Closed Job {suffix}",
+            "owner_user_id": qianq_uid,
+        },
+    )
+    assert job_r.status_code == 200, job_r.text
+    job_id = job_r.json()["id"]
+
+    closed = client_rbac.patch(
+        f"/api/rms/jobs/{job_id}",
+        headers=auth_header(admin_user, admin_pwd),
+        json={"status": "closed"},
+    )
+    assert closed.status_code == 200, closed.text
+
+    login_leiz = _login(client_rbac, leiz)
+    cand_r = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_leiz.cookies,
+        json=_candidate_json(job_id, name=f"Cls Cand {suffix}"),
+    )
+    assert cand_r.status_code == 400, cand_r.text
+    assert "open" in cand_r.json().get("detail", "").lower()
+
+    cand_r2 = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_leiz.cookies,
+        json=_candidate_json(job_id, name=f"Cls Cand2 {suffix}", target_job_id=None),
+    )
+    assert cand_r2.status_code == 200, cand_r2.text
+    cand_id = cand_r2.json()["id"]
+
+    recommend_r = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_leiz.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert recommend_r.status_code == 400, recommend_r.text
+    assert "open" in recommend_r.json().get("detail", "").lower()
+
+
 def test_job_read_recruitment_dept_and_child_strict_subtree(
     client_rbac, admin_auth, rms_engine, uniq
 ):

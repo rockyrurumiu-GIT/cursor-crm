@@ -625,6 +625,16 @@
                 <button type="button" class="crm-filter-item rounded-lg bg-[#0969da] px-3 text-xs font-medium text-white hover:bg-[#0860ca] disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="handbookUploading || !handbookSelectedFiles.length" @click="uploadSelectedHandbookFiles">{{ handbookUploading ? '上传中…' : '上传' }}</button>
                 <input ref="handbookFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookFilesSelected" />
             </div>
+            <div v-if="moduleKey === 'employee_files'" class="flex flex-wrap items-center gap-2 shrink-0">
+                <span v-if="!employeeFileSelectedFiles.length" class="max-w-[14rem] truncate text-xs text-[#57606a]">未选择文件</span>
+                <span v-else class="inline-flex items-center gap-1 max-w-[16rem] rounded-lg border border-[#d0d7de] bg-white px-2 h-[2.25rem] min-h-[2.25rem] text-xs text-[#1f2328]">
+                    <span class="truncate min-w-0" :title="employeeFileSelectedFileSummary">{{ employeeFileSelectedFileSummary }}</span>
+                    <button type="button" class="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]" title="清除已选文件" aria-label="清除已选文件" @click="clearEmployeeFileSelectedFiles">×</button>
+                </span>
+                <button type="button" class="crm-filter-item rounded-lg border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="employeeFileUploading" @click="employeeFileInput && employeeFileInput.click()">选择文件</button>
+                <button type="button" class="crm-filter-item rounded-lg bg-[#0969da] px-3 text-xs font-medium text-white hover:bg-[#0860ca] disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="employeeFileUploading || !employeeFileSelectedFiles.length" @click="uploadSelectedEmployeeFiles">{{ employeeFileUploading ? '上传中…' : '上传' }}</button>
+                <input ref="employeeFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar" @change="onEmployeeFilesSelected" />
+            </div>
         </div>
         <div v-if="moduleKey === 'pipeline'" class="mt-4 flex flex-col flex-1 min-h-0 gap-3">
             <div class="flex items-end justify-between gap-3 flex-wrap shrink-0">
@@ -1385,6 +1395,60 @@
                 </div>
             </div>
         </div>
+        <div v-else-if="moduleKey === 'employee_files'" class="mt-4 flex flex-col flex-1 min-h-0 gap-4">
+            <div v-if="employeeFileUploadError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shrink-0">{{ employeeFileUploadError }}</div>
+            <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3 shrink-0">
+                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                    <div class="crm-filter-row flex-1 min-w-0">
+                        <input v-model.trim="employeeFileFilter.keyword" type="text" class="crm-filter-item crm-filter-control w-[12rem]" placeholder="关键字模糊查询" title="关键字模糊查询" />
+                        <select v-model="employeeFileStatusFilter" class="crm-filter-item crm-filter-control w-[10rem]" title="状态">
+                            <option value="">状态</option>
+                            <option value="draft">草稿</option>
+                            <option value="published">已发布</option>
+                            <option value="deprecated">已作废</option>
+                        </select>
+                        <button type="button" class="crm-filter-item crm-filter-reset" @click="resetEmployeeFileFilter">清除筛选</button>
+                    </div>
+                    <p class="text-sm font-semibold text-[#1f2328] shrink-0">
+                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredEmployeeFiles.length }}</span> 条
+                    </p>
+                </div>
+            </div>
+            <div class="border border-gray-200 rounded-lg overflow-hidden flex flex-col flex-1 min-h-0 bg-white">
+                <div v-if="!filteredEmployeeFiles.length" class="p-10 text-center text-gray-400 text-sm">暂无员工文件，请上传。</div>
+                <div v-else class="overflow-x-auto crm-table-scroll">
+                    <table class="crm-table handbook-table min-w-full text-sm" data-table-id="employee-files">
+                        <thead>
+                            <tr>
+                                <th class="crm-th text-left">文件</th>
+                                <th class="crm-th">状态</th>
+                                <th class="crm-th">类型</th>
+                                <th class="crm-th">时间</th>
+                                <th class="crm-th crm-sticky-right-op crm-op-col-xl">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="f in filteredEmployeeFiles" :key="f.id">
+                                <td class="crm-td crm-name-cell handbook-col-text"><div class="crm-cell-clip">{{ f.original_filename }}</div></td>
+                                <td class="crm-td"><span class="rounded-full px-2 py-0.5 text-xs" :class="employeeFileStatusClass(f.status)">{{ employeeFileStatusLabel(f.status) }}</span></td>
+                                <td class="crm-td">{{ employeeFileMediaLabel(f) }}</td>
+                                <td class="crm-td text-xs whitespace-nowrap">{{ formatDate(f.created_at) }}</td>
+                                <td class="crm-td whitespace-nowrap crm-sticky-right-op crm-op-col-xl">
+                                    <div class="crm-op-actions">
+                                        <button type="button" class="crm-op-btn-edit" @click="downloadEmployeeFile(f)">下载</button>
+                                        <button v-if="canDeletePermission('delivery.employee_files.delete')" type="button" class="crm-op-btn-delete"
+                                            data-crm-delete-title="确认删除文件"
+                                            data-crm-delete-target-prefix="将删除文件："
+                                            data-crm-delete-hint="删除后将从当前员工文件列表移除。"
+                                            @click="removeEmployeeFile(f)">删除</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
         <div v-else-if="moduleKey === 'requirements'" class="requirements-jobs-module flex flex-col flex-1 min-h-0 mt-4">
             <div v-if="requirementJobsLoading" class="text-sm text-gray-500 py-8 text-center">加载中…</div>
             <div v-else-if="requirementJobsForbidden" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -2097,6 +2161,7 @@ window.__CRM_DELIVERY_DETAIL__ = {
 <script src="/static/js/pages/delivery-detail-pipeline.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-interviews.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-handbook.js?v=delete-perm-20260617"></script>
+<script src="/static/js/pages/delivery-detail-employee-files.js?v=20260619"></script>
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } = Vue;
 const {
@@ -2446,6 +2511,35 @@ createApp({
             mountHandbook,
             unmountHandbook,
         } = handbook;
+        const employeeFiles = window.CrmDeliveryDetailEmployeeFiles.createEmployeeFilesState({
+            ref,
+            reactive,
+            computed,
+            clientId,
+            moduleKey,
+            authHeader: window.crmAuthHeader,
+            downloadBlob: window.crmDownloadBlob,
+        });
+        const {
+            employeeFileFilter,
+            employeeFileStatusFilter,
+            filteredEmployeeFiles,
+            resetEmployeeFileFilter,
+            clearEmployeeFileSelectedFiles,
+            employeeFileInput,
+            employeeFileUploading,
+            employeeFileUploadError,
+            employeeFileSelectedFiles,
+            employeeFileSelectedFileSummary,
+            employeeFileStatusLabel,
+            employeeFileStatusClass,
+            employeeFileMediaLabel,
+            onEmployeeFilesSelected,
+            uploadSelectedEmployeeFiles,
+            downloadEmployeeFile,
+            removeEmployeeFile,
+            mountEmployeeFiles,
+        } = employeeFiles;
         const scrollToTop = () => {
             if (scrollToTopPipeline()) return;
             if (scrollToTopInterviews()) return;
@@ -2485,6 +2579,7 @@ createApp({
                 openInterviewEditByQuery();
             }
             await mountHandbook();
+            await mountEmployeeFiles();
             if (moduleKey === 'requirements') {
                 await loadRequirementJobs();
                 await nextTick();
@@ -2534,6 +2629,10 @@ createApp({
             openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
             handbookReaderMediaUrl,
             openHandbookMetaModal, saveHandbookMeta, openHandbookCuesModal, saveHandbookCues, rebuildHandbookOutline,
+            employeeFileFilter, employeeFileStatusFilter, filteredEmployeeFiles, resetEmployeeFileFilter, clearEmployeeFileSelectedFiles,
+            employeeFileInput, employeeFileUploading, employeeFileUploadError, employeeFileSelectedFiles, employeeFileSelectedFileSummary,
+            employeeFileStatusLabel, employeeFileStatusClass, employeeFileMediaLabel,
+            onEmployeeFilesSelected, uploadSelectedEmployeeFiles, downloadEmployeeFile, removeEmployeeFile,
             pipelineScrollWrap,
             PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,
             pipelinePeriodValue, pipelinePeriodDisplay, pipelinePeriodPanelStyle, togglePipelinePeriodDropdown, setPipelinePeriodHoverMonth, selectPipelinePeriod, clearPipelinePeriodField,

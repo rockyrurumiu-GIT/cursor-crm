@@ -612,6 +612,20 @@ class DeliveryHandbookFile(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+class DeliveryEmployeeFile(Base):
+    """客户员工文件：按客户归档的上传文档。"""
+
+    __tablename__ = "delivery_employee_files"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
+    original_filename = Column(String, default="")
+    stored_path = Column(String, default="")
+    status = Column(String, default="draft")
+    media_kind = Column(String, default="")
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 # Handbook constants/helpers: migrated to schemas/delivery_handbook.py and services/delivery_handbook.py (Phase 5D)
 from schemas.delivery_handbook import HANDBOOK_ALLOWED_SUFFIXES, HANDBOOK_STATUS_SET, HANDBOOK_SEARCH_BODY_MAX
 
@@ -1334,6 +1348,19 @@ register_delivery_handbook_routes(
 )
 
 
+from routes.delivery_employee_files import register_delivery_employee_file_routes
+
+register_delivery_employee_file_routes(
+    app,
+    get_db=get_db,
+    Client=Client,
+    DeliveryEmployeeFile=DeliveryEmployeeFile,
+    AuditLog=AuditLog,
+    upload_dir=UPLOAD_DIR,
+    max_file_size=MAX_FILE_SIZE,
+)
+
+
 
 # --- Roster API routes: migrated to routes/delivery_roster.py (Phase 5A-2) ---
 from routes.delivery_roster import register_delivery_roster_routes
@@ -1671,6 +1698,7 @@ DELIVERY_MODULES = {
     "requirements": "需求清单",
     "pipeline": "管道数据",
     "interviews": "员工访谈",
+    "employee_files": "员工文件",
     "turnover": "离职率分析",
     "handbook": "交付手册",
     "settlement": "结算回款",
