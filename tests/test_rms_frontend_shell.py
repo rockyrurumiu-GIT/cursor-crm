@@ -802,6 +802,7 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert ">修改</button>" in pipe_region
     assert ">历史</button>" in pipe_region
     assert "只看活动状态" in pipe_region
+    assert "显示所有状态" in pipe_region
     assert "rms-pipeline-row--terminal" in pipe_region
     rms_src = (REPO_ROOT / "static/js/pages/rms.js").read_text(encoding="utf-8")
     pipeline_js = (REPO_ROOT / "static/js/pages/rms-pipeline.js").read_text(encoding="utf-8")
@@ -860,10 +861,13 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert ">简历</a>" in apps_region
     assert "hide_roster_converted" in applications_js
     assert "applicationsFilter" in applications_js
+    assert "applicationStatusFilterSummary" in apps_region
+    assert "applicationStatusFilterSummary" in applications_js
     assert "待转花名册" in apps_region
     assert "已转花名册" in html
     assert "filteredApplications" in applications_js
-    assert "隐藏已转花名册" in apps_region
+    assert "隐藏已转入花名册" in apps_region
+    assert "显示已转入花名册" in apps_region
 
     assert "Plan 34" not in html
     assert "占位" not in html

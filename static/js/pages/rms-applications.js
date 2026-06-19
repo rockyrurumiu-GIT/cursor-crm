@@ -36,7 +36,7 @@
       keyword: "",
       client_id: "",
       job_id: "",
-      status: "",
+      statuses: [],
       date_from: "",
       date_to: "",
       hide_roster_converted: false,
@@ -47,6 +47,19 @@
         value: s,
         label: Labels.progressLabel ? Labels.progressLabel(s) : s,
       };
+    });
+
+    function applicationProgressLabel(status) {
+      return Labels.progressLabel ? Labels.progressLabel(status) : status;
+    }
+
+    var applicationStatusDropdownOpen = ref(false);
+    var applicationStatusDraft = ref([]);
+    var applicationStatusFilterSummary = computed(function () {
+      var sel = applicationsFilter.statuses || [];
+      if (!sel.length) return "招聘进展";
+      if (sel.length === 1) return applicationProgressLabel(sel[0]);
+      return "已选" + sel.length + "项";
     });
 
     var statusHistoryModal = ref(null);
@@ -99,10 +112,10 @@
           return Number(a.job_id) === wantJob;
         });
       }
-      if (applicationsFilter.status) {
-        var selectedStatus = String(applicationsFilter.status);
+      if ((applicationsFilter.statuses || []).length) {
+        var selectedStatuses = applicationsFilter.statuses;
         rows = rows.filter(function (a) {
-          return statusMatchesFilter(a.status, [selectedStatus]);
+          return statusMatchesFilter(a.status, selectedStatuses);
         });
       }
       var from = parseDateOnly(applicationsFilter.date_from);
@@ -128,10 +141,39 @@
       applicationsFilter.keyword = "";
       applicationsFilter.client_id = "";
       applicationsFilter.job_id = "";
-      applicationsFilter.status = "";
+      applicationsFilter.statuses.splice(0, applicationsFilter.statuses.length);
+      applicationStatusDraft.value = [];
+      applicationStatusDropdownOpen.value = false;
       applicationsFilter.date_from = "";
       applicationsFilter.date_to = "";
       applicationsFilter.hide_roster_converted = false;
+    }
+
+    function toggleApplicationStatusDropdown() {
+      if (!applicationStatusDropdownOpen.value) {
+        applicationStatusDraft.value = (applicationsFilter.statuses || []).slice();
+      }
+      applicationStatusDropdownOpen.value = !applicationStatusDropdownOpen.value;
+    }
+
+    function toggleApplicationStatusDraft(value) {
+      var list = applicationStatusDraft.value;
+      var idx = list.indexOf(value);
+      if (idx >= 0) list.splice(idx, 1);
+      else list.push(value);
+    }
+
+    function clearApplicationStatusDraft() {
+      applicationStatusDraft.value = [];
+    }
+
+    function applyApplicationStatusFilter() {
+      var next = applicationStatusDraft.value.slice();
+      applicationsFilter.statuses.splice(0, applicationsFilter.statuses.length);
+      next.forEach(function (v) {
+        applicationsFilter.statuses.push(v);
+      });
+      applicationStatusDropdownOpen.value = false;
     }
 
     function candidateForApp(a) {
@@ -279,6 +321,13 @@
       applicationsState: applicationsState,
       applicationsFilter: applicationsFilter,
       applicationProgressOptions: applicationProgressOptions,
+      applicationStatusDropdownOpen: applicationStatusDropdownOpen,
+      applicationStatusDraft: applicationStatusDraft,
+      applicationStatusFilterSummary: applicationStatusFilterSummary,
+      toggleApplicationStatusDropdown: toggleApplicationStatusDropdown,
+      toggleApplicationStatusDraft: toggleApplicationStatusDraft,
+      clearApplicationStatusDraft: clearApplicationStatusDraft,
+      applyApplicationStatusFilter: applyApplicationStatusFilter,
       filteredApplications: filteredApplications,
       resetApplicationFilter: resetApplicationFilter,
       applicationDetailModal: applicationDetailModal,
