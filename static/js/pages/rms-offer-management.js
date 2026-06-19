@@ -35,10 +35,17 @@
       gm_amount: "",
       gm_pct: "",
       planned_onboard_date: "",
+      quote_confirm_attachment: "",
     });
     var offerApprovalSaving = ref(false);
     var offerApprovalError = ref("");
     var offerActionSaving = ref(false);
+    var offerQuoteAttachment = reactive({ fileName: "", previewUrl: "", uploading: false });
+    var offerQuotePreviewOpen = ref(false);
+    var offerQuoteFileInput = ref(null);
+    var offerDetailModal = ref(null);
+    var offerDetailComment = ref("");
+    var offerDetailPreviewOpen = ref(false);
     var Labels = deps.Labels || {};
     var parseDateOnly = Labels.parseDateOnly || function (str) {
       var s = String(str || "").trim();
@@ -69,6 +76,76 @@
       var keys = Object.keys(offerApprovalForm);
       for (var i = 0; i < keys.length; i++) {
         offerApprovalForm[keys[i]] = "";
+      }
+      clearOfferQuoteAttachment();
+    }
+
+    function clearOfferQuotePreviewUrl() {
+      if (offerQuoteAttachment.previewUrl) {
+        try {
+          URL.revokeObjectURL(offerQuoteAttachment.previewUrl);
+        } catch (e) { /* noop */ }
+      }
+      offerQuoteAttachment.previewUrl = "";
+    }
+
+    function clearOfferQuoteAttachment() {
+      clearOfferQuotePreviewUrl();
+      offerQuoteAttachment.fileName = "";
+      offerApprovalForm.quote_confirm_attachment = "";
+      offerQuotePreviewOpen.value = false;
+    }
+
+    function triggerOfferQuoteFilePick() {
+      if (offerQuoteFileInput.value) offerQuoteFileInput.value.click();
+    }
+
+    function openOfferQuotePreview() {
+      if (offerQuoteAttachment.previewUrl) offerQuotePreviewOpen.value = true;
+    }
+
+    function closeOfferQuotePreview() {
+      offerQuotePreviewOpen.value = false;
+    }
+
+    async function onOfferQuoteAttachmentSelected(ev) {
+      var input = ev.target;
+      var file = input && input.files && input.files[0];
+      if (input) input.value = "";
+      if (!file || !offerApprovalModal.value) return;
+      var isImage = /^image\//.test(file.type) || /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name || "");
+      if (!isImage) {
+        toast("仅支持图片格式", true);
+        return;
+      }
+      offerQuoteAttachment.uploading = true;
+      try {
+        var fd = new FormData();
+        fd.append("file", file);
+        var appId = offerApprovalModal.value.application_id;
+        var headers = typeof global.crmAuthHeader === "function" ? global.crmAuthHeader() : {};
+        var resp = await fetch("/api/rms/applications/" + appId + "/offer-quote-attachment", {
+          method: "POST",
+          headers: headers,
+          credentials: "same-origin",
+          body: fd,
+        });
+        if (!resp.ok) {
+          var msg = "上传失败";
+          try {
+            var j = await resp.json();
+            if (j && typeof j.detail === "string") msg = j.detail;
+          } catch (e) { /* noop */ }
+          toast(msg, true);
+          return;
+        }
+        var data = await resp.json();
+        clearOfferQuotePreviewUrl();
+        offerQuoteAttachment.previewUrl = URL.createObjectURL(file);
+        offerQuoteAttachment.fileName = (data && data.file_name) || file.name || "图片";
+        offerApprovalForm.quote_confirm_attachment = (data && data.path) || "";
+      } finally {
+        offerQuoteAttachment.uploading = false;
       }
     }
 
@@ -142,6 +219,35 @@
       if (!s) return null;
       var n = Number(s);
       return Number.isFinite(n) ? n : null;
+    }
+
+    function offerGmAmountTier(val) {
+      var n = normalizeMoneyValue(val);
+      if (n == null) return "";
+      if (n >= 4000) return "high";
+      if (n >= 2000) return "mid";
+      return "low";
+    }
+
+    function offerGmPctTier(val) {
+      var n = parseGmPctNumber(val);
+      if (n == null) return "";
+      if (n >= 15) return "high";
+      if (n >= 10) return "mid";
+      return "low";
+    }
+
+    function offerGmValueBadgeClass(tier) {
+      if (tier === "high") {
+        return "inline-flex items-center self-start rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-0.5 text-[15px] font-semibold text-blue-800";
+      }
+      if (tier === "mid") {
+        return "inline-flex items-center self-start rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-0.5 text-[15px] font-semibold text-amber-800";
+      }
+      if (tier === "low") {
+        return "inline-flex items-center self-start rounded-lg border border-[#fca5a5] bg-[#ef4444] px-2.5 py-0.5 text-[15px] font-semibold text-white";
+      }
+      return "text-[15px] font-semibold text-[#1f2328]";
     }
 
     function matchesOfferKeyword(row, keyword) {
@@ -372,11 +478,14 @@
         ["gm_amount", "GM$"],
         ["gm_pct", "GM%"],
         ["planned_onboard_date", "计划入职日期"],
+        ["quote_confirm_attachment", "客户报价确认"],
       ];
       for (var i = 0; i < required.length; i++) {
         if (!String(offerApprovalForm[required[i][0]] || "").trim()) {
           if (required[i][0] === "gm_amount" || required[i][0] === "gm_pct") {
             toast("请使用毛利测算器填写 " + required[i][1], true);
+          } else if (required[i][0] === "quote_confirm_attachment") {
+            toast("请上传" + required[i][1] + "附件", true);
           } else {
             toast(required[i][1] + " 必填", true);
           }
@@ -410,81 +519,76 @@
     }
 
     async function approveOfferRecord(row, comment) {
-      if (!row || row.id == null) return;
+      if (!row || row.id == null) return false;
       offerActionSaving.value = true;
       try {
         var r = await rmsRequest("POST", "/api/rms/offers/" + row.id + "/approve", { comment: comment || "" });
         if (!r.ok) {
           toast(r.message, true);
-          return;
+          return false;
         }
         toast("已通过", false);
         await Promise.all([loadApplications(), loadOfferRecords()]);
         refreshNotificationsIfAny();
+        return true;
       } finally {
         offerActionSaving.value = false;
       }
     }
 
     async function rejectOfferRecord(row, reason) {
-      if (!row || row.id == null) return;
+      if (!row || row.id == null) return false;
       offerActionSaving.value = true;
       try {
         var r = await rmsRequest("POST", "/api/rms/offers/" + row.id + "/reject", { reason: reason });
         if (!r.ok) {
           toast(r.message, true);
-          return;
+          return false;
         }
         toast("已驳回", false);
         await Promise.all([loadApplications(), loadOfferRecords()]);
         refreshNotificationsIfAny();
+        return true;
       } finally {
         offerActionSaving.value = false;
       }
     }
 
-    async function openOfferApproveModal(row) {
-      if (typeof global.crmConfirmActionDialog !== "function") {
-        toast("确认对话框不可用", true);
-        return;
-      }
-      var result = await global.crmConfirmActionDialog({
-        title: "审批通过",
-        lines: [{ label: "候选人", value: row.candidate_name || "—" }],
-        fields: [{ type: "textarea", name: "comment", label: "审批意见", placeholder: "可选" }],
-        confirmText: "通过",
-        cancelText: "取消",
-        zIndex: 120,
-      });
-      if (!result || !result.ok) return;
-      await approveOfferRecord(row, (result.values && result.values.comment) || "");
+    function openOfferDetailModal(row) {
+      if (!row) return;
+      offerDetailModal.value = row;
+      offerDetailComment.value = "";
+      offerDetailPreviewOpen.value = false;
     }
 
-    async function openOfferRejectModal(row) {
-      if (typeof global.crmConfirmActionDialog !== "function") {
-        toast("确认对话框不可用", true);
+    function closeOfferDetailModal() {
+      offerDetailModal.value = null;
+      offerDetailComment.value = "";
+      offerDetailPreviewOpen.value = false;
+    }
+
+    function openOfferDetailPreview() {
+      if (offerDetailModal.value && offerDetailModal.value.quote_confirm_attachment_url) {
+        offerDetailPreviewOpen.value = true;
+      }
+    }
+
+    function closeOfferDetailPreview() {
+      offerDetailPreviewOpen.value = false;
+    }
+
+    async function submitOfferDetailDecision(decision) {
+      var row = offerDetailModal.value;
+      if (!row) return;
+      var comment = String(offerDetailComment.value || "").trim();
+      if (!comment) {
+        toast("评审意见必填", true);
         return;
       }
-      var result = await global.crmConfirmActionDialog({
-        title: "驳回 Offer 审批",
-        lines: [{ label: "候选人", value: row.candidate_name || "—" }],
-        fields: [{
-          type: "textarea",
-          name: "reason",
-          label: "驳回原因",
-          placeholder: "必填",
-        }],
-        confirmText: "驳回",
-        cancelText: "取消",
-        zIndex: 120,
-      });
-      if (!result || !result.ok) return;
-      var reason = String((result.values && result.values.reason) || "").trim();
-      if (!reason) {
-        toast("驳回原因必填", true);
-        return;
-      }
-      await rejectOfferRecord(row, reason);
+      var ok = decision === "approve"
+        ? await approveOfferRecord(row, comment)
+        : await rejectOfferRecord(row, comment);
+      if (ok) closeOfferDetailModal();
     }
 
     async function openDropOfferModal(appRow) {
@@ -586,13 +690,27 @@
       offerApprovalSaving: offerApprovalSaving,
       offerApprovalError: offerApprovalError,
       offerActionSaving: offerActionSaving,
+      offerQuoteAttachment: offerQuoteAttachment,
+      offerQuotePreviewOpen: offerQuotePreviewOpen,
+      offerQuoteFileInput: offerQuoteFileInput,
+      onOfferQuoteAttachmentSelected: onOfferQuoteAttachmentSelected,
+      clearOfferQuoteAttachment: clearOfferQuoteAttachment,
+      triggerOfferQuoteFilePick: triggerOfferQuoteFilePick,
+      openOfferQuotePreview: openOfferQuotePreview,
+      closeOfferQuotePreview: closeOfferQuotePreview,
       loadOfferRecords: loadOfferRecords,
       openOfferApprovalModal: openOfferApprovalModal,
       closeOfferApprovalModal: closeOfferApprovalModal,
       submitOfferApproval: submitOfferApproval,
       canApproveOfferRow: canApproveOfferRow,
-      openOfferApproveModal: openOfferApproveModal,
-      openOfferRejectModal: openOfferRejectModal,
+      offerDetailModal: offerDetailModal,
+      offerDetailComment: offerDetailComment,
+      offerDetailPreviewOpen: offerDetailPreviewOpen,
+      openOfferDetailModal: openOfferDetailModal,
+      closeOfferDetailModal: closeOfferDetailModal,
+      openOfferDetailPreview: openOfferDetailPreview,
+      closeOfferDetailPreview: closeOfferDetailPreview,
+      submitOfferDetailDecision: submitOfferDetailDecision,
       openDropOfferModal: openDropOfferModal,
       openTransitLostModal: openTransitLostModal,
       resolveOfferFromUrl: resolveOfferFromUrl,
@@ -606,6 +724,9 @@
       formatOfferListMoney: formatOfferListMoney,
       formatOfferListGmPct: formatOfferListGmPct,
       formatOfferRowQuote: formatOfferRowQuote,
+      offerGmAmountTier: offerGmAmountTier,
+      offerGmPctTier: offerGmPctTier,
+      offerGmValueBadgeClass: offerGmValueBadgeClass,
     };
   }
 

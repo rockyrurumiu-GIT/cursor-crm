@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from typing import Any, Dict, List, Optional, Set, Type
 
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+import security_foundation as sec
 from auth.service import AuthContext
 from schemas.rms import (
     OFFER_APPROVAL_REQUIRED_FIELDS,
@@ -131,6 +135,102 @@ def _load_application_bundle(
     if not client:
         raise HTTPException(status_code=400, detail="客户不存在")
     return row, candidate, job, client
+
+
+OFFER_QUOTE_ATTACHMENT_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"})
+MAX_OFFER_QUOTE_ATTACHMENT_BYTES = 10 * 1024 * 1024
+OFFER_QUOTE_ATTACHMENT_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".bmp": "image/bmp",
+}
+
+
+async def upload_offer_quote_attachment(
+    db: Session,
+    ctx: AuthContext,
+    application_id: int,
+    upload: UploadFile,
+    *,
+    upload_dir: str,
+    RmsApplication: Type[Any],
+    Client: Type[Any],
+) -> Dict[str, str]:
+    """Store a客户报价确认 image attachment for an offer approval submission."""
+    app = app_svc._get_writable_application(db, ctx, application_id, RmsApplication, Client)
+    raw_name = upload.filename or ""
+    ext = os.path.splitext(raw_name)[1].lower()
+    if ext not in OFFER_QUOTE_ATTACHMENT_SUFFIXES:
+        raise HTTPException(status_code=400, detail="仅支持图片格式（png/jpg/jpeg/gif/webp/bmp）")
+    content = await upload.read()
+    if len(content) > MAX_OFFER_QUOTE_ATTACHMENT_BYTES:
+        raise HTTPException(status_code=400, detail="图片不能超过 10MB")
+    safe = sec.safe_visit_attachment_name(raw_name)
+    if not os.path.splitext(safe)[1]:
+        safe = safe + ext
+    rel = f"rms/offer_quotes/{int(app.id)}/{int(time.time() * 1000000)}_{safe}"
+    try:
+        abs_target = sec.resolve_upload_path(upload_dir, rel)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法文件路径")
+    os.makedirs(os.path.dirname(abs_target), exist_ok=True)
+    with open(abs_target, "wb") as f:
+        f.write(content)
+    return {"path": rel, "file_name": raw_name or safe}
+
+
+def _offer_quote_attachment_path(record: Any) -> str:
+    raw = getattr(record, "form_json", "") or ""
+    if not raw:
+        return ""
+    try:
+        form = json.loads(raw)
+    except (ValueError, TypeError):
+        return ""
+    if not isinstance(form, dict):
+        return ""
+    return str(form.get("quote_confirm_attachment") or "").strip()
+
+
+def view_offer_quote_attachment(
+    db: Session,
+    ctx: AuthContext,
+    offer_record_id: int,
+    *,
+    upload_dir: str,
+    RmsOfferRecord: Type[Any],
+    RmsOfferApprovalStep: Type[Any],
+    RmsApplication: Type[Any],
+    Client: Type[Any],
+) -> FileResponse:
+    record = _get_offer_record_or_404(db, offer_record_id, RmsOfferRecord)
+    approver_offer_ids = _pending_approver_offer_record_ids(
+        db, ctx, [int(record.id)], RmsOfferApprovalStep=RmsOfferApprovalStep
+    )
+    scoped = rms_ds.scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
+    allowed_app_ids = {
+        int(a.id)
+        for a in scoped.filter(RmsApplication.id == int(record.application_id)).all()
+    }
+    if not _can_view_offer_record(
+        ctx, record, allowed_app_ids=allowed_app_ids, approver_offer_ids=approver_offer_ids
+    ):
+        raise HTTPException(status_code=403, detail="无权查看该附件")
+    rel = _offer_quote_attachment_path(record)
+    if not rel:
+        raise HTTPException(status_code=404, detail="无客户报价确认附件")
+    try:
+        abs_path = sec.resolve_upload_path(upload_dir, rel)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法文件路径")
+    if not os.path.isfile(abs_path):
+        raise HTTPException(status_code=404, detail="附件文件不存在")
+    ext = os.path.splitext(abs_path)[1].lower()
+    media_type = OFFER_QUOTE_ATTACHMENT_MEDIA_TYPES.get(ext, "application/octet-stream")
+    return FileResponse(abs_path, media_type=media_type, content_disposition_type="inline")
 
 
 def _validate_offer_body(body: Dict[str, Any]) -> Dict[str, str]:
@@ -764,6 +864,7 @@ def offer_record_to_dict(
 ) -> Dict[str, Any]:
     pending_step = _get_pending_step(db, int(record.id), RmsOfferApprovalStep)
     node = (record.current_approval_node or "").strip()
+    quote_attachment_path = _offer_quote_attachment_path(record)
     return {
         "id": record.id,
         "application_id": record.application_id,
@@ -783,6 +884,10 @@ def offer_record_to_dict(
         "probation_days": record.probation_days or "",
         "probation_discount_months": record.probation_discount_months or "",
         "planned_onboard_date": record.planned_onboard_date or "",
+        "quote_confirm_attachment": quote_attachment_path,
+        "quote_confirm_attachment_url": (
+            f"/api/rms/offers/{int(record.id)}/quote-attachment" if quote_attachment_path else ""
+        ),
         "reason": record.reason or "",
         "created_by": record.created_by,
         "created_at": record.created_at or "",

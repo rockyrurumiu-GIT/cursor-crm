@@ -18,6 +18,7 @@ from schemas.rms import (
 )
 from services import rms_applications as app_svc
 from services import rms_candidates as cand_svc
+from services import rms_offer_approval as offer_svc
 from services import rms_resumes as resume_svc
 from services import rms_roster_check as roster_chk
 from services import rms_roster_conversion as roster_conv
@@ -286,6 +287,24 @@ def register_rms_applications_routes(
             RmsApplication,
             RmsApplicationStatusHistory,
             Client,
+        )
+
+    @app.post("/api/rms/applications/{application_id}/offer-quote-attachment")
+    async def api_upload_offer_quote_attachment(
+        application_id: int,
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.applications.write")),
+    ):
+        return await offer_svc.upload_offer_quote_attachment(
+            db,
+            ctx,
+            application_id,
+            file,
+            upload_dir=upload_dir,
+            RmsApplication=RmsApplication,
+            Client=Client,
         )
 
     @app.post("/api/rms/applications/{application_id}/status")

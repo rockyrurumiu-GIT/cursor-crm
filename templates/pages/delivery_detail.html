@@ -200,10 +200,6 @@
         min-width: var(--req-sticky-title-width);
         max-width: var(--req-sticky-title-width);
     }
-    .crm-table[data-table-id="requirements-jobs"] .crm-td.req-sticky-title.crm-name-cell {
-        color: #0969da;
-        font-weight: 600;
-    }
     .crm-table[data-table-id="requirements-jobs"] .crm-td.rms-col-jd,
     .crm-table[data-table-id="requirements-jobs"] .crm-th.rms-col-jd,
     .crm-table[data-table-id="requirements-jobs"] .crm-td.requirements-col-jd,
@@ -288,22 +284,10 @@
         overflow: hidden;
     }
     .req-job-title-btn {
-        color: #0969da;
-        font-weight: 600;
-        text-align: left;
-        background: transparent;
-        border: 0;
-        padding: 0;
-        margin: 0;
-        cursor: pointer;
-        max-width: 100%;
+        display: block;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        display: block;
-    }
-    .req-job-title-btn:hover {
-        text-decoration: underline;
     }
     .req-job-drawer-body {
         flex: 1 1 auto;
@@ -1434,8 +1418,8 @@
                         </thead>
                         <tbody>
                             <tr v-for="j in requirementJobs" :key="j.id">
-                                <td class="crm-td req-sticky-title">
-                                    <button type="button" class="req-job-title-btn" :title="j.title || '—'" @click="openRequirementJobDetail(j)">{{ j.title || '—' }}</button>
+                                <td class="crm-td crm-name-cell req-sticky-title">
+                                    <button type="button" class="crm-name-link req-job-title-btn" :title="j.title || '—'" @click="openRequirementJobDetail(j)">{{ j.title || '—' }}</button>
                                 </td>
                                 <td class="crm-td">{{ jobPriorityLabel(j.priority) }}</td>
                                 <td class="crm-td">{{ jobStatusLabel(j.status) }}</td>

@@ -168,6 +168,10 @@
     .rms-candidates-scroll.rms-candidates-table-scroll {
         max-height: calc(2.32rem * 11);
     }
+    /* 推荐记录：比候选人表少显示 2 行，避免整页溢出 */
+    .rms-candidates-scroll.rms-applications-table-scroll {
+        max-height: calc(2.32rem * 9);
+    }
     .rms-candidates-frame {
         border-radius: 0.5rem;
         overflow: hidden;
@@ -181,7 +185,10 @@
     }
     /* 岗位：仅序号列冻结；候选人：仅姓名列冻结 */
     .rms-jobs-scroll.rms-candidates-table-scroll {
+        min-height: calc(2.32rem * 11);
         max-height: calc(2.32rem * 11);
+        padding-bottom: 22px;
+        box-sizing: border-box;
     }
     .crm-table.rms-jobs-table {
         table-layout: fixed;
@@ -359,7 +366,7 @@
         line-height: 1.35;
         font-family: inherit;
     }
-    .crm-table[data-table-id="rms-offer-management"] tbody td.crm-td.rms-offer-candidate-name {
+    .crm-table[data-table-id="rms-offer-management"] tbody td.crm-td.crm-name-cell {
         color: #0969da;
         font-weight: 700;
     }
@@ -654,6 +661,7 @@
     .crm-table.rms-jobs-table .crm-th.rms-col-jd {
         width: var(--rms-jobs-jd-width);
         min-width: 4em;
+        max-width: var(--rms-jobs-jd-width);
         box-sizing: border-box;
         vertical-align: top;
     }
@@ -669,6 +677,29 @@
         max-width: 100%;
         min-width: 0;
         white-space: nowrap !important;
+    }
+    /* 岗位 JD/备注：与需求清单一致，省略 + 悬停原位展开 */
+    .crm-table.rms-jobs-table .crm-cell-clip-pop:not(.crm-cell-clip-pop--fixed) {
+        left: 0;
+        right: auto;
+        min-width: 100%;
+        max-width: 100%;
+        width: auto;
+        max-height: 14rem;
+        overflow-y: auto;
+        z-index: 16;
+        box-sizing: border-box;
+    }
+    .crm-table.rms-jobs-table .crm-td.crm-cell-clip-td-open,
+    .crm-table.rms-jobs-table .crm-td.rms-col-jd.crm-cell-clip-td-open,
+    .crm-table.rms-jobs-table .crm-td.rms-col-note.crm-cell-clip-td-open {
+        overflow: visible !important;
+        position: relative;
+        z-index: 15;
+    }
+    .crm-table.rms-jobs-table tbody tr.crm-cell-clip-tr-open {
+        position: relative;
+        z-index: 15;
     }
     .crm-table.rms-jobs-table .crm-td.rms-col-note,
     .crm-table.rms-jobs-table .crm-th.rms-col-note {
@@ -1343,7 +1374,7 @@
         <div v-else-if="!applicationsState.items.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无推荐记录</div>
         <div v-else-if="!filteredApplications.length" data-rms-empty class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] px-4 py-8 text-center text-sm text-[#57606a]">暂无符合条件的推荐记录</div>
         <div v-else class="rms-candidates-frame border border-[#d0d7de]">
-            <div ref="applicationsScrollWrap" class="rms-candidates-scroll crm-table-scroll">
+            <div ref="applicationsScrollWrap" class="rms-candidates-scroll rms-applications-table-scroll crm-table-scroll">
             <table class="crm-table rms-candidates-table" data-table-id="rms-applications">
                 <thead>
                     <tr>
@@ -1364,7 +1395,7 @@
                 <tbody>
                     <tr v-for="a in filteredApplications" :key="a.id">
                         <td class="crm-td crm-name-cell rms-candidate-sticky-name">
-                            <button type="button" class="text-left text-[#0969da] hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer"
+                            <button type="button" class="crm-name-link"
                                 @click="openApplicationDetailModal(a)">{{ appCandidateName(a) }}</button>
                         </td>
                         <td class="crm-td">{{ appClientName(a) }}</td>
@@ -1788,7 +1819,7 @@
                 <tbody>
                     <tr v-for="row in filteredOfferRecords" :key="'offer'+row.id">
                         <td class="crm-td rms-offer-sticky-status">{{ row.status_label }}</td>
-                        <td class="crm-td rms-offer-candidate-name rms-offer-sticky-candidate">{{ row.candidate_name || '—' }}</td>
+                        <td class="crm-td crm-name-cell rms-offer-sticky-candidate">{{ row.candidate_name || '—' }}</td>
                         <td class="crm-td">{{ row.current_approval_node_label || '—' }}</td>
                         <td class="crm-td">{{ row.pending_approver_label || '—' }}</td>
                         <td class="crm-td">{{ row.client_name || '—' }}</td>
@@ -1806,8 +1837,7 @@
                         <td class="crm-td">{{ formatRmsDate(row.created_at) }}</td>
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div v-if="row.status === 'pending' && canApproveOfferRow(row)" class="crm-op-actions flex flex-nowrap items-center gap-1">
-                                <button type="button" class="crm-op-btn-detail" :disabled="offerActionSaving" @click="openOfferApproveModal(row)">通过</button>
-                                <button type="button" class="crm-op-btn-delete" :disabled="offerActionSaving" @click="openOfferRejectModal(row)">驳回</button>
+                                <button type="button" class="crm-op-btn-detail" :disabled="offerActionSaving" @click="openOfferDetailModal(row)">详情</button>
                             </div>
                             <span v-else class="rms-offer-muted">—</span>
                         </td>
@@ -2038,6 +2068,19 @@
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM%<span class="text-red-500">*</span></span><input :value="formatOfferGmPct(offerApprovalForm.gm_pct)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" placeholder="请使用毛利测算器" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">计划入职日期<span class="text-red-500">*</span></span><input v-model="offerApprovalForm.planned_onboard_date" type="date" class="crm-form-control" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">折扣月数<span class="text-red-500">*</span></span><select v-model="offerApprovalForm.probation_discount_months" class="crm-form-control"><option value="0">不打折</option><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+                    <div class="sm:col-span-2 lg:col-span-3 flex flex-wrap items-center gap-3 border-t border-[#eaeef2] pt-3 mt-1">
+                        <span class="text-[#57606a] shrink-0">客户报价确认<span class="text-red-500">*</span></span>
+                        <button type="button" class="rounded-lg border border-amber-300 px-3 text-xs font-medium text-amber-800 h-[2.25rem] min-h-[2.25rem] whitespace-nowrap bg-amber-50 hover:bg-amber-100 disabled:opacity-50" :disabled="offerQuoteAttachment.uploading" @click="triggerOfferQuoteFilePick">{{ offerQuoteAttachment.uploading ? '上传中…' : '附件' }}</button>
+                        <input ref="offerQuoteFileInput" type="file" accept="image/*" class="hidden" @change="onOfferQuoteAttachmentSelected" />
+                        <template v-if="offerApprovalForm.quote_confirm_attachment">
+                            <button type="button" class="shrink-0 inline-flex h-[2.25rem] w-[2.25rem] items-center justify-center overflow-hidden rounded-lg border border-[#d0d7de] bg-white hover:border-[#0969da]" title="点击放大预览" @click="openOfferQuotePreview">
+                                <img :src="offerQuoteAttachment.previewUrl" class="h-full w-full object-cover" alt="报价确认附件" />
+                            </button>
+                            <span class="truncate max-w-[12rem] text-xs text-[#57606a]" :title="offerQuoteAttachment.fileName">{{ offerQuoteAttachment.fileName }}</span>
+                            <button type="button" class="shrink-0 inline-flex h-6 w-6 items-center justify-center rounded text-[#57606a] hover:bg-[#f6f8fa] hover:text-red-600" title="删除附件" @click="clearOfferQuoteAttachment">&times;</button>
+                        </template>
+                        <span v-else class="text-xs text-[#9ca3af]">仅支持图片格式</span>
+                    </div>
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-between shrink-0">
@@ -2047,6 +2090,59 @@
                     <button type="button" class="px-4 py-2 rounded-lg bg-[#0969da] text-white hover:bg-[#0860ca] disabled:opacity-50" :disabled="offerApprovalSaving" @click="submitOfferApproval">{{ offerApprovalSaving ? '提交中…' : '提交审批' }}</button>
                 </div>
             </div>
+        </div>
+        <div v-if="offerQuotePreviewOpen" class="crm-esc-modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6" @click="closeOfferQuotePreview">
+            <img :src="offerQuoteAttachment.previewUrl" class="max-h-[90vh] max-w-[90vw] rounded-lg shadow-2xl" alt="报价确认附件" @click.stop />
+            <button type="button" class="absolute top-4 right-4 text-3xl leading-none text-white/80 hover:text-white" data-crm-esc-close title="关闭" @click="closeOfferQuotePreview">&times;</button>
+        </div>
+    </div>
+
+    <!-- RMS Offer approval detail / decision modal -->
+    <div v-if="offerDetailModal" class="crm-esc-modal crm-form-modal-overlay z-50" @click.self="closeOfferDetailModal">
+        <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
+            <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">Offer 审批详情</h3>
+                <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeOfferDetailModal">&times;</button>
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-5">
+                <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-2 text-sm">
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">候选人</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ offerDetailModal.candidate_name || '—' }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">客户</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ offerDetailModal.client_name || '—' }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">岗位</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ offerDetailModal.job_title || '—' }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">报价（含税）</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ formatOfferRowQuote(offerDetailModal) }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">人选薪资</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ formatOfferListMoney(offerDetailModal.pre_tax_salary) }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">试工期</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ offerDetailModal.probation_days || '—' }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">折扣月数</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ offerDetailModal.probation_discount_months === '0' ? '不打折' : (offerDetailModal.probation_discount_months || '—') }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">GM$</span><span :class="offerGmValueBadgeClass(offerGmAmountTier(offerDetailModal.gm_amount))">{{ formatOfferListMoney(offerDetailModal.gm_amount) }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">GM%</span><span :class="offerGmValueBadgeClass(offerGmPctTier(offerDetailModal.gm_pct))">{{ formatOfferListGmPct(offerDetailModal.gm_pct) }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">计划入职时间</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ offerDetailModal.planned_onboard_date || '—' }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">招聘</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ offerDetailModal.recommended_by_label || '—' }}</span></div>
+                    <div class="flex flex-col gap-0.5"><span class="text-xs font-medium uppercase tracking-wide text-[#8c959f]">申请人</span><span class="text-[15px] font-semibold text-[#1f2328]">{{ offerDetailModal.created_by_label || '—' }}</span></div>
+                    <div class="sm:col-span-3 lg:col-span-6 flex flex-wrap items-center gap-3 border-t border-[#eaeef2] pt-2 mt-0">
+                        <span class="text-[#57606a] shrink-0">客户报价确认</span>
+                        <template v-if="offerDetailModal.quote_confirm_attachment_url">
+                            <button type="button" class="shrink-0 inline-flex h-[2.25rem] w-[2.25rem] items-center justify-center overflow-hidden rounded-lg border border-[#d0d7de] bg-white hover:border-[#0969da]" title="点击放大预览" @click="openOfferDetailPreview">
+                                <img :src="offerDetailModal.quote_confirm_attachment_url" class="h-full w-full object-cover" alt="报价确认附件" />
+                            </button>
+                            <span class="text-xs text-[#57606a]">点击查看附件</span>
+                        </template>
+                        <span v-else class="text-xs text-[#9ca3af]">无附件</span>
+                    </div>
+                    <label class="sm:col-span-3 lg:col-span-6 flex flex-col gap-1">
+                        <span class="text-[#57606a]">评审意见<span class="text-red-500">*</span></span>
+                        <textarea v-model.trim="offerDetailComment" rows="2" class="crm-form-control" placeholder="请输入评审意见（必填）"></textarea>
+                    </label>
+                </div>
+            </div>
+            <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-end shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de]" @click="closeOfferDetailModal">取消</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-[#0969da] text-white hover:bg-[#0860ca] disabled:opacity-50" :disabled="offerActionSaving" @click="submitOfferDetailDecision('approve')">通过</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50" :disabled="offerActionSaving" @click="submitOfferDetailDecision('reject')">驳回</button>
+            </div>
+        </div>
+        <div v-if="offerDetailPreviewOpen" class="crm-esc-modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6" @click="closeOfferDetailPreview">
+            <img :src="offerDetailModal.quote_confirm_attachment_url" class="max-h-[90vh] max-w-[90vw] rounded-lg shadow-2xl" alt="报价确认附件" @click.stop />
+            <button type="button" class="absolute top-4 right-4 text-3xl leading-none text-white/80 hover:text-white" data-crm-esc-close title="关闭" @click="closeOfferDetailPreview">&times;</button>
         </div>
     </div>
 

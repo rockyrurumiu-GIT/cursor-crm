@@ -485,9 +485,29 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .crm-table td.crm-td.crm-name-cell {
+        .crm-table td.crm-td.crm-name-cell,
+        .visit-table td.visit-td.crm-name-cell {
             color: #0969da;
-            font-weight: 600;
+            font-weight: 700;
+        }
+        .crm-table td.crm-td.crm-name-cell .crm-name-link,
+        .visit-table td.visit-td.crm-name-cell .crm-name-link {
+            color: inherit;
+            font-weight: inherit;
+            font-size: inherit;
+            line-height: inherit;
+            font-family: inherit;
+            text-align: left;
+            background: transparent;
+            border: 0;
+            padding: 0;
+            margin: 0;
+            cursor: pointer;
+            max-width: 100%;
+        }
+        .crm-table td.crm-td.crm-name-cell .crm-name-link:hover,
+        .visit-table td.visit-td.crm-name-cell .crm-name-link:hover {
+            text-decoration: underline;
         }
         .crm-table tbody tr:nth-child(even) td.crm-td {
             background: #f6f8fa;
@@ -647,6 +667,57 @@
         }
         .crm-cell-clip.is-pop-open > .crm-cell-clip-pop {
             display: block;
+        }
+        /* JD 等列内展开：JS 用 fixed 定位，避免被表格滚动区 overflow 裁切 */
+        .crm-cell-clip-pop.crm-cell-clip-pop--fixed {
+            position: fixed !important;
+            display: block !important;
+            z-index: 1000 !important;
+            right: auto !important;
+            min-width: 0 !important;
+            max-width: none !important;
+            overflow-y: auto;
+            pointer-events: auto;
+            box-sizing: border-box;
+            -webkit-overflow-scrolling: touch;
+            font-size: 0.8125rem;
+            line-height: 1.5;
+            padding: 0.5rem 0.7rem;
+        }
+        /* 悬停框右上角的复制按钮（JS fixed 定位，见 crm-cell-clip-pop.js） */
+        .crm-clip-copy-btn {
+            position: fixed;
+            z-index: 1001;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            border: 1px solid #c4cad1;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.92);
+            color: #4b5563;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
+            transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+        }
+        .crm-clip-copy-btn.is-visible {
+            display: inline-flex;
+        }
+        .crm-clip-copy-btn:hover {
+            background: #fff;
+            color: #0969da;
+            border-color: #0969da;
+        }
+        .crm-clip-copy-btn.is-copied {
+            color: #16a34a;
+            border-color: #16a34a;
+        }
+        .crm-clip-copy-btn svg {
+            width: 15px;
+            height: 15px;
+            pointer-events: none;
         }
         .crm-td.crm-cell-clip-td-open,
         .visit-td.crm-cell-clip-td-open {
@@ -2675,7 +2746,7 @@
         })();
     </script>
     {% block page_scripts %}{% endblock %}
-    <script src="/static/js/crm-table-resize.js?v=30"></script>
-    <script src="/static/js/crm-cell-clip-pop.js?v=5"></script>
+    <script src="/static/js/crm-table-resize.js?v=32"></script>
+    <script src="/static/js/crm-cell-clip-pop.js?v=12"></script>
 </body>
 </html>

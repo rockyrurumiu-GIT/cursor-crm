@@ -167,8 +167,8 @@
             </thead>
             <tbody>
                 <tr v-for="c in items" :key="c.id">
-                    <td class="crm-td">
-                        <button type="button" class="text-[#0969da] hover:underline text-left" @click="openDetail(c)">{{ c.name }}</button>
+                    <td class="crm-td crm-name-cell">
+                        <button type="button" class="crm-name-link" @click="openDetail(c)">{{ c.name }}</button>
                     </td>
                     <td class="crm-td">{{ c.client_name || '—' }}</td>
                     <td class="crm-td">{{ c.title || '—' }}</td>

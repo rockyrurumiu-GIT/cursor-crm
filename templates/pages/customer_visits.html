@@ -30,10 +30,6 @@
         line-height: 1.35;
         font-family: inherit;
     }
-    .visit-table[data-table-id="customer-visits"] td.visit-td.visit-client-name {
-        color: #0969da;
-        font-weight: 700;
-    }
     .visit-table[data-table-id="customer-visits"] .crm-op-btn-detail,
     .visit-table[data-table-id="customer-visits"] .crm-op-btn-edit,
     .visit-table[data-table-id="customer-visits"] .crm-op-btn-delete {
@@ -264,7 +260,7 @@
                     <td class="visit-td visit-sticky-region">{{ row.region || '—' }}</td>
                     <td class="visit-td visit-sticky-city">{{ row.city || '—' }}</td>
                     <td class="visit-td visit-sticky-sales">{{ row.salesperson || '—' }}</td>
-                    <td class="visit-td visit-sticky-client visit-client-name">{{ row.client_name || '—' }}</td>
+                    <td class="visit-td visit-sticky-client crm-name-cell">{{ row.client_name || '—' }}</td>
                     <td class="visit-td">{{ row.way || '—' }}</td>
                     <td class="visit-td"><div class="crm-cell-clip">{{ row.visit_purpose || '—' }}</div></td>
                     <td class="visit-td">{{ row.target || '—' }}</td>

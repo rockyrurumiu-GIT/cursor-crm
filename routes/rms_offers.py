@@ -16,6 +16,7 @@ def register_rms_offers_routes(
     app,
     *,
     get_db: Callable,
+    upload_dir: str,
     Client: Type[Any],
     CrmNotification: Type[Any],
     RmsApplication: Type[Any],
@@ -86,6 +87,23 @@ def register_rms_offers_routes(
             RmsOfferApprovalConfig=RmsOfferApprovalConfig,
             Client=Client,
             CrmNotification=CrmNotification,
+        )
+
+    @app.get("/api/rms/offers/{offer_record_id}/quote-attachment")
+    async def api_view_offer_quote_attachment(
+        offer_record_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(_require_logged_in),
+    ):
+        return offer_svc.view_offer_quote_attachment(
+            db,
+            ctx,
+            offer_record_id,
+            upload_dir=upload_dir,
+            RmsOfferRecord=RmsOfferRecord,
+            RmsOfferApprovalStep=RmsOfferApprovalStep,
+            RmsApplication=RmsApplication,
+            Client=Client,
         )
 
     @app.post("/api/rms/offers/{offer_record_id}/approve")

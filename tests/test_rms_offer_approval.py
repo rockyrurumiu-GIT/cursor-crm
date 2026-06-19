@@ -38,6 +38,7 @@ OFFER_BODY = {
     "gm_amount": "5000",
     "gm_pct": "15",
     "planned_onboard_date": "2026-07-01",
+    "quote_confirm_attachment": "rms/offer_quotes/test/quote.png",
 }
 
 
@@ -232,6 +233,70 @@ def test_submit_moves_application_to_offer_approval_pending(
     row = next(o for o in listed if o["id"] == offer["id"])
     assert row["pending_approver_label"]
     assert dept_user in row["pending_approver_label"]
+
+
+def test_submit_offer_requires_quote_confirm_attachment(
+    client_rbac, admin_auth, rms_engine, uniq, approvers_config
+):
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"att_{uniq}")
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _advance_to_pending_offer(client_rbac, login, app_id)
+
+    body = dict(OFFER_BODY)
+    body.pop("quote_confirm_attachment", None)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/offer-approval",
+        cookies=login.cookies,
+        json=body,
+    )
+    assert r.status_code == 400, r.text
+    assert "客户报价确认" in r.json()["detail"]
+
+
+_PNG_1X1 = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000a49444154789c6300010000050001"
+    "0d0a2db40000000049454e44ae426082"
+)
+
+
+def test_offer_quote_attachment_exposed_and_served(
+    client_rbac, admin_auth, rms_engine, uniq, approvers_config
+):
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"qa_{uniq}")
+    dept_user = f"offer_dept_{uniq}"
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _grant_role_permissions(rms_engine, ROLE_VIEWER, ("rms.applications.read",))
+    _advance_to_pending_offer(client_rbac, login, app_id)
+
+    uploaded = client_rbac.post(
+        f"/api/rms/applications/{app_id}/offer-quote-attachment",
+        cookies=login.cookies,
+        files={"file": ("quote.png", _PNG_1X1, "image/png")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    rel_path = uploaded.json()["path"]
+
+    offer_id = _submit_offer(client_rbac, login, app_id, quote_confirm_attachment=rel_path).json()["id"]
+
+    dept_login = _login(client_rbac, dept_user)
+    listed = client_rbac.get("/api/rms/offers?status=pending", cookies=dept_login.cookies).json()
+    row = next(o for o in listed if o["id"] == offer_id)
+    assert row["quote_confirm_attachment"] == rel_path
+    assert row["quote_confirm_attachment_url"] == f"/api/rms/offers/{offer_id}/quote-attachment"
+
+    served = client_rbac.get(row["quote_confirm_attachment_url"], cookies=dept_login.cookies)
+    assert served.status_code == 200, served.text
+    assert served.headers["content-type"] == "image/png"
+    assert served.content == _PNG_1X1
+
+    outsider = f"offer_qa_out_{uniq}"
+    _create_user(client_rbac, admin_auth, outsider, [ROLE_VIEWER])
+    out_login = _login(client_rbac, outsider)
+    forbidden = client_rbac.get(row["quote_confirm_attachment_url"], cookies=out_login.cookies)
+    assert forbidden.status_code == 403
 
 
 def test_full_approval_moves_to_onboarding(client_rbac, admin_auth, rms_engine, uniq, approvers_config):

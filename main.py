@@ -1574,6 +1574,7 @@ register_rms_offer_approval_config_routes(
 register_rms_offers_routes(
     app,
     get_db=get_db,
+    upload_dir=UPLOAD_DIR,
     Client=Client,
     CrmNotification=CrmNotification,
     RmsApplication=RMS_MODELS["RmsApplication"],

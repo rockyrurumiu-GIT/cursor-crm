@@ -400,6 +400,7 @@ OFFER_APPROVAL_REQUIRED_FIELDS = (
     "gm_amount",
     "gm_pct",
     "planned_onboard_date",
+    "quote_confirm_attachment",
 )
 
 OFFER_APPROVAL_REQUIRED_LABELS = {
@@ -411,6 +412,7 @@ OFFER_APPROVAL_REQUIRED_LABELS = {
     "gm_amount": "GM$",
     "gm_pct": "GM%",
     "planned_onboard_date": "计划入职日期",
+    "quote_confirm_attachment": "客户报价确认",
 }
 
 OFFER_PROBATION_DISCOUNT_MONTHS = frozenset({"0", "1", "2", "3"})
@@ -435,6 +437,7 @@ class OfferApprovalSubmitBody(BaseModel):
     customer_name: str = ""
     work_location: str = ""
     position_title: str = ""
+    quote_confirm_attachment: str = ""
 
 
 class OfferRejectBody(BaseModel):

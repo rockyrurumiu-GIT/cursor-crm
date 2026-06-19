@@ -427,23 +427,30 @@
             return;
         }
         if (table.dataset.tableId === 'customer-visits') {
-            const ths = table.querySelectorAll('thead th');
+            // 冻结列 left = 之前各列宽度累加，须用列宽而非 th.offsetLeft：
+            // 当表格 offsetParent 为 body（外层无定位祖先）时，offsetLeft 会带上
+            // 卡片/侧栏偏移甚至 sticky 位移，导致冻结列被推到右侧、左侧留白。
+            let acc = 0;
             for (let i = 0; i < 5; i++) {
-                const th = ths[i];
-                if (!th) break;
-                table.style.setProperty(`--visit-sticky-col${i}-left`, `${th.offsetLeft}px`);
-                table.style.setProperty(`--visit-sticky-col${i}-width`, `${readColWidth(i)}px`);
+                const w = readColWidth(i);
+                if (!Number.isFinite(w) || w <= 0) break;
+                table.style.setProperty(`--visit-sticky-col${i}-left`, `${acc}px`);
+                table.style.setProperty(`--visit-sticky-col${i}-width`, `${w}px`);
+                acc += w;
             }
             return;
         }
         if (table.dataset.tableId === 'opportunity-leads') {
             const ths = table.querySelectorAll('thead th');
             if (ths[0]) {
-                table.style.setProperty('--opp-sticky-col0-width', `${ths[0].offsetWidth}px`);
-            }
-            if (ths[1]) {
-                table.style.setProperty('--opp-sticky-col1-width', `${ths[1].offsetWidth}px`);
-                table.style.setProperty('--opp-sticky-col1-left', `${ths[1].offsetLeft}px`);
+                const w0 = ths[0].offsetWidth;
+                table.style.setProperty('--opp-sticky-col0-width', `${w0}px`);
+                if (ths[1]) {
+                    table.style.setProperty('--opp-sticky-col1-width', `${ths[1].offsetWidth}px`);
+                    // 客户列 left = 商机名称列宽；勿用 ths[1].offsetLeft（offsetParent 为
+                    // body 时会带上卡片/侧栏偏移，导致客户列被推右、中间留白）。
+                    table.style.setProperty('--opp-sticky-col1-left', `${w0}px`);
+                }
             }
             return;
         }
