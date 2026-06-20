@@ -1695,7 +1695,11 @@ async def page_home_trash(request: Request):
 @app.get("/materials", response_class=HTMLResponse)
 async def page_materials(
     request: Request,
-    _user: str = Depends(require_permission("materials.read")),
+    _ctx: AuthContext = Depends(auth_deps.require_any_permission(
+        "materials.read",
+        "materials.public.read",
+        "materials.internal.read",
+    )),
 ):
     return _page("pages/materials.html", request)
 

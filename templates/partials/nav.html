@@ -1,7 +1,7 @@
 {% set path = request.url.path %}
 <nav class="flex items-stretch gap-0 flex-wrap md:flex-nowrap">
     <!-- 首页 -->
-    <div class="gh-nav-item{% if path.startswith('/home') or path.startswith('/materials') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,materials.read">
+    <div class="gh-nav-item{% if path.startswith('/home') or path.startswith('/materials') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,materials.read,materials.public.read,materials.internal.read">
         <span class="nav-trigger cursor-default">首页
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
@@ -12,7 +12,7 @@
                         <div class="gh-mega-col-h">数字资产</div>
                         <a class="gh-mega-link" href="/home/funnel" data-crm-nav-perm="crm.clients.read">销售漏斗看板</a>
                         <a class="gh-mega-link" href="/home/trash" data-crm-nav-perm="crm.clients.read">回收站与空间占用</a>
-                        <a class="gh-mega-link" href="/materials" data-crm-nav-perm="materials.read">公司资料库</a>
+                        <a class="gh-mega-link" href="/materials" data-crm-nav-any="materials.read,materials.public.read,materials.internal.read">公司资料库</a>
                     </div>
                     <div>
                         <div class="gh-mega-col-h">快捷入口</div>

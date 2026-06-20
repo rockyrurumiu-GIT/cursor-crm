@@ -69,6 +69,12 @@ ALL_PERMISSION_CODES: FrozenSet[str] = frozenset({
     "materials.write",
     "materials.download",
     "materials.delete",
+    "materials.public.read",
+    "materials.public.preview",
+    "materials.public.download",
+    "materials.internal.read",
+    "materials.internal.preview",
+    "materials.internal.download",
 })
 
 ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {
@@ -83,6 +89,9 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {
         "crm.visits.read",
         "crm.visits.write",
         "dashboard.read",
+        "materials.public.read",
+        "materials.public.preview",
+        "materials.public.download",
     }),
     ROLE_DELIVERY: frozenset({
         "crm.clients.read",
@@ -105,6 +114,10 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {
         "rms.applications.read",
         "rms.analytics.read",
         "dashboard.read",
+        "materials.public.read",
+        "materials.public.preview",
+        "materials.internal.read",
+        "materials.internal.preview",
     }),
     ROLE_VIEWER: frozenset({
         "crm.clients.read",

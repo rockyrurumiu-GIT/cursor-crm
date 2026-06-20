@@ -3,13 +3,29 @@ from __future__ import annotations
 
 from typing import Any, Callable, Optional, Type
 
-from fastapi import Depends, File, Form, HTTPException, UploadFile
+from fastapi import Depends, File, Form, UploadFile
 from sqlalchemy.orm import Session
 
-from auth.deps import get_current_context, require_permission
+from auth.deps import get_current_context, require_any_permission, require_permission
 from auth.service import AuthContext
 from schemas.company_materials import MATERIAL_ALLOWED_SUFFIXES, MaterialUpdateBody
 from services import company_materials as mat_svc
+
+_MATERIALS_READ_ANY = (
+    "materials.read",
+    "materials.public.read",
+    "materials.internal.read",
+)
+_MATERIALS_PREVIEW_ANY = (
+    "materials.read",
+    "materials.public.preview",
+    "materials.internal.preview",
+)
+_MATERIALS_DOWNLOAD_ANY = (
+    "materials.download",
+    "materials.public.download",
+    "materials.internal.download",
+)
 
 
 def register_company_materials_routes(
@@ -23,7 +39,7 @@ def register_company_materials_routes(
     @app.get("/api/materials/form-options")
     async def api_materials_form_options(
         db: Session = Depends(get_db),
-        _user: str = Depends(require_permission("materials.read")),
+        _ctx: AuthContext = Depends(require_any_permission(*_MATERIALS_READ_ANY)),
     ):
         return mat_svc.list_form_options(db)
 
@@ -37,7 +53,7 @@ def register_company_materials_routes(
         expires_before: Optional[str] = None,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        _user: str = Depends(require_permission("materials.read")),
+        _gate: AuthContext = Depends(require_any_permission(*_MATERIALS_READ_ANY)),
     ):
         return mat_svc.list_materials(
             db,
@@ -85,7 +101,7 @@ def register_company_materials_routes(
         material_id: int,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        _user: str = Depends(require_permission("materials.read")),
+        _gate: AuthContext = Depends(require_any_permission(*_MATERIALS_READ_ANY)),
     ):
         return mat_svc.get_material(db, ctx, CompanyMaterial, material_id)
 
@@ -106,14 +122,31 @@ def register_company_materials_routes(
             fields_set=set(body.model_fields_set),
         )
 
+    @app.get("/api/materials/{material_id}/preview")
+    async def api_preview_material(
+        material_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _gate: AuthContext = Depends(require_any_permission(*_MATERIALS_PREVIEW_ANY)),
+    ):
+        return mat_svc.preview_material(
+            db,
+            ctx,
+            CompanyMaterial,
+            material_id,
+            upload_dir=upload_dir,
+        )
+
     @app.get("/api/materials/{material_id}/download")
     async def api_download_material(
         material_id: int,
         db: Session = Depends(get_db),
-        _user: str = Depends(require_permission("materials.download")),
+        ctx: AuthContext = Depends(get_current_context),
+        _gate: AuthContext = Depends(require_any_permission(*_MATERIALS_DOWNLOAD_ANY)),
     ):
         return mat_svc.download_material(
             db,
+            ctx,
             CompanyMaterial,
             material_id,
             upload_dir=upload_dir,

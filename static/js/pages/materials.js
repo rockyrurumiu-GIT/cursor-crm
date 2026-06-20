@@ -50,6 +50,25 @@ function buildQuery(filters) {
     return qs ? '?' + qs : '';
 }
 
+const PREVIEWABLE_EXTS = ['.pdf', '.jpg', '.jpeg', '.png'];
+
+function fileExt(name) {
+    const n = String(name || '').trim().toLowerCase();
+    const i = n.lastIndexOf('.');
+    return i >= 0 ? n.slice(i) : '';
+}
+
+function isPreviewableFile(name) {
+    return PREVIEWABLE_EXTS.includes(fileExt(name));
+}
+
+function previewModeForFile(name) {
+    const ext = fileExt(name);
+    if (ext === '.pdf') return 'pdf';
+    if (ext === '.jpg' || ext === '.jpeg' || ext === '.png') return 'image';
+    return 'unsupported';
+}
+
 createApp({
     setup() {
         const items = ref([]);
@@ -81,6 +100,10 @@ createApp({
         const editFileSize = ref(0);
         const fileInput = ref(null);
         const dragging = ref(false);
+        const showPreviewModal = ref(false);
+        const previewUrl = ref('');
+        const previewMode = ref('');
+        const previewTitle = ref('');
 
         const canWriteMaterials = ref(false);
 
@@ -248,6 +271,26 @@ createApp({
             window.location.href = '/api/materials/' + id + '/download';
         }
 
+        function previewMaterial(row) {
+            if (!row || !row.id) return;
+            previewTitle.value = row.title || row.file_name || '资料预览';
+            const mode = previewModeForFile(row.file_name);
+            previewMode.value = mode;
+            if (mode === 'unsupported') {
+                previewUrl.value = '';
+            } else {
+                previewUrl.value = '/api/materials/' + row.id + '/preview';
+            }
+            showPreviewModal.value = true;
+        }
+
+        function closePreviewModal() {
+            showPreviewModal.value = false;
+            previewUrl.value = '';
+            previewMode.value = '';
+            previewTitle.value = '';
+        }
+
         async function archiveMaterial(row) {
             if (!confirm('确定删除「' + row.title + '」？删除后默认列表不再显示。')) return;
             try {
@@ -279,6 +322,10 @@ createApp({
             formOptions,
             showForm,
             showDetail,
+            showPreviewModal,
+            previewUrl,
+            previewMode,
+            previewTitle,
             formMode,
             form,
             detailRow,
@@ -301,6 +348,8 @@ createApp({
             onFileChange,
             submitForm,
             downloadMaterial,
+            previewMaterial,
+            closePreviewModal,
             archiveMaterial,
             formatFileSize,
             confidentialityBadge,

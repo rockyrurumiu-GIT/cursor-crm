@@ -19,6 +19,25 @@ MATERIALS_PERMISSION_CODES = frozenset({
     "materials.write",
     "materials.download",
     "materials.delete",
+    "materials.public.read",
+    "materials.public.preview",
+    "materials.public.download",
+    "materials.internal.read",
+    "materials.internal.preview",
+    "materials.internal.download",
+})
+
+SALES_MATERIALS_PERMISSIONS = frozenset({
+    "materials.public.read",
+    "materials.public.preview",
+    "materials.public.download",
+})
+
+DELIVERY_MATERIALS_PERMISSIONS = frozenset({
+    "materials.public.read",
+    "materials.public.preview",
+    "materials.internal.read",
+    "materials.internal.preview",
 })
 
 _MIN_PDF = b"%PDF-1.4\n% materials test\n"
@@ -46,12 +65,12 @@ def _login(client, username: str, password: str):
     return client.post("/api/auth/login", json={"username": username, "password": password})
 
 
-def _create_materials_only_user(client, engine, admin_auth, suffix: str) -> tuple[TestClient, object]:
+def _create_user_with_perms(client, engine, admin_auth, suffix: str, perms, *, role_prefix: str = "MAT_PERMS") -> tuple[TestClient, object]:
     from auth.password import hash_password
 
-    role_code = f"MATERIALS_ONLY_{suffix}"
-    username = f"materials_only_{suffix}"
-    password = "mat_only1"
+    role_code = f"{role_prefix}_{suffix}"
+    username = f"mat_user_{suffix}"
+    password = "mat_user1"
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -62,7 +81,7 @@ def _create_materials_only_user(client, engine, admin_auth, suffix: str) -> tupl
         )
         rid = int(conn.execute(text("SELECT id FROM sys_role WHERE code = :c"), {"c": role_code}).fetchone()[0])
         conn.execute(text("DELETE FROM sys_role_permission WHERE role_id = :rid"), {"rid": rid})
-        for perm in ("materials.read",):
+        for perm in perms:
             pid = conn.execute(text("SELECT id FROM sys_permission WHERE code = :p"), {"p": perm}).scalar()
             if pid:
                 conn.execute(
@@ -101,17 +120,36 @@ def _create_materials_only_user(client, engine, admin_auth, suffix: str) -> tupl
     return client, login.cookies
 
 
-def _admin_upload(client, cookies, title: str = "测试资料") -> dict:
+def _create_materials_only_user(client, engine, admin_auth, suffix: str) -> tuple[TestClient, object]:
+    return _create_user_with_perms(
+        client,
+        engine,
+        admin_auth,
+        suffix,
+        ("materials.read",),
+        role_prefix="MATERIALS_ONLY",
+    )
+
+
+def _admin_upload(
+    client,
+    cookies,
+    title: str = "测试资料",
+    *,
+    confidentiality: str = "internal",
+    filename: str = "license.pdf",
+    content: bytes = _MIN_PDF,
+) -> dict:
     r = client.post(
         "/api/materials",
         cookies=cookies,
         data={
             "title": title,
             "category": "business_license",
-            "confidentiality": "internal",
+            "confidentiality": confidentiality,
             "description": "desc",
         },
-        files={"file": ("license.pdf", _MIN_PDF, "application/pdf")},
+        files={"file": (filename, content, "application/pdf")},
     )
     assert r.status_code == 201, r.text
     return r.json()
@@ -125,9 +163,9 @@ def test_materials_permissions_in_catalog():
 
 
 def test_materials_not_in_default_roles():
-    for role in (ROLE_SALES, ROLE_DELIVERY, ROLE_VIEWER):
-        perms = ROLE_DEFAULT_PERMISSIONS[role]
-        assert not MATERIALS_PERMISSION_CODES.intersection(perms)
+    assert SALES_MATERIALS_PERMISSIONS <= ROLE_DEFAULT_PERMISSIONS[ROLE_SALES]
+    assert DELIVERY_MATERIALS_PERMISSIONS <= ROLE_DEFAULT_PERMISSIONS[ROLE_DELIVERY]
+    assert not MATERIALS_PERMISSION_CODES.intersection(ROLE_DEFAULT_PERMISSIONS[ROLE_VIEWER])
 
 
 def test_page_materials_requires_read(client_rbac, admin_auth):
@@ -161,6 +199,7 @@ def test_materials_only_user_matrix(client_rbac, engine, admin_auth):
     assert r_list.status_code == 200
     for item in r_list.json().get("items", []):
         assert item["can_download"] is False
+        assert item["can_preview"] is True
         assert item["can_write"] is False
         assert item["can_delete"] is False
         assert "stored_path" not in item
@@ -202,6 +241,7 @@ def test_admin_upload_list_download_archive(client_rbac, admin_auth, engine):
     created = _admin_upload(client_rbac, cookies, title=f"AdminMat_{os.getpid()}")
     mid = created["id"]
     assert created["can_download"] is True
+    assert created["can_preview"] is True
     assert created["can_write"] is True
     assert created["can_delete"] is True
     assert "stored_path" not in created
@@ -395,6 +435,128 @@ def test_materials_replace_file_rejects_archived_material(client_rbac, admin_aut
     assert "已删除资料不可替换文件" in str(r.json().get("detail", ""))
 
 
+def test_sales_sees_only_public_materials(client_rbac, engine, admin_auth):
+    suffix = f"sales_{os.getpid()}"
+    client, cookies = _create_user_with_perms(
+        client_rbac, engine, admin_auth, suffix, sorted(SALES_MATERIALS_PERMISSIONS), role_prefix="MAT_SALES"
+    )
+    admin_login = _login(client_rbac, *admin_auth)
+    admin_cookies = admin_login.cookies
+    public_row = _admin_upload(
+        client_rbac, admin_cookies, title=f"Pub_{suffix}", confidentiality="public",
+    )
+    internal_row = _admin_upload(
+        client_rbac, admin_cookies, title=f"Int_{suffix}", confidentiality="internal",
+    )
+    confidential_row = _admin_upload(
+        client_rbac, admin_cookies, title=f"Conf_{suffix}", confidentiality="confidential",
+    )
+
+    r_page = client.get("/materials", cookies=cookies)
+    assert r_page.status_code == 200
+
+    r_list = client.get("/api/materials", cookies=cookies)
+    assert r_list.status_code == 200
+    ids = {x["id"] for x in r_list.json()["items"]}
+    assert public_row["id"] in ids
+    assert internal_row["id"] not in ids
+    assert confidential_row["id"] not in ids
+
+    pub = next(x for x in r_list.json()["items"] if x["id"] == public_row["id"])
+    assert pub["can_download"] is True
+    assert pub["can_preview"] is True
+
+    r_internal_detail = client.get(f"/api/materials/{internal_row['id']}", cookies=cookies)
+    assert r_internal_detail.status_code == 404
+
+    r_dl_public = client.get(f"/api/materials/{public_row['id']}/download", cookies=cookies)
+    assert r_dl_public.status_code == 200
+
+    r_dl_internal = client.get(f"/api/materials/{internal_row['id']}/download", cookies=cookies)
+    assert r_dl_internal.status_code in (403, 404)
+
+
+def test_delivery_internal_preview_without_download(client_rbac, engine, admin_auth):
+    suffix = f"delivery_{os.getpid()}"
+    client, cookies = _create_user_with_perms(
+        client_rbac, engine, admin_auth, suffix, sorted(DELIVERY_MATERIALS_PERMISSIONS), role_prefix="MAT_DELIVERY"
+    )
+    admin_login = _login(client_rbac, *admin_auth)
+    admin_cookies = admin_login.cookies
+    public_row = _admin_upload(
+        client_rbac, admin_cookies, title=f"DPub_{suffix}", confidentiality="public",
+    )
+    internal_row = _admin_upload(
+        client_rbac, admin_cookies, title=f"DInt_{suffix}", confidentiality="internal",
+    )
+
+    r_list = client.get("/api/materials", cookies=cookies)
+    assert r_list.status_code == 200
+    by_id = {x["id"]: x for x in r_list.json()["items"]}
+    assert public_row["id"] in by_id
+    assert internal_row["id"] in by_id
+    assert by_id[internal_row["id"]]["can_preview"] is True
+    assert by_id[internal_row["id"]]["can_download"] is False
+
+    r_preview = client.get(f"/api/materials/{internal_row['id']}/preview", cookies=cookies)
+    assert r_preview.status_code == 200
+    assert r_preview.content == _MIN_PDF
+    assert "inline" in (r_preview.headers.get("content-disposition") or "").lower()
+
+    r_dl = client.get(f"/api/materials/{internal_row['id']}/download", cookies=cookies)
+    assert r_dl.status_code == 403
+
+
+def test_confidential_hidden_from_sales_and_delivery(client_rbac, engine, admin_auth):
+    suffix = f"conf_{os.getpid()}"
+    admin_login = _login(client_rbac, *admin_auth)
+    admin_cookies = admin_login.cookies
+    confidential_row = _admin_upload(
+        client_rbac, admin_cookies, title=f"Secret_{suffix}", confidentiality="confidential",
+    )
+
+    for perms, prefix in (
+        (sorted(SALES_MATERIALS_PERMISSIONS), "MAT_SALES_CONF"),
+        (sorted(DELIVERY_MATERIALS_PERMISSIONS), "MAT_DELIVERY_CONF"),
+    ):
+        _, cookies = _create_user_with_perms(
+            client_rbac, engine, admin_auth, f"{suffix}_{prefix}", perms, role_prefix=prefix
+        )
+        r_list = client_rbac.get("/api/materials", cookies=cookies)
+        ids = {x["id"] for x in r_list.json()["items"]}
+        assert confidential_row["id"] not in ids
+        r_detail = client_rbac.get(f"/api/materials/{confidential_row['id']}", cookies=cookies)
+        assert r_detail.status_code == 404
+
+
+def test_preview_office_returns_400(client_rbac, engine, admin_auth):
+    suffix = f"office_{os.getpid()}"
+    client, cookies = _create_user_with_perms(
+        client_rbac, engine, admin_auth, suffix, sorted(SALES_MATERIALS_PERMISSIONS), role_prefix="MAT_OFFICE"
+    )
+    admin_login = _login(client_rbac, *admin_auth)
+    created = _admin_upload(
+        client_rbac,
+        admin_login.cookies,
+        title=f"Doc_{suffix}",
+        confidentiality="public",
+        filename="brief.docx",
+        content=b"PK docx",
+    )
+    r = client.get(f"/api/materials/{created['id']}/preview", cookies=cookies)
+    assert r.status_code == 400
+    assert "暂不支持在线预览" in str(r.json().get("detail", ""))
+
+
+def test_materials_preview_route_registered(client_rbac, admin_auth):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    created = _admin_upload(client_rbac, login.cookies, title=f"PreviewRoute_{os.getpid()}", confidentiality="public")
+    r = client_rbac.get(f"/api/materials/{created['id']}/preview", cookies=login.cookies)
+    assert r.status_code == 200
+    assert "inline" in (r.headers.get("content-disposition") or "").lower()
+
+
 def test_crm_api_exposes_patch():
     root = Path(__file__).resolve().parent.parent
     api_src = (root / "static/js/core/crm-api.js").read_text(encoding="utf-8")
@@ -427,6 +589,8 @@ def test_materials_frontend_permission_refresh():
     assert "点击或拖拽文件到此处" in html
     assert "选择新文件替换当前文件" in html
     assert "replace-file" in js
+    assert "previewMaterial" in js
+    assert "showPreviewModal" in js
     assert '@click="closeForm">&times;</button>' in html
     assert "crm-form-control" in html
     assert "materials-upload-dropzone" in html
@@ -441,3 +605,4 @@ def test_materials_frontend_permission_refresh():
     assert "materials-status-badge" in html
     assert "confidentialityBadge(row.confidentiality)" in html
     assert "materials-table-frame" in html
+    assert ">预览</button>" in html

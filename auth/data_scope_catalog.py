@@ -135,6 +135,12 @@ SYSTEM_PERMISSIONS: FrozenSet[str] = frozenset({
     "materials.write",
     "materials.download",
     "materials.delete",
+    "materials.public.read",
+    "materials.public.preview",
+    "materials.public.download",
+    "materials.internal.read",
+    "materials.internal.preview",
+    "materials.internal.download",
 })
 
 BUSINESS_PERMISSIONS: FrozenSet[str] = frozenset(

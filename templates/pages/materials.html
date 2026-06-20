@@ -198,6 +198,7 @@
                         </td>
                         <td class="crm-td">
                             <div class="crm-op-actions">
+                                <button v-if="row.can_preview" type="button" class="crm-op-btn-edit" @click="previewMaterial(row)">预览</button>
                                 <button v-if="row.can_download" type="button" class="crm-op-btn-edit" @click="downloadMaterial(row.id)">下载</button>
                                 <button v-if="row.can_write" type="button" class="crm-op-btn-edit" @click="openEdit(row)">编辑</button>
                                 <button v-if="row.can_delete && row.status === 'active'" type="button" class="crm-op-btn-delete" @click="archiveMaterial(row)">删除</button>
@@ -249,6 +250,7 @@
                     <div class="materials-drawer-field-label">文件名</div>
                     <div class="materials-drawer-field-value">
                         <span>{{ detailRow.file_name || '—' }}</span>
+                        <button v-if="detailRow.can_preview" type="button" class="crm-op-btn-edit ml-2" @click="previewMaterial(detailRow)">预览</button>
                         <button v-if="detailRow.can_download" type="button" class="crm-op-btn-edit ml-2" @click="downloadMaterial(detailRow.id)">下载</button>
                     </div>
                 </div>
@@ -284,6 +286,21 @@
             </section>
         </div>
     </aside>
+
+    <!-- 预览弹窗 -->
+    <div v-if="showPreviewModal" class="crm-esc-modal crm-form-modal-overlay z-[60]" @click.self="closePreviewModal">
+        <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
+            <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg truncate">{{ previewTitle || '资料预览' }}</h3>
+                <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closePreviewModal">&times;</button>
+            </div>
+            <div class="p-5 min-h-[20rem] max-h-[75vh] overflow-auto">
+                <iframe v-if="previewMode === 'pdf'" :src="previewUrl" class="w-full h-[70vh] border border-[#d0d7de] rounded-lg" title="资料预览"></iframe>
+                <img v-else-if="previewMode === 'image'" :src="previewUrl" class="max-w-full max-h-[70vh] mx-auto block rounded-lg border border-[#d0d7de]" alt="资料预览">
+                <p v-else class="text-sm text-[#57606a] text-center py-12">该格式暂不支持在线预览，请联系资料管理员</p>
+            </div>
+        </div>
+    </div>
 
     <!-- 上传/编辑弹窗 -->
     <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-50" @click.self="closeForm" @dragover.prevent @drop.prevent>
@@ -397,5 +414,5 @@
 {% endblock %}
 {% block page_scripts %}
 <script src="/static/js/core/crm-api.js"></script>
-<script src="/static/js/pages/materials.js?v=5"></script>
+<script src="/static/js/pages/materials.js?v=6"></script>
 {% endblock %}

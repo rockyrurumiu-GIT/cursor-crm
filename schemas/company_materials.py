@@ -10,6 +10,10 @@ MATERIAL_ALLOWED_SUFFIXES: Set[str] = frozenset({
     ".ppt", ".pptx", ".zip", ".jpg", ".jpeg", ".png",
 })
 
+MATERIAL_PREVIEWABLE_SUFFIXES: Set[str] = frozenset({
+    ".pdf", ".jpg", ".jpeg", ".png",
+})
+
 MATERIAL_CATEGORIES: Dict[str, str] = {
     "business_license": "营业执照",
     "financial_report": "财务资料",

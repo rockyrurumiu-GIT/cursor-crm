@@ -18,6 +18,7 @@ from auth.service import AuthContext
 from schemas.company_materials import (
     MATERIAL_CATEGORIES,
     MATERIAL_CONFIDENTIALITY,
+    MATERIAL_PREVIEWABLE_SUFFIXES,
     MATERIAL_STATUS,
     MaterialUpdateBody,
     category_label,
@@ -29,6 +30,76 @@ from schemas.company_materials import (
 )
 
 _CHUNK_SIZE = 1024 * 1024
+_PREVIEW_UNSUPPORTED_MSG = "该格式暂不支持在线预览，请联系资料管理员"
+
+_MEDIA_TYPE_BY_EXT = {
+    ".pdf": "application/pdf",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+}
+
+
+def _has_admin_read(ctx: AuthContext) -> bool:
+    return auth_svc.user_has_permission(ctx, "materials.read")
+
+
+def can_read_confidentiality(ctx: AuthContext, level: str) -> bool:
+    conf = str(level or "").strip().lower()
+    if _has_admin_read(ctx):
+        return True
+    if conf == "public":
+        return auth_svc.user_has_permission(ctx, "materials.public.read")
+    if conf == "internal":
+        return auth_svc.user_has_permission(ctx, "materials.internal.read")
+    return False
+
+
+def can_preview_confidentiality(ctx: AuthContext, level: str) -> bool:
+    conf = str(level or "").strip().lower()
+    if _has_admin_read(ctx):
+        return True
+    if conf == "confidential":
+        return False
+    if conf == "public":
+        return auth_svc.user_has_permission(ctx, "materials.public.preview")
+    if conf == "internal":
+        return auth_svc.user_has_permission(ctx, "materials.internal.preview")
+    return False
+
+
+def can_download_confidentiality(ctx: AuthContext, level: str) -> bool:
+    conf = str(level or "").strip().lower()
+    if auth_svc.user_has_permission(ctx, "materials.download"):
+        return True
+    if conf == "confidential":
+        return False
+    if conf == "public":
+        return auth_svc.user_has_permission(ctx, "materials.public.download")
+    if conf == "internal":
+        return auth_svc.user_has_permission(ctx, "materials.internal.download")
+    return False
+
+
+def _readable_confidentiality_levels(ctx: AuthContext) -> List[str]:
+    if _has_admin_read(ctx):
+        return ["public", "internal", "confidential"]
+    levels: List[str] = []
+    if auth_svc.user_has_permission(ctx, "materials.public.read"):
+        levels.append("public")
+    if auth_svc.user_has_permission(ctx, "materials.internal.read"):
+        levels.append("internal")
+    return levels
+
+
+def _action_flags(ctx: AuthContext, row: Any) -> Dict[str, bool]:
+    conf = str(getattr(row, "confidentiality", "") or "").strip().lower()
+    return {
+        "can_preview": can_preview_confidentiality(ctx, conf),
+        "can_download": can_download_confidentiality(ctx, conf),
+        "can_write": auth_svc.user_has_permission(ctx, "materials.write"),
+        "can_delete": auth_svc.user_has_permission(ctx, "materials.delete"),
+    }
 
 
 def safe_material_filename(name: str) -> str:
@@ -43,14 +114,6 @@ def material_stored_path_rel(filename: str) -> str:
     now = datetime.now()
     safe = safe_material_filename(filename)
     return f"materials/{now.year:04d}/{now.month:02d}/{uuid.uuid4().hex}_{safe}"
-
-
-def _action_flags(ctx: AuthContext) -> Dict[str, bool]:
-    return {
-        "can_download": auth_svc.user_has_permission(ctx, "materials.download"),
-        "can_write": auth_svc.user_has_permission(ctx, "materials.write"),
-        "can_delete": auth_svc.user_has_permission(ctx, "materials.delete"),
-    }
 
 
 def _date_str(dt: Any) -> str:
@@ -100,7 +163,7 @@ def _load_user_names(db: Session, user_ids: List[int]) -> Dict[int, str]:
 
 def row_to_dict(row: Any, ctx: AuthContext, *, dept_names: Optional[Dict[int, str]] = None,
                 user_names: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
-    flags = _action_flags(ctx)
+    flags = _action_flags(ctx, row)
     owner_dept_id = getattr(row, "owner_dept_id", None)
     uploaded_by = getattr(row, "uploaded_by", None)
     owner_name = ""
@@ -184,12 +247,19 @@ def list_materials(
         q = q.filter(CompanyMaterial.status == "active")
     if category:
         q = q.filter(CompanyMaterial.category == normalize_category(category))
-    if confidentiality:
-        q = q.filter(CompanyMaterial.confidentiality == normalize_confidentiality(confidentiality))
     if owner_dept_id is not None:
         q = q.filter(CompanyMaterial.owner_dept_id == int(owner_dept_id))
     if expires_before:
         q = q.filter(CompanyMaterial.expires_at != None).filter(CompanyMaterial.expires_at <= expires_before.strip())  # noqa: E711
+    allowed_levels = _readable_confidentiality_levels(ctx)
+    if not allowed_levels:
+        return {"items": []}
+    q = q.filter(CompanyMaterial.confidentiality.in_(allowed_levels))
+    if confidentiality:
+        req = normalize_confidentiality(confidentiality)
+        if req not in allowed_levels:
+            return {"items": []}
+        q = q.filter(CompanyMaterial.confidentiality == req)
     if q_text and q_text.strip():
         like = f"%{q_text.strip()}%"
         q = q.filter(or_(
@@ -205,7 +275,30 @@ def get_material(db: Session, ctx: AuthContext, CompanyMaterial: Type[Any], mate
     row = db.query(CompanyMaterial).filter(CompanyMaterial.id == material_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="资料不存在")
+    if not can_read_confidentiality(ctx, str(row.confidentiality or "")):
+        raise HTTPException(status_code=404, detail="资料不存在")
     return _rows_to_dicts(db, ctx, [row])[0]
+
+
+def _resolve_material_file(
+    row: Any,
+    *,
+    upload_dir: str,
+) -> tuple[str, str]:
+    sp = (row.stored_path or "").strip()
+    if not sp:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    try:
+        abs_path = sec.resolve_upload_path(upload_dir, sp)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="非法文件路径")
+    if not os.path.isfile(abs_path):
+        raise HTTPException(status_code=404, detail="文件不存在")
+    filename = row.file_name or os.path.basename(abs_path)
+    ext = os.path.splitext(filename)[1].lower()
+    if not ext:
+        ext = os.path.splitext(abs_path)[1].lower()
+    return abs_path, ext
 
 
 async def _write_upload_chunked(
@@ -446,6 +539,7 @@ def archive_material(
 
 def download_material(
     db: Session,
+    ctx: AuthContext,
     CompanyMaterial: Type[Any],
     material_id: int,
     *,
@@ -454,14 +548,40 @@ def download_material(
     row = db.query(CompanyMaterial).filter(CompanyMaterial.id == material_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="资料不存在")
-    sp = (row.stored_path or "").strip()
-    if not sp:
-        raise HTTPException(status_code=404, detail="文件不存在")
-    try:
-        abs_path = sec.resolve_upload_path(upload_dir, sp)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="非法文件路径")
-    if not os.path.isfile(abs_path):
-        raise HTTPException(status_code=404, detail="文件不存在")
+    conf = str(row.confidentiality or "").strip().lower()
+    if not can_read_confidentiality(ctx, conf):
+        raise HTTPException(status_code=404, detail="资料不存在")
+    if not can_download_confidentiality(ctx, conf):
+        raise HTTPException(status_code=403, detail="缺少下载权限")
+    abs_path, _ext = _resolve_material_file(row, upload_dir=upload_dir)
     mime = (row.mime_type or "").strip() or "application/octet-stream"
     return FileResponse(abs_path, media_type=mime, filename=row.file_name or os.path.basename(abs_path))
+
+
+def preview_material(
+    db: Session,
+    ctx: AuthContext,
+    CompanyMaterial: Type[Any],
+    material_id: int,
+    *,
+    upload_dir: str,
+) -> FileResponse:
+    row = db.query(CompanyMaterial).filter(CompanyMaterial.id == material_id).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="资料不存在")
+    conf = str(row.confidentiality or "").strip().lower()
+    if not can_read_confidentiality(ctx, conf):
+        raise HTTPException(status_code=404, detail="资料不存在")
+    if not can_preview_confidentiality(ctx, conf):
+        raise HTTPException(status_code=403, detail="缺少预览权限")
+    abs_path, ext = _resolve_material_file(row, upload_dir=upload_dir)
+    if ext not in MATERIAL_PREVIEWABLE_SUFFIXES:
+        raise HTTPException(status_code=400, detail=_PREVIEW_UNSUPPORTED_MSG)
+    media_type = _MEDIA_TYPE_BY_EXT.get(ext, "application/octet-stream")
+    filename = row.file_name or os.path.basename(abs_path)
+    return FileResponse(
+        abs_path,
+        media_type=media_type,
+        filename=filename,
+        content_disposition_type="inline",
+    )
