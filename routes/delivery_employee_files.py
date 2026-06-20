@@ -11,7 +11,10 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 import security_foundation as sec
-from auth.deps import require_permission
+from auth import data_scope as ds
+from auth.data_scope_catalog import RESOURCE_DELIVERY_EMPLOYEE_FILES
+from auth.deps import get_current_context, require_permission
+from auth.service import AuthContext
 from schemas.delivery_employee_files import EMPLOYEE_FILE_ALLOWED_SUFFIXES, EMPLOYEE_FILE_STATUS_SET
 from services.delivery_employee_files import (
     employee_file_client_dir_rel,
@@ -39,11 +42,15 @@ def register_delivery_employee_file_routes(
     async def list_delivery_employee_files(
         client_id: int,
         db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("delivery.employee_files.read")),
     ):
         c = db.query(Client).filter(Client.id == client_id).first()
         if not c:
             raise HTTPException(status_code=404, detail="客户不存在")
+        ds.assert_client_in_scope(
+            db, ctx, client_id, Client, RESOURCE_DELIVERY_EMPLOYEE_FILES, "read"
+        )
         rows = (
             db.query(DeliveryEmployeeFile)
             .filter(DeliveryEmployeeFile.client_id == client_id)
@@ -58,6 +65,7 @@ def register_delivery_employee_file_routes(
         files: List[UploadFile] = File(default=[]),
         status: str = Form(default="draft"),
         db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("delivery.employee_files.write")),
     ):
         if not files:
@@ -65,6 +73,9 @@ def register_delivery_employee_file_routes(
         client = db.query(Client).filter(Client.id == client_id).first()
         if not client:
             raise HTTPException(status_code=404, detail="客户不存在")
+        ds.assert_client_in_scope(
+            db, ctx, client_id, Client, RESOURCE_DELIVERY_EMPLOYEE_FILES, "write"
+        )
         rel_dir = employee_file_client_dir_rel(client)
         abs_dir = sec.resolve_upload_path(upload_dir, rel_dir)
         os.makedirs(abs_dir, exist_ok=True)
@@ -125,10 +136,24 @@ def register_delivery_employee_file_routes(
         row_id: int,
         body: Dict[str, Any] = Body(default={}),
         db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("delivery.employee_files.write")),
     ):
-        row = db.query(DeliveryEmployeeFile).filter(DeliveryEmployeeFile.id == row_id).first()
-        if not row or row.client_id != client_id:
+        c = db.query(Client).filter(Client.id == client_id).first()
+        if not c:
+            raise HTTPException(status_code=404, detail="客户不存在")
+        ds.assert_client_in_scope(
+            db, ctx, client_id, Client, RESOURCE_DELIVERY_EMPLOYEE_FILES, "write"
+        )
+        row = (
+            db.query(DeliveryEmployeeFile)
+            .filter(
+                DeliveryEmployeeFile.id == row_id,
+                DeliveryEmployeeFile.client_id == client_id,
+            )
+            .first()
+        )
+        if not row:
             raise HTTPException(status_code=404, detail="记录不存在")
         if not isinstance(body, dict):
             raise HTTPException(status_code=400, detail="无效请求体")
@@ -149,10 +174,24 @@ def register_delivery_employee_file_routes(
         client_id: int,
         row_id: int,
         db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("delivery.employee_files.delete")),
     ):
-        row = db.query(DeliveryEmployeeFile).filter(DeliveryEmployeeFile.id == row_id).first()
-        if not row or row.client_id != client_id:
+        c = db.query(Client).filter(Client.id == client_id).first()
+        if not c:
+            raise HTTPException(status_code=404, detail="客户不存在")
+        ds.assert_client_in_scope(
+            db, ctx, client_id, Client, RESOURCE_DELIVERY_EMPLOYEE_FILES, "delete"
+        )
+        row = (
+            db.query(DeliveryEmployeeFile)
+            .filter(
+                DeliveryEmployeeFile.id == row_id,
+                DeliveryEmployeeFile.client_id == client_id,
+            )
+            .first()
+        )
+        if not row:
             raise HTTPException(status_code=404, detail="记录不存在")
         sp = (row.stored_path or "").strip()
         if sp:

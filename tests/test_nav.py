@@ -56,3 +56,16 @@ def test_delivery_nav_structure():
     turnover_idx = nav.index('href="/delivery/turnover"')
     assert employee_files_idx < interviews_idx < turnover_idx
     assert "员工文件" in nav
+
+
+def test_home_digital_assets_nav():
+    nav = _nav_html()
+    assert 'data-crm-nav-any="crm.clients.read,materials.read"' in nav
+    assert "数字资产" in nav
+    assert 'href="/materials" data-crm-nav-perm="materials.read">公司资料库' in nav
+    assert 'href="/home/funnel" data-crm-nav-perm="crm.clients.read"' in nav
+    assert 'href="/home/trash" data-crm-nav-perm="crm.clients.read"' in nav
+    assert 'href="/home" data-crm-nav-perm="crm.clients.read"' in nav
+    materials_idx = nav.index('href="/materials"')
+    funnel_idx = nav.index('href="/home/funnel"')
+    assert materials_idx > funnel_idx

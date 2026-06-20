@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from auth.deps import get_current_context, require_permission
+from auth.deps import _require_super_admin, get_current_context, require_permission
 from auth.service import AuthContext
 from schemas.delivery_roster import (
     CHINESE_ROSTER_HEADER_MAP,
@@ -147,10 +147,8 @@ def register_delivery_roster_routes(
     @app.get("/api/roster/logs")
     async def roster_logs_all(
         db: Session = Depends(get_db),
-        ctx: AuthContext = Depends(get_current_context),
+        _ctx: AuthContext = Depends(_require_super_admin),
     ):
-        if not ctx.is_super:
-            raise HTTPException(status_code=403, detail="仅超级管理员可查看日志")
         logs = db.query(AuditLog).filter(AuditLog.action.like("%花名册%")).order_by(desc(AuditLog.created_at)).limit(300).all()
         return logs
 

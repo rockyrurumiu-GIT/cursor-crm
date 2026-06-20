@@ -166,10 +166,29 @@ def test_non_super_cannot_edit_super_admin_role_permissions(client_rbac, admin_a
 
 
 def test_cannot_remove_last_super_admin(client_rbac, admin_auth):
+    import main as crm_main
+
+    from auth.permissions import ROLE_SUPER_ADMIN
+
     user, pwd = admin_auth
     login = _login(client_rbac, user, pwd)
     me = client_rbac.get("/api/me", cookies=login.cookies).json()
     uid = me["user"]["id"]
+
+    with crm_main.engine.begin() as conn:
+        super_rid = conn.execute(
+            text("SELECT id FROM sys_role WHERE code = :c"),
+            {"c": ROLE_SUPER_ADMIN},
+        ).scalar()
+        conn.execute(
+            text("DELETE FROM sys_user_role WHERE role_id = :rid AND user_id != :uid"),
+            {"rid": super_rid, "uid": uid},
+        )
+        conn.execute(
+            text("INSERT OR IGNORE INTO sys_user_role (user_id, role_id) VALUES (:uid, :rid)"),
+            {"uid": uid, "rid": super_rid},
+        )
+
     headers = {**auth_header(user, pwd), "Content-Type": "application/json"}
     r = client_rbac.put(
         f"/api/system/users/{uid}/roles",
@@ -177,6 +196,7 @@ def test_cannot_remove_last_super_admin(client_rbac, admin_auth):
         json={"role_codes": ["VIEWER"]},
     )
     assert r.status_code == 400
+    assert "最后一个超级管理员" in str(r.json().get("detail", ""))
 
 
 def test_disabled_user_session_invalid(client_rbac, admin_auth):

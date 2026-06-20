@@ -207,6 +207,16 @@ _MATRIX_ROWS: List[Dict[str, Any]] = [
         "approve": [],
     },
     {
+        "module": "materials",
+        "module_label": "数字资产",
+        "label": "公司资料库",
+        "read": ["materials.read"],
+        "write": ["materials.write"],
+        "delete": ["materials.delete"],
+        "import_export": ["materials.download"],
+        "approve": [],
+    },
+    {
         "module": "system",
         "module_label": "系统",
         "label": "用户管理",

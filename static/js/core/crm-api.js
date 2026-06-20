@@ -94,6 +94,19 @@
   }
 
   /**
+   * PATCH request (JSON body).
+   */
+  function patch(url, body, opts) {
+    opts = opts || {};
+    return fetch(url, {
+      method: "PATCH",
+      headers: buildHeaders(opts.headers, true),
+      credentials: "same-origin",
+      body: JSON.stringify(body),
+    }).then(handleResponse);
+  }
+
+  /**
    * DELETE request.
    */
   function del(url, opts) {
@@ -123,6 +136,7 @@
     get: get,
     post: post,
     put: put,
+    patch: patch,
     del: del,
     postForm: postForm,
   };

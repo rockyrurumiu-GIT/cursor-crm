@@ -290,6 +290,14 @@ def _assert_forbidden(resp, code: str):
             "rms.applications.write",
             lambda _cid: {"job_id": 1, "candidate_id": 1},
         ),
+        (
+            "/api/materials",
+            "materials.read",
+            "post",
+            "/api/materials",
+            "materials.write",
+            lambda _cid: {},
+        ),
     ],
 )
 def test_restricted_module_forbidden(

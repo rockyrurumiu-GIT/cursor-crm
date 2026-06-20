@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from auth.deps import get_current_context, require_permission
+from auth.deps import _require_super_admin, require_permission
 from auth.service import AuthContext
 from schemas.delivery_pipeline import (
     PIPELINE_EXPORT_HEADERS,
@@ -104,10 +104,8 @@ def register_delivery_pipeline_routes(
     async def pipeline_logs(
         client_id: int,
         db: Session = Depends(get_db),
-        ctx: AuthContext = Depends(get_current_context),
+        _ctx: AuthContext = Depends(_require_super_admin),
     ):
-        if not ctx.is_super:
-            raise HTTPException(status_code=403, detail="仅超级管理员可查看日志")
         logs = (
             db.query(AuditLog)
             .filter(AuditLog.client_id == client_id)

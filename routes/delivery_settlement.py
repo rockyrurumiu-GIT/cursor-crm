@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from auth import data_scope as ds
 from auth.data_scope_catalog import RESOURCE_DELIVERY_SETTLEMENT
-from auth.deps import get_current_context, require_permission
+from auth.deps import _require_super_admin, get_current_context, require_permission
 from auth.service import AuthContext
 from services.delivery_settlement import (
     SETTLEMENT_EXPORT_HEADERS,
@@ -227,10 +227,8 @@ def register_delivery_settlement_routes(
     @app.get("/api/delivery/settlement/logs")
     async def settlement_logs(
         db: Session = Depends(get_db),
-        ctx: AuthContext = Depends(get_current_context),
+        _ctx: AuthContext = Depends(_require_super_admin),
     ):
-        if not ctx.is_super:
-            raise HTTPException(status_code=403, detail="仅超级管理员可查看日志")
         logs = (
             db.query(AuditLog)
             .filter(AuditLog.action.like("结算回款%"))

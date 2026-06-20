@@ -11,13 +11,16 @@ from starlette.testclient import TestClient
 from auth.data_scope import apply_client_scope, get_effective_data_scope, merge_scope_types
 from auth.data_scope_catalog import (
     RESOURCE_CRM_CLIENT,
+    RESOURCE_DELIVERY_EMPLOYEE_FILES,
     SCOPE_ALL,
     SCOPE_ASSIGNED,
     SCOPE_DEPT,
     SCOPE_NONE,
 )
+from auth.permissions import ROLE_DELIVERY
 from auth.service import AuthContext
 from tests.helpers import auth_header
+from tests.test_rms_phase2_mvp import _grant_role_permissions, _set_role_data_scope
 
 
 @pytest.fixture
@@ -212,6 +215,144 @@ def test_delivery_settlement_scoped_by_delivery_owner(client_rbac, admin_auth):
     client_ids = {int(r.get("client_id") or 0) for r in rows}
     assert cid_a in client_ids
     assert cid_b not in client_ids
+
+
+def _count_employee_files(engine, client_id: int) -> int:
+    with engine.connect() as conn:
+        return int(
+            conn.execute(
+                text("SELECT COUNT(*) FROM delivery_employee_files WHERE client_id = :cid"),
+                {"cid": client_id},
+            ).scalar()
+            or 0
+        )
+
+
+def test_delivery_employee_files_scoped_by_delivery_owner(client_rbac, admin_auth):
+    suffix = os.getpid()
+    delivery_a = f"empfile_a_{suffix}"
+    delivery_b = f"empfile_b_{suffix}"
+    uid_a = _create_user(client_rbac, admin_auth, delivery_a, ["DELIVERY"])
+    uid_b = _create_user(client_rbac, admin_auth, delivery_b, ["DELIVERY"])
+    admin_user, admin_pwd = admin_auth
+    headers = auth_header(admin_user, admin_pwd)
+
+    c1 = client_rbac.post(
+        "/api/clients",
+        headers=headers,
+        data={
+            "name": f"员工文件客户A_{suffix}",
+            "industry": "IT",
+            "owner": "admin",
+            "scale": "100",
+            "phase": "成交",
+            "description": "d",
+        },
+    )
+    c2 = client_rbac.post(
+        "/api/clients",
+        headers=headers,
+        data={
+            "name": f"员工文件客户B_{suffix}",
+            "industry": "IT",
+            "owner": "admin",
+            "scale": "100",
+            "phase": "成交",
+            "description": "d",
+        },
+    )
+    assert c1.status_code == 200 and c2.status_code == 200
+    cid_a, cid_b = c1.json()["id"], c2.json()["id"]
+    import main as crm_main
+
+    _set_client_owner(crm_main.engine, cid_a, uid_a, delivery_owner_user_id=uid_a)
+    _set_client_owner(crm_main.engine, cid_b, uid_b, delivery_owner_user_id=uid_b)
+
+    _grant_role_permissions(crm_main.engine, ROLE_DELIVERY, ("delivery.employee_files.delete",))
+    _set_role_data_scope(
+        crm_main.engine,
+        ROLE_DELIVERY,
+        RESOURCE_DELIVERY_EMPLOYEE_FILES,
+        "delete",
+        SCOPE_ASSIGNED,
+    )
+
+    with crm_main.engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO delivery_employee_files "
+                "(client_id, original_filename, stored_path, status, media_kind, created_at, updated_at) "
+                "VALUES "
+                "(:c1, 'file_a.pdf', 'employee_files/client_a/a.pdf', 'draft', 'pdf', datetime('now'), datetime('now')), "
+                "(:c2, 'file_b.pdf', 'employee_files/client_b/b.pdf', 'draft', 'pdf', datetime('now'), datetime('now'))"
+            ),
+            {"c1": cid_a, "c2": cid_b},
+        )
+        row_a = conn.execute(
+            text("SELECT id FROM delivery_employee_files WHERE client_id = :cid LIMIT 1"),
+            {"cid": cid_a},
+        ).scalar()
+        row_b = conn.execute(
+            text("SELECT id FROM delivery_employee_files WHERE client_id = :cid LIMIT 1"),
+            {"cid": cid_b},
+        ).scalar()
+
+    login_a = _login(client_rbac, delivery_a, "pass1234")
+    cookies_a = login_a.cookies
+
+    own_list = client_rbac.get(
+        f"/api/clients/{cid_a}/delivery/employee-files",
+        cookies=cookies_a,
+    )
+    assert own_list.status_code == 200, own_list.text
+    own_ids = {int(x["id"]) for x in own_list.json()}
+    assert int(row_a) in own_ids
+
+    cross_list = client_rbac.get(
+        f"/api/clients/{cid_b}/delivery/employee-files",
+        cookies=cookies_a,
+    )
+    assert cross_list.status_code == 404
+
+    count_b_before = _count_employee_files(crm_main.engine, cid_b)
+    fake_pdf = b"%PDF-1.4 fake content for scope test"
+    cross_post = client_rbac.post(
+        f"/api/clients/{cid_b}/delivery/employee-files",
+        cookies=cookies_a,
+        files=[("files", ("cross.pdf", fake_pdf, "application/pdf"))],
+        data={"status": "draft"},
+    )
+    assert cross_post.status_code == 404
+    assert _count_employee_files(crm_main.engine, cid_b) == count_b_before
+
+    cross_patch = client_rbac.patch(
+        f"/api/clients/{cid_b}/delivery/employee-files/{row_b}",
+        cookies=cookies_a,
+        json={"status": "published"},
+    )
+    assert cross_patch.status_code == 404
+
+    cross_delete = client_rbac.delete(
+        f"/api/clients/{cid_b}/delivery/employee-files/{row_b}",
+        cookies=cookies_a,
+    )
+    assert cross_delete.status_code == 404
+
+    login_admin = _login(client_rbac, admin_user, admin_pwd)
+    assert (
+        client_rbac.get(
+            f"/api/clients/{cid_a}/delivery/employee-files",
+            cookies=login_admin.cookies,
+        ).status_code
+        == 200
+    )
+    assert (
+        client_rbac.get(
+            f"/api/clients/{cid_b}/delivery/employee-files",
+            cookies=login_admin.cookies,
+        ).status_code
+        == 200
+    )
 
 
 def test_handoff_inherits_client_delivery_owner_for_pending_list(client_rbac, admin_auth):

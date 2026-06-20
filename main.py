@@ -103,6 +103,7 @@ TRASH_DIR = os.path.join(BASE_DIR, "deleted_files")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 DB_URL = os.environ.get("CRM_DB_URL", "sqlite:///./crm_v8.db")
 MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+MATERIALS_MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 ADMIN_USER = {
     "username": os.environ.get("CRM_ADMIN_USERNAME", "admin"),
     "password": os.environ.get("CRM_ADMIN_PASSWORD", "admin123"),
@@ -624,6 +625,29 @@ class DeliveryEmployeeFile(Base):
     media_kind = Column(String, default="")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class CompanyMaterial(Base):
+    """公司资料库：全局资质/模板/介绍等文件。"""
+
+    __tablename__ = "company_materials"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False, default="")
+    category = Column(String, nullable=False, default="other")
+    description = Column(Text, default="")
+    confidentiality = Column(String, default="internal")
+    owner_dept_id = Column(Integer, nullable=True, index=True)
+    file_name = Column(String, default="")
+    stored_path = Column(String, default="")
+    mime_type = Column(String, default="")
+    file_size = Column(Integer, default=0)
+    status = Column(String, default="active", index=True)
+    expires_at = Column(String, nullable=True)
+    uploaded_by = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    archived_at = Column(DateTime, nullable=True)
+    archived_by = Column(Integer, nullable=True)
 
 
 # Handbook constants/helpers: migrated to schemas/delivery_handbook.py and services/delivery_handbook.py (Phase 5D)
@@ -1360,6 +1384,15 @@ register_delivery_employee_file_routes(
     max_file_size=MAX_FILE_SIZE,
 )
 
+from routes.company_materials import register_company_materials_routes
+
+register_company_materials_routes(
+    app,
+    get_db=get_db,
+    CompanyMaterial=CompanyMaterial,
+    upload_dir=UPLOAD_DIR,
+    max_file_size=MATERIALS_MAX_FILE_SIZE,
+)
 
 
 # --- Roster API routes: migrated to routes/delivery_roster.py (Phase 5A-2) ---
@@ -1657,6 +1690,14 @@ async def page_home_funnel(request: Request):
 @app.get("/home/trash", response_class=HTMLResponse)
 async def page_home_trash(request: Request):
     return _page("pages/home_trash.html", request)
+
+
+@app.get("/materials", response_class=HTMLResponse)
+async def page_materials(
+    request: Request,
+    _user: str = Depends(require_permission("materials.read")),
+):
+    return _page("pages/materials.html", request)
 
 
 @app.get("/customers", response_class=HTMLResponse)

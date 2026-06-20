@@ -131,6 +131,10 @@ SYSTEM_PERMISSIONS: FrozenSet[str] = frozenset({
     "dashboard.write",
     "dashboard.delete",
     "tools.gm_calc.read",
+    "materials.read",
+    "materials.write",
+    "materials.download",
+    "materials.delete",
 })
 
 BUSINESS_PERMISSIONS: FrozenSet[str] = frozenset(

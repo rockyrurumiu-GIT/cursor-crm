@@ -76,6 +76,13 @@ def _require_logged_in(ctx: AuthContext = Depends(get_current_context)) -> AuthC
     return ctx
 
 
+def _require_super_admin(ctx: AuthContext = Depends(get_current_context)) -> AuthContext:
+    from auth.policy import assert_actor_is_super
+
+    assert_actor_is_super(ctx)
+    return ctx
+
+
 def authenticate_admin(ctx: AuthContext = Depends(get_current_context)) -> str:
     if not ctx.is_super and "system.users.manage" not in ctx.permissions:
         if auth_svc.is_rbac_mode():
