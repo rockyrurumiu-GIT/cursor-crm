@@ -14,6 +14,13 @@ MATERIAL_PREVIEWABLE_SUFFIXES: Set[str] = frozenset({
     ".pdf", ".jpg", ".jpeg", ".png",
 })
 
+MATERIAL_OFFICE_CONVERT_SUFFIXES: Set[str] = frozenset({
+    ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+})
+
+MATERIAL_PREVIEW_CONVERSION_FAILED_MSG = "该文件暂无法生成预览"
+MATERIAL_PREVIEW_UNSUPPORTED_MSG = "该格式暂不支持在线预览，请联系资料管理员"
+
 MATERIAL_CATEGORIES: Dict[str, str] = {
     "business_license": "营业执照",
     "financial_report": "财务资料",

@@ -155,6 +155,18 @@ def _admin_upload(
     return r.json()
 
 
+def _mock_office_convert_write_pdf(**kwargs) -> str:
+    import main as crm_main
+    from services.material_preview_conversion import preview_cache_rel_path
+
+    rel = preview_cache_rel_path(kwargs["material_id"], kwargs["updated_at"])
+    abs_path = sec.resolve_upload_path(crm_main.UPLOAD_DIR, rel)
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    with open(abs_path, "wb") as f:
+        f.write(_MIN_PDF)
+    return abs_path
+
+
 def test_materials_permissions_in_catalog():
     assert MATERIALS_PERMISSION_CODES <= ALL_PERMISSION_CODES
     assert MATERIALS_PERMISSION_CODES <= SYSTEM_PERMISSIONS
@@ -529,23 +541,131 @@ def test_confidential_hidden_from_sales_and_delivery(client_rbac, engine, admin_
         assert r_detail.status_code == 404
 
 
-def test_preview_office_returns_400(client_rbac, engine, admin_auth):
-    suffix = f"office_{os.getpid()}"
+def test_preview_zip_returns_400(client_rbac, engine, admin_auth):
+    suffix = f"zip_{os.getpid()}"
     client, cookies = _create_user_with_perms(
-        client_rbac, engine, admin_auth, suffix, sorted(SALES_MATERIALS_PERMISSIONS), role_prefix="MAT_OFFICE"
+        client_rbac, engine, admin_auth, suffix, sorted(SALES_MATERIALS_PERMISSIONS), role_prefix="MAT_ZIP"
     )
     admin_login = _login(client_rbac, *admin_auth)
     created = _admin_upload(
         client_rbac,
         admin_login.cookies,
-        title=f"Doc_{suffix}",
+        title=f"Zip_{suffix}",
+        confidentiality="public",
+        filename="bundle.zip",
+        content=b"PK\x03\x04",
+    )
+    r = client.get(f"/api/materials/{created['id']}/preview", cookies=cookies)
+    assert r.status_code == 400
+    assert "暂不支持在线预览" in str(r.json().get("detail", ""))
+
+
+def test_office_preview_returns_pdf(client_rbac, engine, admin_auth, monkeypatch):
+    monkeypatch.setattr(
+        "services.company_materials.convert_office_to_preview_pdf",
+        _mock_office_convert_write_pdf,
+    )
+    suffix = f"office_ok_{os.getpid()}"
+    client, cookies = _create_user_with_perms(
+        client_rbac, engine, admin_auth, suffix, sorted(SALES_MATERIALS_PERMISSIONS), role_prefix="MAT_OFF_OK"
+    )
+    admin_login = _login(client_rbac, *admin_auth)
+    for fname in ("brief.docx", "slides.pptx", "sheet.xlsx"):
+        created = _admin_upload(
+            client_rbac,
+            admin_login.cookies,
+            title=f"Office_{fname}_{suffix}",
+            confidentiality="public",
+            filename=fname,
+            content=b"PK fake office",
+        )
+        r = client.get(f"/api/materials/{created['id']}/preview", cookies=cookies)
+        assert r.status_code == 200, r.text
+        assert r.content == _MIN_PDF
+        assert "application/pdf" in (r.headers.get("content-type") or "")
+        assert "inline" in (r.headers.get("content-disposition") or "").lower()
+
+
+def test_office_preview_conversion_failure(client_rbac, engine, admin_auth, monkeypatch):
+    from services.material_preview_conversion import MaterialPreviewConversionError
+
+    def _fail(**kwargs):
+        raise MaterialPreviewConversionError("mock failure")
+
+    monkeypatch.setattr("services.company_materials.convert_office_to_preview_pdf", _fail)
+    suffix = f"office_fail_{os.getpid()}"
+    client, cookies = _create_user_with_perms(
+        client_rbac, engine, admin_auth, suffix, sorted(SALES_MATERIALS_PERMISSIONS), role_prefix="MAT_OFF_FAIL"
+    )
+    admin_login = _login(client_rbac, *admin_auth)
+    created = _admin_upload(
+        client_rbac,
+        admin_login.cookies,
+        title=f"Fail_{suffix}",
         confidentiality="public",
         filename="brief.docx",
         content=b"PK docx",
     )
     r = client.get(f"/api/materials/{created['id']}/preview", cookies=cookies)
     assert r.status_code == 400
-    assert "暂不支持在线预览" in str(r.json().get("detail", ""))
+    assert "暂无法生成预览" in str(r.json().get("detail", ""))
+
+
+def test_office_preview_forbidden_without_permission(client_rbac, engine, admin_auth, monkeypatch):
+    monkeypatch.setattr(
+        "services.company_materials.convert_office_to_preview_pdf",
+        _mock_office_convert_write_pdf,
+    )
+    suffix = f"office_forbid_{os.getpid()}"
+    client, cookies = _create_user_with_perms(
+        client_rbac,
+        engine,
+        admin_auth,
+        suffix,
+        ("materials.public.read",),
+        role_prefix="MAT_OFF_RO",
+    )
+    admin_login = _login(client_rbac, *admin_auth)
+    created = _admin_upload(
+        client_rbac,
+        admin_login.cookies,
+        title=f"RO_{suffix}",
+        confidentiality="public",
+        filename="brief.docx",
+        content=b"PK docx",
+    )
+    r = client.get(f"/api/materials/{created['id']}/preview", cookies=cookies)
+    assert r.status_code == 403
+
+
+def test_delivery_office_internal_preview_no_download(client_rbac, engine, admin_auth, monkeypatch):
+    monkeypatch.setattr(
+        "services.company_materials.convert_office_to_preview_pdf",
+        _mock_office_convert_write_pdf,
+    )
+    suffix = f"del_off_{os.getpid()}"
+    client, cookies = _create_user_with_perms(
+        client_rbac, engine, admin_auth, suffix, sorted(DELIVERY_MATERIALS_PERMISSIONS), role_prefix="MAT_DEL_OFF"
+    )
+    admin_login = _login(client_rbac, *admin_auth)
+    created = _admin_upload(
+        client_rbac,
+        admin_login.cookies,
+        title=f"DIntDoc_{suffix}",
+        confidentiality="internal",
+        filename="internal.docx",
+        content=b"PK docx",
+    )
+    detail = client.get(f"/api/materials/{created['id']}", cookies=cookies).json()
+    assert detail["can_preview"] is True
+    assert detail["can_download"] is False
+
+    r_preview = client.get(f"/api/materials/{created['id']}/preview", cookies=cookies)
+    assert r_preview.status_code == 200
+    assert "application/pdf" in (r_preview.headers.get("content-type") or "")
+
+    r_dl = client.get(f"/api/materials/{created['id']}/download", cookies=cookies)
+    assert r_dl.status_code == 403
 
 
 def test_materials_preview_route_registered(client_rbac, admin_auth):

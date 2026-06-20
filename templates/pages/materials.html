@@ -295,8 +295,10 @@
                 <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closePreviewModal">&times;</button>
             </div>
             <div class="p-5 min-h-[20rem] max-h-[75vh] overflow-auto">
-                <iframe v-if="previewMode === 'pdf'" :src="previewUrl" class="w-full h-[70vh] border border-[#d0d7de] rounded-lg" title="资料预览"></iframe>
-                <img v-else-if="previewMode === 'image'" :src="previewUrl" class="max-w-full max-h-[70vh] mx-auto block rounded-lg border border-[#d0d7de]" alt="资料预览">
+                <p v-if="previewMode === 'loading'" class="text-sm text-[#57606a] text-center py-12">正在加载预览…</p>
+                <iframe v-else-if="previewMode === 'pdf' && previewUrl" :src="previewUrl" class="w-full h-[70vh] border border-[#d0d7de] rounded-lg" title="资料预览"></iframe>
+                <img v-else-if="previewMode === 'image' && previewUrl" :src="previewUrl" class="max-w-full max-h-[70vh] mx-auto block rounded-lg border border-[#d0d7de]" alt="资料预览">
+                <p v-else-if="previewMode === 'error'" class="text-sm text-[#57606a] text-center py-12">{{ previewErrorMessage || '该文件暂无法生成预览' }}</p>
                 <p v-else class="text-sm text-[#57606a] text-center py-12">该格式暂不支持在线预览，请联系资料管理员</p>
             </div>
         </div>
@@ -414,5 +416,5 @@
 {% endblock %}
 {% block page_scripts %}
 <script src="/static/js/core/crm-api.js"></script>
-<script src="/static/js/pages/materials.js?v=6"></script>
+<script src="/static/js/pages/materials.js?v=8"></script>
 {% endblock %}

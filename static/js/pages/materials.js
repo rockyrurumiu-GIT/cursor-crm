@@ -50,7 +50,12 @@ function buildQuery(filters) {
     return qs ? '?' + qs : '';
 }
 
-const PREVIEWABLE_EXTS = ['.pdf', '.jpg', '.jpeg', '.png'];
+const PREVIEWABLE_EXTS = [
+    '.pdf', '.jpg', '.jpeg', '.png',
+    '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+];
+
+const OFFICE_PREVIEW_EXTS = ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'];
 
 function fileExt(name) {
     const n = String(name || '').trim().toLowerCase();
@@ -64,7 +69,7 @@ function isPreviewableFile(name) {
 
 function previewModeForFile(name) {
     const ext = fileExt(name);
-    if (ext === '.pdf') return 'pdf';
+    if (ext === '.pdf' || OFFICE_PREVIEW_EXTS.includes(ext)) return 'pdf';
     if (ext === '.jpg' || ext === '.jpeg' || ext === '.png') return 'image';
     return 'unsupported';
 }
@@ -104,6 +109,9 @@ createApp({
         const previewUrl = ref('');
         const previewMode = ref('');
         const previewTitle = ref('');
+        const previewLoading = ref(false);
+        const previewErrorMessage = ref('');
+        let previewBlobUrl = '';
 
         const canWriteMaterials = ref(false);
 
@@ -271,17 +279,53 @@ createApp({
             window.location.href = '/api/materials/' + id + '/download';
         }
 
-        function previewMaterial(row) {
+        function revokePreviewBlob() {
+            if (previewBlobUrl) {
+                URL.revokeObjectURL(previewBlobUrl);
+                previewBlobUrl = '';
+            }
+        }
+
+        async function previewMaterial(row) {
             if (!row || !row.id) return;
             previewTitle.value = row.title || row.file_name || '资料预览';
             const mode = previewModeForFile(row.file_name);
-            previewMode.value = mode;
+            previewErrorMessage.value = '';
+            revokePreviewBlob();
+            previewUrl.value = '';
+
             if (mode === 'unsupported') {
-                previewUrl.value = '';
-            } else {
-                previewUrl.value = '/api/materials/' + row.id + '/preview';
+                previewMode.value = 'unsupported';
+                previewLoading.value = false;
+                showPreviewModal.value = true;
+                return;
             }
+
+            previewMode.value = 'loading';
+            previewLoading.value = true;
             showPreviewModal.value = true;
+
+            const url = '/api/materials/' + row.id + '/preview';
+            try {
+                const headers = window.crmAuthHeader ? window.crmAuthHeader() : {};
+                const r = await fetch(url, { credentials: 'same-origin', headers });
+                if (!r.ok) {
+                    const err = await r.json().catch(function () { return {}; });
+                    previewMode.value = 'error';
+                    previewErrorMessage.value = err.detail || '预览失败，请稍后重试';
+                    return;
+                }
+                const blob = await r.blob();
+                revokePreviewBlob();
+                previewBlobUrl = URL.createObjectURL(blob);
+                previewUrl.value = previewBlobUrl;
+                previewMode.value = mode;
+            } catch (e) {
+                previewMode.value = 'error';
+                previewErrorMessage.value = (e && e.message) || '预览失败，请稍后重试';
+            } finally {
+                previewLoading.value = false;
+            }
         }
 
         function closePreviewModal() {
@@ -289,6 +333,9 @@ createApp({
             previewUrl.value = '';
             previewMode.value = '';
             previewTitle.value = '';
+            previewErrorMessage.value = '';
+            previewLoading.value = false;
+            revokePreviewBlob();
         }
 
         async function archiveMaterial(row) {
@@ -326,6 +373,8 @@ createApp({
             previewUrl,
             previewMode,
             previewTitle,
+            previewLoading,
+            previewErrorMessage,
             formMode,
             form,
             detailRow,

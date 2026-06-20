@@ -18,7 +18,10 @@ from auth.service import AuthContext
 from schemas.company_materials import (
     MATERIAL_CATEGORIES,
     MATERIAL_CONFIDENTIALITY,
+    MATERIAL_OFFICE_CONVERT_SUFFIXES,
     MATERIAL_PREVIEWABLE_SUFFIXES,
+    MATERIAL_PREVIEW_CONVERSION_FAILED_MSG,
+    MATERIAL_PREVIEW_UNSUPPORTED_MSG,
     MATERIAL_STATUS,
     MaterialUpdateBody,
     category_label,
@@ -28,9 +31,12 @@ from schemas.company_materials import (
     normalize_status,
     status_label,
 )
+from services.material_preview_conversion import (
+    MaterialPreviewConversionError,
+    convert_office_to_preview_pdf,
+)
 
 _CHUNK_SIZE = 1024 * 1024
-_PREVIEW_UNSUPPORTED_MSG = "该格式暂不支持在线预览，请联系资料管理员"
 
 _MEDIA_TYPE_BY_EXT = {
     ".pdf": "application/pdf",
@@ -575,13 +581,30 @@ def preview_material(
     if not can_preview_confidentiality(ctx, conf):
         raise HTTPException(status_code=403, detail="缺少预览权限")
     abs_path, ext = _resolve_material_file(row, upload_dir=upload_dir)
-    if ext not in MATERIAL_PREVIEWABLE_SUFFIXES:
-        raise HTTPException(status_code=400, detail=_PREVIEW_UNSUPPORTED_MSG)
-    media_type = _MEDIA_TYPE_BY_EXT.get(ext, "application/octet-stream")
-    filename = row.file_name or os.path.basename(abs_path)
-    return FileResponse(
-        abs_path,
-        media_type=media_type,
-        filename=filename,
-        content_disposition_type="inline",
-    )
+    if ext in MATERIAL_PREVIEWABLE_SUFFIXES:
+        media_type = _MEDIA_TYPE_BY_EXT.get(ext, "application/octet-stream")
+        filename = row.file_name or os.path.basename(abs_path)
+        return FileResponse(
+            abs_path,
+            media_type=media_type,
+            filename=filename,
+            content_disposition_type="inline",
+        )
+    if ext in MATERIAL_OFFICE_CONVERT_SUFFIXES:
+        try:
+            pdf_abs = convert_office_to_preview_pdf(
+                source_abs=abs_path,
+                upload_dir=upload_dir,
+                material_id=int(row.id),
+                updated_at=row.updated_at,
+            )
+        except MaterialPreviewConversionError:
+            raise HTTPException(status_code=400, detail=MATERIAL_PREVIEW_CONVERSION_FAILED_MSG)
+        stem = os.path.splitext(row.file_name or os.path.basename(abs_path))[0] or "preview"
+        return FileResponse(
+            pdf_abs,
+            media_type="application/pdf",
+            filename=f"{stem}.pdf",
+            content_disposition_type="inline",
+        )
+    raise HTTPException(status_code=400, detail=MATERIAL_PREVIEW_UNSUPPORTED_MSG)
