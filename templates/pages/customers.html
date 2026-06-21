@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}客户列表 · ITO BMS{% endblock %}
+{% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -48,23 +49,6 @@
         color: #1f2328;
         font-size: 13px;
         word-break: break-word;
-    }
-    #page-app .customers-toolbar .customers-toolbar-control {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        height: 2.25rem;
-        min-height: 2.25rem;
-        padding: 0 1rem;
-        font-size: 0.875rem;
-        line-height: 1.25rem;
-        font-weight: 500;
-        border-radius: 0.5rem;
-        white-space: nowrap;
-    }
-    #page-app .customers-toolbar select.customers-toolbar-control {
-        padding-right: 2rem;
-        width: 100%;
     }
     #page-app .customers-multi-filter {
         position: relative;
@@ -355,57 +339,166 @@
     #page-app .cp-btn-primary:hover {
         background: #16478f;
     }
+
+    /* ==========================================================================
+       客户列表换皮（对齐联系人页 · token dict + shadcn）· 仅作用于 #page-app
+       浅色表头 + 列图标 / 仅横向分割线 / 去斑马 / 柔和 hover / 冻结首列 / 图标版操作
+       ========================================================================== */
+    #page-app .crm-table th.crm-th {
+        background: #F9FAFB;
+        color: #6B7280;
+        border: 0;
+        border-bottom: 1px solid #E5E7EB;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.7625rem;
+        padding: 10px 16px;
+        text-transform: none;
+    }
+    #page-app .crm-table th.crm-th:last-child { border-right: 0; }
+    #page-app .crm-table th.crm-th .ct-th-icon {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        margin-right: 6px;
+        vertical-align: middle;
+        color: #16A39A;
+    }
+    #page-app .crm-table thead th.crm-sticky-right-op {
+        background: #F9FAFB;
+        color: #6B7280;
+        border-color: #E5E7EB;
+    }
+    /* 冻结首列（客户名称） */
+    #page-app .customers-table .customers-sticky-col0 {
+        position: sticky;
+        left: 0;
+        z-index: 11;
+        box-sizing: border-box;
+        background: #fff;
+        background-clip: padding-box;
+        border-right: 1px solid #EEF0F2;
+    }
+    #page-app .customers-table thead .customers-sticky-col0 {
+        background: #F9FAFB;
+        z-index: 31;
+    }
+    /* ===== 深色版表头：仅在暗色侧栏模式下生效（与联系人页一致） ===== */
+    #main-shell.bms-sidebar-dark #page-app {
+        --ct-th-dark-bg: #3B6699;
+        --ct-th-dark-text: #FFFFFF;
+        --ct-th-dark-border: rgba(255, 255, 255, 0.12);
+        --ct-th-dark-icon: #CBD9EC;
+    }
+    #main-shell.bms-sidebar-dark #page-app .crm-table th.crm-th,
+    #main-shell.bms-sidebar-dark #page-app .customers-table thead .customers-sticky-col0,
+    #main-shell.bms-sidebar-dark #page-app .crm-table thead th.crm-sticky-right-op {
+        background: var(--ct-th-dark-bg);
+        color: var(--ct-th-dark-text);
+        border-color: var(--ct-th-dark-border);
+        border-bottom-color: var(--ct-th-dark-border);
+    }
+    #main-shell.bms-sidebar-dark #page-app .crm-table th.crm-th .ct-th-icon {
+        color: var(--ct-th-dark-icon);
+    }
+    /* 数据单元格：去网格竖线，仅留底部分割线 */
+    #page-app .crm-table td.crm-td {
+        border: 0;
+        border-bottom: 1px solid #EEF0F2;
+        color: #1A1D1F;
+        background: #fff;
+        padding: 14px 16px;
+    }
+    /* 去斑马：偶数行恢复白底（含冻结列） */
+    #page-app .crm-table tbody tr:nth-child(even) td.crm-td,
+    #page-app .customers-table tbody tr:nth-child(even) .customers-sticky-col0 {
+        background: #fff;
+    }
+    /* 柔和 hover */
+    #page-app .crm-table tbody tr:hover td.crm-td,
+    #page-app .customers-table tbody tr:hover .customers-sticky-col0 {
+        background: #F9FAFB;
+    }
+    /* 客户名称链接：shadcn 风格主文本 */
+    #page-app .crm-table td.crm-td.crm-name-cell .crm-name-link {
+        color: #0969da;
+        font-weight: 700;
+    }
+    #page-app .crm-table td.crm-td.crm-name-cell .crm-name-link:hover {
+        text-decoration: underline;
+    }
+    /* 操作列：修改 / 删除 改为图标 */
+    #page-app .crm-op-btn-edit,
+    #page-app .crm-op-btn-delete {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem;
+    }
+    #page-app .crm-op-btn-edit svg,
+    #page-app .crm-op-btn-delete svg {
+        width: 15px;
+        height: 15px;
+    }
+    #page-app .crm-op-btn-edit:hover,
+    #page-app .crm-op-btn-delete:hover {
+        text-decoration: none;
+    }
+    #page-app .crm-table tbody td.crm-sticky-right-op { overflow: visible !important; }
+    #page-app .crm-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
 </style>
 {% endblock %}
 {% block content %}
 {% raw %}
 <div id="page-app">
     <div class="container mx-auto p-6 max-w-[1280px] space-y-4">
-        <div class="flex justify-between items-center flex-wrap gap-2">
+        <div class="flex flex-wrap justify-between gap-3 items-center">
             <h1 class="text-2xl font-bold text-gray-900">客户列表</h1>
-            <div class="flex items-center flex-wrap gap-2 customers-toolbar">
-                <a v-if="canWriteClients" href="/customers/new"
-                    class="customers-toolbar-control border border-blue-600 bg-blue-600 text-white hover:bg-[#3D5176]">+ 新增客户</a>
-                <a v-if="canReviewHandoff" href="/customers/reviews"
-                    class="customers-toolbar-control border border-amber-500 bg-white text-amber-700 hover:bg-amber-50">待审交接</a>
-                <button v-if="canExportClients" type="button" @click="exportCSV"
-                    class="customers-toolbar-control border border-blue-600 bg-white text-blue-600 hover:bg-blue-50">导出全量名单 (CSV)</button>
-            </div>
         </div>
-
-        <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] p-2 sm:p-3">
-            <div
-                v-if="!filterPanelExpanded"
-                class="flex flex-wrap items-center justify-between gap-2"
-            >
-                <p class="text-sm font-semibold text-[#1f2328] min-w-0">
-                    合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredClients.length }}</span> 条
-                </p>
-                <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                    <button
-                        type="button"
-                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                        @click="filterPanelExpanded = true"
-                    >展开筛选</button>
-                    <button
-                        type="button"
-                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                        title="回到顶部"
-                        @click="scrollCustomersToTop"
-                    >
-                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
-                    </button>
-                </div>
-            </div>
-            <div v-else class="space-y-2">
-                <div class="crm-filter-row">
+        <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="relative w-full sm:w-[280px]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
                     <input
                         v-model.trim="filterKeyword"
                         type="text"
-                        placeholder="输入客户名称关键词"
-                        class="crm-filter-item crm-filter-control w-[12rem]"
-                        title="客户名称（模糊）"
+                        placeholder="搜索客户名称、城市、联系人…"
+                        class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30"
+                        title="关键词（模糊）"
                     />
+                </div>
+                <button
+                    type="button"
+                    @click="filterPanelExpanded = !filterPanelExpanded"
+                    :class="filterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'"
+                    class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]"
+                >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                    筛选
+                </button>
+                <p class="ml-auto min-w-0 self-end leading-none pb-[7px] text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">
+                    合计（符合筛选条件）：<span>{{ filteredClients.length }}</span> 条
+                </p>
+                <span v-if="canReviewHandoff" class="group relative inline-flex">
+                    <a href="/customers/reviews" aria-label="待审交接" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-amber-300 bg-white text-amber-700 transition-colors hover:bg-amber-50">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m-6 9 2 2 4-4"/></svg>
+                    </a>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">待审交接</span>
+                </span>
+                <span v-if="canExportClients" class="group relative inline-flex">
+                    <button type="button" @click="exportCSV" aria-label="导出全量名单" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 15v2.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V15"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">导出全量名单</span>
+                </span>
+                <span v-if="canWriteClients" class="group relative inline-flex">
+                    <button type="button" @click="openCreateClient" aria-label="新增客户" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3a567f]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">新增客户</span>
+                </span>
+            </div>
+            <div v-if="filterPanelExpanded" class="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#EEF0F2] pt-2.5">
                     <div ref="handoffFilterRef" class="crm-filter-item customers-multi-filter">
                         <button
                             type="button"
@@ -482,69 +575,43 @@
                             </div>
                         </div>
                     </div>
-                    <select v-model="filterSalesOwnerId" class="crm-filter-item crm-filter-control w-[9rem]" title="销售主责">
-                        <option value="">销售主责</option>
-                        <option v-for="u in salesOwnerOptions" :key="'so-' + u.value" :value="u.value">{{ u.label }}</option>
-                    </select>
-                    <button type="button" class="crm-filter-item crm-filter-reset" @click="clearFilters">清除筛选</button>
-                </div>
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-sm font-semibold text-[#1f2328] min-w-0">
-                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredClients.length }}</span> 条
-                    </p>
-                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                        <button
-                            type="button"
-                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                            title="收起筛选区"
-                            @click="filterPanelExpanded = false"
-                        >
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                            title="回到顶部"
-                            @click="scrollCustomersToTop"
-                        >
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" /></svg>
-                        </button>
-                    </div>
-                </div>
+                <select v-model="filterSalesOwnerId" class="crm-filter-item crm-filter-control w-[9rem]" title="销售主责">
+                    <option value="">销售主责</option>
+                    <option v-for="u in salesOwnerOptions" :key="'so-' + u.value" :value="u.value">{{ u.label }}</option>
+                </select>
+                <button type="button" class="crm-filter-item crm-filter-reset" @click="clearFilters">清除筛选</button>
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow overflow-hidden">
+        <div class="bg-white rounded-lg overflow-hidden border border-[#E5E7EB] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
             <div class="crm-h-scroll">
             <table class="crm-table customers-table">
                 <thead>
                     <tr>
-                        <th class="crm-th">客户名称</th>
-                        <th class="crm-th">外包规模</th>
-                        <th class="crm-th">开拓阶段</th>
-                        <th class="crm-th">预估金额</th>
-                        <th class="crm-th">城市</th>
-                        <th class="crm-th">首要联系人</th>
-                        <th class="crm-th">商机</th>
-                        <th class="crm-th">销售部门</th>
-                        <th class="crm-th">销售主责</th>
-                        <th class="crm-th">交付部门</th>
-                        <th class="crm-th">交付主责</th>
-                        <th class="crm-th">招聘部门</th>
-                        <th class="crm-th">招聘主责</th>
-                        <th class="crm-th customers-handoff-col">交接状态</th>
-                        <th class="crm-th">创建时间</th>
-                        <th class="crm-th crm-sticky-right-op">操作</th>
+                        <th class="crm-th customers-sticky-col0"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5h17v10a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5v-10ZM8.5 8.5V6.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/></svg>客户</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 19V5M4 19h16M8 16v-4M12 16V9M16 16v-6"/></svg>外包规模</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 21V4M5 4h11l-2 3 2 3H5"/></svg>开拓阶段</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21c4-4 6-7.2 6-10a6 6 0 1 0-12 0c0 2.8 2 6 6 10ZM12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>城市</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>首要联系人</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.5 19.5h5M10.5 21.5h3M12 3a6 6 0 0 0-3.5 10.9c.4.3.7.8.8 1.3l.2 1.3h5l.2-1.3c.1-.5.4-1 .8-1.3A6 6 0 0 0 12 3Z"/></svg>商机</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9 9.5l3 3.5 3-3.5M12 13v5M9.5 15h5"/></svg>预估金额</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>销售主责</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>交付主责</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>招聘主责</th>
+                        <th class="crm-th customers-handoff-col"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 4l4 4-4 4M20 8H9M8 20l-4-4 4-4M4 16h11"/></svg>交接状态</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>创建时间</th>
+                        <th class="crm-th crm-sticky-right-op"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="c in filteredClients" :key="c.id">
-                        <td class="crm-td crm-name-cell">{{ c.name }}</td>
+                    <tr v-for="c in pagedClients" :key="c.id">
+                        <td class="crm-td crm-name-cell customers-sticky-col0">
+                            <button type="button" class="crm-name-link" @click="openDetail(c)">{{ c.name }}</button>
+                        </td>
                         <td class="crm-td">{{ c.scale }}</td>
                         <td class="crm-td">
                             <span :class="phaseColor(c.phase)" class="px-2 py-1 rounded text-xs">{{ c.phase }}</span>
                         </td>
-                        <td class="crm-td">{{ fmtAmount(c) }}</td>
                         <td class="crm-td">{{ fmtDash(c.city) }}</td>
                         <td class="crm-td">{{ fmtPrimaryContact(c) }}</td>
                         <td class="crm-td">
@@ -556,11 +623,9 @@
                             </template>
                             <span v-else class="text-gray-400">—</span>
                         </td>
-                        <td class="crm-td">{{ fmtDash(salesDeptDisplay(c)) }}</td>
+                        <td class="crm-td">{{ fmtAmount(c) }}</td>
                         <td class="crm-td">{{ fmtDash(salesOwnerDisplay(c)) }}</td>
-                        <td class="crm-td">{{ fmtDash(deliveryDeptDisplay(c)) }}</td>
                         <td class="crm-td">{{ fmtDash(deliveryOwnerDisplay(c)) }}</td>
-                        <td class="crm-td">{{ fmtDash(recruitmentDeptDisplay(c)) }}</td>
                         <td class="crm-td">{{ fmtDash(recruitmentOwnerDisplay(c)) }}</td>
                         <td class="crm-td customers-handoff-col">
                             <a :href="`/customers/${c.id}/handoff`"
@@ -574,15 +639,56 @@
                         <td class="crm-td text-gray-500 whitespace-nowrap">{{ formatDateOnly(c.created_at) }}</td>
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div class="crm-op-actions">
-                                <button type="button" @click="openDetail(c)" class="crm-op-btn-detail">详情</button>
-                                <a v-if="canWriteClients" :href="`/customers/${c.id}/edit`" class="crm-op-btn-edit">修改</a>
-                                <button v-if="canDeleteClients" type="button" @click="confirmDelete(c)" class="crm-op-btn-delete">删除</button>
+                                <span v-if="canWriteClients" class="group relative inline-flex">
+                                    <a :href="`/customers/${c.id}/edit`" class="crm-op-btn-edit" aria-label="修改">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                    </a>
+                                    <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">修改</span>
+                                </span>
+                                <span v-if="canDeleteClients" class="group relative inline-flex">
+                                    <button type="button" @click="confirmDelete(c)" class="crm-op-btn-delete" aria-label="删除">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                    </button>
+                                    <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">删除</span>
+                                </span>
                             </div>
                         </td>
                     </tr>
                 </tbody>
             </table>
             </div>
+        </div>
+
+        <div v-if="filteredClients.length" class="flex flex-wrap items-center justify-between gap-3 px-1 pt-1">
+            <div class="flex items-center gap-1">
+                <button
+                    type="button"
+                    :disabled="currentPage === 1"
+                    @click="goPage(currentPage - 1)"
+                    class="inline-flex h-9 items-center gap-1 rounded-md px-2.5 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+                    上一页
+                </button>
+                <button
+                    v-for="p in pageNumbers"
+                    :key="'pg-' + p"
+                    type="button"
+                    @click="goPage(p)"
+                    :class="p === currentPage ? 'bg-[#F2F3F7] text-[#1A1D1F]' : 'text-[#344054] hover:bg-[#F9FAFB]'"
+                    class="inline-flex h-9 min-w-[36px] items-center justify-center rounded-md px-2 text-sm font-medium transition-colors"
+                >{{ p }}</button>
+                <button
+                    type="button"
+                    :disabled="currentPage === totalPages"
+                    @click="goPage(currentPage + 1)"
+                    class="inline-flex h-9 items-center gap-1 rounded-md px-2.5 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                    下一页
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6"/></svg>
+                </button>
+            </div>
+            <div class="text-sm font-medium text-[#475467]">10 条 / 页</div>
         </div>
     </div>
 
@@ -703,6 +809,94 @@
             <div class="crm-form-modal-footer">
                 <button type="button" @click="showAddVisit=false" class="flex-1 bg-gray-200 py-2 rounded">取消</button>
                 <button type="button" @click="submitVisit" class="flex-1 bg-blue-600 text-white py-2 rounded">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div v-if="showCreateClient" class="crm-esc-modal crm-form-modal-overlay z-[210]" @click.self="showCreateClient=false">
+        <div class="crm-form-modal-panel max-w-2xl" @click.stop>
+            <div class="crm-form-modal-header">
+                <h3 class="font-bold text-lg">新增客户</h3>
+            </div>
+            <div class="crm-form-modal-body">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <div><label class="text-xs text-gray-500">客户名称 <span class="text-red-500">*</span></label><input v-model="createForm.name" class="crm-form-control" placeholder="客户全称"></div>
+                    <div><label class="text-xs text-gray-500">行业 <span class="text-red-500">*</span></label><input v-model="createForm.industry" class="crm-form-control"></div>
+                    <div><label class="text-xs text-gray-500">销售部门 <span class="text-red-500">*</span></label>
+                        <select v-model="createForm.owner_dept_id" class="crm-form-control">
+                            <option value="">未指定</option>
+                            <option v-for="d in assignDepts" :key="'sd-'+d.id" :value="String(d.id)">{{ d.name || d.code }}</option>
+                        </select>
+                    </div>
+                    <div><label class="text-xs text-gray-500">销售主责 <span class="text-red-500">*</span></label>
+                        <select v-model="createForm.owner_user_id" class="crm-form-control">
+                            <option value="">未指定</option>
+                            <option v-for="u in assignUsers" :key="'su-'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                        </select>
+                    </div>
+                    <div><label class="text-xs text-gray-500">交付部门 <span class="text-red-500">*</span></label>
+                        <select v-model="createForm.delivery_dept_id" class="crm-form-control">
+                            <option value="">未指定</option>
+                            <option v-for="d in assignDepts" :key="'dd-'+d.id" :value="String(d.id)">{{ d.name || d.code }}</option>
+                        </select>
+                    </div>
+                    <div><label class="text-xs text-gray-500">交付主责 <span class="text-red-500">*</span></label>
+                        <select v-model="createForm.delivery_owner_user_id" class="crm-form-control">
+                            <option value="">未指定</option>
+                            <option v-for="u in assignUsers" :key="'du-'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                        </select>
+                    </div>
+                    <div><label class="text-xs text-gray-500">招聘部门 <span class="text-red-500">*</span></label>
+                        <select v-model="createForm.recruitment_dept_id" class="crm-form-control">
+                            <option value="">未指定</option>
+                            <option v-for="d in assignDepts" :key="'rd-'+d.id" :value="String(d.id)">{{ d.name || d.code }}</option>
+                        </select>
+                    </div>
+                    <div><label class="text-xs text-gray-500">招聘主责 <span class="text-red-500">*</span></label>
+                        <select v-model="createForm.recruitment_owner_user_id" class="crm-form-control">
+                            <option value="">未指定</option>
+                            <option v-for="u in assignUsers" :key="'ru-'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                        </select>
+                    </div>
+                    <div><label class="text-xs text-gray-500">外包规模 <span class="text-red-500">*</span></label><input v-model="createForm.scale" class="crm-form-control" placeholder="例如：10人月"></div>
+                    <div><label class="text-xs text-gray-500">开拓阶段 <span class="text-red-500">*</span></label>
+                        <select v-model="createForm.phase" class="crm-form-control">
+                            <option value="初步接触">初步接触</option>
+                            <option value="方案/报价">方案/报价</option>
+                            <option value="合同签订">合同签订</option>
+                            <option value="成交">成交</option>
+                        </select>
+                    </div>
+                    <div><label class="text-xs text-gray-500">客户所在城市 <span class="text-red-500">*</span></label><input v-model="createForm.city" class="crm-form-control" placeholder="例如：深圳"></div>
+                    <div><label class="text-xs text-gray-500">获客渠道 <span class="text-red-500">*</span></label>
+                        <select v-model="createForm.contact_acquisition_channel" class="crm-form-control">
+                            <option value="">请选择</option>
+                            <option value="个人">个人</option>
+                            <option value="公司">公司</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                    <div><label class="text-xs text-gray-500">联系人姓名 <span class="text-red-500">*</span></label><input v-model="createForm.contact_name" class="crm-form-control"></div>
+                    <div><label class="text-xs text-gray-500">联系人职位 <span class="text-red-500">*</span></label><input v-model="createForm.contact_title" class="crm-form-control"></div>
+                    <div><label class="text-xs text-gray-500">联系方式 <span class="text-red-500">*</span></label><input v-model="createForm.contact_info" class="crm-form-control" placeholder="电话、微信等"></div>
+                    <div><label class="text-xs text-gray-500">联系人关系 <span class="text-red-500">*</span></label>
+                        <select v-model="createForm.contact_relationship" class="crm-form-control">
+                            <option value="">请选择</option>
+                            <option value="普通">普通</option>
+                            <option value="良好">良好</option>
+                            <option value="密切">密切</option>
+                        </select>
+                    </div>
+                    <div><label class="text-xs text-gray-500">联系人+1</label><input v-model="createForm.contact_superior_contact" class="crm-form-control" placeholder="联系人的上级"></div>
+                    <div class="sm:col-span-2"><label class="text-xs text-gray-500">联系人说明 <span class="text-red-500">*</span></label><textarea v-model="createForm.contact_description" rows="2" class="w-full border border-gray-300 rounded-md p-2 text-sm" placeholder="联系人的具体情况"></textarea></div>
+                    <div class="sm:col-span-2"><label class="text-xs text-gray-500">描述 <span class="text-red-500">*</span></label><textarea v-model="createForm.description" rows="3" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
+                    <div class="sm:col-span-2"><label class="text-xs text-gray-500">备注</label><textarea v-model="createForm.remarks" rows="2" class="w-full border border-gray-300 rounded-md p-2 text-sm" placeholder="可选"></textarea></div>
+                    <p v-if="createError" class="sm:col-span-2 text-sm text-red-600">{{ createError }}</p>
+                </div>
+            </div>
+            <div class="crm-form-modal-footer">
+                <button type="button" @click="showCreateClient=false" class="flex-1 bg-gray-100 py-2 rounded">取消</button>
+                <button type="button" @click="saveCreateClient" :disabled="createSaving" class="flex-1 bg-[#4C6491] text-white py-2 rounded disabled:opacity-50">{{ createSaving ? '保存中…' : '保存' }}</button>
             </div>
         </div>
     </div>
@@ -1195,6 +1389,29 @@ createApp({
             return rows;
         });
 
+        const pageSize = ref(10);
+        const currentPage = ref(1);
+        const totalPages = computed(() => Math.max(1, Math.ceil(filteredClients.value.length / pageSize.value)));
+        const pagedClients = computed(() => {
+            const start = (currentPage.value - 1) * pageSize.value;
+            return filteredClients.value.slice(start, start + pageSize.value);
+        });
+        const pageNumbers = computed(() => {
+            const total = totalPages.value;
+            const max = 7;
+            let start = Math.max(1, currentPage.value - 3);
+            let end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            const arr = [];
+            for (let i = start; i <= end; i++) arr.push(i);
+            return arr;
+        });
+        const goPage = (p) => {
+            currentPage.value = Math.min(Math.max(1, p), totalPages.value);
+        };
+        watch([filterKeyword, filterSalesOwnerId, filterPhases, filterHandoffStatuses], () => { currentPage.value = 1; }, { deep: true });
+        watch(filteredClients, () => { if (currentPage.value > totalPages.value) currentPage.value = totalPages.value; });
+
         const syncFilterUrl = () => {
             const qs = new URLSearchParams();
             const kw = filterKeyword.value.trim();
@@ -1387,6 +1604,119 @@ createApp({
             });
         };
 
+        const showCreateClient = ref(false);
+        const createSaving = ref(false);
+        const createError = ref('');
+        const emptyCreateForm = () => ({
+            name: '', industry: '',
+            owner_dept_id: '', owner_user_id: '',
+            delivery_dept_id: '', delivery_owner_user_id: '',
+            recruitment_dept_id: '', recruitment_owner_user_id: '',
+            scale: '', phase: '初步接触',
+            city: '', contact_name: '', contact_info: '', contact_title: '',
+            contact_relationship: '', contact_acquisition_channel: '',
+            contact_superior_contact: '', contact_description: '',
+            description: '', remarks: '',
+        });
+        const createForm = ref(emptyCreateForm());
+        const assignDepts = computed(() => assignOptions.value.depts || []);
+        const assignUsers = computed(() => assignOptions.value.users || []);
+
+        const ownerNameFromUserId = (uid) => {
+            if (uid == null || uid === '') return '';
+            const u = (assignOptions.value.users || []).find((x) => String(x.id) === String(uid));
+            return u ? (u.display_name || u.username || '').trim() : '';
+        };
+
+        const openCreateClient = () => {
+            if (!requireClientWrite()) return;
+            const defs = (assignOptions.value && assignOptions.value.defaults) || {};
+            const f = emptyCreateForm();
+            if (defs.owner_dept_id != null) f.owner_dept_id = String(defs.owner_dept_id);
+            if (defs.owner_user_id != null) f.owner_user_id = String(defs.owner_user_id);
+            createForm.value = f;
+            createError.value = '';
+            showCreateClient.value = true;
+        };
+
+        const validateCreateForm = (f) => {
+            const checks = [
+                ['name', '客户名称'],
+                ['industry', '行业'],
+                ['owner_dept_id', '销售部门'],
+                ['owner_user_id', '销售主责'],
+                ['delivery_dept_id', '交付部门'],
+                ['delivery_owner_user_id', '交付主责'],
+                ['recruitment_dept_id', '招聘部门'],
+                ['recruitment_owner_user_id', '招聘主责'],
+                ['scale', '外包规模'],
+                ['phase', '开拓阶段'],
+                ['city', '客户所在城市'],
+                ['contact_acquisition_channel', '获客渠道'],
+                ['contact_name', '联系人姓名'],
+                ['contact_title', '联系人职位'],
+                ['contact_info', '联系方式'],
+                ['contact_relationship', '联系人关系'],
+                ['contact_description', '联系人说明'],
+                ['description', '描述'],
+            ];
+            for (const [key, label] of checks) {
+                if (!String(f[key] ?? '').trim()) {
+                    return `请填写${label}`;
+                }
+            }
+            if (!ownerNameFromUserId(f.owner_user_id)) {
+                return '请选择销售主责';
+            }
+            return '';
+        };
+
+        const saveCreateClient = async () => {
+            if (!requireClientWrite()) return;
+            const f = createForm.value;
+            const err = validateCreateForm(f);
+            if (err) { createError.value = err; return; }
+            const owner = ownerNameFromUserId(f.owner_user_id);
+            createError.value = '';
+            const fd = new FormData();
+            fd.append('name', f.name.trim());
+            fd.append('industry', f.industry.trim());
+            fd.append('owner', owner);
+            fd.append('owner_dept_id', f.owner_dept_id || '');
+            fd.append('owner_user_id', f.owner_user_id || '');
+            fd.append('delivery_dept_id', f.delivery_dept_id || '');
+            fd.append('delivery_owner_user_id', f.delivery_owner_user_id || '');
+            fd.append('recruitment_dept_id', f.recruitment_dept_id || '');
+            fd.append('recruitment_owner_user_id', f.recruitment_owner_user_id || '');
+            fd.append('scale', f.scale.trim());
+            fd.append('phase', f.phase || '');
+            fd.append('city', f.city || '');
+            fd.append('contact_name', f.contact_name || '');
+            fd.append('contact_info', f.contact_info || '');
+            fd.append('contact_title', f.contact_title || '');
+            fd.append('contact_relationship', f.contact_relationship || '');
+            fd.append('contact_acquisition_channel', f.contact_acquisition_channel || '');
+            fd.append('contact_superior_contact', f.contact_superior_contact || '');
+            fd.append('contact_description', f.contact_description || '');
+            fd.append('description', f.description.trim());
+            fd.append('remarks', f.remarks || '');
+            createSaving.value = true;
+            try {
+                const r = await fetch('/api/clients', { method: 'POST', headers: authHeader(), body: fd });
+                if (!r.ok) {
+                    const t = await r.text();
+                    createError.value = '保存失败：' + t;
+                    return;
+                }
+                showCreateClient.value = false;
+                await loadClients();
+            } catch (e) {
+                createError.value = '网络错误';
+            } finally {
+                createSaving.value = false;
+            }
+        };
+
         const openAddVisit = () => {
             if (!requireVisitWrite()) return;
             showAddVisit.value = true;
@@ -1419,10 +1749,6 @@ createApp({
         const isImage = (path) => /\.(jpg|jpeg|png|gif|webp)$/i.test(path);
         const viewFull = (path) => window.crmOpenAuthenticatedFile(path);
 
-        const scrollCustomersToTop = () => {
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        };
-
         onMounted(async () => {
             await loadMe();
             await loadClients();
@@ -1435,6 +1761,7 @@ createApp({
 
         return {
             allClients, filteredClients, handoffMap,
+            pagedClients, currentPage, totalPages, pageNumbers, goPage,
             filterKeyword, filterPhases, filterHandoffStatuses, filterSalesOwnerId, filterPanelExpanded,
             handoffFilterOptions: HANDOFF_FILTER_OPTIONS, phaseFilterOptions: PHASE_FILTER_OPTIONS,
             handoffFilterSummary, handoffFilterDropdownOpen, handoffFilterDraft, handoffFilterRef,
@@ -1444,11 +1771,13 @@ createApp({
             canExportClients, canOpenHandoff, canReviewHandoff,
             toggleHandoffFilterDropdown, toggleHandoffFilterDraft, clearHandoffFilterDraft, applyHandoffFilter,
             togglePhaseFilterDropdown, togglePhaseFilterDraft, clearPhaseFilterDraft, applyPhaseFilter,
-            clearFilters, scrollCustomersToTop,
+            clearFilters,
             showDetail, showAddVisit, showDelete, showOppDrawer, selectedOpp, relatedClient,
             selectedClient, details,
             deleteCaptcha, deleteInput, visitForm, onVisitFileChange,
             loadClients, phaseColor,
+            showCreateClient, createSaving, createError, createForm,
+            assignDepts, assignUsers, openCreateClient, saveCreateClient,
             handoffEntry, handoffStatusLabel, resolveHandoffStatus, handoffBadge,
             clientOpportunities, openOppDrawer, closeOppDrawer,
             fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, displayAmount, displayWinRate, oppStageBadgeClass, hasPrimaryContact,

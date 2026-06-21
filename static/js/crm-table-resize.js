@@ -427,11 +427,9 @@
             return;
         }
         if (table.dataset.tableId === 'customer-visits') {
-            // 冻结列 left = 之前各列宽度累加，须用列宽而非 th.offsetLeft：
-            // 当表格 offsetParent 为 body（外层无定位祖先）时，offsetLeft 会带上
-            // 卡片/侧栏偏移甚至 sticky 位移，导致冻结列被推到右侧、左侧留白。
+            // 冻结前三列（拜访对象/客户/销售）：left = 之前各列宽度累加
             let acc = 0;
-            for (let i = 0; i < 5; i++) {
+            for (let i = 0; i < 3; i++) {
                 const w = readColWidth(i);
                 if (!Number.isFinite(w) || w <= 0) break;
                 table.style.setProperty(`--visit-sticky-col${i}-left`, `${acc}px`);

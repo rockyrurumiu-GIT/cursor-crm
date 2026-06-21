@@ -1,52 +1,213 @@
 {% extends "base.html" %}
-{% block title %}合同 · ITO BMS{% endblock %}
+{% block title %}合同管理 · ITO BMS{% endblock %}
+{% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    .contracts-client-gallery {
+        border-radius: 1.25rem;
+        padding: clamp(1.25rem, 4vw, 2rem);
+        background: linear-gradient(145deg, #f8fafc 0%, rgba(239, 246, 255, 0.88) 45%, rgba(245, 243, 255, 0.75) 100%);
+        border: 1px solid rgba(255, 255, 255, 0.85);
+        box-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.9),
+            0 4px 24px rgba(15, 23, 42, 0.06);
+    }
+    .contracts-client-card {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        min-height: 100%;
+        padding: 1.5rem 1.65rem 1.35rem;
+        border-radius: 1.125rem;
+        border: 1px solid rgba(255, 255, 255, 0.75);
+        background: linear-gradient(
+            155deg,
+            rgba(255, 255, 255, 0.78) 0%,
+            rgba(255, 255, 255, 0.42) 38%,
+            rgba(230, 240, 255, 0.38) 100%
+        );
+        backdrop-filter: blur(18px);
+        -webkit-backdrop-filter: blur(18px);
+        box-shadow:
+            0 10px 40px rgba(15, 23, 42, 0.07),
+            0 2px 8px rgba(15, 23, 42, 0.04),
+            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    }
+    .contracts-client-card__icon {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 9999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+        color: #1e293b;
+        flex-shrink: 0;
+    }
+    .contracts-client-card__eyebrow {
+        margin: 0;
+        font-size: 0.625rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #64748b;
+    }
+    .contracts-client-card__name {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        line-height: 1.35;
+        letter-spacing: -0.02em;
+        color: #0f172a;
+    }
+    .contracts-contract-block {
+        width: 100%;
+        padding: 0.85rem 1rem;
+        border-radius: 0.75rem;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(226, 232, 240, 0.95);
+    }
+    .contracts-contract-block + .contracts-contract-block {
+        margin-top: 0.5rem;
+    }
+    .contracts-contract-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.35rem 0.75rem;
+        margin-bottom: 0.45rem;
+    }
+    .contracts-contract-no {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #334155;
+    }
+    .contracts-status-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.55rem;
+        border-radius: 9999px;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        background: #f1f5f9;
+        color: #475569;
+    }
+    .contracts-meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.15rem 0.35rem;
+        font-size: 0.8125rem;
+        line-height: 1.55;
+        color: #64748b;
+    }
+    .contracts-meta-k {
+        color: #94a3b8;
+        font-weight: 500;
+    }
+    .contracts-milestone-list {
+        margin-top: 0.65rem;
+        padding-top: 0.55rem;
+        border-top: 1px dashed rgba(203, 213, 225, 0.85);
+    }
+    .contracts-milestone-item {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.35rem 0.5rem;
+        font-size: 0.75rem;
+        color: #475569;
+    }
+    .contracts-milestone-item + .contracts-milestone-item {
+        margin-top: 0.35rem;
+    }
+    .contracts-seed-btn {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #0969da;
+    }
+    .contracts-seed-btn:hover {
+        text-decoration: underline;
+    }
+    .contracts-seed-done {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #16a34a;
+    }
+    .contracts-client-empty {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 3rem 1.5rem;
+        color: #94a3b8;
+        font-size: 0.9375rem;
+        border-radius: 1rem;
+        background: rgba(255, 255, 255, 0.35);
+        border: 1px dashed rgba(148, 163, 184, 0.4);
+    }
+</style>
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="contracts-app" class="container mx-auto p-6 max-w-[1280px] space-y-4">
-    <h1 class="text-2xl font-bold text-gray-900">合同与里程碑</h1>
-    <p class="text-sm text-gray-500">交接审批通过后自动生成 SOW 草稿；里程碑可预置结算回款行。</p>
-    <div class="bg-white border rounded-lg overflow-hidden">
-        <div class="crm-h-scroll">
-        <table class="crm-table w-full" data-table-id="contracts">
-            <thead>
-                <tr>
-                    <th class="crm-th">合同号</th>
-                    <th class="crm-th">客户</th>
-                    <th class="crm-th">标题</th>
-                    <th class="crm-th">金额</th>
-                    <th class="crm-th">状态</th>
-                    <th class="crm-th">里程碑</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="c in items" :key="c.id">
-                    <td class="crm-td">{{ c.contract_no }}</td>
-                    <td class="crm-td">{{ c.client_name }}</td>
-                    <td class="crm-td">{{ c.title }}</td>
-                    <td class="crm-td">{{ displayAmount(c.total_amount) }}</td>
-                    <td class="crm-td">{{ c.status_label }}</td>
-                    <td class="crm-td">
-                        <div v-for="m in c.milestones" :key="m.id" class="text-xs mb-1">
-                            {{ m.name }}
-                            <button v-if="!m.settlement_entry_id" type="button" @click="seed(c,m)" class="text-[#0969da] ml-1">预置结算</button>
-                            <span v-else class="text-green-600 ml-1">已预置</span>
-                        </div>
-                    </td>
-                </tr>
-                <tr v-if="!items.length"><td colspan="6" class="crm-td text-center text-gray-400 py-8">暂无合同（需先通过交接审批）</td></tr>
-            </tbody>
-        </table>
-        </div>
+<div id="contracts-app" class="container mx-auto p-4 md:p-6 max-w-[1280px] space-y-4">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-900">合同管理</h1>
+        <p class="text-sm text-gray-500 mt-1">交接审批通过后自动生成 SOW 草稿；里程碑可预置结算回款行。</p>
     </div>
+    <section class="contracts-client-gallery" aria-label="合同客户卡片">
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-6">
+            <article v-for="g in clientGroups" :key="g.client_id" class="contracts-client-card">
+                <div class="contracts-client-card__icon" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                </div>
+                <p class="contracts-client-card__eyebrow">客户</p>
+                <h2 class="contracts-client-card__name">{{ g.client_name || '—' }}</h2>
+                <div class="w-full">
+                    <div v-for="c in g.contracts" :key="c.id" class="contracts-contract-block">
+                        <div class="contracts-contract-head">
+                            <span class="contracts-contract-no">{{ c.contract_no || '—' }}</span>
+                            <span class="contracts-status-badge">{{ c.status_label }}</span>
+                        </div>
+                        <div class="contracts-meta-row">
+                            <span class="contracts-meta-k">标题</span>
+                            <span>{{ c.title || '—' }}</span>
+                        </div>
+                        <div class="contracts-meta-row mt-1">
+                            <span class="contracts-meta-k">金额</span>
+                            <span>{{ displayAmount(c.total_amount) }}</span>
+                        </div>
+                        <div v-if="c.milestones && c.milestones.length" class="contracts-milestone-list">
+                            <div v-for="m in c.milestones" :key="m.id" class="contracts-milestone-item">
+                                <span>{{ m.name }}</span>
+                                <button
+                                    v-if="!m.settlement_entry_id"
+                                    type="button"
+                                    class="contracts-seed-btn"
+                                    @click="seed(c, m)"
+                                >预置结算</button>
+                                <span v-else class="contracts-seed-done">已预置</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </article>
+            <p v-if="!clientGroups.length" class="contracts-client-empty">暂无合同（需先通过交接审批）</p>
+        </div>
+    </section>
 </div>
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, onMounted } = Vue;
+const { createApp, ref, computed, onMounted } = Vue;
 createApp({
     setup() {
         const items = ref([]);
@@ -58,16 +219,32 @@ createApp({
             if (!Number.isFinite(n)) return String(raw || '—');
             return n.toLocaleString('zh-CN');
         };
+        const clientGroups = computed(() => {
+            const map = new Map();
+            for (const c of items.value) {
+                const key = c.client_id != null ? String(c.client_id) : (c.client_name || 'unknown');
+                if (!map.has(key)) {
+                    map.set(key, {
+                        client_id: c.client_id,
+                        client_name: c.client_name,
+                        contracts: [],
+                    });
+                }
+                map.get(key).contracts.push(c);
+            }
+            return Array.from(map.values());
+        });
         const load = async () => {
             const r = await fetch('/api/contracts', { headers: auth() });
             items.value = r.ok ? await r.json() : [];
         };
         const seed = async (c, m) => {
             const r = await fetch(`/api/contracts/${c.id}/milestones/${m.id}/seed-settlement`, { method: 'POST', headers: auth() });
-            if (r.ok) await load(); else alert((await r.json()).detail || '失败');
+            if (r.ok) await load();
+            else alert((await r.json()).detail || '失败');
         };
         onMounted(load);
-        return { items, seed, displayAmount };
+        return { clientGroups, seed, displayAmount };
     },
 }).mount('#contracts-app');
 </script>

@@ -12,10 +12,8 @@
         border-spacing: 0;
         --visit-font-size: 0.8125rem;
         --visit-sticky-col0-left: 0px;
-        --visit-sticky-col1-left: 96px;
-        --visit-sticky-col2-left: 168px;
-        --visit-sticky-col3-left: 240px;
-        --visit-sticky-col4-left: 312px;
+        --visit-sticky-col1-left: 100px;
+        --visit-sticky-col2-left: 220px;
         font-size: var(--visit-font-size);
         line-height: 1.35;
     }
@@ -47,11 +45,9 @@
         text-align: center;
         vertical-align: middle;
     }
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-time,
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-region,
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-city,
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-sales,
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-client {
+    .visit-table[data-table-id="customer-visits"] .visit-sticky-target,
+    .visit-table[data-table-id="customer-visits"] .visit-sticky-client,
+    .visit-table[data-table-id="customer-visits"] .visit-sticky-sales {
         position: sticky;
         box-sizing: border-box;
         background: #fff;
@@ -59,71 +55,53 @@
         overflow: visible;
         text-overflow: clip;
     }
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-time {
+    .visit-table[data-table-id="customer-visits"] .visit-sticky-target {
         left: var(--visit-sticky-col0-left);
-        z-index: 14;
-    }
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-region {
-        left: var(--visit-sticky-col1-left);
-        z-index: 13;
-    }
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-city {
-        left: var(--visit-sticky-col2-left);
         z-index: 12;
     }
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-sales {
-        left: var(--visit-sticky-col3-left);
+    .visit-table[data-table-id="customer-visits"] .visit-sticky-client {
+        left: var(--visit-sticky-col1-left);
         z-index: 11;
     }
-    .visit-table[data-table-id="customer-visits"] .visit-sticky-client {
-        left: var(--visit-sticky-col4-left);
+    .visit-table[data-table-id="customer-visits"] .visit-sticky-sales {
+        left: var(--visit-sticky-col2-left);
         z-index: 10;
         border-right: 1px solid #d0d7de;
         box-shadow: 2px 0 6px -4px rgba(15, 23, 42, 0.12);
     }
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-time,
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-region,
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-city,
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-sales,
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-client {
+    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-target,
+    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-client,
+    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-sales {
         top: 0;
         background: #2f75b5;
     }
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-time { z-index: 64; }
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-region { z-index: 63; }
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-city { z-index: 62; }
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-sales { z-index: 61; }
-    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-client { z-index: 60; }
-    /* 长文本悬停浮层：层级低于左侧冻结列，避免盖住时间～客户名称 */
+    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-target { z-index: 62; }
+    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-client { z-index: 61; }
+    .visit-table[data-table-id="customer-visits"] thead .visit-sticky-sales { z-index: 60; }
+    /* 长文本悬停浮层：层级低于左侧冻结列，避免盖住拜访对象～销售 */
     .visit-table[data-table-id="customer-visits"] .crm-cell-clip-pop {
         z-index: 3;
     }
     .visit-table[data-table-id="customer-visits"] .visit-td.crm-cell-clip-td-open {
         z-index: 3;
     }
-    .visit-table[data-table-id="customer-visits"] tbody tr:nth-child(even) .visit-sticky-time,
-    .visit-table[data-table-id="customer-visits"] tbody tr:nth-child(even) .visit-sticky-region,
-    .visit-table[data-table-id="customer-visits"] tbody tr:nth-child(even) .visit-sticky-city,
-    .visit-table[data-table-id="customer-visits"] tbody tr:nth-child(even) .visit-sticky-sales,
-    .visit-table[data-table-id="customer-visits"] tbody tr:nth-child(even) .visit-sticky-client {
+    .visit-table[data-table-id="customer-visits"] tbody tr:nth-child(even) .visit-sticky-target,
+    .visit-table[data-table-id="customer-visits"] tbody tr:nth-child(even) .visit-sticky-client,
+    .visit-table[data-table-id="customer-visits"] tbody tr:nth-child(even) .visit-sticky-sales {
         background: #f6f8fa;
     }
-    .visit-table[data-table-id="customer-visits"] tbody tr:hover .visit-sticky-time,
-    .visit-table[data-table-id="customer-visits"] tbody tr:hover .visit-sticky-region,
-    .visit-table[data-table-id="customer-visits"] tbody tr:hover .visit-sticky-city,
-    .visit-table[data-table-id="customer-visits"] tbody tr:hover .visit-sticky-sales,
-    .visit-table[data-table-id="customer-visits"] tbody tr:hover .visit-sticky-client {
+    .visit-table[data-table-id="customer-visits"] tbody tr:hover .visit-sticky-target,
+    .visit-table[data-table-id="customer-visits"] tbody tr:hover .visit-sticky-client,
+    .visit-table[data-table-id="customer-visits"] tbody tr:hover .visit-sticky-sales {
         background: #eef6ff;
     }
-    .visit-table th.visit-th-resizable:not(.crm-sticky-right-op):not(.visit-sticky-time):not(.visit-sticky-region):not(.visit-sticky-city):not(.visit-sticky-sales):not(.visit-sticky-client) {
+    .visit-table th.visit-th-resizable:not(.crm-sticky-right-op):not(.visit-sticky-target):not(.visit-sticky-client):not(.visit-sticky-sales) {
         position: relative;
         overflow: visible;
     }
-    .visit-table th.visit-th-resizable.visit-sticky-time,
-    .visit-table th.visit-th-resizable.visit-sticky-region,
-    .visit-table th.visit-th-resizable.visit-sticky-city,
-    .visit-table th.visit-th-resizable.visit-sticky-sales,
-    .visit-table th.visit-th-resizable.visit-sticky-client {
+    .visit-table th.visit-th-resizable.visit-sticky-target,
+    .visit-table th.visit-th-resizable.visit-sticky-client,
+    .visit-table th.visit-th-resizable.visit-sticky-sales {
         position: sticky;
         overflow: visible;
     }
@@ -177,12 +155,10 @@
         vertical-align: middle;
         color: #16A39A;
     }
-    /* 冻结表头（5 左列 + 右操作列）统一浅色底 */
-    #visits-app .visit-table thead .visit-sticky-time,
-    #visits-app .visit-table thead .visit-sticky-region,
-    #visits-app .visit-table thead .visit-sticky-city,
-    #visits-app .visit-table thead .visit-sticky-sales,
+    /* 冻结表头（3 左列 + 右操作列）统一浅色底 */
+    #visits-app .visit-table thead .visit-sticky-target,
     #visits-app .visit-table thead .visit-sticky-client,
+    #visits-app .visit-table thead .visit-sticky-sales,
     #visits-app .visit-table thead th.crm-sticky-right-op {
         background: #F9FAFB;
         color: #6B7280;
@@ -197,28 +173,24 @@
     }
     /* 去斑马（含冻结列） */
     #visits-app .visit-table tbody tr:nth-child(even) td.visit-td,
-    #visits-app .visit-table tbody tr:nth-child(even) .visit-sticky-time,
-    #visits-app .visit-table tbody tr:nth-child(even) .visit-sticky-region,
-    #visits-app .visit-table tbody tr:nth-child(even) .visit-sticky-city,
-    #visits-app .visit-table tbody tr:nth-child(even) .visit-sticky-sales,
-    #visits-app .visit-table tbody tr:nth-child(even) .visit-sticky-client {
+    #visits-app .visit-table tbody tr:nth-child(even) .visit-sticky-target,
+    #visits-app .visit-table tbody tr:nth-child(even) .visit-sticky-client,
+    #visits-app .visit-table tbody tr:nth-child(even) .visit-sticky-sales {
         background: #fff;
     }
     /* 柔和 hover（含冻结列） */
     #visits-app .visit-table tbody tr:hover td.visit-td,
-    #visits-app .visit-table tbody tr:hover .visit-sticky-time,
-    #visits-app .visit-table tbody tr:hover .visit-sticky-region,
-    #visits-app .visit-table tbody tr:hover .visit-sticky-city,
-    #visits-app .visit-table tbody tr:hover .visit-sticky-sales,
-    #visits-app .visit-table tbody tr:hover .visit-sticky-client {
+    #visits-app .visit-table tbody tr:hover .visit-sticky-target,
+    #visits-app .visit-table tbody tr:hover .visit-sticky-client,
+    #visits-app .visit-table tbody tr:hover .visit-sticky-sales {
         background: #F9FAFB;
     }
-    /* 冻结客户名称列右侧分割线柔化 */
-    #visits-app .visit-table .visit-sticky-client {
+    /* 冻结销售列右侧分割线柔化 */
+    #visits-app .visit-table .visit-sticky-sales {
         border-right: 1px solid #EEF0F2;
         box-shadow: none;
     }
-    /* 客户名称：主蓝（提升特异性盖过本页 visit-td 文本色） */
+    /* 拜访对象：主蓝加粗 */
     #visits-app .visit-table td.visit-td.crm-name-cell {
         color: #0969da;
         font-weight: 700;
@@ -237,11 +209,9 @@
     #visits-app .visit-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
     /* 暗色版表头：跟随侧栏暗色模式 */
     #main-shell.bms-sidebar-dark #visits-app .visit-table th.visit-th,
-    #main-shell.bms-sidebar-dark #visits-app .visit-table thead .visit-sticky-time,
-    #main-shell.bms-sidebar-dark #visits-app .visit-table thead .visit-sticky-region,
-    #main-shell.bms-sidebar-dark #visits-app .visit-table thead .visit-sticky-city,
-    #main-shell.bms-sidebar-dark #visits-app .visit-table thead .visit-sticky-sales,
+    #main-shell.bms-sidebar-dark #visits-app .visit-table thead .visit-sticky-target,
     #main-shell.bms-sidebar-dark #visits-app .visit-table thead .visit-sticky-client,
+    #main-shell.bms-sidebar-dark #visits-app .visit-table thead .visit-sticky-sales,
     #main-shell.bms-sidebar-dark #visits-app .visit-table thead th.crm-sticky-right-op {
         background: var(--ct-th-dark-bg, #3B6699);
         color: var(--ct-th-dark-text, #FFFFFF);
@@ -339,14 +309,14 @@
             </colgroup>
             <thead>
                 <tr>
-                    <th class="visit-th visit-th-resizable visit-sticky-time" data-col="0"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>时间</th>
-                    <th class="visit-th visit-th-resizable visit-sticky-region" data-col="1"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5 3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2-6-2ZM9 4.5v13M15 6.5v13"/></svg>区域</th>
-                    <th class="visit-th visit-th-resizable visit-sticky-city" data-col="2"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21c4-4 6-7.2 6-10a6 6 0 1 0-12 0c0 2.8 2 6 6 10ZM12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>城市</th>
-                    <th class="visit-th visit-th-resizable visit-sticky-sales" data-col="3"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>销售</th>
-                    <th class="visit-th visit-th-resizable visit-sticky-client" data-col="4"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5h17v10a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5v-10ZM8.5 8.5V6.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/></svg>客户名称</th>
-                    <th class="visit-th visit-th-resizable" data-col="5"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5.5h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z"/></svg>拜访方式</th>
-                    <th class="visit-th visit-th-resizable" data-col="6"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9ZM12 12.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"/></svg>拜访目标</th>
-                    <th class="visit-th visit-th-resizable" data-col="7"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6.5 18.5a6 6 0 0 1 11 0"/></svg>拜访对象</th>
+                    <th class="visit-th visit-th-resizable visit-sticky-target" data-col="0"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 11.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM6.5 18.5a6 6 0 0 1 11 0"/></svg>拜访对象</th>
+                    <th class="visit-th visit-th-resizable visit-sticky-client" data-col="1"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5h17v10a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5v-10ZM8.5 8.5V6.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/></svg>客户</th>
+                    <th class="visit-th visit-th-resizable visit-sticky-sales" data-col="2"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>销售</th>
+                    <th class="visit-th visit-th-resizable" data-col="3"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5.5h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z"/></svg>拜访方式</th>
+                    <th class="visit-th visit-th-resizable" data-col="4"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>拜访时间</th>
+                    <th class="visit-th visit-th-resizable" data-col="5"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5 3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2-6-2ZM9 4.5v13M15 6.5v13"/></svg>区域</th>
+                    <th class="visit-th visit-th-resizable" data-col="6"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21c4-4 6-7.2 6-10a6 6 0 1 0-12 0c0 2.8 2 6 6 10ZM12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>城市</th>
+                    <th class="visit-th visit-th-resizable" data-col="7"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9ZM12 12.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"/></svg>拜访目标</th>
                     <th class="visit-th visit-th-resizable" data-col="8"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 19a4 4 0 0 0-8 0M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M20.5 19a3.2 3.2 0 0 0-4.3-3M16.8 11a2.4 2.4 0 0 0 0-4"/></svg>我方随行人员</th>
                     <th class="visit-th visit-th-resizable" data-col="9"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM12 9v4l2.5 1.5M9.5 3.5h5"/></svg>拜访时长（分）</th>
                     <th class="visit-th visit-th-resizable" data-col="10"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM8.5 12l2.5 2.5 4.5-5"/></svg>拜访目标是否达成</th>
@@ -357,14 +327,14 @@
             </thead>
             <tbody>
                 <tr v-for="row in filteredItems" :key="row.id">
-                    <td class="visit-td visit-sticky-time">{{ row.week_period || '—' }}</td>
-                    <td class="visit-td visit-sticky-region">{{ row.region || '—' }}</td>
-                    <td class="visit-td visit-sticky-city">{{ row.city || '—' }}</td>
+                    <td class="visit-td visit-sticky-target crm-name-cell">{{ row.target || '—' }}</td>
+                    <td class="visit-td visit-sticky-client">{{ row.client_name || '—' }}</td>
                     <td class="visit-td visit-sticky-sales">{{ row.salesperson || '—' }}</td>
-                    <td class="visit-td visit-sticky-client crm-name-cell">{{ row.client_name || '—' }}</td>
                     <td class="visit-td">{{ row.way || '—' }}</td>
+                    <td class="visit-td">{{ row.week_period || '—' }}</td>
+                    <td class="visit-td">{{ row.region || '—' }}</td>
+                    <td class="visit-td">{{ row.city || '—' }}</td>
                     <td class="visit-td"><div class="crm-cell-clip">{{ row.visit_purpose || '—' }}</div></td>
-                    <td class="visit-td">{{ row.target || '—' }}</td>
                     <td class="visit-td">{{ row.accompanying || '—' }}</td>
                     <td class="visit-td">{{ row.duration_minutes || '—' }}</td>
                     <td class="visit-td">{{ row.result || '—' }}</td>
@@ -412,7 +382,7 @@
         </div>
     </div>
 
-    <div v-if="detailRow" class="crm-esc-modal fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" @click.self="detailRow=null">
+    <div v-if="detailRow" class="crm-esc-modal fixed inset-0 bg-black/40 flex items-center justify-center z-[200] p-4" @click.self="detailRow=null">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <h3 class="text-lg font-bold mb-4">拜访记录详情</h3>
             <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -428,7 +398,7 @@
         </div>
     </div>
 
-    <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-50" @click.self="showForm=false">
+    <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="showForm=false">
         <div class="crm-form-modal-panel max-w-2xl" @click.stop>
             <div class="crm-form-modal-header">
                 <h3 class="font-bold text-lg">{{ form.id ? '修改拜访记录' : '新增拜访记录' }}</h3>
@@ -436,14 +406,14 @@
             <div class="crm-form-modal-body">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                 <div class="sm:col-span-2">
-                    <label class="text-xs text-gray-500">客户 *</label>
+                    <label class="text-xs text-gray-500">客户 <span class="text-red-500">*</span></label>
                     <select v-model.number="form.client_id" class="crm-form-control">
                         <option :value="0" disabled>请选择客户</option>
                         <option v-for="c in filters.clients" :key="c.id" :value="c.id">{{ c.name }}</option>
                     </select>
                 </div>
-                <div><label class="text-xs text-gray-500">日期</label><input v-model="form.week_period" type="date" class="crm-form-control crm-form-control--date"></div>
-                <div><label class="text-xs text-gray-500">区域</label>
+                <div><label class="text-xs text-gray-500">日期 <span class="text-red-500">*</span></label><input v-model="form.week_period" type="date" class="crm-form-control crm-form-control--date"></div>
+                <div><label class="text-xs text-gray-500">区域 <span class="text-red-500">*</span></label>
                     <select v-model="form.region" class="crm-form-control">
                         <option value="">请选择区域</option>
                         <option value="东区">东区</option>
@@ -453,9 +423,9 @@
                         <option value="中区">中区</option>
                     </select>
                 </div>
-                <div><label class="text-xs text-gray-500">城市</label><input v-model="form.city" class="crm-form-control" placeholder="如：广州、深圳"></div>
-                <div><label class="text-xs text-gray-500">销售</label><input v-model="form.salesperson" class="crm-form-control"></div>
-                <div><label class="text-xs text-gray-500">拜访方式</label>
+                <div><label class="text-xs text-gray-500">城市 <span class="text-red-500">*</span></label><input v-model="form.city" class="crm-form-control" placeholder="如：广州、深圳"></div>
+                <div><label class="text-xs text-gray-500">销售 <span class="text-red-500">*</span></label><input v-model="form.salesperson" class="crm-form-control"></div>
+                <div><label class="text-xs text-gray-500">拜访方式 <span class="text-red-500">*</span></label>
                     <select v-model="form.way" class="crm-form-control">
                         <option value="">请选择拜访方式</option>
                         <option value="现场">现场</option>
@@ -465,11 +435,11 @@
                         <option value="线上会议">线上会议</option>
                     </select>
                 </div>
-                <div class="sm:col-span-2"><label class="text-xs text-gray-500">拜访目标</label><textarea v-model="form.visit_purpose" rows="2" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
-                <div><label class="text-xs text-gray-500">拜访对象</label><input v-model="form.target" class="crm-form-control"></div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">拜访目标 <span class="text-red-500">*</span></label><textarea v-model="form.visit_purpose" rows="2" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
+                <div><label class="text-xs text-gray-500">拜访对象 <span class="text-red-500">*</span></label><input v-model="form.target" class="crm-form-control"></div>
                 <div><label class="text-xs text-gray-500">我方随行人员</label><input v-model="form.accompanying" class="crm-form-control"></div>
-                <div><label class="text-xs text-gray-500">拜访时长（分）</label><input v-model="form.duration_minutes" class="crm-form-control"></div>
-                <div><label class="text-xs text-gray-500">拜访目标是否达成</label>
+                <div><label class="text-xs text-gray-500">拜访时长（分） <span class="text-red-500">*</span></label><input v-model="form.duration_minutes" class="crm-form-control"></div>
+                <div><label class="text-xs text-gray-500">拜访目标是否达成 <span class="text-red-500">*</span></label>
                     <select v-model="form.result" class="crm-form-control">
                         <option value="">请选择</option>
                         <option value="全部达成">全部达成</option>
@@ -477,8 +447,8 @@
                         <option value="未达成">未达成</option>
                     </select>
                 </div>
-                <div class="sm:col-span-2"><label class="text-xs text-gray-500">拜访纪要</label><textarea v-model="form.visit_summary" rows="3" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
-                <div class="sm:col-span-2"><label class="text-xs text-gray-500">下一步行动</label><textarea v-model="form.next_plan" rows="2" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">拜访纪要 <span class="text-red-500">*</span></label><textarea v-model="form.visit_summary" rows="3" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">下一步行动 <span class="text-red-500">*</span></label><textarea v-model="form.next_plan" rows="2" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
             </div>
             </div>
             <div class="crm-form-modal-footer">
@@ -491,5 +461,5 @@
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/customer_visits.js?v=9"></script>
+<script src="/static/js/customer_visits.js?v=11"></script>
 {% endblock %}

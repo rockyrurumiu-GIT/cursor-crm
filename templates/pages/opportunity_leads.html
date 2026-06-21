@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}商机 · ITO BMS{% endblock %}
+{% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -60,18 +61,193 @@
     .crm-table[data-table-id="opportunity-leads"] .crm-td.crm-cell-clip-td-open {
         z-index: 3;
     }
+
+    /* ==========================================================================
+       商机管理换皮（对齐联系人/客户页 · 系统全局皮肤）· 仅作用于 #opp-app
+       浅色表头 + 列图标 / 仅横向分割线 / 去斑马 / 柔和 hover / 图标版操作
+       ========================================================================== */
+    #opp-app .crm-table th.crm-th {
+        background: #F9FAFB;
+        color: #6B7280;
+        border: 0;
+        border-bottom: 1px solid #E5E7EB;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.7625rem;
+        padding: 10px 16px;
+        text-transform: none;
+    }
+    #opp-app .crm-table th.crm-th:last-child { border-right: 0; }
+    #opp-app .crm-table th.crm-th .ct-th-icon {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        margin-right: 6px;
+        vertical-align: middle;
+        color: #16A39A;
+    }
+    /* 冻结表头 + 右操作列同浅底（覆盖原 #2f75b5 蓝表头） */
+    #opp-app .crm-table[data-table-id="opportunity-leads"] thead .opp-sticky-name,
+    #opp-app .crm-table[data-table-id="opportunity-leads"] thead .opp-sticky-client,
+    #opp-app .crm-table thead th.crm-sticky-right-op {
+        background: #F9FAFB;
+        color: #6B7280;
+        border-color: #E5E7EB;
+    }
+    /* ===== 深色版表头：仅在暗色侧栏模式下生效 ===== */
+    #main-shell.bms-sidebar-dark #opp-app {
+        --ct-th-dark-bg: #3B6699;
+        --ct-th-dark-text: #FFFFFF;
+        --ct-th-dark-border: rgba(255, 255, 255, 0.12);
+        --ct-th-dark-icon: #CBD9EC;
+    }
+    #main-shell.bms-sidebar-dark #opp-app .crm-table th.crm-th,
+    #main-shell.bms-sidebar-dark #opp-app .crm-table[data-table-id="opportunity-leads"] thead .opp-sticky-name,
+    #main-shell.bms-sidebar-dark #opp-app .crm-table[data-table-id="opportunity-leads"] thead .opp-sticky-client,
+    #main-shell.bms-sidebar-dark #opp-app .crm-table thead th.crm-sticky-right-op {
+        background: var(--ct-th-dark-bg);
+        color: var(--ct-th-dark-text);
+        border-color: var(--ct-th-dark-border);
+        border-bottom-color: var(--ct-th-dark-border);
+    }
+    #main-shell.bms-sidebar-dark #opp-app .crm-table th.crm-th .ct-th-icon {
+        color: var(--ct-th-dark-icon);
+    }
+    /* 数据单元格：去网格竖线，仅留底部分割线 */
+    #opp-app .crm-table td.crm-td {
+        border: 0;
+        border-bottom: 1px solid #EEF0F2;
+        color: #1A1D1F;
+        background: #fff;
+        padding: 14px 16px;
+    }
+    /* 去斑马：偶数行恢复白底（含冻结列） */
+    #opp-app .crm-table tbody tr:nth-child(even) td.crm-td,
+    #opp-app .crm-table[data-table-id="opportunity-leads"] tbody tr:nth-child(even) .opp-sticky-name,
+    #opp-app .crm-table[data-table-id="opportunity-leads"] tbody tr:nth-child(even) .opp-sticky-client {
+        background: #fff;
+    }
+    /* 柔和 hover */
+    #opp-app .crm-table tbody tr:hover td.crm-td,
+    #opp-app .crm-table[data-table-id="opportunity-leads"] tbody tr:hover .opp-sticky-name,
+    #opp-app .crm-table[data-table-id="opportunity-leads"] tbody tr:hover .opp-sticky-client {
+        background: #F9FAFB;
+    }
+    /* 冻结第二列右侧分割线柔化 */
+    #opp-app .crm-table[data-table-id="opportunity-leads"] .opp-sticky-client {
+        border-right: 1px solid #EEF0F2;
+        box-shadow: none;
+    }
+    /* 名称链接：shadcn 风格主文本 */
+    #opp-app .crm-table td.crm-td.crm-name-cell .crm-name-link {
+        color: #0969da;
+        font-weight: 700;
+    }
+    #opp-app .crm-table td.crm-td.crm-name-cell .crm-name-link:hover {
+        text-decoration: underline;
+    }
+    /* 操作列：改为图标 */
+    #opp-app .crm-op-btn-detail,
+    #opp-app .crm-op-btn-edit,
+    #opp-app .crm-op-btn-delete,
+    #opp-app .crm-op-btn-handoff {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem;
+    }
+    #opp-app .crm-op-btn-detail svg,
+    #opp-app .crm-op-btn-edit svg,
+    #opp-app .crm-op-btn-delete svg,
+    #opp-app .crm-op-btn-handoff svg {
+        width: 15px;
+        height: 15px;
+    }
+    #opp-app .crm-op-btn-detail:hover,
+    #opp-app .crm-op-btn-edit:hover,
+    #opp-app .crm-op-btn-delete:hover,
+    #opp-app .crm-op-btn-handoff:hover {
+        text-decoration: none;
+    }
+    #opp-app .crm-table tbody td.crm-sticky-right-op { overflow: visible !important; }
+    #opp-app .crm-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
+
+    /* 商机详情右侧抽屉字段排版 */
+    #opp-app .opp-drawer-body > section + section { margin-top: 0.75rem; }
+    #opp-app .opp-drawer-section-title {
+        font-size: 14px;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 8px;
+    }
+    #opp-app .opp-drawer-field {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    #opp-app .opp-drawer-field:last-child { border-bottom: none; }
+    #opp-app .opp-drawer-field-label {
+        width: 7rem;
+        flex-shrink: 0;
+        color: #6B7280;
+        font-size: 13px;
+    }
+    #opp-app .opp-drawer-field-value {
+        flex: 1;
+        min-width: 0;
+        color: #111827;
+        word-break: break-word;
+    }
 </style>
 {% endblock %}
 {% block content %}
 {% raw %}
 <div id="opp-app" class="container mx-auto p-6 max-w-[1280px] space-y-4">
     <div class="flex flex-wrap justify-between gap-3 items-center">
-        <div>
-            <h1 class="text-2xl font-bold text-gray-900">商机管理</h1>
-        </div>
-        <button type="button" @click="openNewForm" class="bg-[#4C6491] text-white px-4 py-2 rounded text-sm">+ 新建商机</button>
+        <h1 class="text-2xl font-bold text-gray-900">商机管理</h1>
     </div>
-    <div class="bg-white border rounded-lg overflow-hidden">
+    <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="relative w-full sm:w-[280px]">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                <input
+                    v-model.trim="filterKeyword"
+                    type="text"
+                    placeholder="搜索商机、客户、负责人、联系人…"
+                    class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30"
+                    title="关键词（模糊）"
+                />
+            </div>
+            <button
+                type="button"
+                @click="filterPanelExpanded = !filterPanelExpanded"
+                :class="filterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'"
+                class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]"
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                筛选
+            </button>
+            <p class="ml-auto min-w-0 self-end leading-none pb-[7px] text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">
+                合计（符合筛选条件）：<span>{{ filteredItems.length }}</span> 条
+            </p>
+            <span class="group relative inline-flex">
+                <button type="button" @click="openNewForm" aria-label="新建商机" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3a567f]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg>
+                </button>
+                <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">新建商机</span>
+            </span>
+        </div>
+        <div v-if="filterPanelExpanded" class="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#EEF0F2] pt-2.5">
+            <select v-model="filterStage" class="crm-filter-item crm-filter-control w-[14rem]" title="阶段">
+                <option value="">全部阶段</option>
+                <option v-for="s in stageOptions" :key="'st-' + s.value" :value="s.value">{{ s.label }}</option>
+            </select>
+            <button type="button" class="crm-filter-item crm-filter-reset" @click="clearFilters">清除筛选</button>
+        </div>
+    </div>
+    <div class="bg-white rounded-lg overflow-hidden border border-[#E5E7EB] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
         <div class="crm-h-scroll">
         <table class="crm-table w-full min-w-[1200px]" data-table-id="opportunity-leads">
             <colgroup>
@@ -80,24 +256,26 @@
             </colgroup>
             <thead>
                 <tr>
-                    <th class="crm-th opp-sticky-name">商机名称</th>
-                    <th class="crm-th opp-sticky-client">客户</th>
-                    <th class="crm-th">预估单价(人月)</th>
-                    <th class="crm-th">预估当年金额</th>
-                    <th class="crm-th">赢单率</th>
-                    <th class="crm-th">联系人</th>
-                    <th class="crm-th">阶段</th>
-                    <th class="crm-th">负责人</th>
-                    <th class="crm-th">预计成交日期</th>
-                    <th class="crm-th crm-col-remarks" data-col-min="192">下一步动作</th>
-                    <th class="crm-th crm-col-created-at" data-col-min="144">创建时间</th>
-                    <th class="crm-th crm-sticky-right-op">操作</th>
+                    <th class="crm-th opp-sticky-name"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9.5 19.5h5M10.5 21.5h3M12 3a6 6 0 0 0-3.5 10.9c.4.3.7.8.8 1.3l.2 1.3h5l.2-1.3c.1-.5.4-1 .8-1.3A6 6 0 0 0 12 3Z"/></svg>商机名称</th>
+                    <th class="crm-th opp-sticky-client"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5h17v10a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5v-10ZM8.5 8.5V6.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/></svg>客户</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM9 9.5l3 3.5 3-3.5M12 13v5M9.5 15h5"/></svg>预估单价(人月)</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 19V5M4 19h16M8 16v-4M12 16V9M16 16v-6"/></svg>预估当年金额</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 5 5 19M8.5 7a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM18.5 17a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z"/></svg>赢单率</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>联系人</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 21V4M5 4h11l-2 3 2 3H5"/></svg>阶段</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>负责人</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 4v3M17 4v3M4.5 9.5h15M5.5 6.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1Z"/></svg>预计成交日期</th>
+                    <th class="crm-th crm-col-remarks" data-col-min="192"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5M9 13h6M9 16.5h4"/></svg>下一步动作</th>
+                    <th class="crm-th crm-col-created-at" data-col-min="144"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>创建时间</th>
+                    <th class="crm-th crm-sticky-right-op"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
                 </tr>
             </thead>
             <tbody>
-                <tr v-for="o in items" :key="o.id">
-                    <td class="crm-td opp-sticky-name">{{ o.name || '—' }}</td>
-                    <td class="crm-td opp-sticky-client crm-name-cell">{{ o.client_name || '—' }}</td>
+                <tr v-for="o in pagedItems" :key="o.id">
+                    <td class="crm-td opp-sticky-name crm-name-cell">
+                        <button type="button" class="crm-name-link" @click="openDetail(o)">{{ o.name || '—' }}</button>
+                    </td>
+                    <td class="crm-td opp-sticky-client">{{ o.client_name || '—' }}</td>
                     <td class="crm-td">{{ displayAmount(o.amount) }}</td>
                     <td class="crm-td">{{ displayAmount(o.estimated_current_year_amount) }}</td>
                     <td class="crm-td">{{ displayWinRate(o.probability) }}</td>
@@ -109,52 +287,91 @@
                     <td class="crm-td crm-col-created-at whitespace-nowrap">{{ formatDate(o.created_at) }}</td>
                     <td class="crm-td whitespace-nowrap crm-sticky-right-op">
                         <div class="crm-op-actions">
-                            <button type="button" class="crm-op-btn-detail" @click="openDetail(o)">详情</button>
-                            <button type="button" class="crm-op-btn-edit" @click="openEdit(o)">修改</button>
-                            <button v-if="canDeletePermission('crm.opportunities.delete')" type="button" class="crm-op-btn-delete" @click="remove(o)">删除</button>
-                            <button v-if="o.stage==='won'" type="button" class="crm-op-btn-handoff" @click="createHandoff(o)">交接</button>
+                            <span class="group relative inline-flex">
+                                <button type="button" class="crm-op-btn-edit" @click="openEdit(o)" aria-label="修改">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                </button>
+                                <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">修改</span>
+                            </span>
+                            <span v-if="canDeletePermission('crm.opportunities.delete')" class="group relative inline-flex">
+                                <button type="button" class="crm-op-btn-delete" @click="remove(o)" aria-label="删除">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                </button>
+                                <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">删除</span>
+                            </span>
+                            <span v-if="o.stage==='won'" class="group relative inline-flex">
+                                <button type="button" class="crm-op-btn-handoff" @click="createHandoff(o)" aria-label="交接">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 4l4 4-4 4M20 8H9M8 20l-4-4 4-4M4 16h11"/></svg>
+                                </button>
+                                <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">交接</span>
+                            </span>
                         </div>
                     </td>
                 </tr>
-                <tr v-if="!items.length"><td colspan="12" class="crm-td text-center text-gray-400 py-8">暂无商机</td></tr>
+                <tr v-if="!filteredItems.length"><td colspan="12" class="crm-td text-center text-gray-400 py-8">暂无商机</td></tr>
             </tbody>
         </table>
         </div>
     </div>
 
-    <div v-if="detailRow" class="crm-esc-modal fixed inset-0 z-[200] bg-black/40 flex items-center justify-center p-4 sm:p-6" @click.self="detailRow=null">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[calc(100vh-5rem)] overflow-y-auto p-6">
-            <h3 class="text-lg font-bold mb-4">商机详情</h3>
-            <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <dt class="text-gray-500">商机名称</dt>
-                <dd class="text-gray-900">{{ detailRow.name || '—' }}</dd>
-                <dt class="text-gray-500">客户</dt>
-                <dd class="text-gray-900">{{ detailRow.client_name || '—' }}</dd>
-                <dt class="text-gray-500">预估单价(人月)</dt>
-                <dd class="text-gray-900">{{ displayAmount(detailRow.amount) }}</dd>
-                <dt class="text-gray-500">预估当年金额</dt>
-                <dd class="text-gray-900">{{ displayAmount(detailRow.estimated_current_year_amount) }}</dd>
-                <dt class="text-gray-500">赢单率</dt>
-                <dd class="text-gray-900">{{ displayWinRate(detailRow.probability) }}</dd>
-                <dt class="text-gray-500">阶段</dt>
-                <dd class="text-gray-900">{{ detailRow.stage_label || '—' }}</dd>
-                <dt class="text-gray-500">负责人</dt>
-                <dd class="text-gray-900">{{ detailRow.owner || '—' }}</dd>
-                <dt class="text-gray-500">预计成交日期</dt>
-                <dd class="text-gray-900">{{ detailRow.expected_close_date || '—' }}</dd>
-                <dt class="text-gray-500">联系人</dt>
-                <dd class="text-gray-900">{{ detailRow.contact_name || '—' }}</dd>
-                <dt class="text-gray-500 sm:col-span-2">下一步动作</dt>
-                <dd class="text-gray-900 sm:col-span-2 whitespace-pre-wrap">{{ detailRow.remarks || '—' }}</dd>
-                <dt class="text-gray-500">创建时间</dt>
-                <dd class="text-gray-900">{{ formatDate(detailRow.created_at) }}</dd>
-            </dl>
-            <div class="flex gap-2 mt-4">
-                <button v-if="detailRow.stage==='won'" type="button" @click="createHandoff(detailRow)" class="flex-1 bg-green-600 text-white py-2 rounded text-sm">发起交接</button>
-                <button type="button" @click="detailRow=null" class="flex-1 bg-gray-100 py-2 rounded">关闭</button>
-            </div>
+    <div v-if="filteredItems.length" class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ filteredItems.length }}</span> 条，第 {{ currentPage }} / {{ totalPages }} 页</p>
+        <div class="flex items-center gap-1.5">
+            <button type="button" @click="goPage(currentPage - 1)" :disabled="currentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+            <button
+                v-for="p in pageNumbers"
+                :key="'pg-' + p"
+                type="button"
+                @click="goPage(p)"
+                :class="p === currentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'"
+                class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors"
+            >{{ p }}</button>
+            <button type="button" @click="goPage(currentPage + 1)" :disabled="currentPage >= totalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+            <span class="ml-1 inline-flex h-8 items-center rounded-[6px] border border-[#D7DBE0] bg-[#F9FAFB] px-2.5 text-sm text-[#6B7280]">10 条 / 页</span>
         </div>
     </div>
+
+    <div v-if="detailRow" class="crm-right-drawer-backdrop bg-black/40" @click.self="detailRow=null"></div>
+    <aside v-if="detailRow" class="crm-esc-modal crm-right-drawer open">
+        <div class="flex items-start gap-3 border-b px-4 py-3 shrink-0">
+            <div class="min-w-0 flex-1">
+                <h3 class="text-base font-bold text-gray-900 truncate">{{ detailRow.name || '商机详情' }}</h3>
+                <p class="mt-0.5 text-xs text-gray-500 truncate">{{ detailRow.client_name || '—' }}</p>
+            </div>
+            <button type="button" @click="detailRow=null" aria-label="关闭" class="-mr-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-[18px] w-[18px]" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <div class="opp-drawer-body flex-1 min-h-0 overflow-y-auto px-4 py-3 text-sm">
+            <section>
+                <div class="opp-drawer-section-title">基本信息</div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">客户</div><div class="opp-drawer-field-value">{{ detailRow.client_name || '—' }}</div></div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">阶段</div><div class="opp-drawer-field-value">{{ detailRow.stage_label || '—' }}</div></div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">负责人</div><div class="opp-drawer-field-value">{{ detailRow.owner || '—' }}</div></div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">联系人</div><div class="opp-drawer-field-value">{{ detailRow.contact_name || '—' }}</div></div>
+            </section>
+            <section>
+                <div class="opp-drawer-section-title">金额与预测</div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">预估单价(人月)</div><div class="opp-drawer-field-value">{{ displayAmount(detailRow.amount) }}</div></div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">预估当年金额</div><div class="opp-drawer-field-value">{{ displayAmount(detailRow.estimated_current_year_amount) }}</div></div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">赢单率</div><div class="opp-drawer-field-value">{{ displayWinRate(detailRow.probability) }}</div></div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">预计成交日期</div><div class="opp-drawer-field-value">{{ detailRow.expected_close_date || '—' }}</div></div>
+            </section>
+            <section>
+                <div class="opp-drawer-section-title">跟进</div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">下一步动作</div><div class="opp-drawer-field-value whitespace-pre-wrap">{{ detailRow.remarks || '—' }}</div></div>
+            </section>
+            <section>
+                <div class="opp-drawer-section-title">系统</div>
+                <div class="opp-drawer-field"><div class="opp-drawer-field-label">创建时间</div><div class="opp-drawer-field-value">{{ formatDate(detailRow.created_at) }}</div></div>
+            </section>
+        </div>
+        <div class="flex gap-2 border-t px-4 py-3 shrink-0">
+            <button v-if="detailRow.stage==='won'" type="button" @click="createHandoff(detailRow)" class="flex-1 bg-green-600 text-white py-2 rounded text-sm">发起交接</button>
+                <button type="button" @click="openEdit(detailRow); detailRow=null" class="flex-1 bg-[#456595] text-white py-2 rounded text-sm">修改</button>
+            <button type="button" @click="detailRow=null" class="flex-1 bg-gray-100 py-2 rounded text-sm">关闭</button>
+        </div>
+    </aside>
 
     <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="showForm=false">
         <div class="crm-form-modal-panel max-w-lg" @click.stop>
@@ -251,6 +468,15 @@ function normalizeWinRateForSave(raw) {
     return String(raw || '').replace(/[^\d.]/g, '').replace(/^(\d*\.\d*).*$/, '$1');
 }
 
+const STAGE_OPTIONS = [
+    { value: 'initial', label: '商机确认 / 初步接触' },
+    { value: 'qualifying', label: '需求分析 / 方案匹配' },
+    { value: 'proposal', label: '方案建议 / 报价演示' },
+    { value: 'negotiating', label: '谈判 / 赢单谈判' },
+    { value: 'won', label: '赢单结案 / 签约' },
+    { value: 'lost', label: '输单结案' },
+];
+
 createApp({
     setup() {
         const items = ref([]);
@@ -258,6 +484,53 @@ createApp({
         const contacts = ref([]);
         const showForm = ref(false);
         const detailRow = ref(null);
+        const filterKeyword = ref('');
+        const filterStage = ref('');
+        const filterPanelExpanded = ref(false);
+        const stageOptions = STAGE_OPTIONS;
+        const pageSize = 10;
+        const currentPage = ref(1);
+
+        const filteredItems = computed(() => {
+            const kw = filterKeyword.value.trim().toLowerCase();
+            const stage = filterStage.value;
+            return items.value.filter((o) => {
+                if (stage && o.stage !== stage) return false;
+                if (!kw) return true;
+                const hay = [o.name, o.client_name, o.owner, o.contact_name, o.stage_label]
+                    .map((v) => String(v || '').toLowerCase())
+                    .join(' ');
+                return hay.includes(kw);
+            });
+        });
+
+        const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / pageSize)));
+        const pagedItems = computed(() => {
+            const start = (currentPage.value - 1) * pageSize;
+            return filteredItems.value.slice(start, start + pageSize);
+        });
+        const pageNumbers = computed(() => {
+            const total = totalPages.value;
+            const cur = currentPage.value;
+            const max = 7;
+            if (total <= max) return Array.from({ length: total }, (_, i) => i + 1);
+            let start = Math.max(1, cur - 3);
+            let end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+        });
+        const goPage = (p) => {
+            const n = Math.min(Math.max(1, p), totalPages.value);
+            currentPage.value = n;
+        };
+        const clearFilters = () => {
+            filterKeyword.value = '';
+            filterStage.value = '';
+        };
+        watch([filterKeyword, filterStage], () => { currentPage.value = 1; });
+        watch(() => filteredItems.value.length, () => {
+            if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+        });
         const emptyForm = () => ({
             id: null,
             client_id: '',
@@ -458,6 +731,17 @@ createApp({
 
         return {
             items,
+            filteredItems,
+            pagedItems,
+            filterKeyword,
+            filterStage,
+            filterPanelExpanded,
+            stageOptions,
+            clearFilters,
+            currentPage,
+            totalPages,
+            pageNumbers,
+            goPage,
             clients,
             contacts,
             filteredContacts,

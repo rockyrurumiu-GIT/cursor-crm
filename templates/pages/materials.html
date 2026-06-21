@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}公司资料库 · ITO BMS{% endblock %}
+{% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -118,96 +119,213 @@
         background: #f6f8fa;
         padding: 1rem;
     }
+
+    /* ==========================================================================
+       公司资料库换皮（对齐联系人/客户页 · 系统全局皮肤）· 仅作用于 #materials-app
+       ========================================================================== */
+    #materials-app .crm-table th.crm-th {
+        background: #F9FAFB;
+        color: #6B7280;
+        border: 0;
+        border-bottom: 1px solid #E5E7EB;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.7625rem;
+        padding: 10px 16px;
+        text-transform: none;
+    }
+    #materials-app .crm-table th.crm-th .ct-th-icon {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        margin-right: 6px;
+        vertical-align: middle;
+        color: #16A39A;
+    }
+    /* ===== 深色版表头：仅在暗色侧栏模式下生效 ===== */
+    #main-shell.bms-sidebar-dark #materials-app {
+        --ct-th-dark-bg: #3B6699;
+        --ct-th-dark-text: #FFFFFF;
+        --ct-th-dark-border: rgba(255, 255, 255, 0.12);
+        --ct-th-dark-icon: #CBD9EC;
+    }
+    #main-shell.bms-sidebar-dark #materials-app .crm-table th.crm-th {
+        background: var(--ct-th-dark-bg);
+        color: var(--ct-th-dark-text);
+        border-color: var(--ct-th-dark-border);
+        border-bottom-color: var(--ct-th-dark-border);
+    }
+    #main-shell.bms-sidebar-dark #materials-app .crm-table th.crm-th .ct-th-icon {
+        color: var(--ct-th-dark-icon);
+    }
+    /* 数据单元格：去网格竖线，仅留底部分割线 */
+    #materials-app .crm-table td.crm-td {
+        border: 0;
+        border-bottom: 1px solid #EEF0F2;
+        color: #1A1D1F;
+        background: #fff;
+        padding: 12px 16px;
+    }
+    /* 去斑马 */
+    #materials-app .crm-table tbody tr:nth-child(even) td.crm-td { background: #fff; }
+    /* 柔和 hover */
+    #materials-app .crm-table tbody tr:hover td.crm-td { background: #F9FAFB; }
+    /* 名称链接 */
+    #materials-app .crm-table td.crm-td.crm-name-cell .crm-name-link {
+        color: #0969da;
+        font-weight: 700;
+    }
+    #materials-app .crm-table td.crm-td.crm-name-cell .crm-name-link:hover { text-decoration: underline; }
+    /* 操作列：图标按钮 */
+    #materials-app .crm-op-actions { gap: 0.35rem; }
+    #materials-app .crm-op-btn-edit,
+    #materials-app .crm-op-btn-delete {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem;
+    }
+    #materials-app .crm-op-btn-edit svg,
+    #materials-app .crm-op-btn-delete svg { width: 15px; height: 15px; }
+    #materials-app .crm-op-btn-edit:hover,
+    #materials-app .crm-op-btn-delete:hover { text-decoration: none; }
 </style>
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="materials-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 py-4 sm:px-6 sm:py-5" v-cloak>
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6 flex-1 min-h-0 flex flex-col gap-3">
-        <div class="flex flex-wrap items-center justify-between gap-3 shrink-0">
-            <h1 class="text-2xl font-bold text-gray-900">公司资料库</h1>
+<div id="materials-app" class="container mx-auto max-w-[1280px] p-6 space-y-4" v-cloak>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-2xl font-bold text-gray-900">公司资料库</h1>
+    </div>
+    <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="relative w-full sm:w-[280px]">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                <input
+                    v-model="filters.q"
+                    type="text"
+                    placeholder="搜索资料名称、文件名…（回车搜索）"
+                    class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30"
+                    title="关键词（回车搜索）"
+                    @keyup.enter="loadMaterials"
+                />
+            </div>
             <button
-                v-if="canWriteMaterials"
                 type="button"
-                class="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]"
-                @click="openCreate"
-            >上传资料</button>
+                @click="filterPanelExpanded = !filterPanelExpanded"
+                :class="filterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'"
+                class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]"
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                筛选
+            </button>
+            <p class="ml-auto min-w-0 self-end leading-none pb-[7px] text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">
+                合计：<span>{{ items.length }}</span> 条
+            </p>
+            <span v-if="canWriteMaterials" class="group relative inline-flex">
+                <button type="button" @click="openCreate" aria-label="上传资料" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3a567f]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 0L8 7m4-4 4 4M4 15v2.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V15"/></svg>
+                </button>
+                <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">上传资料</span>
+            </span>
         </div>
-        <div class="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-3 shrink-0 overflow-x-auto">
-            <div class="crm-filter-row flex flex-wrap items-center gap-2">
-                <input v-model="filters.q" type="text" placeholder="关键词" class="crm-filter-control min-w-[120px]" @keyup.enter="loadMaterials" />
-                <select v-model="filters.category" class="crm-filter-control min-w-[140px]">
-                    <option value="">分类（全部）</option>
-                    <option v-for="c in formOptions.categories" :key="c.value" :value="c.value">{{ c.label }}</option>
-                </select>
-                <select v-model="filters.confidentiality" class="crm-filter-control min-w-[120px]">
-                    <option value="">保密等级（全部）</option>
-                    <option v-for="c in formOptions.confidentiality_levels" :key="c.value" :value="c.value">{{ c.label }}</option>
-                </select>
-                <select v-model="filters.owner_dept_id" class="crm-filter-control min-w-[140px]">
-                    <option value="">归属部门（全部）</option>
-                    <option v-for="d in formOptions.depts" :key="d.id" :value="String(d.id)">{{ d.name }}</option>
-                </select>
-                <select v-model="filters.status" class="crm-filter-control min-w-[120px]">
-                    <option v-for="s in formOptions.statuses" :key="s.value" :value="s.value">{{ s.label }}</option>
-                </select>
-                <input v-model="filters.expires_before" type="date" class="crm-filter-control" title="有效期截止" />
-                <button type="button" class="crm-filter-reset" @click="resetFilters">清除</button>
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50" @click="loadMaterials">筛选</button>
-            </div>
+        <div v-if="filterPanelExpanded" class="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#EEF0F2] pt-2.5">
+            <select v-model="filters.category" class="crm-filter-item crm-filter-control min-w-[140px]">
+                <option value="">分类（全部）</option>
+                <option v-for="c in formOptions.categories" :key="c.value" :value="c.value">{{ c.label }}</option>
+            </select>
+            <select v-model="filters.confidentiality" class="crm-filter-item crm-filter-control min-w-[120px]">
+                <option value="">保密等级（全部）</option>
+                <option v-for="c in formOptions.confidentiality_levels" :key="c.value" :value="c.value">{{ c.label }}</option>
+            </select>
+            <select v-model="filters.owner_dept_id" class="crm-filter-item crm-filter-control min-w-[140px]">
+                <option value="">归属部门（全部）</option>
+                <option v-for="d in formOptions.depts" :key="d.id" :value="String(d.id)">{{ d.name }}</option>
+            </select>
+            <select v-model="filters.status" class="crm-filter-item crm-filter-control min-w-[120px]">
+                <option v-for="s in formOptions.statuses" :key="s.value" :value="s.value">{{ s.label }}</option>
+            </select>
+            <input v-model="filters.expires_before" type="date" class="crm-filter-item crm-filter-control" title="有效期截止" />
+            <button type="button" class="crm-filter-item inline-flex h-9 items-center rounded-[6px] border border-[#D7DBE0] bg-white px-3 text-sm font-medium text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB]" @click="loadMaterials">应用筛选</button>
+            <button type="button" class="crm-filter-item crm-filter-reset" @click="resetFilters">清除</button>
         </div>
-        <div class="materials-table-frame border border-[#d0d7de] flex-1 min-h-0 flex flex-col">
-            <div class="crm-h-scroll crm-table-scroll materials-table-scroll flex-1 min-h-0">
-            <table class="crm-table w-full" data-table-id="materials">
-                <thead>
-                    <tr>
-                        <th class="crm-th">序号</th>
-                        <th class="crm-th">资料名称</th>
-                        <th class="crm-th">分类</th>
-                        <th class="crm-th">保密等级</th>
-                        <th class="crm-th">归属部门</th>
-                        <th class="crm-th">文件名</th>
-                        <th class="crm-th">有效期</th>
-                        <th class="crm-th">上传人</th>
-                        <th class="crm-th">更新时间</th>
-                        <th class="crm-th">状态</th>
-                        <th class="crm-th">操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-if="loading">
-                        <td class="crm-td text-center text-gray-500" colspan="11">加载中…</td>
-                    </tr>
-                    <tr v-else-if="!items.length">
-                        <td class="crm-td text-center text-gray-500" colspan="11">暂无资料</td>
-                    </tr>
-                    <tr v-for="(row, idx) in items" :key="row.id">
-                        <td class="crm-td tabular-nums">{{ idx + 1 }}</td>
-                        <td class="crm-td crm-name-cell"><button type="button" class="crm-name-link" @click="openDetail(row)">{{ row.title }}</button></td>
-                        <td class="crm-td">{{ row.category_label }}</td>
-                        <td class="crm-td">
-                            <span :class="confidentialityBadge(row.confidentiality)" class="materials-status-badge">{{ row.confidentiality_label }}</span>
-                        </td>
-                        <td class="crm-td">{{ row.owner_dept_name || '—' }}</td>
-                        <td class="crm-td max-w-[10rem] truncate" :title="row.file_name">{{ row.file_name }}</td>
-                        <td class="crm-td">{{ row.expires_at || '—' }}</td>
-                        <td class="crm-td">{{ row.uploaded_by_name || '—' }}</td>
-                        <td class="crm-td">{{ row.updated_at }}</td>
-                        <td class="crm-td">
-                            <span :class="statusBadge(row.status)" class="materials-status-badge">{{ row.status_label }}</span>
-                        </td>
-                        <td class="crm-td">
-                            <div class="crm-op-actions">
-                                <button v-if="row.can_preview" type="button" class="crm-op-btn-edit" @click="previewMaterial(row)">预览</button>
-                                <button v-if="row.can_download" type="button" class="crm-op-btn-edit" @click="downloadMaterial(row.id)">下载</button>
-                                <button v-if="row.can_write" type="button" class="crm-op-btn-edit" @click="openEdit(row)">编辑</button>
-                                <button v-if="row.can_delete && row.status === 'active'" type="button" class="crm-op-btn-delete" @click="archiveMaterial(row)">删除</button>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-            </div>
+    </div>
+    <div class="bg-white rounded-lg overflow-hidden border border-[#E5E7EB] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+        <div class="crm-h-scroll">
+        <table class="crm-table w-full" data-table-id="materials">
+            <thead>
+                <tr>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 9h14M5 15h14M9 4 7 20M17 4l-2 16"/></svg>序号</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5M9 13h6M9 16.5h4"/></svg>资料名称</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 12.5 11 5h7.5V12.5L11 20 3.5 12.5ZM15.5 8.6h.01"/></svg>分类</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3 5 6v5c0 4 3 6.5 7 8 4-1.5 7-4 7-8V6l-7-3Z"/></svg>保密等级</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5h17v10a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5v-10ZM8.5 8.5V6.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/></svg>归属部门</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3 3 0 0 1 4 4l-8 8a1.5 1.5 0 0 1-2-2l7-7"/></svg>文件名</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 4v3M17 4v3M4.5 9.5h15M5.5 6.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1Z"/></svg>有效期</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>上传人</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>更新时间</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 21V4M5 4h11l-2 3 2 3H5"/></svg>状态</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-if="loading">
+                    <td class="crm-td text-center text-gray-500" colspan="11">加载中…</td>
+                </tr>
+                <tr v-else-if="!items.length">
+                    <td class="crm-td text-center text-gray-500" colspan="11">暂无资料</td>
+                </tr>
+                <tr v-for="(row, idx) in pagedItems" :key="row.id">
+                    <td class="crm-td tabular-nums">{{ (currentPage - 1) * pageSize + idx + 1 }}</td>
+                    <td class="crm-td crm-name-cell"><button type="button" class="crm-name-link" @click="openDetail(row)">{{ row.title }}</button></td>
+                    <td class="crm-td">{{ row.category_label }}</td>
+                    <td class="crm-td">
+                        <span :class="confidentialityBadge(row.confidentiality)" class="materials-status-badge">{{ row.confidentiality_label }}</span>
+                    </td>
+                    <td class="crm-td">{{ row.owner_dept_name || '—' }}</td>
+                    <td class="crm-td max-w-[10rem] truncate" :title="row.file_name">{{ row.file_name }}</td>
+                    <td class="crm-td">{{ row.expires_at || '—' }}</td>
+                    <td class="crm-td">{{ row.uploaded_by_name || '—' }}</td>
+                    <td class="crm-td">{{ row.updated_at }}</td>
+                    <td class="crm-td">
+                        <span :class="statusBadge(row.status)" class="materials-status-badge">{{ row.status_label }}</span>
+                    </td>
+                    <td class="crm-td">
+                        <div class="crm-op-actions">
+                            <button v-if="row.can_preview" type="button" class="crm-op-btn-edit" @click="previewMaterial(row)" aria-label="预览" title="预览">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button v-if="row.can_download" type="button" class="crm-op-btn-edit" @click="downloadMaterial(row.id)" aria-label="下载" title="下载">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 15v2.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V15"/></svg>
+                            </button>
+                            <button v-if="row.can_write" type="button" class="crm-op-btn-edit" @click="openEdit(row)" aria-label="编辑" title="编辑">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            </button>
+                            <button v-if="row.can_delete && row.status === 'active'" type="button" class="crm-op-btn-delete" @click="archiveMaterial(row)" aria-label="删除" title="删除">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <div v-if="!loading && items.length" class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ items.length }}</span> 条，第 {{ currentPage }} / {{ totalPages }} 页</p>
+        <div class="flex items-center gap-1.5">
+            <button type="button" @click="goPage(currentPage - 1)" :disabled="currentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+            <button
+                v-for="p in pageNumbers"
+                :key="'pg-' + p"
+                type="button"
+                @click="goPage(p)"
+                :class="p === currentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'"
+                class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors"
+            >{{ p }}</button>
+            <button type="button" @click="goPage(currentPage + 1)" :disabled="currentPage >= totalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+            <span class="ml-1 inline-flex h-8 items-center rounded-[6px] border border-[#D7DBE0] bg-[#F9FAFB] px-2.5 text-sm text-[#6B7280]">10 条 / 页</span>
         </div>
     </div>
 
@@ -288,7 +406,7 @@
     </aside>
 
     <!-- 预览弹窗 -->
-    <div v-if="showPreviewModal" class="crm-esc-modal crm-form-modal-overlay z-[60]" @click.self="closePreviewModal">
+    <div v-if="showPreviewModal" class="crm-esc-modal crm-form-modal-overlay z-[210]" @click.self="closePreviewModal">
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg truncate">{{ previewTitle || '资料预览' }}</h3>
@@ -305,7 +423,7 @@
     </div>
 
     <!-- 上传/编辑弹窗 -->
-    <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-50" @click.self="closeForm" @dragover.prevent @drop.prevent>
+    <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeForm" @dragover.prevent @drop.prevent>
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ formMode === 'create' ? '上传资料' : '编辑资料' }}</h3>
@@ -416,5 +534,5 @@
 {% endblock %}
 {% block page_scripts %}
 <script src="/static/js/core/crm-api.js"></script>
-<script src="/static/js/pages/materials.js?v=8"></script>
+<script src="/static/js/pages/materials.js?v=9"></script>
 {% endblock %}

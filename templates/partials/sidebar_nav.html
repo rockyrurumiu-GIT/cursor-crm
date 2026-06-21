@@ -8,7 +8,7 @@
     '/goals/quarter', '/goals/personal', '/goals/team',
     '/customers/roster', '/delivery/requirements', '/delivery/pipeline',
     '/delivery/employee_files', '/delivery/interviews', '/delivery/turnover',
-    '/delivery/handoff-pending', '/delivery/handbook', '/delivery/settlement',
+    '/delivery/handbook', '/delivery/settlement',
     '/rms/dashboard', '/rms', '/rms/import-help', '/rms/recommend-help',
     '/system/users'
 ] %}
@@ -56,7 +56,7 @@
             <a class="bms-nav-link{% if ns.active == '/customers' %} is-current{% endif %}" href="/customers" data-crm-nav-perm="crm.clients.read">客户列表</a>
             <a class="bms-nav-link{% if ns.active == '/contacts/all' %} is-current{% endif %}" href="/contacts/all" data-crm-nav-perm="crm.contacts.read">联系人</a>
             <a class="bms-nav-link{% if ns.active == '/customers/visits' %} is-current{% endif %}" href="/customers/visits" data-crm-nav-perm="crm.visits.read">客户拜访</a>
-            <a class="bms-nav-link{% if ns.active == '/contracts' %} is-current{% endif %}" href="/contracts">合同与里程碑</a>
+            <a class="bms-nav-link{% if ns.active == '/contracts' %} is-current{% endif %}" href="/contracts">合同管理</a>
             <a class="bms-nav-link{% if ns.active == '/tools/calc' %} is-current{% endif %}" href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">毛利测算器</a>
             <a class="bms-nav-link{% if ns.active == '/dashboards' %} is-current{% endif %}" href="/dashboards" data-crm-nav-perm="dashboard.read">仪表盘</a>
         </div>
@@ -101,7 +101,6 @@
             <a class="bms-nav-link{% if ns.active == '/delivery/employee_files' %} is-current{% endif %}" href="/delivery/employee_files">员工文件</a>
             <a class="bms-nav-link{% if ns.active == '/delivery/interviews' %} is-current{% endif %}" href="/delivery/interviews">员工访谈</a>
             <a class="bms-nav-link{% if ns.active == '/delivery/turnover' %} is-current{% endif %}" href="/delivery/turnover">离职率分析</a>
-            <a class="bms-nav-link{% if ns.active == '/delivery/handoff-pending' %} is-current{% endif %}" href="/delivery/handoff-pending">项目待审</a>
             <a class="bms-nav-link{% if ns.active == '/delivery/handbook' %} is-current{% endif %}" href="/delivery/handbook">交付手册</a>
             <a class="bms-nav-link{% if ns.active == '/delivery/settlement' %} is-current{% endif %}" href="/delivery/settlement">结算回款</a>
         </div>

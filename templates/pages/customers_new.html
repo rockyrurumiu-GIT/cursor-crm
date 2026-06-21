@@ -6,25 +6,25 @@
     <h1 class="text-2xl font-bold text-gray-900 mb-6">{{ "修改客户" if is_edit else "新增客户" }}</h1>
     <form id="new-client-form" class="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
         <div>
-            <label class="block text-sm font-medium mb-1">客户名称</label>
+            <label class="block text-sm font-medium mb-1">客户名称 <span class="text-red-500">*</span></label>
             <input name="name" required class="w-full p-2 border rounded">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">行业</label>
+            <label class="block text-sm font-medium mb-1">行业 <span class="text-red-500">*</span></label>
             <input name="industry" required class="w-full p-2 border rounded">
         </div>
         <div class="border-t border-gray-100 pt-4 mt-2">
             <p class="text-sm font-bold text-gray-800 mb-3">销售归属</p>
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">销售部门</label>
+                    <label class="block text-sm font-medium mb-1">销售部门 <span class="text-red-500">*</span></label>
                     <select name="owner_dept_id" id="sales-dept-select" class="crm-form-control w-full">
                         <option value="">未指定</option>
                     </select>
                     <p class="text-xs text-gray-500 mt-1">新建时默认当前登录人所属部门</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">销售主责</label>
+                    <label class="block text-sm font-medium mb-1">销售主责 <span class="text-red-500">*</span></label>
                     <select name="owner_user_id" id="sales-owner-select" class="crm-form-control w-full">
                         <option value="">未指定</option>
                     </select>
@@ -36,14 +36,14 @@
             <p class="text-sm font-bold text-gray-800 mb-3">交付归属</p>
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">交付部门</label>
+                    <label class="block text-sm font-medium mb-1">交付部门 <span class="text-red-500">*</span></label>
                     <select name="delivery_dept_id" id="delivery-dept-select" class="crm-form-control w-full">
                         <option value="">未指定</option>
                     </select>
                     <p class="text-xs text-gray-500 mt-1">用于交付模块按部门过滤可见客户</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">交付主责</label>
+                    <label class="block text-sm font-medium mb-1">交付主责 <span class="text-red-500">*</span></label>
                     <select name="delivery_owner_user_id" id="delivery-owner-select" class="crm-form-control w-full">
                         <option value="">未指定</option>
                     </select>
@@ -54,14 +54,14 @@
             <p class="text-sm font-bold text-gray-800 mb-3">招聘归属</p>
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium mb-1">招聘部门</label>
+                    <label class="block text-sm font-medium mb-1">招聘部门 <span class="text-red-500">*</span></label>
                     <select name="recruitment_dept_id" id="recruitment-dept-select" class="crm-form-control w-full">
                         <option value="">未指定</option>
                     </select>
                     <p class="text-xs text-gray-500 mt-1">用于招聘角色按部门过滤可见客户（与销售/交付部门并列生效）</p>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-1">招聘主责</label>
+                    <label class="block text-sm font-medium mb-1">招聘主责 <span class="text-red-500">*</span></label>
                     <select name="recruitment_owner_user_id" id="recruitment-owner-select" class="crm-form-control w-full">
                         <option value="">未指定</option>
                     </select>
@@ -69,11 +69,11 @@
             </div>
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">外包规模</label>
+            <label class="block text-sm font-medium mb-1">外包规模 <span class="text-red-500">*</span></label>
             <input name="scale" required class="w-full p-2 border rounded" placeholder="例如：10人月">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">开拓阶段</label>
+            <label class="block text-sm font-medium mb-1">开拓阶段 <span class="text-red-500">*</span></label>
             <select name="phase" class="crm-form-control">
                 <option>初步接触</option>
                 <option>方案/报价</option>
@@ -92,19 +92,19 @@
             <p class="text-xs text-gray-500 mt-1">= 各商机「预估当年金额 × 赢单率」之和（不含输单商机）</p>
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">联系人姓名</label>
+            <label class="block text-sm font-medium mb-1">联系人姓名 <span class="text-red-500">*</span></label>
             <input name="contact_name" class="w-full p-2 border rounded">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">联系方式</label>
+            <label class="block text-sm font-medium mb-1">联系方式 <span class="text-red-500">*</span></label>
             <input name="contact_info" class="w-full p-2 border rounded" placeholder="电话、微信等">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">联系人职位</label>
+            <label class="block text-sm font-medium mb-1">联系人职位 <span class="text-red-500">*</span></label>
             <input name="contact_title" class="w-full p-2 border rounded">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">联系人关系</label>
+            <label class="block text-sm font-medium mb-1">联系人关系 <span class="text-red-500">*</span></label>
             <select name="contact_relationship" class="crm-form-control">
                 <option value="">请选择</option>
                 <option>普通</option>
@@ -113,7 +113,7 @@
             </select>
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">获客渠道</label>
+            <label class="block text-sm font-medium mb-1">获客渠道 <span class="text-red-500">*</span></label>
             <select name="contact_acquisition_channel" class="crm-form-control">
                 <option value="">请选择</option>
                 <option value="个人">个人</option>
@@ -126,15 +126,15 @@
             <input name="contact_superior_contact" class="w-full p-2 border rounded" placeholder="联系人的上级">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">联系人说明</label>
+            <label class="block text-sm font-medium mb-1">联系人说明 <span class="text-red-500">*</span></label>
             <textarea name="contact_description" rows="3" class="w-full p-2 border rounded" placeholder="联系人的具体情况"></textarea>
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">客户所在城市</label>
+            <label class="block text-sm font-medium mb-1">客户所在城市 <span class="text-red-500">*</span></label>
             <input name="city" class="w-full p-2 border rounded" placeholder="例如：深圳">
         </div>
         <div>
-            <label class="block text-sm font-medium mb-1">描述</label>
+            <label class="block text-sm font-medium mb-1">描述 <span class="text-red-500">*</span></label>
             <textarea name="description" required rows="3" class="w-full p-2 border rounded"></textarea>
         </div>
         <div>
@@ -295,6 +295,43 @@
         }
     }
 
+    var REQUIRED_FIELDS = [
+        ['name', '客户名称'],
+        ['industry', '行业'],
+        ['owner_dept_id', '销售部门'],
+        ['owner_user_id', '销售主责'],
+        ['delivery_dept_id', '交付部门'],
+        ['delivery_owner_user_id', '交付主责'],
+        ['recruitment_dept_id', '招聘部门'],
+        ['recruitment_owner_user_id', '招聘主责'],
+        ['scale', '外包规模'],
+        ['phase', '开拓阶段'],
+        ['contact_name', '联系人姓名'],
+        ['contact_info', '联系方式'],
+        ['contact_title', '联系人职位'],
+        ['contact_relationship', '联系人关系'],
+        ['contact_acquisition_channel', '获客渠道'],
+        ['contact_description', '联系人说明'],
+        ['city', '客户所在城市'],
+        ['description', '描述'],
+    ];
+
+    function validateFormFields() {
+        for (var i = 0; i < REQUIRED_FIELDS.length; i++) {
+            var key = REQUIRED_FIELDS[i][0];
+            var label = REQUIRED_FIELDS[i][1];
+            var el = form.elements[key];
+            if (!el || !String(el.value || '').trim()) {
+                return '请填写' + label;
+            }
+        }
+        syncOwnerFieldFromSalesUser();
+        if (ownerField && !ownerField.value.trim()) {
+            return '请选择销售主责';
+        }
+        return '';
+    }
+
     form.onsubmit = async function (e) {
         e.preventDefault();
         if (!canWriteClient) {
@@ -303,12 +340,13 @@
             return;
         }
         msg.classList.add('hidden');
-        syncOwnerFieldFromSalesUser();
-        if (ownerField && !ownerField.value.trim()) {
-            msg.textContent = '请选择销售主责';
+        var validationErr = validateFormFields();
+        if (validationErr) {
+            msg.textContent = validationErr;
             msg.classList.remove('hidden');
             return;
         }
+        syncOwnerFieldFromSalesUser();
         var fd = new FormData(form);
         var h = window.crmAuthHeader();
         var url = clientId ? ('/api/clients/' + clientId) : '/api/clients';

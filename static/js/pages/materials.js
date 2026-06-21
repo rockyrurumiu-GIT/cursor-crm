@@ -1,7 +1,7 @@
 /**
  * Company materials library page.
  */
-const { createApp, ref, reactive, onMounted, onUnmounted } = Vue;
+const { createApp, ref, reactive, computed, watch, onMounted, onUnmounted } = Vue;
 
 function emptyForm() {
     return {
@@ -79,6 +79,31 @@ createApp({
         const items = ref([]);
         const loading = ref(false);
         const submitting = ref(false);
+        const filterPanelExpanded = ref(false);
+        const pageSize = 10;
+        const currentPage = ref(1);
+
+        const totalPages = computed(() => Math.max(1, Math.ceil(items.value.length / pageSize)));
+        const pagedItems = computed(() => {
+            const start = (currentPage.value - 1) * pageSize;
+            return items.value.slice(start, start + pageSize);
+        });
+        const pageNumbers = computed(() => {
+            const total = totalPages.value;
+            const cur = currentPage.value;
+            const max = 7;
+            if (total <= max) return Array.from({ length: total }, (_, i) => i + 1);
+            let start = Math.max(1, cur - 3);
+            const end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+        });
+        const goPage = (p) => {
+            currentPage.value = Math.min(Math.max(1, p), totalPages.value);
+        };
+        watch(() => items.value.length, () => {
+            if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+        });
         const filters = reactive({
             q: '',
             category: '',
@@ -133,6 +158,7 @@ createApp({
             try {
                 const data = await window.crmApi.get('/api/materials' + buildQuery(filters));
                 items.value = data.items || [];
+                currentPage.value = 1;
             } finally {
                 loading.value = false;
             }
@@ -363,6 +389,13 @@ createApp({
 
         return {
             items,
+            pagedItems,
+            pageSize,
+            currentPage,
+            totalPages,
+            pageNumbers,
+            goPage,
+            filterPanelExpanded,
             loading,
             submitting,
             filters,

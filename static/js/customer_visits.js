@@ -33,12 +33,11 @@ const emptyForm = () => ({
     next_plan: '',
 });
 
-const VISIT_COL_STORAGE = 'visit-table-col-widths-v3';
+const VISIT_COL_STORAGE = 'visit-table-col-widths-v4';
 const VISIT_COL_MIN = 48;
 const VISIT_COL_EDGE = 12;
 const VISIT_COL_DEFAULTS = [
-    96, 72, 72, 72, 120, 80, 200, 100, 120,
-    88, 140, 180, 180, 120,
+    100, 120, 72, 80, 96, 72, 72, 200, 120, 88, 140, 180, 180, 120,
 ];
 
 const detailFields = [
@@ -154,11 +153,34 @@ createApp({
             detailRow.value = { ...row };
         };
 
-        const save = async () => {
-            if (!form.value.client_id) {
-                alert('请选择客户');
-                return;
+        const validateForm = () => {
+            const checks = [
+                ['client_id', '客户', (v) => Number(v) > 0],
+                ['week_period', '日期'],
+                ['region', '区域'],
+                ['city', '城市'],
+                ['salesperson', '销售'],
+                ['way', '拜访方式'],
+                ['visit_purpose', '拜访目标'],
+                ['target', '拜访对象'],
+                ['duration_minutes', '拜访时长（分）'],
+                ['result', '拜访目标是否达成'],
+                ['visit_summary', '拜访纪要'],
+                ['next_plan', '下一步行动'],
+            ];
+            for (const [key, label, test] of checks) {
+                const val = form.value[key];
+                const ok = test ? test(val) : String(val ?? '').trim();
+                if (!ok) {
+                    alert(`请填写${label}`);
+                    return false;
+                }
             }
+            return true;
+        };
+
+        const save = async () => {
+            if (!validateForm()) return;
             const body = { ...form.value };
             delete body.id;
             const url = form.value.id ? `/api/customer-visits/${form.value.id}` : '/api/customer-visits';
