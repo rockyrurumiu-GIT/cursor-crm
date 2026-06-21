@@ -13,6 +13,15 @@ document.addEventListener('DOMContentLoaded', function () {
     if (next && next.charAt(0) === '/' && next.indexOf('//') !== 0) {
         window.__crm_login_next = next;
     }
+    var user = (params.get('user') || '').trim();
+    if (user) {
+        var userInput = document.getElementById('login-user');
+        if (userInput) {
+            userInput.value = user;
+            var pwdInput = document.getElementById('login-pwd');
+            if (pwdInput) { pwdInput.focus(); }
+        }
+    }
 });
 </script>
 {% endblock %}

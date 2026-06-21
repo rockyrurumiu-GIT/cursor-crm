@@ -5,13 +5,103 @@
 
 {% block head_extra %}
 <style>
-    /* 主标题：大字、常规字重（非粗体） */
+    /* 首页 Hero · 参数字典 design-tokens-home-hero-landing.md（作用域限定本页） */
+    #home-hero {
+        --color-bg-base: #0b0a23;
+        --color-text-primary: #FFFFFF;
+        --color-text-secondary: rgba(229, 226, 246, 0.78);
+        --color-accent: #238636;
+        --color-accent-hover: #2ea043;
+        --color-ghost-border: #30363d;
+        --color-ghost-hover-bg: rgba(255, 255, 255, 0.06);
+        --color-input-focus: #58a6ff;
+        --color-input-focus-ring: rgba(88, 166, 255, 0.35);
+        --radius-hero-control: 6px;
+        --shadow-cta-primary: 0 8px 24px rgba(35, 134, 54, 0.35);
+        --line-height-headline: 1.16;
+        --letter-headline: -0.025em;
+    }
+    /* 主标题：大字、加粗（对齐 GitHub 参考） */
     .home-hero-headline {
         font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
             "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-        font-weight: 400;
-        letter-spacing: -0.025em;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        line-height: 1.12;
         font-feature-settings: "kern" 1;
+    }
+    /* 副标题：系统 sans 字体，与 GitHub 参考一致 */
+    .home-hero-sub {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+    }
+    /* 登录组合控件（输入框 + 绿色按钮，参考 GitHub 注册条） */
+    .home-login-combo {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        width: 100%;
+        max-width: 25rem;
+        margin: 0 auto;
+        padding: 0.4rem 0.4rem 0.4rem 0.5rem;
+        background: #eceef1;
+        border: 1px solid rgba(255, 255, 255, 0.6);
+        border-radius: 14px;
+        box-shadow: 0 10px 34px rgba(2, 6, 23, 0.35);
+    }
+    .home-login-input {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 2.85rem;
+        padding: 0 0.9rem;
+        background: transparent;
+        border: none;
+        outline: none;
+        color: #1f2328;
+        font-size: 0.95rem;
+    }
+    .home-login-input::placeholder { color: #6b7280; }
+    .home-login-btn {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 2.85rem;
+        padding: 0 1.35rem;
+        border-radius: 10px;
+        background: var(--color-accent);
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica, Arial, sans-serif;
+        font-weight: 500;
+        font-size: 0.95rem;
+        white-space: nowrap;
+        transition: background-color .18s ease, box-shadow .18s ease;
+    }
+    .home-login-btn:hover { background: var(--color-accent-hover); }
+    .home-login-btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(35, 134, 54, 0.45);
+    }
+    /* 整页背景：靛紫满屏渐变（对齐 GitHub 参考），顶深底亮、两底角压暗 */
+    #home-hero {
+        background:
+            linear-gradient(90deg, rgba(4, 3, 16, 0.85) 0%, rgba(4, 3, 16, 0.45) 14%, transparent 32%, transparent 68%, rgba(4, 3, 16, 0.45) 86%, rgba(4, 3, 16, 0.85) 100%),
+            radial-gradient(ellipse 130% 90% at 50% 118%, rgba(167, 139, 250, 0.55) 0%, rgba(124, 58, 237, 0.42) 22%, rgba(67, 56, 202, 0.32) 42%, transparent 68%),
+            linear-gradient(180deg, #0b0a23 0%, #161046 50%, #241a63 100%);
+    }
+    /* 底部居中光晕：自底向上的紫→蓝 bloom，三层叠加、更聚拢更亮 */
+    .home-hero-floor-glow {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+            radial-gradient(ellipse 64% 42% at 50% 122%, rgba(216, 191, 255, 0.85) 0%, rgba(167, 139, 250, 0.45) 26%, transparent 60%),
+            radial-gradient(ellipse 100% 60% at 50% 114%, rgba(124, 58, 237, 0.55) 0%, rgba(99, 102, 241, 0.20) 40%, transparent 64%),
+            radial-gradient(ellipse 150% 90% at 50% 130%, rgba(168, 85, 247, 0.20) 0%, transparent 60%);
+        animation: homeFloorGlow 7s ease-in-out infinite alternate;
+    }
+    @keyframes homeFloorGlow {
+        from { opacity: 0.85; transform: translateY(6px) scale(1); }
+        to { opacity: 1; transform: translateY(0) scale(1.03); }
     }
     /* 底部 icon：体积光 + 轻微光泽 */
     .home-mascot-img {
@@ -111,34 +201,33 @@
 
 {% block shell_extra_class %}bms-shell-fullscreen{% endblock %}
 
-{% block main_class %}bg-[#010409] min-h-0 flex flex-col{% endblock %}
+{% block main_class %}bg-[#0b0a23] min-h-0 flex flex-col{% endblock %}
 
 {% block content %}
-<section class="relative flex-1 flex flex-col overflow-hidden min-h-[calc(100vh-3.5rem)] text-[#e6edf3]">
-    <!-- 底部紫蓝光晕（模仿 GitHub 首页氛围） -->
-    <div class="absolute inset-0 pointer-events-none bg-[#010409]" aria-hidden="true"
-        style="background-image: radial-gradient(ellipse 130% 90% at 50% 100%, rgba(124, 58, 237, 0.42) 0%, rgba(37, 99, 235, 0.18) 38%, transparent 62%);"></div>
+<section id="home-hero" class="relative flex-1 flex flex-col overflow-hidden min-h-[calc(100vh-3.5rem)] text-[#e6edf3]">
+    <!-- 左上角公司 logo（与右上顶栏同边距对齐） -->
+    <a href="/home" class="absolute left-[calc(64px+1ch)] top-9 z-[60] inline-flex items-center gap-2 select-none" aria-label="ITO BMS 首页">
+        <img src="/static/images/throme-logo.png?v=logo4" class="h-9 w-auto -translate-x-[1ch]" width="484" height="384" alt="Throme" decoding="async">
+        <span class="text-white font-normal tracking-tight text-xl">ITO BMS</span>
+    </a>
+    <!-- 底部居中紫蓝光晕（字典 --color-bg-hero-glow 调优为居中 bloom） -->
+    <div class="home-hero-floor-glow" aria-hidden="true"></div>
     <!-- 星点 -->
     <div class="absolute inset-0 pointer-events-none opacity-60" aria-hidden="true"
         style="background-image: radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.35) 50%, transparent 51%), radial-gradient(1px 1px at 75% 55%, rgba(255,255,255,0.25) 50%, transparent 51%), radial-gradient(1px 1px at 40% 70%, rgba(255,255,255,0.2) 50%, transparent 51%);"></div>
 
-    <div class="relative z-10 flex-1 flex flex-col items-center justify-start px-4 sm:px-6 pt-12 sm:pt-16 md:pt-20 lg:pt-24 pb-40 sm:pb-48 md:pb-52 text-center max-w-[1100px] mx-auto w-full">
-        <h1 class="home-hero-headline text-[2.05rem] sm:text-[2.6rem] md:text-[3rem] lg:text-[3.35rem] text-white mb-4 md:mb-5 leading-[1.16] px-1 max-w-[min(100%,44rem)] text-balance">
+    <div class="relative z-10 flex-1 flex flex-col items-center justify-start px-4 sm:px-6 pt-[15vh] sm:pt-[17vh] md:pt-[19vh] lg:pt-[20vh] pb-40 sm:pb-48 md:pb-52 text-center max-w-[1100px] mx-auto w-full">
+        <h1 class="home-hero-headline text-[2.05rem] sm:text-[2.6rem] md:text-[3rem] lg:text-[3.35rem] text-white mb-4 md:mb-5 px-1 max-w-[min(100%,44rem)] text-balance">
             信任源于客情维护与业务深度
         </h1>
-        <p class="text-sm sm:text-base md:text-lg text-[#8b949e] max-w-2xl mb-9 md:mb-10 leading-relaxed">
-            工具与流程不断迭代，但长期信任来自持续跟进与对业务的理解。借助 ITO BMS，客户、漏斗与团队目标汇聚于同一平台，让协作与沉淀推动增长。
+        <p class="home-hero-sub font-normal text-sm sm:text-base md:text-lg text-white max-w-2xl mb-9 md:mb-10 leading-relaxed">
+            ITO BMS平台：构建高效协同，释放增长潜能
         </p>
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 justify-center w-full max-w-xl">
-            <a href="/login?next=/customers"
-                class="inline-flex h-11 sm:h-12 items-center justify-center rounded-md bg-[#238636] hover:bg-[#2ea043] text-white font-semibold px-6 sm:px-8 text-sm sm:text-base shadow-[0_8px_24px_rgba(35,134,54,0.35)] transition-colors">
-                登录
-            </a>
-            <a href="/customers"
-                class="inline-flex h-11 sm:h-12 items-center justify-center rounded-md border border-[#30363d] bg-transparent hover:bg-white/[0.06] text-white font-semibold px-6 sm:px-8 text-sm sm:text-base transition-colors">
-                客户列表
-            </a>
-        </div>
+        <form action="/login" method="get" class="home-login-combo">
+            <input type="hidden" name="next" value="/customers">
+            <input type="text" name="user" autocomplete="username" placeholder="请输入登录名" class="home-login-input" aria-label="登录名">
+            <button type="submit" class="home-login-btn">登录 BMS</button>
+        </form>
     </div>
 
     <!-- 底部装饰：聚拢三角 + 自下而上光晕 + 星点/四角星 + 轻微浮动 -->
