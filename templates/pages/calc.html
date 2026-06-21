@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}毛利测算器 · ITO BMS{% endblock %}
+{% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -33,7 +34,7 @@
                     自定义金险
                 </button>
                 <button type="button" @click="resetForm"
-                    class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">
+                    class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-[#3D5176]">
                     重置
                 </button>
             </div>

@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (overlay) { overlay.classList.remove('hidden'); }
     if (shell) { shell.classList.add('hidden'); }
     var params = new URLSearchParams(window.location.search || '');
-    var next = params.get('next') || '/home';
+    var next = params.get('next') || '/customers';
     if (next && next.charAt(0) === '/' && next.indexOf('//') !== 0) {
         window.__crm_login_next = next;
     }

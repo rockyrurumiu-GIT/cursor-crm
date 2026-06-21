@@ -870,7 +870,7 @@
                         v-if="canRecommendExistingCandidate && reportMode !== 'existing'"
                         type="button"
                         data-rms-action="open-existing-candidate-picker"
-                        class="mt-3 w-full rounded-md bg-[#0969da] px-3 py-2 text-sm font-medium text-white hover:bg-[#0860ca]"
+                        class="mt-3 w-full rounded-md bg-[#4C6491] px-3 py-2 text-sm font-medium text-white hover:bg-[#3D5176]"
                         @click="openExistingCandidatePicker"
                     >推荐库内人选</button>
                 </div>
@@ -950,7 +950,7 @@
                         <p v-if="reportError" data-rms-report-error class="mb-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{{ reportError }}</p>
                         <div class="flex justify-end gap-2">
                         <button type="button" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md" :disabled="reportSaving" @click="closeCandidateReport">取消</button>
-                        <button v-if="canSubmitCandidateReport" type="button" class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50"
+                        <button v-if="canSubmitCandidateReport" type="button" class="px-3 py-1.5 text-sm bg-[#4C6491] text-white rounded-md disabled:opacity-50"
                             :disabled="reportSaving" @click="submitCandidateReport">{{ reportSaving ? '提交中…' : '提交推荐' }}</button>
                         </div>
                     </div>
@@ -984,7 +984,7 @@
     <section v-show="activeTab === 'jobs' && viewMode !== 'candidateReport'">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 class="text-lg font-medium text-[#1f2328]">岗位</h2>
-            <button v-if="canWriteJobs" type="button" class="rounded-lg bg-[#0969da] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0860ca] shrink-0" @click="openJobModal">新建岗位</button>
+            <button v-if="canWriteJobs" type="button" class="rounded-lg bg-[#4C6491] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#3D5176] shrink-0" @click="openJobModal">新建岗位</button>
         </div>
         <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3 shrink-0">
             <div
@@ -1114,7 +1114,7 @@
                         </td>
                         <td class="crm-td whitespace-nowrap rms-sticky-recommend crm-sticky-right-op crm-op-col-xl">
                             <div class="crm-op-actions">
-                                <button v-if="canWriteApplications && canWriteCandidates" type="button" class="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-blue-700 shrink-0" @click="openCandidateReport(j)">推荐候选人</button>
+                                <button v-if="canWriteApplications && canWriteCandidates" type="button" class="rounded-lg bg-blue-600 px-2.5 py-1 text-xs text-white hover:bg-[#3D5176] shrink-0" @click="openCandidateReport(j)">推荐候选人</button>
                             </div>
                         </td>
                     </tr>
@@ -1186,7 +1186,7 @@
                         合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredCandidates.length }}</span> 条
                     </p>
                     <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                        <button v-if="canWriteCandidates" type="button" class="rounded-lg bg-[#0969da] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#0860ca]" @click="openCandidateModal">新建候选人</button>
+                        <button v-if="canWriteCandidates" type="button" class="rounded-lg bg-[#4C6491] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#3D5176]" @click="openCandidateModal">新建候选人</button>
                         <button
                             type="button"
                             class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
@@ -1351,7 +1351,7 @@
                                     class="flex-1 py-1 text-xs text-[#57606a] hover:bg-[#f6f8fa] rounded"
                                     @click="clearApplicationStatusDraft">清空</button>
                                 <button type="button"
-                                    class="flex-1 py-1 text-xs text-white bg-[#0969da] hover:bg-[#0860ca] rounded"
+                                    class="flex-1 py-1 text-xs text-white bg-[#4C6491] hover:bg-[#3D5176] rounded"
                                     @click="applyApplicationStatusFilter">确定</button>
                             </div>
                         </div>
@@ -1593,7 +1593,7 @@
                                     class="flex-1 py-1 text-xs text-[#57606a] hover:bg-[#f6f8fa] rounded"
                                     @click="clearPipelineStatusDraft">清空</button>
                                 <button type="button"
-                                    class="flex-1 py-1 text-xs text-white bg-[#0969da] hover:bg-[#0860ca] rounded"
+                                    class="flex-1 py-1 text-xs text-white bg-[#4C6491] hover:bg-[#3D5176] rounded"
                                     @click="applyPipelineStatusFilter">确定</button>
                             </div>
                         </div>
@@ -1772,7 +1772,7 @@
                                     class="flex-1 py-1 text-xs text-[#57606a] hover:bg-[#f6f8fa] rounded"
                                     @click="clearOfferStatusDraft">清空</button>
                                 <button type="button"
-                                    class="flex-1 py-1 text-xs text-white bg-[#0969da] hover:bg-[#0860ca] rounded"
+                                    class="flex-1 py-1 text-xs text-white bg-[#4C6491] hover:bg-[#3D5176] rounded"
                                     @click="applyOfferStatusFilter">确定</button>
                             </div>
                         </div>
@@ -1908,7 +1908,7 @@
                 <button type="button" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md" @click="closeDeliveryReviewModal">取消</button>
                 <button type="button" class="px-3 py-1.5 text-sm border border-red-300 text-red-700 rounded-md disabled:opacity-50"
                     :disabled="reviewModalSaving" @click="openDeliveryReviewFailModal">内审失败</button>
-                <button type="button" class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50"
+                <button type="button" class="px-3 py-1.5 text-sm bg-[#4C6491] text-white rounded-md disabled:opacity-50"
                     :disabled="reviewModalSaving" @click="submitDeliveryReview('passed')">内审通过</button>
             </div>
         </div>
@@ -2035,7 +2035,7 @@
                                             class="text-xs text-[#0969da] hover:underline mr-2"
                                         >简历</a>
                                         <span v-else class="text-xs text-[#8c959f] mr-2">无简历</span>
-                                        <button type="button" class="text-xs bg-[#0969da] text-white px-2 py-1 rounded-md hover:bg-[#0860ca]" @click="selectExistingCandidateForReport(c)">选择</button>
+                                        <button type="button" class="text-xs bg-[#4C6491] text-white px-2 py-1 rounded-md hover:bg-[#3D5176]" @click="selectExistingCandidateForReport(c)">选择</button>
                                     </td>
                                 </tr>
                             </tbody>
@@ -2129,7 +2129,7 @@
                 <button v-if="canUseGmCalc" type="button" class="px-4 py-2 rounded-lg border border-[#0969da] text-[#0969da] hover:bg-[#f0f6ff]" @click="openOfferGmCalculator">毛利测算器</button>
                 <div class="flex gap-2 ml-auto">
                     <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de]" @click="closeOfferApprovalModal">取消</button>
-                    <button type="button" class="px-4 py-2 rounded-lg bg-[#0969da] text-white hover:bg-[#0860ca] disabled:opacity-50" :disabled="offerApprovalSaving" @click="submitOfferApproval">{{ offerApprovalSaving ? '提交中…' : '提交审批' }}</button>
+                    <button type="button" class="px-4 py-2 rounded-lg bg-[#4C6491] text-white hover:bg-[#3D5176] disabled:opacity-50" :disabled="offerApprovalSaving" @click="submitOfferApproval">{{ offerApprovalSaving ? '提交中…' : '提交审批' }}</button>
                 </div>
             </div>
         </div>
@@ -2178,7 +2178,7 @@
             </div>
             <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-end shrink-0">
                 <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de]" @click="closeOfferDetailModal">取消</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-[#0969da] text-white hover:bg-[#0860ca] disabled:opacity-50" :disabled="offerActionSaving" @click="submitOfferDetailDecision('approve')">通过</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-[#4C6491] text-white hover:bg-[#3D5176] disabled:opacity-50" :disabled="offerActionSaving" @click="submitOfferDetailDecision('approve')">通过</button>
                 <button type="button" class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50" :disabled="offerActionSaving" @click="submitOfferDetailDecision('reject')">驳回</button>
             </div>
         </div>
@@ -2241,7 +2241,7 @@
                 <button v-if="canUseGmCalc" type="button" class="px-4 py-2 rounded-lg border border-[#0969da] text-[#0969da] hover:bg-[#f0f6ff]" @click="openRosterGmCalculatorFromRms">毛利测算器</button>
                 <div class="flex gap-2">
                     <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de]" @click="closeRosterConvertModal">取消</button>
-                    <button type="button" class="px-4 py-2 rounded-lg bg-[#0969da] text-white hover:bg-[#0860ca] disabled:opacity-50" :disabled="rosterConvertSaving" @click="submitRosterConvert">{{ rosterConvertSaving ? '保存中…' : '保存' }}</button>
+                    <button type="button" class="px-4 py-2 rounded-lg bg-[#4C6491] text-white hover:bg-[#3D5176] disabled:opacity-50" :disabled="rosterConvertSaving" @click="submitRosterConvert">{{ rosterConvertSaving ? '保存中…' : '保存' }}</button>
                 </div>
             </div>
         </div>
@@ -2459,7 +2459,7 @@
             <div class="flex justify-end gap-2 mt-5 shrink-0">
                 <button type="button" @click="closeModal" class="px-3 py-1.5 text-sm border border-[#d0d7de] rounded-md">{{ modalCloseLabel }}</button>
                 <button v-if="modalShowSave" type="button" @click="submitModal" :disabled="modalSaving"
-                    class="px-3 py-1.5 text-sm bg-[#0969da] text-white rounded-md disabled:opacity-50">保存</button>
+                    class="px-3 py-1.5 text-sm bg-[#4C6491] text-white rounded-md disabled:opacity-50">保存</button>
             </div>
         </div>
     </div>

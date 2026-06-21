@@ -31,6 +31,10 @@ _HTML_PROTECTED_PREFIXES = (
 
 _PUBLIC_PATHS = frozenset({"/login", "/api/auth/login", "/api/auth/logout", "/api/auth/legacy-bootstrap"})
 
+# 免登录可访问的公开 HTML 页面（精确匹配）。/home 作为全屏落地页公开，
+# 但 /home/funnel、/home/trash 等子页仍受保护。
+_PUBLIC_HTML_PATHS = frozenset({"/home", "/home/"})
+
 _VISIT_ALLOWED_EXTENSIONS = frozenset({
     ".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".txt", ".doc", ".docx",
 })
@@ -161,7 +165,7 @@ def is_html_page_request(request: Request) -> bool:
     if request.method not in ("GET", "HEAD"):
         return False
     path = request.url.path or ""
-    if path in _PUBLIC_PATHS or path.startswith("/static/"):
+    if path in _PUBLIC_PATHS or path in _PUBLIC_HTML_PATHS or path.startswith("/static/"):
         return False
     if path.startswith("/api/"):
         return False
@@ -194,9 +198,9 @@ def html_auth_middleware(
                 )
             if path == "/login":
                 if authed():
-                    dest = (request.query_params.get("next") or "/home").strip()
+                    dest = (request.query_params.get("next") or "/customers").strip()
                     if not dest.startswith("/") or dest.startswith("//"):
-                        dest = "/home"
+                        dest = "/customers"
                     return RedirectResponse(url=dest, status_code=302)
                 return await call_next(request)
             if is_html_page_request(request) and not authed():

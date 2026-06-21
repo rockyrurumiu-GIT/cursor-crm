@@ -109,6 +109,8 @@
 </form>
 {% endblock %}
 
+{% block shell_extra_class %}bms-shell-fullscreen{% endblock %}
+
 {% block main_class %}bg-[#010409] min-h-0 flex flex-col{% endblock %}
 
 {% block content %}
@@ -128,9 +130,9 @@
             工具与流程不断迭代，但长期信任来自持续跟进与对业务的理解。借助 ITO BMS，客户、漏斗与团队目标汇聚于同一平台，让协作与沉淀推动增长。
         </p>
         <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4 justify-center w-full max-w-xl">
-            <a href="/home/funnel"
+            <a href="/login?next=/customers"
                 class="inline-flex h-11 sm:h-12 items-center justify-center rounded-md bg-[#238636] hover:bg-[#2ea043] text-white font-semibold px-6 sm:px-8 text-sm sm:text-base shadow-[0_8px_24px_rgba(35,134,54,0.35)] transition-colors">
-                销售漏斗看板
+                登录
             </a>
             <a href="/customers"
                 class="inline-flex h-11 sm:h-12 items-center justify-center rounded-md border border-[#30363d] bg-transparent hover:bg-white/[0.06] text-white font-semibold px-6 sm:px-8 text-sm sm:text-base transition-colors">

@@ -8,6 +8,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+    {# bms-shell-temp1 壳层主题：全局 include，置于 head_extra 之前，确保所有页面都有 shell 样式 #}
+    {% include "partials/bms_shell_styles.html" %}
     {% block head_extra %}{% endblock %}
     <style>
         /* Critical fallback when Tailwind CDN is unavailable. */
@@ -432,9 +434,9 @@
             color: #111827;
             text-decoration: underline;
         }
-        .crm-op-btn-edit { color: #2563eb; }
+        .crm-op-btn-edit { color: #456595; }
         .crm-op-btn-edit:hover {
-            color: #1d4ed8;
+            color: #3a567f;
             text-decoration: underline;
         }
         .crm-op-btn-delete { color: #dc2626; }
@@ -1447,6 +1449,8 @@
             font-weight: 700;
         }
     </style>
+    {# CRM 默认皮肤：置于主 <style> 之后，页面容器加 .crm-skin 类即启用 #}
+    {% include "partials/crm_skin.html" %}
 </head>
 <body class="bg-[#f6f8fa] text-gray-800" data-crm-auth-mode="{{ auth_mode|default('rbac') }}">
     <div id="login-overlay" class="crm-login-overlay fixed inset-0 z-[100] hidden px-4 py-8 overflow-hidden">
@@ -1517,18 +1521,49 @@
         </div>
     </div>
 
-    <div id="main-shell" class="min-h-screen hidden">
-        <header class="border-b border-[#30363d] bg-[#010409] text-[#e6edf3] shrink-0 relative z-[100] overflow-visible">
-            <div class="max-w-[1280px] mx-auto px-4 flex items-center justify-between min-h-[3.5rem] gap-4 overflow-visible">
-                <div class="crm-header-nav-wrap flex items-center flex-1 min-w-0">
-                    <a href="/home" class="inline-flex items-center gap-2 text-white font-semibold tracking-tight shrink-0 mr-4 md:mr-8">
-                        <img src="/static/images/throme-logo.png?v=logo4" class="crm-brand-logo" width="484" height="384" alt="Throme" decoding="async">
-                        <span>ITO BMS</span>
-                    </a>
-                    {% include "partials/nav.html" %}
-                </div>
+    <div id="main-shell" class="bms-shell bms-shell-temp1 {% block shell_extra_class %}{% endblock %} min-h-screen hidden">
+        <script>
+            // 早应用侧栏主题，避免深色侧栏闪烁（默认 light；shell 初始 hidden，揭示前已生效）
+            try { if (localStorage.getItem('bmsSidebarTheme') === 'dark') { document.getElementById('main-shell').classList.add('bms-sidebar-dark'); } } catch (e) {}
+        </script>
+        <div class="bms-sidebar-backdrop"></div>
+        <aside class="bms-sidebar" id="bms-sidebar">
+            <a href="/home" class="bms-brand">
+                <img src="/static/images/throme-logo.png?v=logo4" class="crm-brand-logo" width="484" height="384" alt="Throme" decoding="async">
+                <span>ITO BMS</span>
+            </a>
+            {% include "partials/sidebar_nav.html" %}
+            <div class="bms-sidebar-footer">
+                <button type="button" id="bms-theme-toggle" class="bms-theme-toggle" aria-pressed="false">
+                    <svg class="bms-theme-ico bms-theme-ico-moon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"/></svg>
+                    <svg class="bms-theme-ico bms-theme-ico-sun" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    <span class="bms-theme-label">深色侧栏</span>
+                </button>
+            </div>
+        </aside>
+        <div class="bms-main-col">
+            <header class="bms-topbar crm-header-nav-wrap">
+                <button type="button" id="bms-hamburger" class="bms-hamburger" aria-label="菜单" aria-controls="bms-sidebar" aria-expanded="false">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
                 {% block header_extra %}{% endblock %}
-                <div class="flex items-center gap-3 shrink-0 text-sm">
+                <div class="bms-topbar-actions flex items-center gap-3 shrink-0 text-sm">
+                    <div id="crm-user-menu" class="crm-user-menu">
+                        <button type="button" id="crm-user-trigger" class="crm-user-trigger" aria-haspopup="menu" aria-expanded="false">
+                            <span class="crm-user-dot" aria-hidden="true"></span>
+                            <span id="header-user" class="crm-user-name"></span>
+                            <svg class="crm-user-caret" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                        </button>
+                        <div id="crm-user-dropdown" class="crm-user-dropdown hidden" role="menu">
+                            <button type="button" id="logout-btn" class="crm-user-dropdown-item" role="menuitem">登出</button>
+                        </div>
+                    </div>
+                    <span class="group relative inline-flex">
+                        <button type="button" id="change-pwd-btn" aria-label="修改密码" class="crm-icon-btn inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z"/></svg>
+                        </button>
+                        <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">修改密码</span>
+                    </span>
                     <div id="crm-notify-wrap" class="crm-notify-wrap hidden">
                         <button type="button" id="crm-notify-btn" class="crm-notify-btn" aria-label="通知" aria-expanded="false" aria-controls="crm-notify-panel">
                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -1547,13 +1582,10 @@
                             <div id="crm-notify-list"></div>
                         </div>
                     </div>
-                    <span id="header-user" class="text-[#8b949e] hidden sm:inline"></span>
-                    <button type="button" id="change-pwd-btn" class="text-[#58a6ff] hover:underline font-medium">修改密码</button>
-                    <button type="button" id="logout-btn" class="text-[#58a6ff] hover:underline font-medium">退出</button>
                 </div>
-            </div>
-        </header>
-        <main class="flex-1 min-h-0 flex flex-col {% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
+            </header>
+            <main class="flex-1 min-h-0 flex flex-col {% block main_class %}{% endblock %}">{% block content %}{% endblock %}</main>
+        </div>
     </div>
 
     {% block handbook_assistant %}
@@ -1600,7 +1632,7 @@
         };
 
         window.crmSyncHeaderHeight = function () {
-            var header = document.querySelector('#main-shell > header');
+            var header = document.querySelector('#main-shell .bms-topbar');
             if (!header) {
                 document.documentElement.style.setProperty('--crm-header-height', '3.5rem');
                 return;
@@ -1617,12 +1649,100 @@
         window.addEventListener('resize', window.crmSyncHeaderHeight);
         document.addEventListener('DOMContentLoaded', function () {
             window.crmSyncHeaderHeight();
-            var header = document.querySelector('#main-shell > header');
+            var header = document.querySelector('#main-shell .bms-topbar');
             if (header && typeof ResizeObserver !== 'undefined') {
                 new ResizeObserver(window.crmSyncHeaderHeight).observe(header);
             }
         });
         document.addEventListener('crm-shell-ready', window.crmSyncHeaderHeight);
+
+        /* ---- bms-shell-temp1 侧边栏交互：手风琴展开 / 窄屏抽屉 / 二级 active 兜底 ---- */
+        window.crmInitBmsSidebar = function () {
+            var shell = document.querySelector('.bms-shell.bms-shell-temp1');
+            if (!shell || shell.__bmsSidebarInit) { return; }
+            shell.__bmsSidebarInit = true;
+
+            // 一级 chevron / 触发行：展开 / 收起二级（手风琴：同时只展开一个一级分组）
+            shell.querySelectorAll('.bms-nav-trigger').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var group = btn.closest('.bms-nav-group');
+                    if (!group) { return; }
+                    var willOpen = !group.classList.contains('is-open');
+                    if (willOpen) {
+                        // 展开当前分组前，收起其他已展开的一级分组
+                        shell.querySelectorAll('.bms-nav-group.is-open').forEach(function (g) {
+                            if (g === group) { return; }
+                            g.classList.remove('is-open');
+                            var t = g.querySelector('.bms-nav-trigger');
+                            if (t) { t.setAttribute('aria-expanded', 'false'); }
+                        });
+                    }
+                    group.classList.toggle('is-open', willOpen);
+                    btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                });
+            });
+
+            // 窄屏汉堡抽屉
+            var ham = document.getElementById('bms-hamburger');
+            var backdrop = shell.querySelector('.bms-sidebar-backdrop');
+            function closeDrawer() {
+                shell.classList.remove('bms-drawer-open');
+                if (ham) { ham.setAttribute('aria-expanded', 'false'); }
+            }
+            if (ham) {
+                ham.addEventListener('click', function () {
+                    var open = shell.classList.toggle('bms-drawer-open');
+                    ham.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+            }
+            if (backdrop) { backdrop.addEventListener('click', closeDrawer); }
+            shell.querySelectorAll('.bms-nav-link').forEach(function (a) {
+                a.addEventListener('click', closeDrawer);
+            });
+
+            // 侧栏 light/dark 切换（仅换侧栏颜色，持久化到 localStorage）
+            var themeBtn = document.getElementById('bms-theme-toggle');
+            if (themeBtn) {
+                function syncTheme() {
+                    var isDark = shell.classList.contains('bms-sidebar-dark');
+                    themeBtn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+                    var label = themeBtn.querySelector('.bms-theme-label');
+                    if (label) { label.textContent = isDark ? '浅色侧栏' : '深色侧栏'; }
+                }
+                syncTheme();
+                themeBtn.addEventListener('click', function () {
+                    var isDark = shell.classList.toggle('bms-sidebar-dark');
+                    try { localStorage.setItem('bmsSidebarTheme', isDark ? 'dark' : 'light'); } catch (e) {}
+                    syncTheme();
+                });
+            }
+
+            // 二级 active 前端兜底：最长 href 匹配（服务端已标则跳过）
+            function normPath(p) { p = (p || '').replace(/\/+$/, ''); return p || '/'; }
+            if (!shell.querySelector('.bms-nav-link.is-current')) {
+                var cur = normPath(window.location.pathname);
+                var best = null, bestLen = -1;
+                shell.querySelectorAll('.bms-nav-link[href]').forEach(function (a) {
+                    var h = normPath(a.getAttribute('href'));
+                    if (cur === h || cur.indexOf(h + '/') === 0) {
+                        if (h.length > bestLen) { bestLen = h.length; best = a; }
+                    }
+                });
+                if (best) { best.classList.add('is-current'); }
+            }
+            // 当前二级所在分组展开
+            var current = shell.querySelector('.bms-nav-link.is-current');
+            if (current) {
+                var g = current.closest('.bms-nav-group');
+                if (g) {
+                    g.classList.add('is-open');
+                    var t = g.querySelector('.bms-nav-trigger');
+                    if (t) { t.setAttribute('aria-expanded', 'true'); }
+                }
+            }
+        };
+        document.addEventListener('DOMContentLoaded', window.crmInitBmsSidebar);
+        document.addEventListener('crm-shell-ready', window.crmInitBmsSidebar);
 
         window.crmHasPermission = function (code) {
             if (window.crmAuthMode !== 'rbac') {
@@ -1927,7 +2047,7 @@
             var confirmClass = String(
                 options.confirmClass
                 || (singleButton
-                    ? 'flex-1 py-2 rounded-md bg-[#0969da] text-white text-sm font-medium hover:bg-[#0550ae]'
+                    ? 'flex-1 py-2 rounded-md bg-[#4C6491] text-white text-sm font-medium hover:bg-[#3D5176]'
                     : 'flex-1 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700')
             );
             return new Promise(function (resolve) {
@@ -2002,7 +2122,7 @@
             var cancelText = String(options.cancelText || '取消');
             var confirmClass = String(
                 options.confirmClass
-                || 'flex-1 py-2 rounded-md bg-[#0969da] text-white text-sm font-medium hover:bg-[#0550ae]'
+                || 'flex-1 py-2 rounded-md bg-[#4C6491] text-white text-sm font-medium hover:bg-[#3D5176]'
             );
             return new Promise(function (resolve) {
                 var done = false;
@@ -2554,6 +2674,16 @@
                 window.dispatchEvent(new Event('crm-shell-ready'));
             }
 
+            function isPublicAnonPath() {
+                return (window.location.pathname || '').replace(/\/+$/, '') === '/home';
+            }
+
+            function showPublicHome() {
+                if (shell) { shell.classList.add('bms-anon'); }
+                hideLoginOverlay();
+                showMainShell();
+            }
+
             function showLogin(msg) {
                 shell.classList.add('hidden');
                 shell.setAttribute('aria-hidden', 'true');
@@ -2577,9 +2707,7 @@
                 window.crmIsSuper = (data.roles || []).indexOf('SUPER_ADMIN') >= 0;
                 window.crmMeUser = data.user || null;
                 var u = (data.user && data.user.display_name) || (data.user && data.user.username) || '';
-                var logoutName = (data.user && data.user.username) || u;
-                document.getElementById('header-user').textContent = u ? ('欢迎，' + u) : '';
-                document.getElementById('logout-btn').textContent = logoutName ? (logoutName + '退出') : '退出';
+                document.getElementById('header-user').textContent = u || '';
                 window.crmApplyNavPermissions();
                 window.crmInitNotifications();
                 window.crmRefreshNotifications();
@@ -2591,6 +2719,7 @@
                     if (!r.ok) {
                         localStorage.removeItem('crm_b64');
                         localStorage.removeItem('crm_user');
+                        if (isPublicAnonPath()) { showPublicHome(); return; }
                         showLogin(r.status === 401 ? '会话已失效，请重新登录' : '无法验证登录状态');
                         return;
                     }
@@ -2613,6 +2742,7 @@
                     }
                     window.crmInitHandbookAssistant();
                 } catch (e) {
+                    if (isPublicAnonPath()) { showPublicHome(); return; }
                     showLogin('无法连接服务器');
                 }
             }
@@ -2667,6 +2797,28 @@
             document.getElementById('change-pwd-btn').onclick = function () {
                 showPwdModal();
             };
+
+            (function () {
+                var menu = document.getElementById('crm-user-menu');
+                var trigger = document.getElementById('crm-user-trigger');
+                var dropdown = document.getElementById('crm-user-dropdown');
+                if (!menu || !trigger || !dropdown) { return; }
+                function setOpen(open) {
+                    menu.classList.toggle('is-open', open);
+                    dropdown.classList.toggle('hidden', !open);
+                    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+                }
+                trigger.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    setOpen(dropdown.classList.contains('hidden'));
+                });
+                document.addEventListener('click', function (e) {
+                    if (!menu.contains(e.target)) { setOpen(false); }
+                });
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') { setOpen(false); }
+                });
+            })();
             document.getElementById('pwd-change-cancel').onclick = closePwdModal;
             document.getElementById('pwd-change-save').onclick = async function () {
                 var curEl = document.getElementById('pwd-change-current');

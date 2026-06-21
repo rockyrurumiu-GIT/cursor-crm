@@ -1,0 +1,134 @@
+{# 左侧边栏导航（替代旧 partials/nav.html）。保留原 href 与原有 data-crm-nav-* 权限属性，不新增/推断权限。 #}
+{% set path = (request.url.path.rstrip('/')) or '/' %}
+{# ---- 二级 active：服务端最长匹配（多个 href 命中时取路径段最长者）---- #}
+{% set _hrefs = [
+    '/home/funnel', '/home/trash', '/materials', '/home',
+    '/customers', '/contacts/all', '/customers/visits', '/contracts', '/tools/calc', '/dashboards',
+    '/opportunity/leads', '/opportunity/pool', '/opportunity/dashboard',
+    '/goals/quarter', '/goals/personal', '/goals/team',
+    '/customers/roster', '/delivery/requirements', '/delivery/pipeline',
+    '/delivery/employee_files', '/delivery/interviews', '/delivery/turnover',
+    '/delivery/handoff-pending', '/delivery/handbook', '/delivery/settlement',
+    '/rms/dashboard', '/rms', '/rms/import-help', '/rms/recommend-help',
+    '/system/users'
+] %}
+{% set ns = namespace(active='', best=-1) %}
+{% for h in _hrefs %}
+    {% set hn = (h.rstrip('/')) or '/' %}
+    {% if path == hn or path.startswith(hn + '/') %}
+        {% if hn | length > ns.best %}
+            {% set ns.active = h %}
+            {% set ns.best = hn | length %}
+        {% endif %}
+    {% endif %}
+{% endfor %}
+{# ---- 一级分组默认展开/高亮：沿用原 nav.html 顶级 nav-active 判断 ---- #}
+{% set g_home = path.startswith('/home') or path.startswith('/materials') %}
+{% set g_customers = (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/tools/calc') or path.startswith('/dashboards') or path.startswith('/customers/visits') or path.startswith('/contracts') or path.startswith('/contacts') %}
+{% set g_opportunity = path.startswith('/opportunity') %}
+{% set g_goals = path.startswith('/goals') %}
+{% set g_delivery = path.startswith('/delivery') or path.startswith('/customers/roster') %}
+{% set g_rms = path.startswith('/rms') %}
+{% set g_system = path.startswith('/system') %}
+<nav class="bms-nav" aria-label="主导航">
+    <!-- 首页 -->
+    <div class="bms-nav-group{% if g_home %} is-open is-active{% endif %}" data-crm-nav-any="crm.clients.read,materials.read,materials.public.read,materials.internal.read">
+        <button type="button" class="bms-nav-trigger" aria-expanded="{{ 'true' if g_home else 'false' }}">
+            <svg class="bms-nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9.75 12 3l9 6.75M5.25 8.75V20h13.5V8.75M9.75 20v-6h4.5v6"/></svg>
+            <span class="bms-nav-label">首页</span>
+            <svg class="bms-nav-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="bms-nav-sub">
+            <a class="bms-nav-link{% if ns.active == '/home/funnel' %} is-current{% endif %}" href="/home/funnel" data-crm-nav-perm="crm.clients.read">销售漏斗看板</a>
+            <a class="bms-nav-link{% if ns.active == '/home/trash' %} is-current{% endif %}" href="/home/trash" data-crm-nav-perm="crm.clients.read">回收站与空间占用</a>
+            <a class="bms-nav-link{% if ns.active == '/materials' %} is-current{% endif %}" href="/materials" data-crm-nav-any="materials.read,materials.public.read,materials.internal.read">公司资料库</a>
+            <a class="bms-nav-link{% if ns.active == '/home' %} is-current{% endif %}" href="/home" data-crm-nav-perm="crm.clients.read">首页总览</a>
+        </div>
+    </div>
+    <!-- 客户（含费用折算器子项） -->
+    <div class="bms-nav-group{% if g_customers %} is-open is-active{% endif %}" data-crm-nav-any="crm.clients.read,crm.contacts.read,crm.visits.read,dashboard.read,tools.gm_calc.read">
+        <button type="button" class="bms-nav-trigger" aria-expanded="{{ 'true' if g_customers else 'false' }}">
+            <svg class="bms-nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.5a4.5 4.5 0 0 0-9 0M10.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 19.5a3.75 3.75 0 0 0-3-3.675M16.5 11a2.625 2.625 0 0 0 0-5.25"/></svg>
+            <span class="bms-nav-label">客户</span>
+            <svg class="bms-nav-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="bms-nav-sub">
+            <a class="bms-nav-link{% if ns.active == '/customers' %} is-current{% endif %}" href="/customers" data-crm-nav-perm="crm.clients.read">客户列表</a>
+            <a class="bms-nav-link{% if ns.active == '/contacts/all' %} is-current{% endif %}" href="/contacts/all" data-crm-nav-perm="crm.contacts.read">联系人</a>
+            <a class="bms-nav-link{% if ns.active == '/customers/visits' %} is-current{% endif %}" href="/customers/visits" data-crm-nav-perm="crm.visits.read">客户拜访</a>
+            <a class="bms-nav-link{% if ns.active == '/contracts' %} is-current{% endif %}" href="/contracts">合同与里程碑</a>
+            <a class="bms-nav-link{% if ns.active == '/tools/calc' %} is-current{% endif %}" href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">毛利测算器</a>
+            <a class="bms-nav-link{% if ns.active == '/dashboards' %} is-current{% endif %}" href="/dashboards" data-crm-nav-perm="dashboard.read">仪表盘</a>
+        </div>
+    </div>
+    <!-- 商机 -->
+    <div class="bms-nav-group{% if g_opportunity %} is-open is-active{% endif %}" data-crm-nav-perm="crm.opportunities.read">
+        <button type="button" class="bms-nav-trigger" aria-expanded="{{ 'true' if g_opportunity else 'false' }}">
+            <svg class="bms-nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM12 12h.01"/></svg>
+            <span class="bms-nav-label">商机</span>
+            <svg class="bms-nav-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="bms-nav-sub">
+            <a class="bms-nav-link font-medium{% if ns.active == '/opportunity/leads' %} is-current{% endif %}" href="/opportunity/leads">线索池与跟进</a>
+            <a class="bms-nav-link font-medium{% if ns.active == '/opportunity/pool' %} is-current{% endif %}" href="/opportunity/pool">公海领取与回收</a>
+            <a class="bms-nav-link font-medium{% if ns.active == '/opportunity/dashboard' %} is-current{% endif %}" href="/opportunity/dashboard">阶段与预测</a>
+        </div>
+    </div>
+    <!-- 目标 -->
+    <div class="bms-nav-group{% if g_goals %} is-open is-active{% endif %}" data-crm-nav-perm="crm.opportunities.read">
+        <button type="button" class="bms-nav-trigger" aria-expanded="{{ 'true' if g_goals else 'false' }}">
+            <svg class="bms-nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 21V4M4.5 4l11 .5-2 4 2 4-11-.5"/></svg>
+            <span class="bms-nav-label">目标</span>
+            <svg class="bms-nav-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="bms-nav-sub">
+            <a class="bms-nav-link{% if ns.active == '/goals/quarter' %} is-current{% endif %}" href="/goals/quarter">季度目标</a>
+            <a class="bms-nav-link{% if ns.active == '/goals/personal' %} is-current{% endif %}" href="/goals/personal">个人指标</a>
+            <a class="bms-nav-link{% if ns.active == '/goals/team' %} is-current{% endif %}" href="/goals/team">团队看板</a>
+        </div>
+    </div>
+    <!-- 交付 -->
+    <div class="bms-nav-group{% if g_delivery %} is-open is-active{% endif %}" data-crm-nav-perm="delivery.roster.read">
+        <button type="button" class="bms-nav-trigger" aria-expanded="{{ 'true' if g_delivery else 'false' }}">
+            <svg class="bms-nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7h11v8H3zM14 10h4l3 3v2h-7zM7.5 18.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM17.5 18.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>
+            <span class="bms-nav-label">交付</span>
+            <svg class="bms-nav-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="bms-nav-sub">
+            <a class="bms-nav-link{% if ns.active == '/customers/roster' %} is-current{% endif %}" href="/customers/roster">花名册</a>
+            <a class="bms-nav-link{% if ns.active == '/delivery/requirements' %} is-current{% endif %}" href="/delivery/requirements">需求清单</a>
+            <a class="bms-nav-link{% if ns.active == '/delivery/pipeline' %} is-current{% endif %}" href="/delivery/pipeline">管道数据</a>
+            <a class="bms-nav-link{% if ns.active == '/delivery/employee_files' %} is-current{% endif %}" href="/delivery/employee_files">员工文件</a>
+            <a class="bms-nav-link{% if ns.active == '/delivery/interviews' %} is-current{% endif %}" href="/delivery/interviews">员工访谈</a>
+            <a class="bms-nav-link{% if ns.active == '/delivery/turnover' %} is-current{% endif %}" href="/delivery/turnover">离职率分析</a>
+            <a class="bms-nav-link{% if ns.active == '/delivery/handoff-pending' %} is-current{% endif %}" href="/delivery/handoff-pending">项目待审</a>
+            <a class="bms-nav-link{% if ns.active == '/delivery/handbook' %} is-current{% endif %}" href="/delivery/handbook">交付手册</a>
+            <a class="bms-nav-link{% if ns.active == '/delivery/settlement' %} is-current{% endif %}" href="/delivery/settlement">结算回款</a>
+        </div>
+    </div>
+    <!-- 招聘 -->
+    <div class="bms-nav-group{% if g_rms %} is-open is-active{% endif %}" data-crm-nav-any="rms.jobs.read,rms.analytics.read,rms.candidates.read">
+        <button type="button" class="bms-nav-trigger" aria-expanded="{{ 'true' if g_rms else 'false' }}">
+            <svg class="bms-nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14 19a4.5 4.5 0 0 0-9 0M9.5 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 8v4M16 10h4"/></svg>
+            <span class="bms-nav-label">招聘</span>
+            <svg class="bms-nav-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="bms-nav-sub">
+            <a class="bms-nav-link{% if ns.active == '/rms/dashboard' %} is-current{% endif %}" href="/rms/dashboard" data-crm-nav-perm="rms.analytics.read">招聘Dashboard</a>
+            <a class="bms-nav-link{% if ns.active == '/rms' %} is-current{% endif %}" href="/rms" data-crm-nav-perm="rms.jobs.read">需求&amp;人才库</a>
+            <a class="bms-nav-link{% if ns.active == '/rms/import-help' %} is-current{% endif %}" href="/rms/import-help" data-crm-nav-perm="rms.candidates.read">批量导入帮助</a>
+            <a class="bms-nav-link{% if ns.active == '/rms/recommend-help' %} is-current{% endif %}" href="/rms/recommend-help" data-crm-nav-perm="rms.applications.write">推荐非本人需求</a>
+        </div>
+    </div>
+    <!-- 权限中心 -->
+    <div class="bms-nav-group{% if g_system %} is-open is-active{% endif %}" data-crm-nav-any="system.users.manage,system.roles.manage,system.audit.read">
+        <button type="button" class="bms-nav-trigger" aria-expanded="{{ 'true' if g_system else 'false' }}">
+            <svg class="bms-nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/></svg>
+            <span class="bms-nav-label">权限中心</span>
+            <svg class="bms-nav-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+        <div class="bms-nav-sub">
+            <a class="bms-nav-link{% if ns.active == '/system/users' %} is-current{% endif %}" href="/system/users">权限中心</a>
+        </div>
+    </div>
+</nav>

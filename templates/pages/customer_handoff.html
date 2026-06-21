@@ -56,7 +56,7 @@
 
         <div v-if="!handoff && !loading" class="bg-white border rounded-lg p-8 text-center">
             <p class="text-gray-500 mb-4">尚未创建销售-交付交接单</p>
-            <button type="button" @click="createHandoff" class="bg-[#0969da] text-white px-4 py-2 rounded">创建交接单</button>
+            <button type="button" @click="createHandoff" class="bg-[#4C6491] text-white px-4 py-2 rounded">创建交接单</button>
         </div>
 
         <div v-if="handoff" class="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -217,7 +217,7 @@
 
                 <div v-if="editable" class="flex gap-2">
                     <button type="button" @click="saveDraft" class="border border-[#0969da] bg-blue-50 text-[#0969da] font-semibold px-4 py-2 rounded text-sm hover:bg-blue-100">保存草稿</button>
-                    <button type="button" @click="submitHandoff" class="bg-[#0969da] text-white px-4 py-2 rounded text-sm">提交交付负责人审批</button>
+                    <button type="button" @click="submitHandoff" class="bg-[#4C6491] text-white px-4 py-2 rounded text-sm">提交交付负责人审批</button>
                 </div>
             </div>
 
@@ -278,7 +278,7 @@
     <div v-if="handoff && canReview" class="handoff-approval-bar">
         <div class="container mx-auto max-w-[1280px] px-6 py-3 flex justify-end gap-3">
             <button type="button" @click="showReject=true" class="px-5 py-2 rounded border border-red-300 text-red-600 hover:bg-red-50">驳回</button>
-            <button type="button" @click="approveHandoff" class="px-5 py-2 rounded bg-[#0969da] text-white hover:bg-blue-700">一键通过</button>
+            <button type="button" @click="approveHandoff" class="px-5 py-2 rounded bg-[#4C6491] text-white hover:bg-[#3D5176]">一键通过</button>
         </div>
     </div>
 

@@ -129,7 +129,7 @@
             <button
                 v-if="canWriteMaterials"
                 type="button"
-                class="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                class="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]"
                 @click="openCreate"
             >上传资料</button>
         </div>
@@ -405,7 +405,7 @@
                     <p v-else class="text-xs text-[#656d76]">支持 PDF、Word、Excel、PPT、ZIP、JPG、PNG，单文件不超过 100MB</p>
                     <div class="flex gap-2">
                         <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de] text-sm" @click="closeForm">取消</button>
-                        <button type="submit" class="px-4 py-2 rounded-lg bg-[#0969da] text-white text-sm hover:bg-[#0860ca] disabled:opacity-50" :disabled="submitting">{{ submitting ? '保存中…' : '保存' }}</button>
+                        <button type="submit" class="px-4 py-2 rounded-lg bg-[#4C6491] text-white text-sm hover:bg-[#3D5176] disabled:opacity-50" :disabled="submitting">{{ submitting ? '保存中…' : '保存' }}</button>
                     </div>
                 </div>
             </form>

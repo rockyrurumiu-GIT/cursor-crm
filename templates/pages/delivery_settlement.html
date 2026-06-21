@@ -184,7 +184,7 @@
     <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6 flex-1 min-h-0 flex flex-col gap-3">
         <h1 class="text-2xl font-bold text-gray-900 shrink-0">结算回款</h1>
         <div class="flex justify-end gap-2 flex-wrap shrink-0">
-            <button type="button" class="inline-flex h-10 w-[92px] items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openAdd">新增</button>
+            <button type="button" class="inline-flex h-10 w-[92px] items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]" @click="openAdd">新增</button>
             <button
                 type="button"
                 class="inline-flex h-10 w-[92px] items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
@@ -429,7 +429,7 @@
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
                 <button type="button" class="settlement-detail-modal-btn border border-gray-300" @click="showForm=false; formDetailReadonly=false">{{ formDetailReadonly ? '关闭' : '取消' }}</button>
-                <button v-if="!formDetailReadonly" type="button" class="settlement-detail-modal-btn text-white" :class="hasErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'" :disabled="hasErrors" @click="saveForm">保存</button>
+                <button v-if="!formDetailReadonly" type="button" class="settlement-detail-modal-btn text-white" :class="hasErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-[#3D5176]'" :disabled="hasErrors" @click="saveForm">保存</button>
             </div>
         </div>
     </div>

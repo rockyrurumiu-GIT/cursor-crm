@@ -1,0 +1,106 @@
+<style>
+    /* ==========================================================================
+       CRM 默认皮肤（contacts 同款）· 通过容器加 .crm-skin 类启用
+       不影响未启用 .crm-skin 的现有页面。覆盖标准 crm-table 视觉与表单聚焦微交互。
+       浅色表头 + teal 图标 / 仅横向分割线 / 去斑马 / 柔和 hover / 蓝色姓名链接 /
+       暗色模式（侧栏开关）下表头转深钢蓝。
+       置于 base.html 主 <style> 之后，确保同特异性下生效。
+       ========================================================================== */
+
+    /* ---------- 表头 ---------- */
+    .crm-skin .crm-table th.crm-th {
+        background: #F9FAFB;
+        color: #6B7280;
+        border: 0;
+        border-bottom: 1px solid #E5E7EB;
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.7625rem;
+        padding: 10px 16px;
+        text-transform: none;
+    }
+    .crm-skin .crm-table th.crm-th:last-child { border-right: 0; }
+    .crm-skin .crm-table th.crm-th .ct-th-icon {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        margin-right: 6px;
+        vertical-align: middle;
+        color: #16A39A;
+    }
+
+    /* ---------- 数据单元格：去网格竖线，仅留底部分割线 ---------- */
+    .crm-skin .crm-table td.crm-td {
+        border: 0;
+        border-bottom: 1px solid #EEF0F2;
+        color: #1A1D1F;
+        background: #fff;
+        padding: 14px 16px;
+    }
+    /* 去斑马 */
+    .crm-skin .crm-table tbody tr:nth-child(even) td.crm-td { background: #fff; }
+    /* 柔和 hover */
+    .crm-skin .crm-table tbody tr:hover td.crm-td { background: #F9FAFB; }
+
+    /* ---------- 姓名链接：主蓝 ---------- */
+    .crm-skin .crm-table td.crm-td.crm-name-cell .crm-name-link {
+        color: #0969da;
+        font-weight: 700;
+    }
+
+    /* ---------- 操作列：图标按钮 ---------- */
+    .crm-skin .crm-op-btn-edit,
+    .crm-skin .crm-op-btn-delete {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem;
+    }
+    .crm-skin .crm-op-btn-edit svg,
+    .crm-skin .crm-op-btn-delete svg { width: 15px; height: 15px; }
+    .crm-skin .crm-op-btn-edit:hover,
+    .crm-skin .crm-op-btn-delete:hover { text-decoration: none; }
+
+    /* ---------- 表单输入：teal 聚焦微交互 ---------- */
+    .crm-skin input.crm-form-control,
+    .crm-skin select.crm-form-control,
+    .crm-skin textarea.crm-form-control,
+    .crm-skin input:not([type="checkbox"]):not([type="radio"]),
+    .crm-skin textarea {
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .crm-skin input.crm-form-control:focus,
+    .crm-skin select.crm-form-control:focus,
+    .crm-skin textarea.crm-form-control:focus,
+    .crm-skin input:not([type="checkbox"]):not([type="radio"]):focus,
+    .crm-skin textarea:focus,
+    .crm-skin select:focus {
+        outline: none;
+        border-color: #16A39A;
+        box-shadow: 0 0 0 3px rgba(22, 163, 154, 0.30);
+    }
+    /* 提升至 id 级，覆盖全局 #main-shell select:focus 的靛蓝聚焦 */
+    #main-shell .crm-skin select.crm-form-control:focus,
+    #main-shell .crm-skin select.crm-filter-control:focus {
+        outline: none;
+        border-color: #16A39A;
+        box-shadow: 0 0 0 3px rgba(22, 163, 154, 0.30);
+    }
+
+    /* ---------- 暗色版表头：仅在侧栏暗色模式下生效 ---------- */
+    #main-shell.bms-sidebar-dark .crm-skin {
+        --ct-th-dark-bg: #3B6699;
+        --ct-th-dark-text: #FFFFFF;
+        --ct-th-dark-border: rgba(255, 255, 255, 0.12);
+        --ct-th-dark-icon: #CBD9EC;
+    }
+    #main-shell.bms-sidebar-dark .crm-skin .crm-table th.crm-th {
+        background: var(--ct-th-dark-bg);
+        color: var(--ct-th-dark-text);
+        border-color: var(--ct-th-dark-border);
+        border-bottom-color: var(--ct-th-dark-border);
+    }
+    #main-shell.bms-sidebar-dark .crm-skin .crm-table th.crm-th .ct-th-icon {
+        color: var(--ct-th-dark-icon);
+    }
+</style>

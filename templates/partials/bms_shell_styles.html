@@ -1,0 +1,466 @@
+<style>
+    /* ==========================================================================
+       bms-shell-temp1 · BMS 全局导航壳层主题（左侧边栏 SaaS 工作台）
+       作用域：.bms-shell.bms-shell-temp1（不污染全局 :root）
+       本版只做导航壳层迁移：sidebar + 轻量 topbar + 原 main 原样保留。
+       不给业务主内容加白色大卡片，仅改背景为 --bms-bg。
+       ========================================================================== */
+    .bms-shell.bms-shell-temp1 {
+        --bms-bg: #FAFAFA;
+        --bms-sidebar-bg: #FFFFFF;
+        --bms-sidebar-border: #EFEFEF;
+        --bms-surface: #FFFFFF;
+
+        /* bms-sidebar-soft-pink · 图1 sidebar 语义 token（仅作用于 sidebar） */
+        --bms-nav-text: #1A1B2E;
+        --bms-nav-text-secondary: #5B5F6E;
+        --bms-nav-text-muted: #9A9DA8;
+        --bms-nav-text-disabled: #C2C4CE;
+        --bms-nav-active-text: #1F1E46;
+        --bms-nav-active-icon: #D98A95;
+        --bms-nav-chevron: #9A9DA8;
+
+        --bms-nav-radius: 10px;
+        --bms-nav-active-radius: 10px;
+
+        --bms-nav-active-item-bg:
+            linear-gradient(90deg, #F7E9EC 0%, #F0E6F1 50%, #ECE9F6 100%);
+        --bms-nav-active-item-shadow:
+            inset 0 1px 0 rgba(255, 255, 255, 0.60),
+            0 8px 20px rgba(150, 110, 150, 0.10);
+
+        --bms-text-primary: #1A1B2E;
+        --bms-text-secondary: #5B5F6E;
+        --bms-text-tertiary: #9A9DA8;
+        --bms-text-disabled: #C2C4CE;
+
+        --bms-accent: #33334D;
+        --bms-accent-hover: #26263C;
+        --bms-accent-active: #1F1F30;
+        --bms-link: #2563EB;
+
+        --bms-border-sidebar: #EFEFEF;
+        --bms-border-soft: #F0F0F0;
+        --bms-border-table: #F0F0F0;
+        --bms-border-control: #E5E6EB;
+
+        --bms-radius-surface: 12px;
+        --bms-radius-nav: 10px;
+        --bms-radius-control: 8px;
+        --bms-radius-tag: 6px;
+
+        --bms-space-1: 8px;
+        --bms-space-2: 16px;
+        --bms-space-3: 24px;
+        --bms-space-4: 32px;
+
+        --bms-shadow-surface:
+            0 1px 2px rgba(30, 32, 50, 0.04),
+            0 8px 24px rgba(30, 32, 50, 0.04);
+        --bms-shadow-button:
+            0 8px 18px rgba(51, 51, 77, 0.16),
+            0 1px 2px rgba(51, 51, 77, 0.10);
+        --bms-shadow-nav-active:
+            inset 0 1px 0 rgba(255, 255, 255, 0.60),
+            0 8px 20px rgba(150, 110, 150, 0.10);
+
+        --bms-sidebar-width: 280px;
+        --bms-topbar-height: 60px;
+
+        display: flex;
+        align-items: stretch;
+        min-height: 100vh;
+        background: var(--bms-bg);
+        color: var(--bms-text-secondary);
+    }
+    /* base.html 里 #main-shell:not(.hidden){flex-direction:column} 为 ID 选择器，
+       特异性高于单纯的类选择器，会把 sidebar 与主列竖向堆叠。
+       这里用同等 ID + 双类（更高特异性）强制改回横向行布局。 */
+    #main-shell.bms-shell.bms-shell-temp1 {
+        flex-direction: row;
+        align-items: stretch;
+    }
+
+    /* ---------- Sidebar ---------- */
+    .bms-shell-temp1 .bms-sidebar {
+        flex: 0 0 var(--bms-sidebar-width);
+        width: var(--bms-sidebar-width);
+        display: flex;
+        flex-direction: column;
+        background: var(--bms-sidebar-bg);
+        border-right: 1px solid var(--bms-sidebar-border);
+        padding: 24px 16px;
+        gap: 4px;
+        position: sticky;
+        top: 0;
+        align-self: flex-start;
+        height: 100vh;
+        overflow-y: auto;
+        z-index: 120;
+    }
+
+    .bms-shell-temp1 .bms-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 8px 8px;
+        margin-bottom: 8px;
+        color: var(--bms-text-primary);
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        font-size: 1.05rem;
+    }
+    .bms-shell-temp1 .bms-brand .crm-brand-logo {
+        height: 1.65rem;
+        filter: drop-shadow(0 2px 4px rgba(36, 40, 70, 0.18));
+    }
+
+    .bms-shell-temp1 .bms-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .bms-shell-temp1 .bms-nav-group { display: flex; flex-direction: column; }
+
+    /* 一级触发项（本版 7 个一级均为纯分组触发，无直达页）：图1 扁平行 */
+    .bms-shell-temp1 .bms-nav-trigger {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        height: 44px;
+        padding: 0 12px;
+        border: 0;
+        background: transparent;
+        border-radius: var(--bms-nav-radius);
+        color: var(--bms-nav-text);
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: left;
+        transition: background 0.14s ease, color 0.14s ease;
+    }
+    .bms-shell-temp1 .bms-nav-trigger:hover {
+        background: rgba(26, 27, 46, 0.04);
+        color: var(--bms-nav-text);
+    }
+    .bms-shell-temp1 .bms-nav-icon {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        color: var(--bms-nav-text-secondary);
+        transition: color 0.14s ease;
+    }
+    .bms-shell-temp1 .bms-nav-label { flex: 1 1 auto; min-width: 0; }
+    .bms-shell-temp1 .bms-nav-chevron {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+        color: var(--bms-nav-chevron);
+        transition: transform 0.16s ease;
+    }
+    .bms-shell-temp1 .bms-nav-group.is-open .bms-nav-chevron { transform: rotate(180deg); }
+
+    /* 当前分组：扁平化，仅父级图标染玫瑰色（替代旧粉紫大卡片） */
+    .bms-shell-temp1 .bms-nav-group.is-active > .bms-nav-trigger .bms-nav-icon {
+        color: var(--bms-nav-active-icon);
+    }
+
+    /* 二级展开区 */
+    .bms-shell-temp1 .bms-nav-sub {
+        display: none;
+        flex-direction: column;
+        gap: 2px;
+        padding-left: 30px;
+    }
+    .bms-shell-temp1 .bms-nav-group.is-open .bms-nav-sub { display: flex; }
+
+    .bms-shell-temp1 .bms-nav-link {
+        display: flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 12px;
+        border-radius: var(--bms-nav-radius);
+        color: var(--bms-nav-text-secondary);
+        font-size: 0.875rem;
+        text-decoration: none;
+        transition: background 0.14s ease, color 0.14s ease;
+    }
+    .bms-shell-temp1 .bms-nav-link:hover {
+        background: rgba(26, 27, 46, 0.04);
+        color: var(--bms-nav-text);
+    }
+    /* 当前二级项高亮：图1 单条玫瑰→薰衣草胶囊 */
+    .bms-shell-temp1 .bms-nav-link.is-current {
+        color: var(--bms-nav-active-text);
+        font-weight: 700;
+        background: var(--bms-nav-active-item-bg);
+        border-radius: var(--bms-nav-active-radius);
+        box-shadow: var(--bms-nav-active-item-shadow);
+    }
+
+    /* ==========================================================================
+       图2 dark sidebar（trustworks 深色侧栏）· 仅作用于 sidebar 子树
+       由 #main-shell.bms-sidebar-dark 开关；topbar / 主列 / 表单不受影响。
+       ========================================================================== */
+    #main-shell.bms-sidebar-dark .bms-sidebar {
+        --bms-sidebar-bg: #0C2230;
+        --bms-sidebar-border: rgba(255, 255, 255, 0.07);
+        --bms-text-primary: #FFFFFF;
+        --bms-nav-text: #D6DEE3;
+        --bms-nav-text-secondary: #9FB0B9;
+        --bms-nav-text-muted: #6E828D;
+        --bms-nav-text-disabled: #566A75;
+        --bms-nav-active-text: #FFFFFF;
+        --bms-nav-active-icon: #D6DEE3;
+        --bms-nav-chevron: #7C8E99;
+        --bms-nav-active-item-bg:
+            linear-gradient(90deg, rgba(34, 211, 166, 0.14) 0%, rgba(34, 211, 166, 0.04) 100%);
+        --bms-nav-active-item-shadow: inset 3px 0 0 0 #22D3A6;
+    }
+    /* dark 模式 hover：浅色 ink 在深底不可见，改用白色低透明度 */
+    #main-shell.bms-sidebar-dark .bms-nav-trigger:hover,
+    #main-shell.bms-sidebar-dark .bms-nav-link:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    /* ---------- Sidebar 底部主题切换 ---------- */
+    .bms-shell-temp1 .bms-sidebar-footer {
+        margin-top: auto;
+        padding-top: 12px;
+    }
+    .bms-shell-temp1 .bms-theme-toggle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        height: 44px;
+        padding: 0 12px;
+        border: 1px solid var(--bms-border-sidebar);
+        background: transparent;
+        border-radius: var(--bms-nav-radius);
+        color: var(--bms-nav-text-secondary);
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: left;
+        transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+    }
+    .bms-shell-temp1 .bms-theme-toggle:hover {
+        background: rgba(26, 27, 46, 0.04);
+        color: var(--bms-nav-text);
+    }
+    #main-shell.bms-sidebar-dark .bms-theme-toggle:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    .bms-shell-temp1 .bms-theme-ico {
+        width: 18px;
+        height: 18px;
+        flex: 0 0 auto;
+        color: inherit;
+    }
+    .bms-shell-temp1 .bms-theme-label { flex: 1 1 auto; min-width: 0; }
+    /* 图标：light 显示月亮（切到 dark），dark 显示太阳（切回 light） */
+    .bms-shell-temp1 .bms-theme-ico-sun { display: none; }
+    #main-shell.bms-sidebar-dark .bms-theme-ico-moon { display: none; }
+    #main-shell.bms-sidebar-dark .bms-theme-ico-sun { display: block; }
+
+    /* ---------- 右侧主列 ---------- */
+    .bms-shell-temp1 .bms-main-col {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        background: var(--bms-bg);
+    }
+
+    .bms-shell-temp1 .bms-topbar {
+        flex: 0 0 var(--bms-topbar-height);
+        height: var(--bms-topbar-height);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 28px;
+        background: var(--bms-surface);
+        border-bottom: 1px solid var(--bms-border-soft);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+    .bms-shell-temp1 .bms-topbar-actions {
+        margin-left: auto;
+        align-items: center;
+    }
+
+    /* 用户区在浅色 topbar 上的配色覆写（仅样式，不改 id/结构） */
+    .bms-shell-temp1 .bms-topbar #header-user { color: var(--bms-text-tertiary); }
+    .bms-shell-temp1 .bms-topbar .crm-icon-btn { color: var(--bms-text-secondary); cursor: pointer; }
+    .bms-shell-temp1 .bms-topbar .crm-icon-btn:hover { background: var(--bms-bg); color: var(--bms-text-primary); }
+    .bms-shell-temp1 .bms-topbar .crm-notify-btn { color: var(--bms-text-secondary); }
+
+    /* 用户菜单：登录态绿灯 + 用户名，下拉登出 */
+    .bms-shell-temp1 .bms-topbar .crm-user-menu { position: relative; }
+    .bms-shell-temp1 .bms-topbar .crm-user-trigger {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        padding: 0 10px;
+        border: 1px solid var(--bms-border-control);
+        border-radius: 8px;
+        background: var(--bms-surface);
+        color: var(--bms-text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+        line-height: 1;
+        cursor: pointer;
+        transition: background .15s ease, border-color .15s ease;
+    }
+    .bms-shell-temp1 .bms-topbar .crm-user-trigger:hover { background: var(--bms-bg); }
+    .bms-shell-temp1 .bms-topbar .crm-user-dot {
+        width: 8px;
+        height: 8px;
+        flex: none;
+        border-radius: 9999px;
+        background: #22C55E;
+        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.16);
+    }
+    .bms-shell-temp1 .bms-topbar #header-user.crm-user-name { color: inherit; }
+    .bms-shell-temp1 .bms-topbar .crm-user-caret {
+        width: 16px;
+        height: 16px;
+        color: var(--bms-nav-chevron, #9AA0A6);
+        transition: transform .15s ease;
+    }
+    .bms-shell-temp1 .bms-topbar .crm-user-menu.is-open .crm-user-caret { transform: rotate(180deg); }
+    .bms-shell-temp1 .bms-topbar .crm-user-dropdown {
+        position: absolute;
+        top: calc(100% + 4px);
+        right: 0;
+        min-width: 88px;
+        padding: 3px;
+        background: #1A1D1F;
+        border: 0;
+        border-radius: 7px;
+        box-shadow: 0 6px 18px rgba(16, 24, 40, 0.22);
+        z-index: 120;
+    }
+    .bms-shell-temp1 .bms-topbar .crm-user-dropdown.hidden { display: none; }
+    .bms-shell-temp1 .bms-topbar #logout-btn.crm-user-dropdown-item {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        padding: 6px 9px;
+        border: 0;
+        border-radius: 5px;
+        background: transparent;
+        color: #fff;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        text-align: left;
+        cursor: pointer;
+    }
+    .bms-shell-temp1 .bms-topbar #logout-btn.crm-user-dropdown-item:hover { background: rgba(255, 255, 255, 0.12); }
+
+    /* 汉堡按钮（仅窄屏可见） */
+    .bms-shell-temp1 .bms-hamburger {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border: 1px solid var(--bms-border-control);
+        border-radius: var(--bms-radius-control);
+        background: var(--bms-surface);
+        color: var(--bms-text-secondary);
+        cursor: pointer;
+    }
+
+    /* 抽屉遮罩（仅窄屏） */
+    .bms-shell-temp1 .bms-sidebar-backdrop { display: none; }
+
+    /* 全局右侧 drawer 的 backdrop（base.html）：桌面端让出 sidebar 宽度，避免盖住左栏 */
+    .bms-shell-temp1 .crm-right-drawer-backdrop { left: var(--bms-sidebar-width); }
+
+    /* ---------- 首页全屏模式：无 sidebar，用户操作浮到右上角 ---------- */
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen { background: #010409; }
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-sidebar,
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-sidebar-backdrop { display: none; }
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-main-col {
+        position: relative;
+        background: #010409;
+    }
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-topbar {
+        position: absolute;
+        top: 0;
+        right: 0;
+        left: auto;
+        width: auto;
+        height: auto;
+        padding: 14px 24px;
+        background: transparent;
+        border-bottom: none;
+        z-index: 60;
+    }
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-hamburger { display: none !important; }
+    /* 深色 hero 上的用户操作配色 */
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-topbar #header-user { color: #8b949e; }
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-topbar .crm-icon-btn { color: #e6edf3; }
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-topbar .crm-icon-btn:hover { background: rgba(255, 255, 255, 0.08); }
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-topbar .crm-notify-btn { color: #e6edf3; }
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-topbar .crm-user-trigger {
+        background: transparent;
+        border-color: rgba(255, 255, 255, 0.18);
+        color: #e6edf3;
+    }
+    #main-shell.bms-shell-temp1.bms-shell-fullscreen .bms-topbar .crm-user-trigger:hover { background: rgba(255, 255, 255, 0.08); }
+    /* 未登录访问公开 /home：隐藏用户操作区（修改密码/退出/通知），仅留 hero 内“登录”按钮 */
+    #main-shell.bms-anon .bms-topbar-actions { display: none; }
+
+    /* flat 模式：取消横贯顶栏，用户操作浮到内容区右上角（参考无顶栏布局）。
+       仅桌面生效；窄屏沿用默认顶栏 + 汉堡，避免移动端导航失效。 */
+    @media (min-width: 1025px) {
+        #main-shell.bms-shell-temp1.bms-shell-flat .bms-main-col {
+            position: relative;
+        }
+        #main-shell.bms-shell-temp1.bms-shell-flat .bms-topbar {
+            position: absolute;
+            top: 0;
+            right: 0;
+            left: auto;
+            width: auto;
+            height: auto;
+            padding: 14px 24px;
+            background: transparent;
+            border-bottom: none;
+            z-index: 60;
+        }
+    }
+
+    /* ---------- 窄屏：sidebar 改抽屉 ---------- */
+    @media (max-width: 1024px) {
+        .bms-shell-temp1 .bms-hamburger { display: inline-flex; }
+        .bms-shell-temp1 .bms-sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            transform: translateX(-100%);
+            transition: transform 0.22s ease;
+            z-index: 200;
+            box-shadow: 0 20px 48px rgba(36, 40, 70, 0.14);
+        }
+        .bms-shell-temp1.bms-drawer-open .bms-sidebar { transform: translateX(0); }
+        .bms-shell-temp1.bms-drawer-open .bms-sidebar-backdrop {
+            display: block;
+            position: fixed;
+            inset: 0;
+            background: rgba(36, 40, 70, 0.32);
+            z-index: 190;
+        }
+        .bms-shell-temp1 .bms-main-col { min-height: 100vh; }
+        .bms-shell-temp1 .crm-right-drawer-backdrop { left: 0; }
+    }
+</style>

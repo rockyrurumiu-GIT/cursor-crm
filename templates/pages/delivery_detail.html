@@ -622,7 +622,7 @@
                     <button type="button" class="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]" title="清除已选文件" aria-label="清除已选文件" @click="clearHandbookSelectedFiles">×</button>
                 </span>
                 <button type="button" class="crm-filter-item rounded-lg border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="handbookUploading" @click="handbookFileInput && handbookFileInput.click()">选择文件</button>
-                <button type="button" class="crm-filter-item rounded-lg bg-[#0969da] px-3 text-xs font-medium text-white hover:bg-[#0860ca] disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="handbookUploading || !handbookSelectedFiles.length" @click="uploadSelectedHandbookFiles">{{ handbookUploading ? '上传中…' : '上传' }}</button>
+                <button type="button" class="crm-filter-item rounded-lg bg-[#4C6491] px-3 text-xs font-medium text-white hover:bg-[#3D5176] disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="handbookUploading || !handbookSelectedFiles.length" @click="uploadSelectedHandbookFiles">{{ handbookUploading ? '上传中…' : '上传' }}</button>
                 <input ref="handbookFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookFilesSelected" />
             </div>
             <div v-if="moduleKey === 'employee_files'" class="flex flex-wrap items-center gap-2 shrink-0">
@@ -632,7 +632,7 @@
                     <button type="button" class="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]" title="清除已选文件" aria-label="清除已选文件" @click="clearEmployeeFileSelectedFiles">×</button>
                 </span>
                 <button type="button" class="crm-filter-item rounded-lg border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="employeeFileUploading" @click="employeeFileInput && employeeFileInput.click()">选择文件</button>
-                <button type="button" class="crm-filter-item rounded-lg bg-[#0969da] px-3 text-xs font-medium text-white hover:bg-[#0860ca] disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="employeeFileUploading || !employeeFileSelectedFiles.length" @click="uploadSelectedEmployeeFiles">{{ employeeFileUploading ? '上传中…' : '上传' }}</button>
+                <button type="button" class="crm-filter-item rounded-lg bg-[#4C6491] px-3 text-xs font-medium text-white hover:bg-[#3D5176] disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="employeeFileUploading || !employeeFileSelectedFiles.length" @click="uploadSelectedEmployeeFiles">{{ employeeFileUploading ? '上传中…' : '上传' }}</button>
                 <input ref="employeeFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar" @change="onEmployeeFilesSelected" />
             </div>
         </div>
@@ -640,7 +640,7 @@
             <div class="flex items-end justify-between gap-3 flex-wrap shrink-0">
                 <input v-model.trim="pipelineFilter.full_name" type="text" placeholder="姓名（模糊）" title="姓名（模糊）" class="crm-filter-item crm-filter-control pipeline-filter-control w-[10rem]" />
                 <div class="flex justify-end gap-2">
-                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openPipelineAdd">新增</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]" @click="openPipelineAdd">新增</button>
                 <a :href="`/delivery/pipeline/${clientId}/insight`" class="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">数据透析</a>
                 <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100" @click="openPipelineBatchModal">批量操作</button>
                 <button
@@ -916,7 +916,7 @@
         </div>
         <div v-else-if="moduleKey === 'interviews'" class="mt-2 flex flex-col flex-1 min-h-0 gap-2">
             <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                <button type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700" @click="openInterviewAdd">新增行</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-[#3D5176]" @click="openInterviewAdd">新增行</button>
                 <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100" @click="runInterviewRosterHints">提示</button>
                 <button v-if="canViewDeliveryLogs" type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openInterviewLogs">日志</button>
                 <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerInterviewImport">导入</button>
@@ -1256,7 +1256,7 @@
         <div v-else-if="moduleKey === 'settlement'" class="mt-4 flex flex-col flex-1 min-h-0 gap-3">
             <div class="flex justify-end gap-2 shrink-0">
                 <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100" @click="showSettlementReminders">提示</button>
-                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="openAdd">新增</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]" @click="openAdd">新增</button>
             </div>
             <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
                 <table class="crm-table settlement-table" data-table-id="settlement" data-table-min-width="1900">
@@ -1718,7 +1718,7 @@
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
                 <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm" @click="handbookMetaModalOpen=false">取消</button>
-                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="saveHandbookMeta">保存</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]" @click="saveHandbookMeta">保存</button>
             </div>
         </div>
     </div>
@@ -1740,7 +1740,7 @@
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
                 <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm" @click="handbookCuesModalOpen=false">取消</button>
-                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700" @click="saveHandbookCues">保存</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]" @click="saveHandbookCues">保存</button>
             </div>
         </div>
     </div>
@@ -1841,7 +1841,7 @@
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
                 <button type="button" class="delivery-detail-modal-btn border border-gray-300" @click="showPipelineForm=false; pipelineFormReadonly=false">{{ pipelineFormReadonly ? '关闭' : '取消' }}</button>
                 <button v-if="!pipelineFormReadonly && returnToInsight" type="button" class="delivery-detail-modal-btn border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100" @click="savePipelineForm(true)">保存并返回透析</button>
-                <button v-if="!pipelineFormReadonly" type="button" class="delivery-detail-modal-btn bg-blue-600 text-white hover:bg-blue-700" @click="savePipelineForm(false)">保存</button>
+                <button v-if="!pipelineFormReadonly" type="button" class="delivery-detail-modal-btn bg-blue-600 text-white hover:bg-[#3D5176]" @click="savePipelineForm(false)">保存</button>
             </div>
         </div>
     </div>
@@ -1959,7 +1959,7 @@
             </div>
             <div class="px-5 py-3 border-t border-gray-200 flex gap-2 justify-end shrink-0">
                 <button type="button" class="px-4 py-2 rounded-lg border border-gray-300" @click="showInterviewForm=false; interviewFormReadonly=false">{{ interviewFormReadonly ? '关闭' : '取消' }}</button>
-                <button v-if="!interviewFormReadonly" type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" @click="saveInterviewForm">保存</button>
+                <button v-if="!interviewFormReadonly" type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-[#3D5176]" @click="saveInterviewForm">保存</button>
             </div>
         </div>
     </div>
@@ -2017,7 +2017,7 @@
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
                 <button type="button" class="delivery-detail-modal-btn border border-gray-300" @click="showForm=false; settlementFormReadonly=false">{{ settlementFormReadonly ? '关闭' : '取消' }}</button>
-                <button v-if="!settlementFormReadonly" type="button" class="delivery-detail-modal-btn bg-blue-600 text-white hover:bg-blue-700" @click="saveForm">保存</button>
+                <button v-if="!settlementFormReadonly" type="button" class="delivery-detail-modal-btn bg-blue-600 text-white hover:bg-[#3D5176]" @click="saveForm">保存</button>
             </div>
         </div>
     </div>

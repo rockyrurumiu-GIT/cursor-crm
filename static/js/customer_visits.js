@@ -1,4 +1,4 @@
-const { createApp, ref, onMounted, nextTick } = Vue;
+const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -65,10 +65,22 @@ createApp({
         const filterRegion = ref('');
         const filterClientId = ref('');
         const filterWeek = ref('');
+        const filterKeyword = ref('');
         const filterPanelExpanded = ref(false);
         const showForm = ref(false);
         const form = ref(emptyForm());
         const detailRow = ref(null);
+
+        /** 关键词模糊过滤（客户端，叠加在服务端筛选结果之上） */
+        const filteredItems = computed(() => {
+            const kw = (filterKeyword.value || '').trim().toLowerCase();
+            if (!kw) return items.value;
+            return items.value.filter((row) => [
+                row.client_name, row.salesperson, row.region, row.city,
+                row.way, row.visit_purpose, row.target, row.accompanying,
+                row.result, row.visit_summary, row.next_plan, row.week_period,
+            ].some((v) => String(v == null ? '' : v).toLowerCase().includes(kw)));
+        });
 
         const auth = () => window.crmAuthHeader();
         const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
@@ -166,6 +178,7 @@ createApp({
         };
 
         const remove = async (row) => {
+            if (!window.confirm('确定删除该拜访记录？此操作不可恢复。')) return;
             const r = await fetch(`/api/customer-visits/${row.id}`, { method: 'DELETE', headers: auth() });
             if (r.ok) {
                 await loadFilters();
@@ -204,6 +217,8 @@ createApp({
             filterRegion,
             filterClientId,
             filterWeek,
+            filterKeyword,
+            filteredItems,
             filterPanelExpanded,
             showForm,
             form,

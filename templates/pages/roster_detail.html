@@ -457,7 +457,7 @@
                 <p class="text-sm text-gray-500 mt-1">总条目 {{ rows.length }} 条<span v-if="displayCountHint">{{ displayCountHint }}</span></p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <button v-if="!IS_GLOBAL_ROSTER" type="button" @click="openAdd" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">新增行</button>
+                <button v-if="!IS_GLOBAL_ROSTER" type="button" @click="openAdd" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]">新增行</button>
                 <button
                     v-if="IS_GLOBAL_ROSTER"
                     type="button"
@@ -904,7 +904,7 @@
                         v-if="!formReadonly"
                         type="button"
                         class="roster-detail-modal-btn text-white"
-                        :class="hasBlockingErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
+                        :class="hasBlockingErrors ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-[#3D5176]'"
                         :disabled="hasBlockingErrors"
                         @click="saveForm"
                     >保存</button>
@@ -971,7 +971,7 @@
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex justify-end gap-2 shrink-0">
                 <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="copyRegularizationReminderResults">复制结果</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700" @click="closeRegularizationReminder">关闭</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-[#3D5176]" @click="closeRegularizationReminder">关闭</button>
             </div>
         </div>
     </div>
@@ -1042,7 +1042,7 @@
             </div>
             <div class="px-5 py-4 border-t border-gray-200 flex justify-end gap-2 shrink-0">
                 <button v-if="validationFindings.length" type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="copyValidationResults">复制结果</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-blue-700" @click="closeValidation">关闭</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-[#3D5176]" @click="closeValidation">关闭</button>
             </div>
         </div>
     </div>
