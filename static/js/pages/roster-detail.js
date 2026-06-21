@@ -505,6 +505,29 @@ const rosterDetailApp = createApp({
             if (filteredRows.value.length !== rows.value.length) return `（筛选后 ${filteredRows.value.length} 条）`;
             return '';
         });
+
+        const pageSize = ref(10);
+        const currentPage = ref(1);
+        const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)));
+        const pagedRows = computed(() => {
+            const start = (currentPage.value - 1) * pageSize.value;
+            return filteredRows.value.slice(start, start + pageSize.value);
+        });
+        const pageNumbers = computed(() => {
+            const total = totalPages.value;
+            const max = 7;
+            let start = Math.max(1, currentPage.value - 3);
+            let end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            const arr = [];
+            for (let i = start; i <= end; i++) arr.push(i);
+            return arr;
+        });
+        const goPage = (p) => {
+            currentPage.value = Math.min(Math.max(1, p), totalPages.value);
+        };
+        watch([filters, showOnlyChecked], () => { currentPage.value = 1; }, { deep: true });
+        watch(filteredRows, () => { if (currentPage.value > totalPages.value) currentPage.value = totalPages.value; });
         const emptyStateText = computed(() => {
             if (showOnlyChecked.value) return checkedCount.value ? '暂无符合筛选条件的勾选条目' : '暂无勾选条目';
             if (Object.values(filters).some((value) => String(value || '').trim() !== '')) return '暂无符合筛选条件的数据';
@@ -1080,9 +1103,9 @@ const rosterDetailApp = createApp({
             filters.preTaxSalaryAbove = '';
             filters.preTaxSalaryBelow = '';
         };
-        function scrollRosterToTop() {
-            const el = rosterScrollWrap.value;
-            if (el) el.scrollTop = 0;
+        function goBack() {
+            if (window.history.length > 1) window.history.back();
+            else window.location.href = '/customers/roster';
         }
         const toggleShowCheckedOnly = () => {
             showOnlyChecked.value = !showOnlyChecked.value;
@@ -1343,14 +1366,14 @@ const rosterDetailApp = createApp({
             });
         });
         return {
-            rows, filteredRows, filters, workLocationOptions, positionTitleOptions,
+            rows, filteredRows, pagedRows, currentPage, pageSize, totalPages, pageNumbers, goPage, filters, workLocationOptions, positionTitleOptions,
             brief, loading, showForm, editingId, form, formFields: activeFormFields, formCompactFields, formTextareaFields, detailCompactFields, detailTextareaFields,
             fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
             showLogs, logsLoading, logs, showValidation, validationScope, validationFindings, validationCopied,
             showRegReminder, regReminderFindings, regReminderCopied,
             regDetailRow, regDetailFields, isWideDetailField, rosterDetailValue, openRegDetail, closeRegDetail,
             canRegularizeRow, doRegularize, regularizingId,
-            missingRequiredFields, hasBlockingErrors, showOnlyChecked, filterPanelExpanded, rosterScrollWrap, scrollRosterToTop, displayCountHint, emptyStateText,
+            missingRequiredFields, hasBlockingErrors, showOnlyChecked, filterPanelExpanded, rosterScrollWrap, goBack, displayCountHint, emptyStateText,
             IS_GLOBAL_ROSTER,
             canViewRosterLogs,
             rosterCustomerSelectOptions,

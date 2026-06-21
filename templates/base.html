@@ -360,6 +360,9 @@
         .crm-table tbody tr:hover .roster-sticky-op,
         .visit-table tbody tr:hover .crm-sticky-right-op {
             background: #eef6ff;
+            /* 悬停行的操作列抬高层级（仍低于 thead 的 32），
+               使操作按钮的悬停说明浮在下一行之上，避免被相邻行遮挡 */
+            z-index: 20 !important;
         }
         .crm-table tfoot .crm-sticky-right-op,
         .crm-table tfoot .roster-sticky-op {
@@ -476,6 +479,15 @@
             text-overflow: ellipsis;
         }
         .crm-table th.crm-th:last-child { border-right: 1px solid #1f5a94; }
+        /* 表头字段图标（全局）：每个列头文字前置一枚同色描边图标，
+           颜色继承表头文字色（默认蓝底白字）。详见 page-conventions 第 9 节 */
+        .crm-table th.crm-th .ct-th-icon {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
         .crm-table td.crm-td {
             padding: 0.5rem 0.6rem;
             font-size: 0.8rem;
