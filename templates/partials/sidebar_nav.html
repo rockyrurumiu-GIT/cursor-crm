@@ -2,8 +2,8 @@
 {% set path = (request.url.path.rstrip('/')) or '/' %}
 {# ---- 二级 active：服务端最长匹配（多个 href 命中时取路径段最长者）---- #}
 {% set _hrefs = [
-    '/home/funnel', '/home/trash', '/materials', '/home',
-    '/customers', '/contacts/all', '/customers/visits', '/contracts', '/tools/calc', '/dashboards',
+    '/home/trash', '/materials', '/contracts', '/home',
+    '/customers', '/contacts/all', '/customers/visits', '/tools/calc', '/dashboards', '/home/funnel',
     '/opportunity/leads', '/opportunity/pool', '/opportunity/dashboard',
     '/goals/quarter', '/goals/personal', '/goals/team',
     '/customers/roster', '/delivery/requirements', '/delivery/pipeline',
@@ -23,8 +23,8 @@
     {% endif %}
 {% endfor %}
 {# ---- 一级分组默认展开/高亮：沿用原 nav.html 顶级 nav-active 判断 ---- #}
-{% set g_home = path.startswith('/home') or path.startswith('/materials') %}
-{% set g_customers = (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/tools/calc') or path.startswith('/dashboards') or path.startswith('/customers/visits') or path.startswith('/contracts') or path.startswith('/contacts') %}
+{% set g_home = (path == '/home' or path.startswith('/home/trash')) or path.startswith('/materials') or path.startswith('/contracts') %}
+{% set g_customers = (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/tools/calc') or path.startswith('/dashboards') or path.startswith('/customers/visits') or path.startswith('/contacts') or path.startswith('/home/funnel') %}
 {% set g_opportunity = path.startswith('/opportunity') %}
 {% set g_goals = path.startswith('/goals') %}
 {% set g_delivery = path.startswith('/delivery') or path.startswith('/customers/roster') %}
@@ -39,9 +39,9 @@
             <svg class="bms-nav-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </button>
         <div class="bms-nav-sub">
-            <a class="bms-nav-link{% if ns.active == '/home/funnel' %} is-current{% endif %}" href="/home/funnel" data-crm-nav-perm="crm.clients.read">销售漏斗看板</a>
             <a class="bms-nav-link{% if ns.active == '/home/trash' %} is-current{% endif %}" href="/home/trash" data-crm-nav-perm="crm.clients.read">回收站与空间占用</a>
             <a class="bms-nav-link{% if ns.active == '/materials' %} is-current{% endif %}" href="/materials" data-crm-nav-any="materials.read,materials.public.read,materials.internal.read">公司资料库</a>
+            <a class="bms-nav-link{% if ns.active == '/contracts' %} is-current{% endif %}" href="/contracts">合同管理</a>
             <a class="bms-nav-link{% if ns.active == '/home' %} is-current{% endif %}" href="/home" data-crm-nav-perm="crm.clients.read">首页总览</a>
         </div>
     </div>
@@ -56,9 +56,9 @@
             <a class="bms-nav-link{% if ns.active == '/customers' %} is-current{% endif %}" href="/customers" data-crm-nav-perm="crm.clients.read">客户列表</a>
             <a class="bms-nav-link{% if ns.active == '/contacts/all' %} is-current{% endif %}" href="/contacts/all" data-crm-nav-perm="crm.contacts.read">联系人</a>
             <a class="bms-nav-link{% if ns.active == '/customers/visits' %} is-current{% endif %}" href="/customers/visits" data-crm-nav-perm="crm.visits.read">客户拜访</a>
-            <a class="bms-nav-link{% if ns.active == '/contracts' %} is-current{% endif %}" href="/contracts">合同管理</a>
             <a class="bms-nav-link{% if ns.active == '/tools/calc' %} is-current{% endif %}" href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">毛利测算器</a>
             <a class="bms-nav-link{% if ns.active == '/dashboards' %} is-current{% endif %}" href="/dashboards" data-crm-nav-perm="dashboard.read">仪表盘</a>
+            <a class="bms-nav-link{% if ns.active == '/home/funnel' %} is-current{% endif %}" href="/home/funnel" data-crm-nav-perm="crm.clients.read">销售漏斗看板</a>
         </div>
     </div>
     <!-- 商机 -->

@@ -1,7 +1,7 @@
 {% set path = request.url.path %}
 <nav class="flex items-stretch gap-0 flex-wrap md:flex-nowrap">
     <!-- 首页 -->
-    <div class="gh-nav-item{% if path.startswith('/home') or path.startswith('/materials') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,materials.read,materials.public.read,materials.internal.read">
+    <div class="gh-nav-item{% if (path == '/home' or path.startswith('/home/trash')) or path.startswith('/materials') or path.startswith('/contracts') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,materials.read,materials.public.read,materials.internal.read">
         <span class="nav-trigger cursor-default">首页
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
@@ -10,9 +10,9 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                         <div class="gh-mega-col-h">数字资产</div>
-                        <a class="gh-mega-link" href="/home/funnel" data-crm-nav-perm="crm.clients.read">销售漏斗看板</a>
                         <a class="gh-mega-link" href="/home/trash" data-crm-nav-perm="crm.clients.read">回收站与空间占用</a>
                         <a class="gh-mega-link" href="/materials" data-crm-nav-any="materials.read,materials.public.read,materials.internal.read">公司资料库</a>
+                        <a class="gh-mega-link" href="/contracts">合同管理</a>
                     </div>
                     <div>
                         <div class="gh-mega-col-h">快捷入口</div>
@@ -23,13 +23,13 @@
         </div>
     </div>
     <!-- 客户（含费用折算器子项） -->
-    <div class="gh-nav-item{% if (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/tools/calc') or path.startswith('/dashboards') or path.startswith('/customers/visits') or path.startswith('/contracts') or path.startswith('/contacts') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,crm.contacts.read,crm.visits.read,dashboard.read,tools.gm_calc.read">
+    <div class="gh-nav-item{% if (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/tools/calc') or path.startswith('/dashboards') or path.startswith('/customers/visits') or path.startswith('/contacts') or path.startswith('/home/funnel') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,crm.contacts.read,crm.visits.read,dashboard.read,tools.gm_calc.read">
         <span class="nav-trigger cursor-default">客户
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
         <div class="gh-mega">
             <div class="gh-mega-panel p-4">
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-8">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-8">
                     <div>
                         <div class="gh-mega-col-h">客户详情</div>
                         <a class="gh-mega-link" href="/customers" data-crm-nav-perm="crm.clients.read">客户列表</a>
@@ -37,13 +37,10 @@
                         <a class="gh-mega-link" href="/customers/visits" data-crm-nav-perm="crm.visits.read">客户拜访</a>
                     </div>
                     <div>
-                        <div class="gh-mega-col-h">合同管理</div>
-                        <a class="gh-mega-link" href="/contracts">合同管理</a>
-                    </div>
-                    <div>
                         <div class="gh-mega-col-h">工具/仪表盘</div>
                         <a class="gh-mega-link" href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">毛利测算器</a>
                         <a class="gh-mega-link" href="/dashboards" data-crm-nav-perm="dashboard.read">仪表盘</a>
+                        <a class="gh-mega-link" href="/home/funnel" data-crm-nav-perm="crm.clients.read">销售漏斗看板</a>
                     </div>
                 </div>
             </div>

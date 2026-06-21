@@ -660,35 +660,20 @@
         </div>
 
         <div v-if="filteredClients.length" class="flex flex-wrap items-center justify-between gap-3 px-1 pt-1">
-            <div class="flex items-center gap-1">
-                <button
-                    type="button"
-                    :disabled="currentPage === 1"
-                    @click="goPage(currentPage - 1)"
-                    class="inline-flex h-9 items-center gap-1 rounded-md px-2.5 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
-                    上一页
-                </button>
+            <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ filteredClients.length }}</span> 条，第 {{ currentPage }} / {{ totalPages }} 页</p>
+            <div class="flex items-center gap-1.5">
+                <button type="button" @click="goPage(currentPage - 1)" :disabled="currentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
                 <button
                     v-for="p in pageNumbers"
                     :key="'pg-' + p"
                     type="button"
                     @click="goPage(p)"
-                    :class="p === currentPage ? 'bg-[#F2F3F7] text-[#1A1D1F]' : 'text-[#344054] hover:bg-[#F9FAFB]'"
-                    class="inline-flex h-9 min-w-[36px] items-center justify-center rounded-md px-2 text-sm font-medium transition-colors"
+                    :class="p === currentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'"
+                    class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors"
                 >{{ p }}</button>
-                <button
-                    type="button"
-                    :disabled="currentPage === totalPages"
-                    @click="goPage(currentPage + 1)"
-                    class="inline-flex h-9 items-center gap-1 rounded-md px-2.5 text-sm font-medium text-[#344054] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                    下一页
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6l6 6-6 6"/></svg>
-                </button>
+                <button type="button" @click="goPage(currentPage + 1)" :disabled="currentPage >= totalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+                <span class="ml-1 inline-flex h-8 items-center rounded-[6px] border border-[#D7DBE0] bg-white px-2.5 text-sm text-[#6B7280]">10 条 / 页</span>
             </div>
-            <div class="text-sm font-medium text-[#475467]">10 条 / 页</div>
         </div>
     </div>
 

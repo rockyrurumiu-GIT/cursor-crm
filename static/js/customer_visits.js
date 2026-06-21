@@ -112,6 +112,7 @@ createApp({
         };
 
         const clearFilters = () => {
+            filterKeyword.value = '';
             filterSales.value = '';
             filterRegion.value = '';
             filterClientId.value = '';

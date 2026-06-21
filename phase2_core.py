@@ -89,24 +89,53 @@ def opportunity_to_dict(o, client_name: str = "", contact_name: str = "") -> Dic
     }
 
 
-def contract_to_dict(c, client_name: str = "", milestones: Optional[List[Dict]] = None) -> Dict[str, Any]:
+def _contract_datetime_str(dt: Any) -> str:
+    if dt is None:
+        return ""
+    if hasattr(dt, "strftime"):
+        return dt.strftime("%Y-%m-%d %H:%M")
+    s = str(dt).strip().replace("T", " ").split(".")[0]
+    return s[:16] if len(s) >= 16 else s
+
+
+def contract_file_name(contract_no: str) -> str:
+    no = (contract_no or "").strip()
+    return f"{no}.docx" if no else ""
+
+
+def contract_to_dict(
+    c,
+    client_name: str = "",
+    milestones: Optional[List[Dict]] = None,
+    *,
+    sales_owner: str = "",
+) -> Dict[str, Any]:
+    contract_no = c.contract_no or ""
+    sales = (sales_owner or "").strip()
+    end_date = (c.end_date or "").strip()
     return {
         "id": c.id,
         "client_id": c.client_id,
         "client_name": client_name,
         "handoff_id": c.handoff_id,
         "opportunity_id": c.opportunity_id,
-        "contract_no": c.contract_no or "",
+        "contract_no": contract_no,
         "contract_type": c.contract_type or "",
         "title": c.title or "",
+        "material_name": c.title or "",
+        "sales_owner": sales,
+        "file_name": contract_file_name(contract_no),
         "total_amount": c.total_amount or "",
         "start_date": c.start_date or "",
         "end_date": c.end_date or "",
+        "expires_at": end_date or "—",
+        "uploaded_by_name": sales or "—",
         "status": c.status or "draft",
         "status_label": CONTRACT_STATUS_LABELS.get(c.status, c.status),
         "sow_markdown": c.sow_markdown or "",
         "milestones": milestones or [],
         "created_at": c.created_at.isoformat() if c.created_at else "",
+        "updated_at": _contract_datetime_str(c.created_at),
     }
 
 

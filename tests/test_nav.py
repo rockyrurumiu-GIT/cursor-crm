@@ -63,9 +63,24 @@ def test_home_digital_assets_nav():
     assert 'data-crm-nav-any="crm.clients.read,materials.read,materials.public.read,materials.internal.read"' in nav
     assert "数字资产" in nav
     assert 'href="/materials" data-crm-nav-any="materials.read,materials.public.read,materials.internal.read">公司资料库' in nav
-    assert 'href="/home/funnel" data-crm-nav-perm="crm.clients.read"' in nav
+    assert 'href="/contracts">合同管理' in nav
+    customer_section = nav.split("<!-- 客户（含费用折算器子项） -->", 1)[1].split("<!-- 商机", 1)[0]
+    assert 'gh-mega-col-h">合同管理' not in customer_section
+    home_section = nav.split("<!-- 首页 -->", 1)[1].split("<!-- 客户（含费用折算器子项） -->", 1)[0]
+    assert 'href="/home/funnel"' not in home_section
     assert 'href="/home/trash" data-crm-nav-perm="crm.clients.read"' in nav
     assert 'href="/home" data-crm-nav-perm="crm.clients.read"' in nav
     materials_idx = nav.index('href="/materials"')
-    funnel_idx = nav.index('href="/home/funnel"')
-    assert materials_idx > funnel_idx
+    contracts_idx = nav.index('href="/contracts"')
+    trash_idx = nav.index('href="/home/trash"')
+    assert materials_idx > trash_idx
+    assert contracts_idx > materials_idx
+
+
+def test_funnel_nav_under_customers_last():
+    nav = _nav_html()
+    assert 'href="/home/funnel" data-crm-nav-perm="crm.clients.read">销售漏斗看板' in nav
+    customer_section = nav.split("<!-- 客户（含费用折算器子项） -->", 1)[1].split("<!-- 商机", 1)[0]
+    funnel_idx = customer_section.index('href="/home/funnel"')
+    dashboards_idx = customer_section.index('href="/dashboards"')
+    assert funnel_idx > dashboards_idx

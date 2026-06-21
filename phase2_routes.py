@@ -402,11 +402,25 @@ def register_phase2_routes(
         if client_id:
             q = q.filter(Contract.client_id == client_id)
         rows = q.order_by(desc(Contract.created_at)).all()
+        handoff_ids = {c.handoff_id for c in rows if c.handoff_id}
+        handoffs: Dict[int, Any] = {}
+        if handoff_ids:
+            for h in db.query(HandoffRequest).filter(HandoffRequest.id.in_(handoff_ids)).all():
+                handoffs[h.id] = h
         out = []
         for c in rows:
             client = db.query(Client).filter(Client.id == c.client_id).first()
             ms = db.query(ContractMilestone).filter(ContractMilestone.contract_id == c.id).all()
-            out.append(contract_to_dict(c, client.name if client else "", [milestone_to_dict(m) for m in ms]))
+            handoff = handoffs.get(c.handoff_id) if c.handoff_id else None
+            sales_owner = (handoff.sales_owner if handoff else "") or (client.owner if client else "")
+            out.append(
+                contract_to_dict(
+                    c,
+                    client.name if client else "",
+                    [milestone_to_dict(m) for m in ms],
+                    sales_owner=sales_owner,
+                )
+            )
         return out
 
     @app.get("/api/contracts/{contract_id}")
@@ -420,7 +434,14 @@ def register_phase2_routes(
             raise HTTPException(status_code=404, detail="合同不存在")
         client = db.query(Client).filter(Client.id == c.client_id).first()
         ms = db.query(ContractMilestone).filter(ContractMilestone.contract_id == c.id).all()
-        return contract_to_dict(c, client.name if client else "", [milestone_to_dict(m) for m in ms])
+        handoff = db.query(HandoffRequest).filter(HandoffRequest.id == c.handoff_id).first() if c.handoff_id else None
+        sales_owner = (handoff.sales_owner if handoff else "") or (client.owner if client else "")
+        return contract_to_dict(
+            c,
+            client.name if client else "",
+            [milestone_to_dict(m) for m in ms],
+            sales_owner=sales_owner,
+        )
 
     @app.post("/api/contracts/{contract_id}/milestones/{milestone_id}/seed-settlement")
     async def seed_milestone_settlement(

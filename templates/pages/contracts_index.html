@@ -4,214 +4,376 @@
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
-    .contracts-client-gallery {
-        border-radius: 1.25rem;
-        padding: clamp(1.25rem, 4vw, 2rem);
-        background: linear-gradient(145deg, #f8fafc 0%, rgba(239, 246, 255, 0.88) 45%, rgba(245, 243, 255, 0.75) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.85);
-        box-shadow:
-            inset 0 1px 0 rgba(255, 255, 255, 0.9),
-            0 4px 24px rgba(15, 23, 42, 0.06);
+    #contracts-app .contracts-drawer-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 0.75rem 1rem 1rem;
     }
-    .contracts-client-card {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.75rem;
-        min-height: 100%;
-        padding: 1.5rem 1.65rem 1.35rem;
-        border-radius: 1.125rem;
-        border: 1px solid rgba(255, 255, 255, 0.75);
-        background: linear-gradient(
-            155deg,
-            rgba(255, 255, 255, 0.78) 0%,
-            rgba(255, 255, 255, 0.42) 38%,
-            rgba(230, 240, 255, 0.38) 100%
-        );
-        backdrop-filter: blur(18px);
-        -webkit-backdrop-filter: blur(18px);
-        box-shadow:
-            0 10px 40px rgba(15, 23, 42, 0.07),
-            0 2px 8px rgba(15, 23, 42, 0.04),
-            inset 0 1px 0 rgba(255, 255, 255, 0.95);
+    #contracts-app .contracts-drawer-body > section + section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #d0d7de;
     }
-    .contracts-client-card__icon {
-        width: 2.5rem;
-        height: 2.5rem;
-        border-radius: 9999px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #ffffff;
-        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
-        color: #1e293b;
-        flex-shrink: 0;
-    }
-    .contracts-client-card__eyebrow {
-        margin: 0;
-        font-size: 0.625rem;
+    #contracts-app .contracts-drawer-section-title {
+        font-size: 0.75rem;
         font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: #64748b;
+        color: #57606a;
+        margin-bottom: 0.5rem;
     }
-    .contracts-client-card__name {
-        margin: 0;
-        font-size: 1.25rem;
-        font-weight: 700;
-        line-height: 1.35;
-        letter-spacing: -0.02em;
-        color: #0f172a;
+    #contracts-app .contracts-drawer-field {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.35rem 0;
+        font-size: 0.875rem;
     }
-    .contracts-contract-block {
-        width: 100%;
-        padding: 0.85rem 1rem;
-        border-radius: 0.75rem;
-        background: rgba(255, 255, 255, 0.72);
-        border: 1px solid rgba(226, 232, 240, 0.95);
+    #contracts-app .contracts-drawer-field-label {
+        flex: 0 0 5.5rem;
+        color: #57606a;
     }
-    .contracts-contract-block + .contracts-contract-block {
-        margin-top: 0.5rem;
+    #contracts-app .contracts-drawer-field-value {
+        flex: 1 1 auto;
+        min-width: 0;
+        color: #1f2328;
+        word-break: break-word;
     }
-    .contracts-contract-head {
+    #contracts-app .crm-table .crm-td {
+        text-align: center;
+        vertical-align: middle;
+    }
+    #contracts-app .crm-table .crm-td.crm-name-cell .crm-name-link {
+        text-align: center;
+    }
+    #contracts-app .crm-table .crm-op-actions {
+        justify-content: center;
+    }
+    #contracts-app .contracts-status-badge {
+        display: inline-block;
+        padding: 0.125rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        line-height: 1.25rem;
+        white-space: nowrap;
+    }
+    #contracts-app .contracts-milestone-chip {
+        display: inline-block;
+        max-width: 12rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.8125rem;
+        color: #475569;
+    }
+    #contracts-app .contracts-sales-cell {
+        font-weight: 400;
+        color: #1A1D1F;
+    }
+    #contracts-app .contracts-milestone-row {
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
         gap: 0.35rem 0.75rem;
-        margin-bottom: 0.45rem;
+        padding: 0.45rem 0;
+        font-size: 0.875rem;
     }
-    .contracts-contract-no {
+    #contracts-app .contracts-milestone-row + .contracts-milestone-row {
+        border-top: 1px dashed #e5e7eb;
+    }
+    #contracts-app .contracts-seed-btn {
         font-size: 0.8125rem;
-        font-weight: 600;
-        color: #334155;
-    }
-    .contracts-status-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.15rem 0.55rem;
-        border-radius: 9999px;
-        font-size: 0.6875rem;
-        font-weight: 600;
-        background: #f1f5f9;
-        color: #475569;
-    }
-    .contracts-meta-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.15rem 0.35rem;
-        font-size: 0.8125rem;
-        line-height: 1.55;
-        color: #64748b;
-    }
-    .contracts-meta-k {
-        color: #94a3b8;
-        font-weight: 500;
-    }
-    .contracts-milestone-list {
-        margin-top: 0.65rem;
-        padding-top: 0.55rem;
-        border-top: 1px dashed rgba(203, 213, 225, 0.85);
-    }
-    .contracts-milestone-item {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: space-between;
-        gap: 0.35rem 0.5rem;
-        font-size: 0.75rem;
-        color: #475569;
-    }
-    .contracts-milestone-item + .contracts-milestone-item {
-        margin-top: 0.35rem;
-    }
-    .contracts-seed-btn {
-        font-size: 0.75rem;
         font-weight: 600;
         color: #0969da;
     }
-    .contracts-seed-btn:hover {
+    #contracts-app .contracts-seed-btn:hover {
         text-decoration: underline;
     }
-    .contracts-seed-done {
-        font-size: 0.75rem;
+    #contracts-app .contracts-seed-done {
+        font-size: 0.8125rem;
         font-weight: 600;
         color: #16a34a;
     }
-    .contracts-client-empty {
-        grid-column: 1 / -1;
+    #contracts-app .crm-table th.crm-th {
+        background: #F9FAFB;
+        color: #6B7280;
+        border: 0;
+        border-bottom: 1px solid #E5E7EB;
         text-align: center;
-        padding: 3rem 1.5rem;
-        color: #94a3b8;
-        font-size: 0.9375rem;
-        border-radius: 1rem;
-        background: rgba(255, 255, 255, 0.35);
-        border: 1px dashed rgba(148, 163, 184, 0.4);
+        font-weight: 600;
+        font-size: 0.7625rem;
+        padding: 10px 16px;
+        text-transform: none;
+    }
+    #contracts-app .crm-table th.crm-th .ct-th-icon {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        margin-right: 6px;
+        vertical-align: middle;
+        color: #16A39A;
+    }
+    #main-shell.bms-sidebar-dark #contracts-app {
+        --ct-th-dark-bg: #3B6699;
+        --ct-th-dark-text: #FFFFFF;
+        --ct-th-dark-border: rgba(255, 255, 255, 0.12);
+        --ct-th-dark-icon: #CBD9EC;
+    }
+    #main-shell.bms-sidebar-dark #contracts-app .crm-table th.crm-th {
+        background: var(--ct-th-dark-bg);
+        color: var(--ct-th-dark-text);
+        border-color: var(--ct-th-dark-border);
+        border-bottom-color: var(--ct-th-dark-border);
+    }
+    #main-shell.bms-sidebar-dark #contracts-app .crm-table th.crm-th .ct-th-icon {
+        color: var(--ct-th-dark-icon);
+    }
+    #contracts-app .crm-table td.crm-td {
+        border: 0;
+        border-bottom: 1px solid #EEF0F2;
+        color: #1A1D1F;
+        background: #fff;
+        padding: 12px 16px;
+    }
+    #contracts-app .crm-table tbody tr:nth-child(even) td.crm-td { background: #fff; }
+    #contracts-app .crm-table tbody tr:hover td.crm-td { background: #F9FAFB; }
+    #contracts-app .crm-table td.crm-td.crm-name-cell .crm-name-link {
+        color: #0969da;
+        font-weight: 700;
+    }
+    #contracts-app .crm-table td.crm-td.crm-name-cell .crm-name-link:hover { text-decoration: underline; }
+    #contracts-app .crm-op-actions { gap: 0.35rem; }
+    #contracts-app .crm-op-btn-edit,
+    #contracts-app .crm-op-btn-delete {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem;
+    }
+    #contracts-app .crm-op-btn-edit svg,
+    #contracts-app .crm-op-btn-delete svg { width: 15px; height: 15px; }
+    #contracts-app .crm-op-btn-edit:hover,
+    #contracts-app .crm-op-btn-delete:hover { text-decoration: none; }
+    #contracts-app .contracts-preview-body {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 0.875rem;
+        line-height: 1.6;
+        color: #1f2328;
     }
 </style>
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="contracts-app" class="container mx-auto p-4 md:p-6 max-w-[1280px] space-y-4">
+<div id="contracts-app" class="container mx-auto max-w-[1280px] p-6 space-y-4" v-cloak>
     <div>
         <h1 class="text-2xl font-bold text-gray-900">合同管理</h1>
         <p class="text-sm text-gray-500 mt-1">交接审批通过后自动生成 SOW 草稿；里程碑可预置结算回款行。</p>
     </div>
-    <section class="contracts-client-gallery" aria-label="合同客户卡片">
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-6">
-            <article v-for="g in clientGroups" :key="g.client_id" class="contracts-client-card">
-                <div class="contracts-client-card__icon" aria-hidden="true">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="16" y1="13" x2="8" y2="13"/>
-                        <line x1="16" y1="17" x2="8" y2="17"/>
-                    </svg>
+
+    <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="relative w-full sm:w-[280px]">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                <input
+                    v-model="filterKeyword"
+                    type="text"
+                    placeholder="搜索资料名称、客户、合同编号、文件名…"
+                    class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30"
+                    title="关键词筛选"
+                />
+            </div>
+            <p class="ml-auto min-w-0 self-end leading-none pb-[7px] text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">
+                合计：<span>{{ filteredItems.length }}</span> 条
+            </p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg overflow-hidden border border-[#E5E7EB] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
+        <div class="crm-h-scroll">
+        <table class="crm-table w-full" data-table-id="contracts">
+            <thead>
+                <tr>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 9h14M5 15h14M9 4 7 20M17 4l-2 16"/></svg>序号</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5M9 13h6M9 16.5h4"/></svg>资料名称</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>客户</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5"/></svg>合同编号</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>销售</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3 3 0 0 1 4 4l-8 8a1.5 1.5 0 0 1-2-2l7-7"/></svg>文件名</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 4v3M17 4v3M4.5 9.5h15M5.5 6.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1Z"/></svg>有效期</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>上传人</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>更改时间</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 21V4M5 4h11l-2 3 2 3H5"/></svg>状态</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-if="loading">
+                    <td class="crm-td text-center text-gray-500" colspan="11">加载中…</td>
+                </tr>
+                <tr v-else-if="!filteredItems.length">
+                    <td class="crm-td text-center text-gray-500" colspan="11">暂无合同（需先通过交接审批）</td>
+                </tr>
+                <tr v-for="(row, idx) in pagedItems" :key="row.id">
+                    <td class="crm-td tabular-nums">{{ (currentPage - 1) * pageSize + idx + 1 }}</td>
+                    <td class="crm-td crm-name-cell"><button type="button" class="crm-name-link" @click="openDetail(row)">{{ row.material_name || row.title || '—' }}</button></td>
+                    <td class="crm-td">{{ row.client_name || '—' }}</td>
+                    <td class="crm-td">{{ row.contract_no || '—' }}</td>
+                    <td class="crm-td contracts-sales-cell">{{ row.sales_owner || '—' }}</td>
+                    <td class="crm-td max-w-[10rem] truncate" :title="row.file_name">{{ row.file_name || '—' }}</td>
+                    <td class="crm-td">{{ row.expires_at || '—' }}</td>
+                    <td class="crm-td">{{ row.uploaded_by_name || '—' }}</td>
+                    <td class="crm-td">{{ row.updated_at || '—' }}</td>
+                    <td class="crm-td">
+                        <span :class="statusBadge(row.status)" class="contracts-status-badge">{{ row.status_label || '—' }}</span>
+                    </td>
+                    <td class="crm-td">
+                        <div class="crm-op-actions">
+                            <button type="button" class="crm-op-btn-edit" @click="openPreview(row)" aria-label="预览" title="预览">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button type="button" class="crm-op-btn-edit" @click="openDetail(row)" aria-label="修改" title="修改">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                            </button>
+                            <button type="button" class="crm-op-btn-delete" @click="deleteContract(row)" aria-label="删除" title="删除">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <div v-if="!loading && filteredItems.length" class="flex flex-wrap items-center justify-between gap-3">
+        <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ filteredItems.length }}</span> 条，第 {{ currentPage }} / {{ totalPages }} 页</p>
+        <div class="flex items-center gap-1.5">
+            <button type="button" @click="goPage(currentPage - 1)" :disabled="currentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+            <button
+                v-for="p in pageNumbers"
+                :key="'pg-' + p"
+                type="button"
+                @click="goPage(p)"
+                :class="p === currentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'"
+                class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors"
+            >{{ p }}</button>
+            <button type="button" @click="goPage(currentPage + 1)" :disabled="currentPage >= totalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+            <span class="ml-1 inline-flex h-8 items-center rounded-[6px] border border-[#D7DBE0] bg-white px-2.5 text-sm text-[#6B7280]">10 条 / 页</span>
+        </div>
+    </div>
+
+    <div v-if="showDetail" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeDetail"></div>
+    <aside v-if="showDetail" class="crm-esc-modal crm-right-drawer open">
+        <div class="flex items-center justify-between gap-2 border-b border-[#d0d7de] px-4 py-3 shrink-0">
+            <h3 class="text-lg font-semibold text-[#1f2328] truncate">合同详情</h3>
+            <button type="button" @click="closeDetail" class="text-2xl leading-none text-[#57606a] hover:text-[#1f2328] shrink-0" aria-label="关闭">&times;</button>
+        </div>
+        <div v-if="detailRow" class="contracts-drawer-body">
+            <section>
+                <div class="contracts-drawer-section-title">基本信息</div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">客户</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.client_name || '—' }}</div>
                 </div>
-                <p class="contracts-client-card__eyebrow">客户</p>
-                <h2 class="contracts-client-card__name">{{ g.client_name || '—' }}</h2>
-                <div class="w-full">
-                    <div v-for="c in g.contracts" :key="c.id" class="contracts-contract-block">
-                        <div class="contracts-contract-head">
-                            <span class="contracts-contract-no">{{ c.contract_no || '—' }}</span>
-                            <span class="contracts-status-badge">{{ c.status_label }}</span>
-                        </div>
-                        <div class="contracts-meta-row">
-                            <span class="contracts-meta-k">标题</span>
-                            <span>{{ c.title || '—' }}</span>
-                        </div>
-                        <div class="contracts-meta-row mt-1">
-                            <span class="contracts-meta-k">金额</span>
-                            <span>{{ displayAmount(c.total_amount) }}</span>
-                        </div>
-                        <div v-if="c.milestones && c.milestones.length" class="contracts-milestone-list">
-                            <div v-for="m in c.milestones" :key="m.id" class="contracts-milestone-item">
-                                <span>{{ m.name }}</span>
-                                <button
-                                    v-if="!m.settlement_entry_id"
-                                    type="button"
-                                    class="contracts-seed-btn"
-                                    @click="seed(c, m)"
-                                >预置结算</button>
-                                <span v-else class="contracts-seed-done">已预置</span>
-                            </div>
-                        </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">合同编号</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.contract_no || '—' }}</div>
+                </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">资料名称</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.material_name || detailRow.title || '—' }}</div>
+                </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">销售</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.sales_owner || '—' }}</div>
+                </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">文件名</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.file_name || '—' }}</div>
+                </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">金额</div>
+                    <div class="contracts-drawer-field-value">{{ displayAmount(detailRow.total_amount) }}</div>
+                </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">有效期</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.expires_at || '—' }}</div>
+                </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">上传人</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.uploaded_by_name || '—' }}</div>
+                </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">状态</div>
+                    <div class="contracts-drawer-field-value">
+                        <span :class="statusBadge(detailRow.status)" class="contracts-status-badge">{{ detailRow.status_label || '—' }}</span>
                     </div>
                 </div>
-            </article>
-            <p v-if="!clientGroups.length" class="contracts-client-empty">暂无合同（需先通过交接审批）</p>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">更改时间</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.updated_at || formatDateTime(detailRow.created_at) }}</div>
+                </div>
+            </section>
+            <section>
+                <div class="contracts-drawer-section-title">里程碑</div>
+                <p v-if="!detailRow.milestones || !detailRow.milestones.length" class="text-sm text-gray-400">暂无里程碑</p>
+                <div v-for="m in detailRow.milestones" :key="m.id" class="contracts-milestone-row">
+                    <span>{{ m.name || '—' }}</span>
+                    <button
+                        v-if="!m.settlement_entry_id"
+                        type="button"
+                        class="contracts-seed-btn"
+                        @click="seed(detailRow, m)"
+                    >预置结算</button>
+                    <span v-else class="contracts-seed-done">已预置</span>
+                </div>
+            </section>
         </div>
-    </section>
+    </aside>
+
+    <div v-if="showPreview" class="crm-esc-modal crm-form-modal-overlay z-[210]" @click.self="closePreview">
+        <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
+            <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg truncate">{{ previewTitle || '合同预览' }}</h3>
+                <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closePreview">&times;</button>
+            </div>
+            <div class="p-5 min-h-[20rem] max-h-[75vh] overflow-auto">
+                <p v-if="!previewContent" class="text-sm text-[#57606a] text-center py-12">暂无 SOW 内容</p>
+                <div v-else class="contracts-preview-body">{{ previewContent }}</div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
 <script>
-const { createApp, ref, computed, onMounted } = Vue;
+const { createApp, ref, computed, watch, onMounted } = Vue;
+
+function statusBadge(code) {
+    const m = {
+        draft: 'bg-gray-100 text-gray-600',
+        signed: 'bg-blue-100 text-blue-800',
+        active: 'bg-green-100 text-green-800',
+        closed: 'bg-slate-100 text-slate-600',
+    };
+    return m[code] || 'bg-gray-100 text-gray-600';
+}
+
 createApp({
     setup() {
         const items = ref([]);
+        const loading = ref(false);
+        const filterKeyword = ref('');
+        const pageSize = 10;
+        const currentPage = ref(1);
+        const showDetail = ref(false);
+        const detailRow = ref(null);
+        const showPreview = ref(false);
+        const previewTitle = ref('');
+        const previewContent = ref('');
+
         const auth = () => window.crmAuthHeader();
+
         const displayAmount = (raw) => {
             const digits = String(raw || '').replace(/[^\d.-]/g, '').trim();
             if (!digits) return '—';
@@ -219,32 +381,132 @@ createApp({
             if (!Number.isFinite(n)) return String(raw || '—');
             return n.toLocaleString('zh-CN');
         };
-        const clientGroups = computed(() => {
-            const map = new Map();
-            for (const c of items.value) {
-                const key = c.client_id != null ? String(c.client_id) : (c.client_name || 'unknown');
-                if (!map.has(key)) {
-                    map.set(key, {
-                        client_id: c.client_id,
-                        client_name: c.client_name,
-                        contracts: [],
-                    });
-                }
-                map.get(key).contracts.push(c);
-            }
-            return Array.from(map.values());
-        });
-        const load = async () => {
-            const r = await fetch('/api/contracts', { headers: auth() });
-            items.value = r.ok ? await r.json() : [];
+
+        const formatDateTime = (raw) => {
+            if (!raw) return '—';
+            const d = new Date(raw);
+            if (Number.isNaN(d.getTime())) return raw;
+            return d.toLocaleString('zh-CN', { hour12: false });
         };
+
+        const filteredItems = computed(() => {
+            const q = filterKeyword.value.trim().toLowerCase();
+            if (!q) return items.value;
+            return items.value.filter((c) => {
+                const hay = [
+                    c.material_name,
+                    c.title,
+                    c.client_name,
+                    c.contract_no,
+                    c.file_name,
+                    c.sales_owner,
+                    c.uploaded_by_name,
+                ].map((v) => String(v || '').toLowerCase()).join(' ');
+                return hay.includes(q);
+            });
+        });
+
+        const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / pageSize)));
+        const pagedItems = computed(() => {
+            const start = (currentPage.value - 1) * pageSize;
+            return filteredItems.value.slice(start, start + pageSize);
+        });
+        const pageNumbers = computed(() => {
+            const total = totalPages.value;
+            const cur = currentPage.value;
+            const max = 7;
+            if (total <= max) return Array.from({ length: total }, (_, i) => i + 1);
+            let start = Math.max(1, cur - 3);
+            const end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+        });
+
+        const goPage = (p) => {
+            currentPage.value = Math.min(Math.max(1, p), totalPages.value);
+        };
+
+        watch(filterKeyword, () => { currentPage.value = 1; });
+        watch(() => filteredItems.value.length, () => {
+            if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+        });
+
+        const openDetail = (row) => {
+            detailRow.value = row;
+            showDetail.value = true;
+        };
+        const closeDetail = () => {
+            showDetail.value = false;
+            detailRow.value = null;
+        };
+
+        const openPreview = (row) => {
+            previewTitle.value = row.material_name || row.title || row.contract_no || '合同预览';
+            previewContent.value = row.sow_markdown || '';
+            showPreview.value = true;
+        };
+        const closePreview = () => {
+            showPreview.value = false;
+            previewTitle.value = '';
+            previewContent.value = '';
+        };
+
+        const deleteContract = (row) => {
+            const name = row.material_name || row.title || row.contract_no || '该合同';
+            if (!window.confirm(`确定删除「${name}」？`)) return;
+            alert('合同由交接单自动生成，暂不支持删除');
+        };
+
+        const load = async () => {
+            loading.value = true;
+            try {
+                const r = await fetch('/api/contracts', { headers: auth() });
+                items.value = r.ok ? await r.json() : [];
+            } finally {
+                loading.value = false;
+            }
+        };
+
         const seed = async (c, m) => {
             const r = await fetch(`/api/contracts/${c.id}/milestones/${m.id}/seed-settlement`, { method: 'POST', headers: auth() });
-            if (r.ok) await load();
-            else alert((await r.json()).detail || '失败');
+            if (r.ok) {
+                await load();
+                if (detailRow.value && detailRow.value.id === c.id) {
+                    detailRow.value = items.value.find((item) => item.id === c.id) || null;
+                }
+            } else {
+                alert((await r.json()).detail || '失败');
+            }
         };
+
         onMounted(load);
-        return { clientGroups, seed, displayAmount };
+
+        return {
+            items,
+            loading,
+            filterKeyword,
+            filteredItems,
+            pagedItems,
+            currentPage,
+            totalPages,
+            pageNumbers,
+            pageSize,
+            goPage,
+            showDetail,
+            detailRow,
+            showPreview,
+            previewTitle,
+            previewContent,
+            openDetail,
+            closeDetail,
+            openPreview,
+            closePreview,
+            deleteContract,
+            seed,
+            displayAmount,
+            formatDateTime,
+            statusBadge,
+        };
     },
 }).mount('#contracts-app');
 </script>

@@ -882,7 +882,7 @@ createApp({
                 name: c.name || '',
                 title: c.title || '',
                 city: c.city || '',
-                created_by: currentUserName() || c.created_by || '',
+                created_by: c.created_by || currentUserName() || '',
                 phone: c.phone || '',
                 email: c.email || '',
                 relationship: ['普通', '良好', '密切'].includes(contactRelationship(c)) ? contactRelationship(c) : '',
