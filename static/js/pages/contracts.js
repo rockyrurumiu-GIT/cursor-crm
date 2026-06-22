@@ -5,10 +5,14 @@ const { createApp, ref, reactive, computed, watch, onMounted, onUnmounted } = Vu
 
 function emptyForm() {
     return {
+        id: null,
         title: '',
         client_id: '',
+        contract_type: '',
         contract_no: '',
-        end_date: '',
+        expires_mode: 'date',
+        expires_at: '',
+        remarks: '',
     };
 }
 
@@ -24,12 +28,76 @@ function buildQuery(filters) {
 
 function statusBadge(code) {
     const m = {
-        draft: 'bg-gray-100 text-gray-600',
-        signed: 'bg-blue-100 text-blue-800',
         active: 'bg-green-100 text-green-800',
-        closed: 'bg-slate-100 text-slate-600',
+        expiring: 'bg-amber-100 text-amber-800',
+        expired: 'bg-red-100 text-red-800',
     };
     return m[code] || 'bg-gray-100 text-gray-600';
+}
+
+const PREVIEWABLE_EXTS = [
+    '.pdf', '.jpg', '.jpeg', '.png',
+    '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+];
+
+const OFFICE_PREVIEW_EXTS = ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'];
+
+function fileExt(name) {
+    const n = String(name || '').trim().toLowerCase();
+    const i = n.lastIndexOf('.');
+    return i >= 0 ? n.slice(i) : '';
+}
+
+function isPreviewableFile(name) {
+    return PREVIEWABLE_EXTS.includes(fileExt(name));
+}
+
+function previewModeForFile(name) {
+    const ext = fileExt(name);
+    if (ext === '.pdf' || OFFICE_PREVIEW_EXTS.includes(ext)) return 'pdf';
+    if (ext === '.jpg' || ext === '.jpeg' || ext === '.png') return 'image';
+    return 'unsupported';
+}
+
+function previewBlobMime(mode, contentType) {
+    const ct = String(contentType || '').toLowerCase();
+    if (mode === 'pdf') return ct.includes('pdf') ? contentType : 'application/pdf';
+    if (mode === 'image') {
+        if (ct.includes('png')) return 'image/png';
+        if (ct.includes('jpeg') || ct.includes('jpg')) return 'image/jpeg';
+        return contentType || 'image/jpeg';
+    }
+    return contentType || 'application/octet-stream';
+}
+
+async function validatePreviewBlob(blob, mode) {
+    if (!blob || !blob.size) {
+        throw new Error('预览文件为空');
+    }
+    const buf = await blob.arrayBuffer();
+    const head = new Uint8Array(buf.slice(0, 16));
+    const textHead = new TextDecoder().decode(buf.slice(0, 256)).trim().toLowerCase();
+    const looksHtml = textHead.startsWith('<!doctype') || textHead.startsWith('<html')
+        || textHead === 'not found' || textHead.includes('not found');
+    const looksJson = textHead.startsWith('{') && textHead.includes('"detail"');
+    if (looksHtml || looksJson) {
+        let msg = '预览失败，请稍后重试';
+        if (looksJson) {
+            try {
+                msg = JSON.parse(new TextDecoder().decode(buf)).detail || msg;
+            } catch (_) { /* ignore */ }
+        } else if (textHead === 'not found' || textHead.includes('not found')) {
+            msg = '预览接口不可用，请刷新页面或重启服务后重试';
+        }
+        throw new Error(msg);
+    }
+    if (mode === 'pdf') {
+        const magic = String.fromCharCode(head[0], head[1], head[2], head[3]);
+        if (magic !== '%PDF') {
+            throw new Error('无法生成 PDF 预览，请下载附件查看');
+        }
+    }
+    return buf;
 }
 
 createApp({
@@ -49,18 +117,27 @@ createApp({
         const formOptions = reactive({
             statuses: [],
             clients: [],
+            contract_types: [],
         });
         const showForm = ref(false);
         const showDetail = ref(false);
         const detailRow = ref(null);
         const form = reactive(emptyForm());
+        const clientPickerQuery = ref('');
+        const clientPickerOpen = ref(false);
         const selectedFile = ref(null);
         const selectedFileName = ref('');
+        const existingFileName = ref('');
         const fileInput = ref(null);
         const dragging = ref(false);
         const showPreview = ref(false);
         const previewTitle = ref('');
         const previewContent = ref('');
+        const previewMode = ref('');
+        const previewUrl = ref('');
+        const previewErrorMessage = ref('');
+        const previewLoading = ref(false);
+        let previewBlobUrl = '';
         const canWriteContracts = ref(false);
 
         const filteredItems = computed(() => items.value);
@@ -80,12 +157,48 @@ createApp({
             return Array.from({ length: end - start + 1 }, (_, i) => start + i);
         });
 
+        const filteredClients = computed(() => {
+            const q = (clientPickerQuery.value || '').trim().toLowerCase();
+            const list = formOptions.clients || [];
+            if (!q) return list.slice(0, 50);
+            return list.filter((c) => String(c.name || '').toLowerCase().includes(q)).slice(0, 50);
+        });
+
+        const selectedClient = computed(() => {
+            const id = String(form.client_id || '');
+            if (!id) return null;
+            return (formOptions.clients || []).find((c) => String(c.id) === id) || null;
+        });
+
+        const selectedClientLabel = computed(() => (selectedClient.value ? selectedClient.value.name : ''));
+
+        const formSalesOwner = computed(() => (selectedClient.value ? (selectedClient.value.sales_owner_name || '—') : '—'));
+
+        const isVendorContract = computed(() => form.contract_type === 'vendor');
+
+        const isEditMode = computed(() => !!form.id);
+
+        const isLongTermExpiry = computed(() => form.expires_mode === 'long_term');
+
+        const formatExpiresAt = (raw) => {
+            const s = String(raw || '').trim();
+            return s || '长期';
+        };
+
         const goPage = (p) => {
             currentPage.value = Math.min(Math.max(1, p), totalPages.value);
         };
 
         watch(() => filteredItems.value.length, () => {
             if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+        });
+
+        watch(() => form.contract_type, (ct) => {
+            if (ct !== 'vendor' && !form.id) form.contract_no = '';
+        });
+
+        watch(() => form.expires_mode, (mode) => {
+            if (mode === 'long_term') form.expires_at = '';
         });
 
         function refreshContractPermissions() {
@@ -97,6 +210,7 @@ createApp({
             const data = await window.crmApi.get('/api/contracts/form-options');
             formOptions.statuses = data.statuses || [];
             formOptions.clients = data.clients || [];
+            formOptions.contract_types = data.contract_types || [];
         }
 
         async function loadContracts() {
@@ -119,14 +233,57 @@ createApp({
 
         function openCreate() {
             Object.assign(form, emptyForm());
+            clientPickerQuery.value = '';
+            clientPickerOpen.value = false;
             selectedFile.value = null;
             selectedFileName.value = '';
+            existingFileName.value = '';
+            if (fileInput.value) fileInput.value.value = '';
+            showForm.value = true;
+        }
+
+        function openEdit(row) {
+            if (row.handoff_id) {
+                alert('交接生成的合同不可在此修改，请在交接单中调整');
+                return;
+            }
+            if (!canWriteContracts.value) {
+                alert('无权限修改合同');
+                return;
+            }
+            form.id = row.id;
+            form.title = row.title || row.material_name || '';
+            form.client_id = String(row.client_id || '');
+            clientPickerQuery.value = row.client_name || '';
+            form.contract_type = row.contract_type || '';
+            form.contract_no = row.contract_no || '';
+            const exp = String(row.expires_at || row.end_date || '').trim();
+            form.expires_mode = exp ? 'date' : 'long_term';
+            form.expires_at = exp;
+            form.remarks = row.remarks || '';
+            existingFileName.value = row.file_name || '';
+            selectedFile.value = null;
+            selectedFileName.value = '';
+            clientPickerOpen.value = false;
             if (fileInput.value) fileInput.value.value = '';
             showForm.value = true;
         }
 
         function closeForm() {
             showForm.value = false;
+            clientPickerOpen.value = false;
+            Object.assign(form, emptyForm());
+            existingFileName.value = '';
+        }
+
+        function selectClient(c) {
+            form.client_id = String(c.id);
+            clientPickerQuery.value = c.name || '';
+            clientPickerOpen.value = false;
+        }
+
+        function onClientPickerBlur() {
+            window.setTimeout(() => { clientPickerOpen.value = false; }, 150);
         }
 
         function setSelectedFile(f) {
@@ -158,7 +315,7 @@ createApp({
         async function submitForm() {
             submitting.value = true;
             try {
-                if (!selectedFile.value) {
+                if (!isEditMode.value && !selectedFile.value) {
                     alert('请选择文件');
                     return;
                 }
@@ -166,27 +323,70 @@ createApp({
                     alert('请选择客户');
                     return;
                 }
+                if (!form.contract_type) {
+                    alert('请选择合同类型');
+                    return;
+                }
+                if (form.expires_mode === 'date' && !form.expires_at) {
+                    alert('请选择有效期或选择长期');
+                    return;
+                }
+                if (isVendorContract.value && !String(form.contract_no || '').trim()) {
+                    alert('请填写供应商合同编号');
+                    return;
+                }
                 const fd = new FormData();
                 fd.append('title', form.title);
                 fd.append('client_id', form.client_id);
-                fd.append('contract_no', form.contract_no || '');
-                fd.append('end_date', form.end_date || '');
-                fd.append('file', selectedFile.value);
-                const headers = window.crmAuthHeader ? window.crmAuthHeader() : {};
-                const r = await fetch('/api/contracts', {
-                    method: 'POST',
-                    headers,
-                    credentials: 'same-origin',
-                    body: fd,
-                });
-                if (!r.ok) {
-                    const err = await r.json().catch(() => ({}));
-                    throw new Error(err.detail || '上传失败');
+                fd.append('contract_type', form.contract_type);
+                if (isVendorContract.value) {
+                    fd.append('contract_no', form.contract_no || '');
                 }
-                showForm.value = false;
+                fd.append('expires_at', form.expires_at || '');
+                fd.append('remarks', form.remarks || '');
+                const headers = window.crmAuthHeader ? window.crmAuthHeader() : {};
+                if (isEditMode.value) {
+                    const r = await fetch('/api/contracts/' + form.id, {
+                        method: 'PATCH',
+                        headers,
+                        credentials: 'same-origin',
+                        body: fd,
+                    });
+                    if (!r.ok) {
+                        const err = await r.json().catch(() => ({}));
+                        throw new Error(err.detail || '保存失败');
+                    }
+                    if (selectedFile.value) {
+                        const fileFd = new FormData();
+                        fileFd.append('file', selectedFile.value);
+                        const fr = await fetch('/api/contracts/' + form.id + '/replace-file', {
+                            method: 'POST',
+                            headers,
+                            credentials: 'same-origin',
+                            body: fileFd,
+                        });
+                        if (!fr.ok) {
+                            const err = await fr.json().catch(() => ({}));
+                            throw new Error(err.detail || '附件替换失败');
+                        }
+                    }
+                } else {
+                    fd.append('file', selectedFile.value);
+                    const r = await fetch('/api/contracts', {
+                        method: 'POST',
+                        headers,
+                        credentials: 'same-origin',
+                        body: fd,
+                    });
+                    if (!r.ok) {
+                        const err = await r.json().catch(() => ({}));
+                        throw new Error(err.detail || '上传失败');
+                    }
+                }
+                closeForm();
                 await loadContracts();
             } catch (e) {
-                alert(e.message || '上传失败');
+                alert(e.message || (isEditMode.value ? '保存失败' : '上传失败'));
             } finally {
                 submitting.value = false;
             }
@@ -216,25 +416,105 @@ createApp({
             detailRow.value = null;
         };
 
-        const openPreview = (row) => {
+        const openPreview = async (row) => {
+            previewTitle.value = row.material_name || row.title || row.contract_no || '合同预览';
             if (row.has_attachment) {
-                window.location.href = '/api/contracts/' + row.id + '/download';
+                const mode = previewModeForFile(row.file_name);
+                previewErrorMessage.value = '';
+                revokePreviewBlob();
+                previewUrl.value = '';
+                previewContent.value = '';
+                if (mode === 'unsupported') {
+                    previewMode.value = 'unsupported';
+                    previewLoading.value = false;
+                    showPreview.value = true;
+                    return;
+                }
+                previewMode.value = 'loading';
+                previewLoading.value = true;
+                showPreview.value = true;
+                const url = '/api/contracts/' + row.id + '/preview';
+                try {
+                    const headers = window.crmAuthHeader ? window.crmAuthHeader() : {};
+                    const r = await fetch(url, { credentials: 'same-origin', headers });
+                    if (!r.ok) {
+                        const err = await r.json().catch(() => ({}));
+                        previewMode.value = 'error';
+                        previewErrorMessage.value = err.detail || '预览失败，请稍后重试';
+                        return;
+                    }
+                    const ct = r.headers.get('content-type') || '';
+                    const rawBlob = await r.blob();
+                    const buf = await validatePreviewBlob(rawBlob, mode);
+                    revokePreviewBlob();
+                    const typedBlob = new Blob([buf], { type: previewBlobMime(mode, ct) });
+                    previewBlobUrl = URL.createObjectURL(typedBlob);
+                    previewUrl.value = previewBlobUrl;
+                    previewMode.value = mode;
+                } catch (e) {
+                    previewMode.value = 'error';
+                    previewErrorMessage.value = (e && e.message) || '预览失败，请稍后重试';
+                } finally {
+                    previewLoading.value = false;
+                }
                 return;
             }
-            previewTitle.value = row.material_name || row.title || row.contract_no || '合同预览';
+            previewMode.value = 'markdown';
             previewContent.value = row.sow_markdown || '';
             showPreview.value = true;
         };
+
+        function revokePreviewBlob() {
+            if (previewBlobUrl) {
+                URL.revokeObjectURL(previewBlobUrl);
+                previewBlobUrl = '';
+            }
+        }
+
         const closePreview = () => {
             showPreview.value = false;
             previewTitle.value = '';
             previewContent.value = '';
+            previewMode.value = '';
+            previewUrl.value = '';
+            previewErrorMessage.value = '';
+            revokePreviewBlob();
         };
 
-        const deleteContract = (row) => {
+        const deleteContract = async (row) => {
+            if (!canWriteContracts.value) {
+                alert('无权限删除合同');
+                return;
+            }
             const name = row.material_name || row.title || row.contract_no || '该合同';
-            if (!window.confirm('确定删除「' + name + '」？')) return;
-            alert('合同由交接单自动生成，暂不支持删除');
+            let ok = false;
+            if (typeof window.crmConfirmDeleteDialog === 'function') {
+                ok = await window.crmConfirmDeleteDialog({
+                    title: '确认删除',
+                    targetText: '将删除：' + name,
+                    hint: '删除后不可恢复，将从当前列表移除。',
+                });
+            } else {
+                ok = window.confirm('确定删除「' + name + '」？');
+            }
+            if (!ok) return;
+            try {
+                const headers = window.crmAuthHeader ? window.crmAuthHeader() : {};
+                const r = await fetch('/api/contracts/' + row.id, {
+                    method: 'DELETE',
+                    headers,
+                    credentials: 'same-origin',
+                });
+                if (!r.ok) {
+                    const err = await r.json().catch(() => ({}));
+                    throw new Error(err.detail || '删除失败');
+                }
+                if (detailRow.value && detailRow.value.id === row.id) closeDetail();
+                if (showForm.value && form.id === row.id) closeForm();
+                await loadContracts();
+            } catch (e) {
+                alert(e.message || '删除失败');
+            }
         };
 
         const seed = async (c, m) => {
@@ -282,17 +562,34 @@ createApp({
             showDetail,
             detailRow,
             form,
+            clientPickerQuery,
+            clientPickerOpen,
+            filteredClients,
+            selectedClientLabel,
+            formSalesOwner,
+            isVendorContract,
+            isEditMode,
+            isLongTermExpiry,
+            formatExpiresAt,
             fileInput,
             selectedFileName,
+            existingFileName,
             dragging,
             showPreview,
             previewTitle,
             previewContent,
+            previewMode,
+            previewUrl,
+            previewErrorMessage,
+            previewLoading,
             canWriteContracts,
             loadContracts,
             resetFilters,
             openCreate,
+            openEdit,
             closeForm,
+            selectClient,
+            onClientPickerBlur,
             onFileChange,
             triggerFilePick,
             onDrop,

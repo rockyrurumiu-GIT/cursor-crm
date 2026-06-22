@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 OPPORTUNITY_STAGES = frozenset({"initial", "qualifying", "proposal", "negotiating", "won", "lost"})
@@ -23,6 +23,22 @@ CONTRACT_STATUS_LABELS = {
     "signed": "已签约",
     "active": "执行中",
     "closed": "已关闭",
+}
+
+CONTRACT_UPLOAD_TYPES = frozenset({"msa", "sow", "nda", "agreement", "vendor"})
+CONTRACT_TYPE_LABELS = {
+    "msa": "甲方MSA",
+    "sow": "甲方SOW",
+    "nda": "甲方NDA",
+    "agreement": "甲方其他协议",
+    "vendor": "供应商合同",
+    "项目": "项目",
+}
+CONTRACT_EXPIRY_STATUSES = frozenset({"active", "expiring", "expired"})
+CONTRACT_EXPIRY_STATUS_LABELS = {
+    "active": "有效",
+    "expiring": "快到期",
+    "expired": "过期",
 }
 
 MILESTONE_STATUSES = frozenset({"pending", "invoiced", "paid"})
@@ -103,6 +119,23 @@ def contract_file_name(contract_no: str) -> str:
     return f"{no}.docx" if no else ""
 
 
+def compute_contract_expiry_status(end_date: str, *, today: Optional[date] = None) -> str:
+    """有效期三档：有效 / 快到期 / 过期（不读 DB status）。"""
+    ref = today or date.today()
+    raw = (end_date or "").strip()
+    if not raw:
+        return "active"
+    try:
+        exp = date.fromisoformat(raw[:10])
+    except ValueError:
+        return "active"
+    if exp < ref:
+        return "expired"
+    if exp <= ref + timedelta(days=30):
+        return "expiring"
+    return "active"
+
+
 def contract_to_dict(
     c,
     client_name: str = "",
@@ -124,6 +157,8 @@ def contract_to_dict(
         display_file_name = contract_file_name(contract_no)
     uploader = (uploaded_by_name or "").strip() or sales or "—"
     updated = getattr(c, "updated_at", None) or c.created_at
+    contract_type_raw = c.contract_type or ""
+    expiry_status = compute_contract_expiry_status(end_date)
     return {
         "id": c.id,
         "client_id": c.client_id,
@@ -131,7 +166,8 @@ def contract_to_dict(
         "handoff_id": c.handoff_id,
         "opportunity_id": c.opportunity_id,
         "contract_no": contract_no,
-        "contract_type": c.contract_type or "",
+        "contract_type": contract_type_raw,
+        "contract_type_label": CONTRACT_TYPE_LABELS.get(contract_type_raw, contract_type_raw or "—"),
         "title": c.title or "",
         "material_name": c.title or "",
         "sales_owner": sales,
@@ -141,10 +177,11 @@ def contract_to_dict(
         "total_amount": c.total_amount or "",
         "start_date": c.start_date or "",
         "end_date": end_date,
-        "expires_at": end_date or "—",
+        "expires_at": end_date,
         "uploaded_by_name": uploader,
-        "status": c.status or "draft",
-        "status_label": CONTRACT_STATUS_LABELS.get(c.status, c.status),
+        "status": expiry_status,
+        "status_label": CONTRACT_EXPIRY_STATUS_LABELS.get(expiry_status, expiry_status),
+        "remarks": getattr(c, "remarks", None) or "",
         "sow_markdown": c.sow_markdown or "",
         "milestones": milestones or [],
         "created_at": c.created_at.isoformat() if c.created_at else "",

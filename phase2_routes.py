@@ -152,7 +152,14 @@ def seed_settlement_from_milestone(
     DeliverySettlementEntry,
 ) -> int:
     if milestone.settlement_entry_id:
-        return milestone.settlement_entry_id
+        existing = (
+            db.query(DeliverySettlementEntry.id)
+            .filter(DeliverySettlementEntry.id == int(milestone.settlement_entry_id))
+            .first()
+        )
+        if existing:
+            return int(milestone.settlement_entry_id)
+        milestone.settlement_entry_id = None
     fee_month = (milestone.planned_date or "")[:7] or datetime.now().strftime("%Y-%m")
     entry = DeliverySettlementEntry(
         client_id=client.id,
@@ -428,13 +435,17 @@ def register_phase2_routes(
     async def create_contract_upload(
         title: str = Form(...),
         client_id: int = Form(...),
+        contract_type: str = Form(...),
         contract_no: str = Form(default=""),
+        expires_at: str = Form(default=""),
         end_date: str = Form(default=""),
+        remarks: str = Form(default=""),
         file: UploadFile = File(...),
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("crm.opportunities.write")),
     ):
+        effective_end_date = (expires_at or end_date).strip()
         return await contract_file_svc.create_contract_with_file(
             db,
             ctx,
@@ -442,12 +453,56 @@ def register_phase2_routes(
             Client,
             title=title,
             client_id=client_id,
+            contract_type=contract_type,
             contract_no=contract_no,
-            end_date=end_date,
+            end_date=effective_end_date,
+            remarks=remarks,
             upload=file,
             upload_dir=upload_dir,
             max_file_size=contracts_max_file_size,
             allowed_suffixes=MATERIAL_ALLOWED_SUFFIXES,
+        )
+
+    @app.patch("/api/contracts/{contract_id}")
+    async def update_contract_upload(
+        contract_id: int,
+        title: str = Form(...),
+        client_id: int = Form(...),
+        contract_type: str = Form(...),
+        contract_no: str = Form(default=""),
+        expires_at: str = Form(default=""),
+        end_date: str = Form(default=""),
+        remarks: str = Form(default=""),
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.opportunities.write")),
+    ):
+        effective_end_date = (expires_at or end_date).strip()
+        return contract_file_svc.update_contract_metadata(
+            db,
+            Contract,
+            Client,
+            contract_id,
+            title=title,
+            client_id=client_id,
+            contract_type=contract_type,
+            contract_no=contract_no,
+            end_date=effective_end_date,
+            remarks=remarks,
+        )
+
+    @app.delete("/api/contracts/{contract_id}")
+    async def delete_contract_upload(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.opportunities.write")),
+    ):
+        return contract_file_svc.delete_contract(
+            db,
+            Contract,
+            ContractMilestone,
+            contract_id,
+            upload_dir=upload_dir,
+            DeliverySettlementEntry=DeliverySettlementEntry,
         )
 
     @app.post("/api/contracts/{contract_id}/replace-file")
@@ -476,6 +531,19 @@ def register_phase2_routes(
         user: str = Depends(require_permission("crm.opportunities.read")),
     ):
         return contract_file_svc.download_contract_file(
+            db,
+            Contract,
+            contract_id,
+            upload_dir=upload_dir,
+        )
+
+    @app.get("/api/contracts/{contract_id}/preview")
+    async def preview_contract_upload(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.opportunities.read")),
+    ):
+        return contract_file_svc.preview_contract_file(
             db,
             Contract,
             contract_id,

@@ -152,6 +152,20 @@
     #contracts-app .crm-op-btn-delete svg { width: 15px; height: 15px; }
     #contracts-app .crm-op-btn-edit:hover,
     #contracts-app .crm-op-btn-delete:hover { text-decoration: none; }
+    #contracts-app .crm-table thead th.crm-sticky-right-op {
+        background: #F9FAFB;
+        color: #6B7280;
+        border-color: #E5E7EB;
+    }
+    #main-shell.bms-sidebar-dark #contracts-app .crm-table thead th.crm-sticky-right-op {
+        background: var(--ct-th-dark-bg);
+        color: var(--ct-th-dark-text);
+        border-color: var(--ct-th-dark-border);
+        border-bottom-color: var(--ct-th-dark-border);
+    }
+    #contracts-app .crm-table tbody td.crm-sticky-right-op { overflow: visible !important; }
+    #contracts-app .crm-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
+    #contracts-app .crm-sticky-right-op .crm-op-actions { overflow: visible; }
     #contracts-app .contracts-preview-body {
         white-space: pre-wrap;
         word-break: break-word;
@@ -172,6 +186,10 @@
         text-align: center;
         cursor: pointer;
         transition: border-color 0.15s, background 0.15s;
+    }
+    #contracts-app .contracts-upload-dropzone--full {
+        width: 100%;
+        min-height: 7rem;
     }
     #contracts-app .contracts-upload-dropzone:hover {
         border-color: #a5b4fc;
@@ -260,7 +278,7 @@
     </div>
 
     <div class="bg-white rounded-lg overflow-hidden border border-[#E5E7EB] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
-        <div class="crm-h-scroll">
+        <div class="crm-table-scroll crm-h-scroll">
         <table class="crm-table w-full" data-table-id="contracts">
             <thead>
                 <tr>
@@ -268,46 +286,51 @@
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5M9 13h6M9 16.5h4"/></svg>资料名称</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>客户</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5"/></svg>合同编号</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/></svg>合同类型</th>
+                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 21V4M5 4h11l-2 3 2 3H5"/></svg>状态</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>销售</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 11.5 12.5 20a5 5 0 0 1-7-7l8-8a3 3 0 0 1 4 4l-8 8a1.5 1.5 0 0 1-2-2l7-7"/></svg>文件名</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 4v3M17 4v3M4.5 9.5h15M5.5 6.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1Z"/></svg>有效期</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>上传人</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>更改时间</th>
-                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 21V4M5 4h11l-2 3 2 3H5"/></svg>状态</th>
-                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
+                    <th class="crm-th crm-sticky-right-op"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
                 </tr>
             </thead>
             <tbody>
                 <tr v-if="loading">
-                    <td class="crm-td text-center text-gray-500" colspan="11">加载中…</td>
+                    <td class="crm-td text-center text-gray-500" colspan="12">加载中…</td>
                 </tr>
                 <tr v-else-if="!filteredItems.length">
-                    <td class="crm-td text-center text-gray-500" colspan="11">暂无合同，可上传附件或等待交接审批自动生成</td>
+                    <td class="crm-td text-center text-gray-500" colspan="12">暂无合同，可上传附件或等待交接审批自动生成</td>
                 </tr>
                 <tr v-for="(row, idx) in pagedItems" :key="row.id">
                     <td class="crm-td tabular-nums">{{ (currentPage - 1) * pageSize + idx + 1 }}</td>
                     <td class="crm-td crm-name-cell"><button type="button" class="crm-name-link" @click="openDetail(row)">{{ row.material_name || row.title || '—' }}</button></td>
                     <td class="crm-td">{{ row.client_name || '—' }}</td>
                     <td class="crm-td">{{ row.contract_no || '—' }}</td>
-                    <td class="crm-td contracts-sales-cell">{{ row.sales_owner || '—' }}</td>
-                    <td class="crm-td max-w-[10rem] truncate" :title="row.file_name">{{ row.file_name || '—' }}</td>
-                    <td class="crm-td">{{ row.expires_at || '—' }}</td>
-                    <td class="crm-td">{{ row.uploaded_by_name || '—' }}</td>
-                    <td class="crm-td">{{ row.updated_at || '—' }}</td>
+                    <td class="crm-td">{{ row.contract_type_label || '—' }}</td>
                     <td class="crm-td">
                         <span :class="statusBadge(row.status)" class="contracts-status-badge">{{ row.status_label || '—' }}</span>
                     </td>
-                    <td class="crm-td">
+                    <td class="crm-td contracts-sales-cell">{{ row.sales_owner || '—' }}</td>
+                    <td class="crm-td max-w-[10rem] truncate" :title="row.file_name">{{ row.file_name || '—' }}</td>
+                    <td class="crm-td">{{ formatExpiresAt(row.expires_at) }}</td>
+                    <td class="crm-td">{{ row.uploaded_by_name || '—' }}</td>
+                    <td class="crm-td">{{ row.updated_at || '—' }}</td>
+                    <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                         <div class="crm-op-actions">
-                            <button type="button" class="crm-op-btn-edit" @click="openPreview(row)" aria-label="预览" title="预览">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="3"/></svg>
-                            </button>
-                            <button type="button" class="crm-op-btn-edit" @click="openDetail(row)" aria-label="修改" title="修改">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                            </button>
-                            <button type="button" class="crm-op-btn-delete" @click="deleteContract(row)" aria-label="删除" title="删除">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
-                            </button>
+                            <span class="group relative inline-flex">
+                                <button type="button" class="crm-op-btn-edit" @click="openEdit(row)" aria-label="修改">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                </button>
+                                <span class="pointer-events-none absolute left-1/2 bottom-full z-[60] mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">修改</span>
+                            </span>
+                            <span class="group relative inline-flex">
+                                <button type="button" class="crm-op-btn-delete" @click="deleteContract(row)" aria-label="删除">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                </button>
+                                <span class="pointer-events-none absolute left-1/2 bottom-full z-[60] mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">删除</span>
+                            </span>
                         </div>
                     </td>
                 </tr>
@@ -337,7 +360,15 @@
     <aside v-if="showDetail" class="crm-esc-modal crm-right-drawer open">
         <div class="flex items-center justify-between gap-2 border-b border-[#d0d7de] px-4 py-3 shrink-0">
             <h3 class="text-lg font-semibold text-[#1f2328] truncate">合同详情</h3>
-            <button type="button" @click="closeDetail" class="text-2xl leading-none text-[#57606a] hover:text-[#1f2328] shrink-0" aria-label="关闭">&times;</button>
+            <div class="flex items-center gap-3 shrink-0">
+                <button
+                    v-if="detailRow && (detailRow.has_attachment || detailRow.sow_markdown)"
+                    type="button"
+                    class="text-sm font-semibold text-[#0969da] hover:underline"
+                    @click="openPreview(detailRow)"
+                >预览</button>
+                <button type="button" @click="closeDetail" class="text-2xl leading-none text-[#57606a] hover:text-[#1f2328]" aria-label="关闭">&times;</button>
+            </div>
         </div>
         <div v-if="detailRow" class="contracts-drawer-body">
             <section>
@@ -349,6 +380,10 @@
                 <div class="contracts-drawer-field">
                     <div class="contracts-drawer-field-label">合同编号</div>
                     <div class="contracts-drawer-field-value">{{ detailRow.contract_no || '—' }}</div>
+                </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">合同类型</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.contract_type_label || '—' }}</div>
                 </div>
                 <div class="contracts-drawer-field">
                     <div class="contracts-drawer-field-label">资料名称</div>
@@ -368,7 +403,7 @@
                 </div>
                 <div class="contracts-drawer-field">
                     <div class="contracts-drawer-field-label">有效期</div>
-                    <div class="contracts-drawer-field-value">{{ detailRow.expires_at || '—' }}</div>
+                    <div class="contracts-drawer-field-value">{{ formatExpiresAt(detailRow.expires_at) }}</div>
                 </div>
                 <div class="contracts-drawer-field">
                     <div class="contracts-drawer-field-label">上传人</div>
@@ -379,6 +414,10 @@
                     <div class="contracts-drawer-field-value">
                         <span :class="statusBadge(detailRow.status)" class="contracts-status-badge">{{ detailRow.status_label || '—' }}</span>
                     </div>
+                </div>
+                <div class="contracts-drawer-field">
+                    <div class="contracts-drawer-field-label">备注</div>
+                    <div class="contracts-drawer-field-value">{{ detailRow.remarks || '—' }}</div>
                 </div>
                 <div class="contracts-drawer-field">
                     <div class="contracts-drawer-field-label">更改时间</div>
@@ -409,8 +448,14 @@
                 <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closePreview">&times;</button>
             </div>
             <div class="p-5 min-h-[20rem] max-h-[75vh] overflow-auto">
-                <p v-if="!previewContent" class="text-sm text-[#57606a] text-center py-12">暂无 SOW 内容</p>
-                <div v-else class="contracts-preview-body">{{ previewContent }}</div>
+                <p v-if="previewMode === 'loading'" class="text-sm text-[#57606a] text-center py-12">正在加载预览…</p>
+                <embed v-else-if="previewMode === 'pdf' && previewUrl" :src="previewUrl + '#toolbar=0&navpanes=0'" type="application/pdf" class="w-full h-[70vh] border border-[#d0d7de] rounded-lg" title="合同预览" />
+                <img v-else-if="previewMode === 'image' && previewUrl" :src="previewUrl" class="max-w-full max-h-[70vh] mx-auto block rounded-lg border border-[#d0d7de]" alt="合同预览">
+                <p v-else-if="previewMode === 'error'" class="text-sm text-[#57606a] text-center py-12">{{ previewErrorMessage || '该文件暂无法生成预览' }}</p>
+                <p v-else-if="previewMode === 'unsupported'" class="text-sm text-[#57606a] text-center py-12">该格式暂不支持在线预览</p>
+                <p v-else-if="previewMode === 'markdown' && !previewContent" class="text-sm text-[#57606a] text-center py-12">暂无 SOW 内容</p>
+                <div v-else-if="previewMode === 'markdown'" class="contracts-preview-body">{{ previewContent }}</div>
+                <p v-else class="text-sm text-[#57606a] text-center py-12">暂无预览内容</p>
             </div>
         </div>
     </div>
@@ -419,62 +464,124 @@
     <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeForm" @dragover.prevent @drop.prevent>
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">上传合同</h3>
+                <h3 class="font-bold text-lg">{{ isEditMode ? '修改合同' : '上传合同' }}</h3>
                 <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeForm">&times;</button>
             </div>
-            <form class="flex flex-col flex-1 min-h-0" @submit.prevent="submitForm">
-                <div class="flex-1 min-h-0 overflow-y-auto p-5">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
-                        <div class="space-y-3">
-                            <label class="flex flex-col gap-1">
-                                <span class="text-[#57606a]">资料名称<span class="text-red-500">*</span></span>
-                                <input v-model="form.title" type="text" required class="crm-form-control" />
-                            </label>
-                            <label class="flex flex-col gap-1">
-                                <span class="text-[#57606a]">客户<span class="text-red-500">*</span></span>
-                                <select v-model="form.client_id" required class="crm-form-control">
-                                    <option value="">请选择客户</option>
-                                    <option v-for="c in formOptions.clients" :key="c.id" :value="String(c.id)">{{ c.name }}</option>
-                                </select>
-                            </label>
-                            <label class="flex flex-col gap-1">
-                                <span class="text-[#57606a]">合同编号</span>
-                                <input v-model="form.contract_no" type="text" class="crm-form-control" />
-                            </label>
-                            <label class="flex flex-col gap-1">
-                                <span class="text-[#57606a]">有效期</span>
-                                <input v-model="form.end_date" type="date" class="crm-form-control crm-form-control--date" />
-                            </label>
-                        </div>
-                        <div class="space-y-3 flex flex-col">
-                            <div>
-                                <span class="block text-[#57606a] mb-1">文件<span class="text-red-500">*</span></span>
-                                <div
-                                    class="contracts-upload-dropzone"
-                                    :class="{ 'has-file': !!selectedFileName, 'is-dragging': dragging }"
-                                    @click="triggerFilePick"
-                                    @dragover.prevent
-                                    @dragenter.prevent="dragging = true"
-                                    @dragleave.prevent="dragging = false"
-                                    @drop.prevent="onDrop"
-                                >
-                                    <template v-if="!selectedFileName">
-                                        <span class="text-sm text-[#57606a]">点击或拖拽文件到此处</span>
-                                        <span class="mt-1 text-xs text-[#656d76]">支持 PDF、Word、Excel、PPT、ZIP、JPG、PNG，最大 100MB</span>
-                                    </template>
-                                    <div v-else class="contracts-file-row">
-                                        <span class="min-w-0 truncate text-sm text-[#0969da]">{{ selectedFileName }}</span>
-                                        <button type="button" class="contracts-file-remove shrink-0" aria-label="移除文件" @click.stop="clearSelectedFile">&times;</button>
-                                    </div>
-                                    <input ref="fileInput" type="file" class="hidden" @change="onFileChange" />
+            <form class="flex flex-col flex-1 min-h-0" novalidate @submit.prevent="submitForm">
+                <div class="flex-1 min-h-0 overflow-y-auto p-5 space-y-5 text-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                        <label class="flex flex-col gap-1">
+                            <span class="text-[#57606a]">资料名称<span class="text-red-500">*</span></span>
+                            <input v-model="form.title" type="text" required class="crm-form-control" />
+                        </label>
+                        <label class="flex flex-col gap-1">
+                            <span class="text-[#57606a]">客户<span class="text-red-500">*</span></span>
+                            <div class="relative">
+                                <input
+                                    v-model="clientPickerQuery"
+                                    type="text"
+                                    autocomplete="off"
+                                    class="crm-form-control"
+                                    :placeholder="selectedClientLabel || '输入客户名模糊搜索'"
+                                    @focus="clientPickerOpen = true"
+                                    @input="clientPickerOpen = true; form.client_id = ''"
+                                    @blur="onClientPickerBlur"
+                                />
+                                <ul v-if="clientPickerOpen && filteredClients.length" class="absolute z-50 mt-1 max-h-48 w-full overflow-auto rounded-md border border-[#d0d7de] bg-white py-1 shadow-lg">
+                                    <li v-for="c in filteredClients" :key="c.id">
+                                        <button type="button" class="block w-full px-3 py-2 text-left text-sm hover:bg-[#f6f8fa]" @mousedown.prevent="selectClient(c)">{{ c.name }}</button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </label>
+                        <label class="flex flex-col gap-1">
+                            <span class="text-[#57606a]">合同类型<span class="text-red-500">*</span></span>
+                            <select v-model="form.contract_type" required class="crm-form-control">
+                                <option value="">请选择合同类型</option>
+                                <option v-for="t in formOptions.contract_types" :key="t.value" :value="t.value">{{ t.label }}</option>
+                            </select>
+                        </label>
+                        <label class="flex flex-col gap-1">
+                            <span class="text-[#57606a]">合同编号<span v-if="isVendorContract" class="text-red-500">*</span></span>
+                            <input
+                                v-if="isVendorContract"
+                                v-model="form.contract_no"
+                                type="text"
+                                required
+                                class="crm-form-control"
+                                placeholder="供应商合同编号"
+                            />
+                            <input
+                                v-else-if="isEditMode"
+                                type="text"
+                                readonly
+                                class="crm-form-control bg-[#f6f8fa] text-[#57606a]"
+                                :value="form.contract_no || '—'"
+                            />
+                            <input v-else type="text" readonly class="crm-form-control bg-[#f6f8fa] text-[#57606a]" value="保存后自动生成" />
+                        </label>
+                        <label class="flex flex-col gap-1">
+                            <span class="text-[#57606a]">销售</span>
+                            <input type="text" readonly class="crm-form-control bg-[#f6f8fa] text-[#57606a]" :value="formSalesOwner" />
+                        </label>
+                        <div class="flex flex-col gap-1">
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                <span class="text-[#57606a] shrink-0">有效期<span class="text-red-500">*</span></span>
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                        <input type="radio" v-model="form.expires_mode" value="date" class="accent-[#456595]" />
+                                        <span>指定日期</span>
+                                    </label>
+                                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                        <input type="radio" v-model="form.expires_mode" value="long_term" class="accent-[#456595]" />
+                                        <span>长期</span>
+                                    </label>
                                 </div>
                             </div>
+                            <input
+                                v-if="!isLongTermExpiry"
+                                v-model="form.expires_at"
+                                type="date"
+                                class="crm-form-control crm-form-control--date"
+                            />
+                            <input v-else type="text" readonly class="crm-form-control bg-[#f6f8fa] text-[#57606a]" value="无固定期限" />
+                        </div>
+                        <label class="flex flex-col gap-1 sm:col-span-2">
+                            <span class="text-[#57606a]">备注</span>
+                            <textarea v-model="form.remarks" rows="2" class="crm-form-control"></textarea>
+                        </label>
+                    </div>
+                    <div>
+                        <span class="block text-[#57606a] mb-2">文件<span v-if="!isEditMode" class="text-red-500">*</span></span>
+                        <p v-if="isEditMode && existingFileName && !selectedFileName" class="mb-2 text-xs text-[#656d76]">当前文件：{{ existingFileName }}（可选新文件替换）</p>
+                        <div
+                            class="contracts-upload-dropzone contracts-upload-dropzone--full"
+                            :class="{ 'has-file': !!(selectedFileName || (isEditMode && existingFileName)), 'is-dragging': dragging }"
+                            @click="triggerFilePick"
+                            @dragover.prevent
+                            @dragenter.prevent="dragging = true"
+                            @dragleave.prevent="dragging = false"
+                            @drop.prevent="onDrop"
+                        >
+                            <template v-if="!selectedFileName && !(isEditMode && existingFileName)">
+                                <span class="text-sm text-[#57606a]">点击或拖拽文件到此处</span>
+                                <span class="mt-1 text-xs text-[#656d76]">支持 PDF、Word、Excel、PPT、ZIP、JPG、PNG，最大 100MB</span>
+                            </template>
+                            <div v-else-if="selectedFileName" class="contracts-file-row">
+                                <span class="min-w-0 truncate text-sm text-[#0969da]">{{ selectedFileName }}</span>
+                                <button type="button" class="contracts-file-remove shrink-0" aria-label="移除文件" @click.stop="clearSelectedFile">&times;</button>
+                            </div>
+                            <div v-else class="contracts-file-row">
+                                <span class="min-w-0 truncate text-sm text-[#57606a]">{{ existingFileName }}</span>
+                                <span class="shrink-0 text-xs text-[#656d76]">点击替换</span>
+                            </div>
+                            <input ref="fileInput" type="file" class="hidden" @change="onFileChange" />
                         </div>
                     </div>
                 </div>
                 <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-end items-center shrink-0">
                     <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de] text-sm" @click="closeForm">取消</button>
-                    <button type="submit" class="px-4 py-2 rounded-lg bg-[#4C6491] text-white text-sm hover:bg-[#3D5176] disabled:opacity-50" :disabled="submitting">{{ submitting ? '上传中…' : '保存' }}</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-[#4C6491] text-white text-sm hover:bg-[#3D5176] disabled:opacity-50" :disabled="submitting">{{ submitting ? (isEditMode ? '保存中…' : '上传中…') : '保存' }}</button>
                 </div>
             </form>
         </div>
@@ -484,5 +591,5 @@
 {% endblock %}
 {% block page_scripts %}
 <script src="/static/js/core/crm-api.js"></script>
-<script src="/static/js/pages/contracts.js?v=1"></script>
+<script src="/static/js/pages/contracts.js?v=11"></script>
 {% endblock %}

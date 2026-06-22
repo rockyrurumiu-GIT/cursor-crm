@@ -36,6 +36,7 @@ def register_delivery_settlement_routes(
     get_db: Callable,
     Client,
     DeliverySettlementEntry,
+    ContractMilestone=None,
     AuditLog,
     backup_dir: str,
     max_file_size: int,
@@ -108,6 +109,15 @@ def register_delivery_settlement_routes(
         if not entry:
             raise HTTPException(status_code=404, detail="记录不存在")
         cid = entry.client_id or 0
+        if ContractMilestone is not None:
+            from services.contracts_files import clear_milestone_settlement_refs
+
+            clear_milestone_settlement_refs(
+                db,
+                ContractMilestone,
+                DeliverySettlementEntry,
+                settlement_entry_id=row_id,
+            )
         db.delete(entry)
         db.flush()
         resequence_settlement_serial_no_all(db, DeliverySettlementEntry)

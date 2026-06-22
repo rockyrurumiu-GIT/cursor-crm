@@ -388,6 +388,7 @@ class Contract(Base):
     mime_type = Column(String, default="")
     file_size = Column(Integer, default=0)
     uploaded_by = Column(Integer, nullable=True)
+    remarks = Column(Text, default="")
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     created_at = Column(DateTime, default=datetime.now)
 
@@ -912,6 +913,7 @@ def _ensure_contracts_schema_compat():
             "file_size": "INTEGER DEFAULT 0",
             "uploaded_by": "INTEGER NULL",
             "updated_at": "DATETIME NULL",
+            "remarks": "TEXT DEFAULT ''",
         }
         for col, ddl in add_cols.items():
             if col not in existing:
@@ -1561,6 +1563,7 @@ register_delivery_settlement_routes(
     get_db=get_db,
     Client=Client,
     DeliverySettlementEntry=DeliverySettlementEntry,
+    ContractMilestone=ContractMilestone,
     AuditLog=AuditLog,
     backup_dir=BACKUP_DIR,
     max_file_size=MAX_FILE_SIZE,
