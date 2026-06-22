@@ -109,10 +109,21 @@ def contract_to_dict(
     milestones: Optional[List[Dict]] = None,
     *,
     sales_owner: str = "",
+    uploaded_by_name: str = "",
 ) -> Dict[str, Any]:
     contract_no = c.contract_no or ""
     sales = (sales_owner or "").strip()
     end_date = (c.end_date or "").strip()
+    stored_path = (getattr(c, "stored_path", None) or "").strip()
+    stored_file_name = (getattr(c, "file_name", None) or "").strip()
+    if stored_path and stored_file_name:
+        display_file_name = stored_file_name
+    elif stored_path:
+        display_file_name = stored_file_name or stored_path.rsplit("/", 1)[-1]
+    else:
+        display_file_name = contract_file_name(contract_no)
+    uploader = (uploaded_by_name or "").strip() or sales or "—"
+    updated = getattr(c, "updated_at", None) or c.created_at
     return {
         "id": c.id,
         "client_id": c.client_id,
@@ -124,18 +135,20 @@ def contract_to_dict(
         "title": c.title or "",
         "material_name": c.title or "",
         "sales_owner": sales,
-        "file_name": contract_file_name(contract_no),
+        "file_name": display_file_name,
+        "has_attachment": bool(stored_path),
+        "file_size": int(getattr(c, "file_size", None) or 0),
         "total_amount": c.total_amount or "",
         "start_date": c.start_date or "",
-        "end_date": c.end_date or "",
+        "end_date": end_date,
         "expires_at": end_date or "—",
-        "uploaded_by_name": sales or "—",
+        "uploaded_by_name": uploader,
         "status": c.status or "draft",
         "status_label": CONTRACT_STATUS_LABELS.get(c.status, c.status),
         "sow_markdown": c.sow_markdown or "",
         "milestones": milestones or [],
         "created_at": c.created_at.isoformat() if c.created_at else "",
-        "updated_at": _contract_datetime_str(c.created_at),
+        "updated_at": _contract_datetime_str(updated),
     }
 
 

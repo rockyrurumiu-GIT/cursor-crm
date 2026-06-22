@@ -134,6 +134,30 @@
                 <h1 class="mt-2 text-2xl font-bold text-gray-900">{{ moduleTitle }} · 客户列表</h1>
             </div>
         </div>
+        <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="relative w-full sm:w-[280px]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                    <input v-model.trim="filterKeyword" type="text" placeholder="搜索客户、销售负责人…" class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30" title="关键词（模糊）" />
+                </div>
+                <button type="button" @click="filterPanelExpanded = !filterPanelExpanded" :class="filterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'" class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                    筛选
+                </button>
+                <p class="ml-auto min-w-0 self-end leading-none pb-[7px] text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">合计（符合筛选条件）：<span>{{ filteredClients.length }}</span> 个</p>
+            </div>
+            <div v-if="filterPanelExpanded" class="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#EEF0F2] pt-2.5">
+                <select v-model="filterPhase" class="crm-filter-item crm-filter-control w-[9rem]" title="开拓阶段">
+                    <option value="">开拓阶段（全部）</option>
+                    <option v-for="p in phaseOptions" :key="'ph-' + p" :value="p">{{ p }}</option>
+                </select>
+                <select v-model="filterOwner" class="crm-filter-item crm-filter-control w-[9rem]" title="销售负责人">
+                    <option value="">销售负责人（全部）</option>
+                    <option v-for="o in ownerOptions" :key="'ow-' + o" :value="o">{{ o }}</option>
+                </select>
+                <button type="button" class="crm-filter-item crm-filter-reset" @click="clearFilters">清除筛选</button>
+            </div>
+        </div>
         <div v-if="gateBannerCount" class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             {{ gateBannerCount }} 个客户尚未通过销售-交付交接审批。仍可进入交付模块，但建议先完成
             <a href="/delivery/handoff-pending" class="text-[#0969da] underline font-medium">项目待审</a>。
@@ -141,7 +165,7 @@
         <section class="delivery-client-gallery" aria-label="客户卡片列表">
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 md:gap-6">
                 <a
-                    v-for="c in clients"
+                    v-for="c in filteredClients"
                     :key="c.id"
                     :href="`/delivery/${moduleKey}/${c.id}`"
                     class="delivery-client-card"
@@ -172,7 +196,7 @@
                         <span aria-hidden="true">→</span>
                     </span>
                 </a>
-                <p v-if="!clients.length" class="delivery-client-empty">暂无客户数据</p>
+                <p v-if="!filteredClients.length" class="delivery-client-empty">{{ clients.length ? '没有符合筛选条件的客户' : '暂无客户数据' }}</p>
             </div>
         </section>
     </div>
@@ -192,6 +216,21 @@ createApp({
         const handoffMap = ref({});
         const moduleKey = window.__DELIVERY_MODULE_KEY__;
         const moduleTitle = window.__DELIVERY_MODULE_TITLE__;
+        const filterKeyword = ref('');
+        const filterPanelExpanded = ref(false);
+        const filterPhase = ref('');
+        const filterOwner = ref('');
+        const uniq = (arr) => [...new Set(arr.filter(Boolean).map(String))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        const phaseOptions = computed(() => uniq(clients.value.map(c => c.phase)));
+        const ownerOptions = computed(() => uniq(clients.value.map(c => c.owner)));
+        const filteredClients = computed(() => clients.value.filter(c => {
+            const kw = filterKeyword.value.trim().toLowerCase();
+            if (kw && ![c.name, c.owner, c.phase].join(' ').toLowerCase().includes(kw)) return false;
+            if (filterPhase.value && String(c.phase || '') !== filterPhase.value) return false;
+            if (filterOwner.value && String(c.owner || '') !== filterOwner.value) return false;
+            return true;
+        }));
+        const clearFilters = () => { filterKeyword.value = ''; filterPhase.value = ''; filterOwner.value = ''; };
         const loadClients = async () => {
             const r = await fetch('/api/clients', { headers: window.crmAuthHeader() });
             clients.value = r.ok ? await r.json() : [];
@@ -203,7 +242,10 @@ createApp({
         const handoffLabel = (cid) => (handoffMap.value[String(cid)] && handoffMap.value[String(cid)].status_label) || '未提交';
         const gateBannerCount = computed(() => clients.value.filter(c => !isHandoffApproved(c.id)).length);
         onMounted(loadClients);
-        return { clients, handoffMap, moduleKey, moduleTitle, isHandoffApproved, handoffLabel, gateBannerCount };
+        return {
+            clients, handoffMap, moduleKey, moduleTitle, isHandoffApproved, handoffLabel, gateBannerCount,
+            filterKeyword, filterPanelExpanded, filterPhase, filterOwner, phaseOptions, ownerOptions, filteredClients, clearFilters,
+        };
     }
 }).mount('#delivery-index-app');
 </script>

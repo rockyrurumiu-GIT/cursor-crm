@@ -159,6 +159,49 @@
         line-height: 1.6;
         color: #1f2328;
     }
+    #contracts-app .contracts-upload-dropzone {
+        border: 2px dashed #d0d7de;
+        border-radius: 0.5rem;
+        padding: 1.25rem 1rem;
+        min-height: 9rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+    }
+    #contracts-app .contracts-upload-dropzone:hover {
+        border-color: #a5b4fc;
+        background: #f6f8fa;
+    }
+    #contracts-app .contracts-upload-dropzone.is-dragging {
+        border-color: #0969da;
+        background: #eef6ff;
+    }
+    #contracts-app .contracts-upload-dropzone.has-file {
+        min-height: 6rem;
+        align-items: stretch;
+        text-align: left;
+    }
+    #contracts-app .contracts-file-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        width: 100%;
+    }
+    #contracts-app .contracts-file-remove {
+        color: #57606a;
+        font-size: 1.25rem;
+        line-height: 1;
+        padding: 0 0.25rem;
+    }
+    #contracts-app .contracts-file-remove:hover {
+        color: #cf222e;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -174,16 +217,45 @@
             <div class="relative w-full sm:w-[280px]">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
                 <input
-                    v-model="filterKeyword"
+                    v-model="filters.q"
                     type="text"
-                    placeholder="搜索资料名称、客户、合同编号、文件名…"
+                    placeholder="搜索资料名称、客户、合同编号、文件名…（回车搜索）"
                     class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30"
-                    title="关键词筛选"
+                    title="关键词（回车搜索）"
+                    @keyup.enter="loadContracts"
                 />
             </div>
+            <button
+                type="button"
+                @click="filterPanelExpanded = !filterPanelExpanded"
+                :class="filterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'"
+                class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]"
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                筛选
+            </button>
             <p class="ml-auto min-w-0 self-end leading-none pb-[7px] text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">
                 合计：<span>{{ filteredItems.length }}</span> 条
             </p>
+            <span v-if="canWriteContracts" class="group relative inline-flex">
+                <button type="button" @click="openCreate" aria-label="上传合同" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3a567f]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 0L8 7m4-4 4 4M4 15v2.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V15"/></svg>
+                </button>
+                <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">上传合同</span>
+            </span>
+        </div>
+        <div v-if="filterPanelExpanded" class="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#EEF0F2] pt-2.5">
+            <select v-model="filters.status" class="crm-filter-item crm-filter-control min-w-[120px]">
+                <option value="">状态（全部）</option>
+                <option v-for="s in formOptions.statuses" :key="s.value" :value="s.value">{{ s.label }}</option>
+            </select>
+            <select v-model="filters.client_id" class="crm-filter-item crm-filter-control min-w-[160px]">
+                <option value="">客户（全部）</option>
+                <option v-for="c in formOptions.clients" :key="c.id" :value="String(c.id)">{{ c.name }}</option>
+            </select>
+            <input v-model="filters.expires_before" type="date" class="crm-filter-item crm-filter-control" title="有效期截止" />
+            <button type="button" class="crm-filter-item inline-flex h-9 items-center rounded-[6px] border border-[#D7DBE0] bg-white px-3 text-sm font-medium text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB]" @click="loadContracts">应用筛选</button>
+            <button type="button" class="crm-filter-item crm-filter-reset" @click="resetFilters">清除</button>
         </div>
     </div>
 
@@ -210,7 +282,7 @@
                     <td class="crm-td text-center text-gray-500" colspan="11">加载中…</td>
                 </tr>
                 <tr v-else-if="!filteredItems.length">
-                    <td class="crm-td text-center text-gray-500" colspan="11">暂无合同（需先通过交接审批）</td>
+                    <td class="crm-td text-center text-gray-500" colspan="11">暂无合同，可上传附件或等待交接审批自动生成</td>
                 </tr>
                 <tr v-for="(row, idx) in pagedItems" :key="row.id">
                     <td class="crm-td tabular-nums">{{ (currentPage - 1) * pageSize + idx + 1 }}</td>
@@ -342,172 +414,75 @@
             </div>
         </div>
     </div>
+
+    <!-- 上传弹窗 -->
+    <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeForm" @dragover.prevent @drop.prevent>
+        <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
+            <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg">上传合同</h3>
+                <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeForm">&times;</button>
+            </div>
+            <form class="flex flex-col flex-1 min-h-0" @submit.prevent="submitForm">
+                <div class="flex-1 min-h-0 overflow-y-auto p-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+                        <div class="space-y-3">
+                            <label class="flex flex-col gap-1">
+                                <span class="text-[#57606a]">资料名称<span class="text-red-500">*</span></span>
+                                <input v-model="form.title" type="text" required class="crm-form-control" />
+                            </label>
+                            <label class="flex flex-col gap-1">
+                                <span class="text-[#57606a]">客户<span class="text-red-500">*</span></span>
+                                <select v-model="form.client_id" required class="crm-form-control">
+                                    <option value="">请选择客户</option>
+                                    <option v-for="c in formOptions.clients" :key="c.id" :value="String(c.id)">{{ c.name }}</option>
+                                </select>
+                            </label>
+                            <label class="flex flex-col gap-1">
+                                <span class="text-[#57606a]">合同编号</span>
+                                <input v-model="form.contract_no" type="text" class="crm-form-control" />
+                            </label>
+                            <label class="flex flex-col gap-1">
+                                <span class="text-[#57606a]">有效期</span>
+                                <input v-model="form.end_date" type="date" class="crm-form-control crm-form-control--date" />
+                            </label>
+                        </div>
+                        <div class="space-y-3 flex flex-col">
+                            <div>
+                                <span class="block text-[#57606a] mb-1">文件<span class="text-red-500">*</span></span>
+                                <div
+                                    class="contracts-upload-dropzone"
+                                    :class="{ 'has-file': !!selectedFileName, 'is-dragging': dragging }"
+                                    @click="triggerFilePick"
+                                    @dragover.prevent
+                                    @dragenter.prevent="dragging = true"
+                                    @dragleave.prevent="dragging = false"
+                                    @drop.prevent="onDrop"
+                                >
+                                    <template v-if="!selectedFileName">
+                                        <span class="text-sm text-[#57606a]">点击或拖拽文件到此处</span>
+                                        <span class="mt-1 text-xs text-[#656d76]">支持 PDF、Word、Excel、PPT、ZIP、JPG、PNG，最大 100MB</span>
+                                    </template>
+                                    <div v-else class="contracts-file-row">
+                                        <span class="min-w-0 truncate text-sm text-[#0969da]">{{ selectedFileName }}</span>
+                                        <button type="button" class="contracts-file-remove shrink-0" aria-label="移除文件" @click.stop="clearSelectedFile">&times;</button>
+                                    </div>
+                                    <input ref="fileInput" type="file" class="hidden" @change="onFileChange" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-end items-center shrink-0">
+                    <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de] text-sm" @click="closeForm">取消</button>
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-[#4C6491] text-white text-sm hover:bg-[#3D5176] disabled:opacity-50" :disabled="submitting">{{ submitting ? '上传中…' : '保存' }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
-<script>
-const { createApp, ref, computed, watch, onMounted } = Vue;
-
-function statusBadge(code) {
-    const m = {
-        draft: 'bg-gray-100 text-gray-600',
-        signed: 'bg-blue-100 text-blue-800',
-        active: 'bg-green-100 text-green-800',
-        closed: 'bg-slate-100 text-slate-600',
-    };
-    return m[code] || 'bg-gray-100 text-gray-600';
-}
-
-createApp({
-    setup() {
-        const items = ref([]);
-        const loading = ref(false);
-        const filterKeyword = ref('');
-        const pageSize = 10;
-        const currentPage = ref(1);
-        const showDetail = ref(false);
-        const detailRow = ref(null);
-        const showPreview = ref(false);
-        const previewTitle = ref('');
-        const previewContent = ref('');
-
-        const auth = () => window.crmAuthHeader();
-
-        const displayAmount = (raw) => {
-            const digits = String(raw || '').replace(/[^\d.-]/g, '').trim();
-            if (!digits) return '—';
-            const n = Number(digits);
-            if (!Number.isFinite(n)) return String(raw || '—');
-            return n.toLocaleString('zh-CN');
-        };
-
-        const formatDateTime = (raw) => {
-            if (!raw) return '—';
-            const d = new Date(raw);
-            if (Number.isNaN(d.getTime())) return raw;
-            return d.toLocaleString('zh-CN', { hour12: false });
-        };
-
-        const filteredItems = computed(() => {
-            const q = filterKeyword.value.trim().toLowerCase();
-            if (!q) return items.value;
-            return items.value.filter((c) => {
-                const hay = [
-                    c.material_name,
-                    c.title,
-                    c.client_name,
-                    c.contract_no,
-                    c.file_name,
-                    c.sales_owner,
-                    c.uploaded_by_name,
-                ].map((v) => String(v || '').toLowerCase()).join(' ');
-                return hay.includes(q);
-            });
-        });
-
-        const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / pageSize)));
-        const pagedItems = computed(() => {
-            const start = (currentPage.value - 1) * pageSize;
-            return filteredItems.value.slice(start, start + pageSize);
-        });
-        const pageNumbers = computed(() => {
-            const total = totalPages.value;
-            const cur = currentPage.value;
-            const max = 7;
-            if (total <= max) return Array.from({ length: total }, (_, i) => i + 1);
-            let start = Math.max(1, cur - 3);
-            const end = Math.min(total, start + max - 1);
-            start = Math.max(1, end - max + 1);
-            return Array.from({ length: end - start + 1 }, (_, i) => start + i);
-        });
-
-        const goPage = (p) => {
-            currentPage.value = Math.min(Math.max(1, p), totalPages.value);
-        };
-
-        watch(filterKeyword, () => { currentPage.value = 1; });
-        watch(() => filteredItems.value.length, () => {
-            if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
-        });
-
-        const openDetail = (row) => {
-            detailRow.value = row;
-            showDetail.value = true;
-        };
-        const closeDetail = () => {
-            showDetail.value = false;
-            detailRow.value = null;
-        };
-
-        const openPreview = (row) => {
-            previewTitle.value = row.material_name || row.title || row.contract_no || '合同预览';
-            previewContent.value = row.sow_markdown || '';
-            showPreview.value = true;
-        };
-        const closePreview = () => {
-            showPreview.value = false;
-            previewTitle.value = '';
-            previewContent.value = '';
-        };
-
-        const deleteContract = (row) => {
-            const name = row.material_name || row.title || row.contract_no || '该合同';
-            if (!window.confirm(`确定删除「${name}」？`)) return;
-            alert('合同由交接单自动生成，暂不支持删除');
-        };
-
-        const load = async () => {
-            loading.value = true;
-            try {
-                const r = await fetch('/api/contracts', { headers: auth() });
-                items.value = r.ok ? await r.json() : [];
-            } finally {
-                loading.value = false;
-            }
-        };
-
-        const seed = async (c, m) => {
-            const r = await fetch(`/api/contracts/${c.id}/milestones/${m.id}/seed-settlement`, { method: 'POST', headers: auth() });
-            if (r.ok) {
-                await load();
-                if (detailRow.value && detailRow.value.id === c.id) {
-                    detailRow.value = items.value.find((item) => item.id === c.id) || null;
-                }
-            } else {
-                alert((await r.json()).detail || '失败');
-            }
-        };
-
-        onMounted(load);
-
-        return {
-            items,
-            loading,
-            filterKeyword,
-            filteredItems,
-            pagedItems,
-            currentPage,
-            totalPages,
-            pageNumbers,
-            pageSize,
-            goPage,
-            showDetail,
-            detailRow,
-            showPreview,
-            previewTitle,
-            previewContent,
-            openDetail,
-            closeDetail,
-            openPreview,
-            closePreview,
-            deleteContract,
-            seed,
-            displayAmount,
-            formatDateTime,
-            statusBadge,
-        };
-    },
-}).mount('#contracts-app');
-</script>
+<script src="/static/js/core/crm-api.js"></script>
+<script src="/static/js/pages/contracts.js?v=1"></script>
 {% endblock %}

@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import Body, Depends, File, HTTPException, Request, UploadFile
+from fastapi import Body, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import desc
@@ -36,6 +36,8 @@ from phase2_core import (
     sync_client_inline_from_contact,
 )
 from services.delivery_roster import decode_roster_upload_bytes
+from services import contracts_files as contract_file_svc
+from schemas.company_materials import MATERIAL_ALLOWED_SUFFIXES
 
 CONTACT_EXPORT_HEADERS = [
     "ID",
@@ -238,6 +240,8 @@ def register_phase2_routes(
     DeliverySettlementEntry,
     set_csv_download_headers: Callable,
     max_file_size: int,
+    upload_dir: str,
+    contracts_max_file_size: int,
 ):
     @app.get("/api/opportunities")
     async def list_opportunities(
@@ -392,36 +396,91 @@ def register_phase2_routes(
         db.refresh(h)
         return {"handoff_id": h.id, "url": f"/customers/{o.client_id}/handoff/{h.id}"}
 
-    @app.get("/api/contracts")
-    async def list_contracts(
-        client_id: Optional[int] = None,
+    @app.get("/api/contracts/form-options")
+    async def contract_form_options(
         db: Session = Depends(get_db),
         user: str = Depends(require_permission("crm.opportunities.read")),
     ):
-        q = db.query(Contract)
-        if client_id:
-            q = q.filter(Contract.client_id == client_id)
-        rows = q.order_by(desc(Contract.created_at)).all()
-        handoff_ids = {c.handoff_id for c in rows if c.handoff_id}
-        handoffs: Dict[int, Any] = {}
-        if handoff_ids:
-            for h in db.query(HandoffRequest).filter(HandoffRequest.id.in_(handoff_ids)).all():
-                handoffs[h.id] = h
-        out = []
-        for c in rows:
-            client = db.query(Client).filter(Client.id == c.client_id).first()
-            ms = db.query(ContractMilestone).filter(ContractMilestone.contract_id == c.id).all()
-            handoff = handoffs.get(c.handoff_id) if c.handoff_id else None
-            sales_owner = (handoff.sales_owner if handoff else "") or (client.owner if client else "")
-            out.append(
-                contract_to_dict(
-                    c,
-                    client.name if client else "",
-                    [milestone_to_dict(m) for m in ms],
-                    sales_owner=sales_owner,
-                )
-            )
-        return out
+        return contract_file_svc.list_form_options(db, Client)
+
+    @app.get("/api/contracts")
+    async def list_contracts(
+        client_id: Optional[int] = None,
+        status: Optional[str] = None,
+        expires_before: Optional[str] = None,
+        q: Optional[str] = None,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.opportunities.read")),
+    ):
+        return contract_file_svc.list_contract_rows(
+            db,
+            Contract,
+            Client,
+            HandoffRequest,
+            ContractMilestone,
+            client_id=client_id,
+            status=status,
+            expires_before=expires_before,
+            q_text=q,
+        )
+
+    @app.post("/api/contracts", status_code=201)
+    async def create_contract_upload(
+        title: str = Form(...),
+        client_id: int = Form(...),
+        contract_no: str = Form(default=""),
+        end_date: str = Form(default=""),
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.opportunities.write")),
+    ):
+        return await contract_file_svc.create_contract_with_file(
+            db,
+            ctx,
+            Contract,
+            Client,
+            title=title,
+            client_id=client_id,
+            contract_no=contract_no,
+            end_date=end_date,
+            upload=file,
+            upload_dir=upload_dir,
+            max_file_size=contracts_max_file_size,
+            allowed_suffixes=MATERIAL_ALLOWED_SUFFIXES,
+        )
+
+    @app.post("/api/contracts/{contract_id}/replace-file")
+    async def replace_contract_upload(
+        contract_id: int,
+        file: UploadFile = File(...),
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        user: str = Depends(require_permission("crm.opportunities.write")),
+    ):
+        return await contract_file_svc.replace_contract_file(
+            db,
+            ctx,
+            Contract,
+            contract_id,
+            upload=file,
+            upload_dir=upload_dir,
+            max_file_size=contracts_max_file_size,
+            allowed_suffixes=MATERIAL_ALLOWED_SUFFIXES,
+        )
+
+    @app.get("/api/contracts/{contract_id}/download")
+    async def download_contract_upload(
+        contract_id: int,
+        db: Session = Depends(get_db),
+        user: str = Depends(require_permission("crm.opportunities.read")),
+    ):
+        return contract_file_svc.download_contract_file(
+            db,
+            Contract,
+            contract_id,
+            upload_dir=upload_dir,
+        )
 
     @app.get("/api/contracts/{contract_id}")
     async def get_contract(
@@ -436,11 +495,17 @@ def register_phase2_routes(
         ms = db.query(ContractMilestone).filter(ContractMilestone.contract_id == c.id).all()
         handoff = db.query(HandoffRequest).filter(HandoffRequest.id == c.handoff_id).first() if c.handoff_id else None
         sales_owner = (handoff.sales_owner if handoff else "") or (client.owner if client else "")
+        uploaded_by_name = ""
+        if getattr(c, "uploaded_by", None):
+            from services.company_materials import _load_user_names
+
+            uploaded_by_name = _load_user_names(db, [int(c.uploaded_by)]).get(int(c.uploaded_by), "")
         return contract_to_dict(
             c,
             client.name if client else "",
             [milestone_to_dict(m) for m in ms],
             sales_owner=sales_owner,
+            uploaded_by_name=uploaded_by_name,
         )
 
     @app.post("/api/contracts/{contract_id}/milestones/{milestone_id}/seed-settlement")

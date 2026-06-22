@@ -1456,7 +1456,36 @@
                 <a href="/rms" class="text-[#0969da] underline ml-1">前往招聘模块 →</a>
             </div>
             <div v-else-if="requirementJobsError" class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">{{ requirementJobsError }}</div>
-            <div v-else class="bg-white border rounded-lg requirements-jobs-wrap flex flex-col flex-1 min-h-0">
+            <template v-else>
+            <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] mb-3 shrink-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <div class="relative w-full sm:w-[280px]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                        <input v-model.trim="reqFilter.keyword" type="text" placeholder="搜索岗位、城市、招聘、JD…" class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30" title="关键词（模糊）" />
+                    </div>
+                    <button type="button" @click="reqFilterPanelExpanded = !reqFilterPanelExpanded" :class="reqFilterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'" class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                        筛选
+                    </button>
+                    <p class="ml-auto min-w-0 self-end leading-none pb-[7px] text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">合计（符合筛选条件）：<span>{{ filteredRequirementJobs.length }}</span> 条</p>
+                </div>
+                <div v-if="reqFilterPanelExpanded" class="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#EEF0F2] pt-2.5">
+                    <select v-model="reqFilter.priority" class="crm-filter-item crm-filter-control w-[9rem]" title="优先级">
+                        <option value="">优先级（全部）</option>
+                        <option v-for="p in reqPriorityOptions" :key="'rp'+p" :value="p">{{ jobPriorityLabel(p) }}</option>
+                    </select>
+                    <select v-model="reqFilter.status" class="crm-filter-item crm-filter-control w-[9rem]" title="状态">
+                        <option value="">状态（全部）</option>
+                        <option v-for="s in reqStatusOptions" :key="'rs'+s" :value="s">{{ jobStatusLabel(s) }}</option>
+                    </select>
+                    <select v-model="reqFilter.city" class="crm-filter-item crm-filter-control w-[9rem]" title="城市">
+                        <option value="">城市（全部）</option>
+                        <option v-for="c in reqCityOptions" :key="'rc'+c" :value="c">{{ c }}</option>
+                    </select>
+                    <button type="button" class="crm-filter-item crm-filter-reset" @click="resetReqFilter">清除筛选</button>
+                </div>
+            </div>
+            <div class="bg-white border rounded-lg requirements-jobs-wrap flex flex-col flex-1 min-h-0">
                 <div class="crm-table-scroll requirements-jobs-scroll">
                     <table class="crm-table w-full min-w-[1400px]" data-table-id="requirements-jobs">
                         <colgroup>
@@ -1464,24 +1493,24 @@
                         </colgroup>
                         <thead>
                             <tr>
-                                <th class="crm-th req-sticky-title">岗位名称</th>
-                                <th class="crm-th">优先级</th>
-                                <th class="crm-th">状态</th>
-                                <th class="crm-th">招聘</th>
-                                <th class="crm-th">HC数</th>
-                                <th class="crm-th">薪资帽</th>
-                                <th class="crm-th">城市</th>
-                                <th class="crm-th">年限</th>
-                                <th class="crm-th">学历</th>
-                                <th class="crm-th">加班/差旅</th>
-                                <th class="crm-th">活跃推荐数</th>
-                                <th class="crm-th">历史推荐数</th>
-                                <th class="crm-th rms-col-jd" data-col-default-em="30">JD</th>
-                                <th class="crm-th crm-col-remarks" data-col-min="160">备注</th>
+                                <th class="crm-th req-sticky-title"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5h17v10a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5v-10ZM8.5 8.5V6.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/></svg>岗位名称</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 21V4M5 4h11l-2 3 2 3H5"/></svg>优先级</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM8.5 12l2.5 2.5 4.5-4.5"/></svg>状态</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>招聘</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20a5 5 0 0 0-10 0M12 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/></svg>HC数</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM12 7v10M14.5 9.5a2 2 0 0 0-2-1.5h-1a1.75 1.75 0 0 0 0 3.5h1a1.75 1.75 0 0 1 0 3.5h-1a2 2 0 0 1-2-1.5"/></svg>薪资帽</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21c4-4 6-7.2 6-10a6 6 0 1 0-12 0c0 2.8 2 6 6 10ZM12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>城市</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>年限</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4 2 9l10 5 10-5-10-5ZM6 11.5V16c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-4.5"/></svg>学历</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M22 3 11 14M22 3l-7 19-4-8-8-4 19-7Z"/></svg>加班/差旅</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 19V5M4 19h16M8 16l3-4 3 2 4-6"/></svg>活跃推荐数</th>
+                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0-8.5-12M12 7.5V12l3 1.8M3.5 9V4.5M3.5 9H8"/></svg>历史推荐数</th>
+                                <th class="crm-th rms-col-jd" data-col-default-em="30"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3.5h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1ZM14 3.5V9h5M9 13h6M9 16.5h6"/></svg>JD</th>
+                                <th class="crm-th crm-col-remarks" data-col-min="160"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>备注</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="j in requirementJobs" :key="j.id">
+                            <tr v-for="j in pagedRequirementJobs" :key="j.id">
                                 <td class="crm-td crm-name-cell req-sticky-title">
                                     <button type="button" class="crm-name-link req-job-title-btn" :title="j.title || '—'" @click="openRequirementJobDetail(j)">{{ j.title || '—' }}</button>
                                 </td>
@@ -1499,13 +1528,23 @@
                                 <td class="crm-td rms-col-jd"><div class="crm-cell-clip">{{ j.job_description || '—' }}</div></td>
                                 <td class="crm-td crm-col-remarks"><div class="crm-cell-clip">{{ j.note || '—' }}</div></td>
                             </tr>
-                            <tr v-if="!requirementJobs.length">
-                                <td colspan="14" class="crm-td text-center text-gray-400 py-8">暂无岗位需求</td>
+                            <tr v-if="!filteredRequirementJobs.length">
+                                <td colspan="14" class="crm-td text-center text-gray-400 py-8">{{ requirementJobs.length ? '暂无符合筛选条件的岗位需求' : '暂无岗位需求' }}</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
             </div>
+            <div v-if="filteredRequirementJobs.length" class="flex flex-wrap items-center justify-between gap-3 px-1 pt-3 shrink-0">
+                <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ filteredRequirementJobs.length }}</span> 条，第 {{ reqCurrentPage }} / {{ reqTotalPages }} 页</p>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" @click="reqGoPage(reqCurrentPage - 1)" :disabled="reqCurrentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+                    <button v-for="p in reqPageNumbers" :key="'reqpg-' + p" type="button" @click="reqGoPage(p)" :class="p === reqCurrentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors">{{ p }}</button>
+                    <button type="button" @click="reqGoPage(reqCurrentPage + 1)" :disabled="reqCurrentPage >= reqTotalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+                    <span class="ml-1 inline-flex h-8 items-center rounded-[6px] border border-[#D7DBE0] bg-white px-2.5 text-sm text-[#6B7280]">10 条 / 页</span>
+                </div>
+            </div>
+            </template>
         </div>
         <p v-else class="text-gray-600 mt-2">当前为该客户的{{ moduleTitle }}页面占位，可在此接入该模块的业务表单、列表与图表。</p>
     </div>
@@ -2264,6 +2303,43 @@ createApp({
             }
         };
         const { fuzzyMatch, uniqueSorted } = window.CrmDeliveryDetail;
+        // 需求清单（requirements）：模糊搜索 / 筛选折叠 / 每页 10 条分页
+        const reqFilterPanelExpanded = ref(false);
+        const reqFilter = reactive({ keyword: '', priority: '', status: '', city: '' });
+        const reqPriorityOptions = computed(() => uniqueSorted(requirementJobs.value, 'priority'));
+        const reqStatusOptions = computed(() => uniqueSorted(requirementJobs.value, 'status'));
+        const reqCityOptions = computed(() => uniqueSorted(requirementJobs.value, 'location'));
+        const filteredRequirementJobs = computed(() => requirementJobs.value.filter((j) => {
+            if (reqFilter.keyword) {
+                const hay = [j.title, j.location, normalizeOwnerLabel(j.recruitment_owner_label), j.job_description, j.note].join(' ');
+                if (!fuzzyMatch(hay, reqFilter.keyword)) return false;
+            }
+            if (reqFilter.priority && String(j.priority || '') !== reqFilter.priority) return false;
+            if (reqFilter.status && String(j.status || '') !== reqFilter.status) return false;
+            if (reqFilter.city && String(j.location || '') !== reqFilter.city) return false;
+            return true;
+        }));
+        const reqPageSize = ref(10);
+        const reqCurrentPage = ref(1);
+        const reqTotalPages = computed(() => Math.max(1, Math.ceil(filteredRequirementJobs.value.length / reqPageSize.value)));
+        const pagedRequirementJobs = computed(() => {
+            const start = (reqCurrentPage.value - 1) * reqPageSize.value;
+            return filteredRequirementJobs.value.slice(start, start + reqPageSize.value);
+        });
+        const reqPageNumbers = computed(() => {
+            const total = reqTotalPages.value;
+            const max = 7;
+            let start = Math.max(1, reqCurrentPage.value - 3);
+            let end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            const arr = [];
+            for (let i = start; i <= end; i++) arr.push(i);
+            return arr;
+        });
+        const reqGoPage = (p) => { reqCurrentPage.value = Math.min(Math.max(1, p), reqTotalPages.value); };
+        const resetReqFilter = () => { reqFilter.keyword = ''; reqFilter.priority = ''; reqFilter.status = ''; reqFilter.city = ''; };
+        watch(reqFilter, () => { reqCurrentPage.value = 1; }, { deep: true });
+        watch(filteredRequirementJobs, () => { if (reqCurrentPage.value > reqTotalPages.value) reqCurrentPage.value = reqTotalPages.value; });
         const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
         const canViewDeliveryLogs = computed(() => !!window.crmIsSuper);
         const loadBrief = () => loadClientBrief(clientId, clientName);
@@ -2599,6 +2675,8 @@ createApp({
         return {
             moduleKey, moduleTitle, clientId, clientName,
             requirementJobs, requirementJobsLoading, requirementJobsError, requirementJobsForbidden,
+            reqFilter, reqFilterPanelExpanded, reqPriorityOptions, reqStatusOptions, reqCityOptions,
+            filteredRequirementJobs, pagedRequirementJobs, reqCurrentPage, reqTotalPages, reqPageNumbers, reqGoPage, resetReqFilter,
             requirementJobDetailOpen, requirementJobDetailRow, requirementJobDetailLoading, requirementJobDetailError,
             openRequirementJobDetail, closeRequirementJobDetail,
             jobPriorityLabel, jobStatusLabel, displayRequirementSalaryCap, normalizeOwnerLabel,

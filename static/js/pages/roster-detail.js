@@ -500,12 +500,6 @@ const rosterDetailApp = createApp({
                 return true;
             });
         });
-        const displayCountHint = computed(() => {
-            if (showOnlyChecked.value) return `（勾选显示 ${filteredRows.value.length} 条）`;
-            if (filteredRows.value.length !== rows.value.length) return `（筛选后 ${filteredRows.value.length} 条）`;
-            return '';
-        });
-
         const pageSize = ref(10);
         const currentPage = ref(1);
         const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)));
@@ -1373,7 +1367,7 @@ const rosterDetailApp = createApp({
             showRegReminder, regReminderFindings, regReminderCopied,
             regDetailRow, regDetailFields, isWideDetailField, rosterDetailValue, openRegDetail, closeRegDetail,
             canRegularizeRow, doRegularize, regularizingId,
-            missingRequiredFields, hasBlockingErrors, showOnlyChecked, filterPanelExpanded, rosterScrollWrap, goBack, displayCountHint, emptyStateText,
+            missingRequiredFields, hasBlockingErrors, showOnlyChecked, filterPanelExpanded, rosterScrollWrap, goBack, emptyStateText,
             IS_GLOBAL_ROSTER,
             canViewRosterLogs,
             rosterCustomerSelectOptions,

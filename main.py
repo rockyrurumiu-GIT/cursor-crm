@@ -383,6 +383,12 @@ class Contract(Base):
     end_date = Column(String, default="")
     status = Column(String, default="draft", index=True)
     sow_markdown = Column(Text, default="")
+    file_name = Column(String, default="")
+    stored_path = Column(String, default="")
+    mime_type = Column(String, default="")
+    file_size = Column(Integer, default=0)
+    uploaded_by = Column(Integer, nullable=True)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -892,6 +898,26 @@ def _ensure_visits_schema_compat():
         )
 
 
+def _ensure_contracts_schema_compat():
+    """补齐 contracts 表附件字段，兼容旧库。"""
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(contracts)").fetchall()}
+        except Exception:
+            return
+        add_cols = {
+            "file_name": "TEXT DEFAULT ''",
+            "stored_path": "TEXT DEFAULT ''",
+            "mime_type": "TEXT DEFAULT ''",
+            "file_size": "INTEGER DEFAULT 0",
+            "uploaded_by": "INTEGER NULL",
+            "updated_at": "DATETIME NULL",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE contracts ADD COLUMN {col} {ddl}")
+
+
 def _ensure_rms_jobs_schema_compat():
     """补齐 rms_jobs 表新增字段，兼容旧库。"""
     with engine.begin() as conn:
@@ -923,6 +949,7 @@ _ensure_pipeline_schema_compat()
 _ensure_clients_schema_compat()
 _ensure_contacts_schema_compat()
 _ensure_visits_schema_compat()
+_ensure_contracts_schema_compat()
 
 run_schema_migrations(engine)
 _ensure_rms_jobs_schema_compat()
@@ -1508,6 +1535,8 @@ register_phase2_routes(
     DeliverySettlementEntry=DeliverySettlementEntry,
     set_csv_download_headers=_set_csv_download_headers,
     max_file_size=MAX_FILE_SIZE,
+    upload_dir=UPLOAD_DIR,
+    contracts_max_file_size=MATERIALS_MAX_FILE_SIZE,
 )
 
 register_visit_routes(
