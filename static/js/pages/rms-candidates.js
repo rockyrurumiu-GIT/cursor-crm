@@ -150,6 +150,24 @@
       return rows;
     });
 
+    var candidatesPagination = Core.createListPagination
+      ? Core.createListPagination({
+          ref: ref,
+          computed: computed,
+          watch: watch,
+          filteredRows: filteredCandidates,
+          prefix: "candidates",
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        })
+      : {
+          pagedRows: filteredCandidates,
+          candidatesCurrentPage: ref(1),
+          candidatesTotalPages: computed(function () { return 1; }),
+          candidatesPageNumbers: computed(function () { return [1]; }),
+          candidatesGoPage: function () {},
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        };
+
     var candidateNameById = computed(function () {
       var m = {};
       candidatesState.items.forEach(function (c) {
@@ -709,6 +727,12 @@
       candidateModalTitle: candidateModalTitle,
       candidateModalShowSave: candidateModalShowSave,
       filteredCandidates: filteredCandidates,
+      pagedCandidates: candidatesPagination.pagedRows,
+      candidatesCurrentPage: candidatesPagination.candidatesCurrentPage || candidatesPagination.currentPage,
+      candidatesTotalPages: candidatesPagination.candidatesTotalPages || candidatesPagination.totalPages,
+      candidatesPageNumbers: candidatesPagination.candidatesPageNumbers || candidatesPagination.pageNumbers,
+      candidatesGoPage: candidatesPagination.candidatesGoPage || candidatesPagination.goPage,
+      candidatesPageSize: candidatesPagination.pageSize,
       candidateNameById: candidateNameById,
       filteredJobPickerOptions: filteredJobPickerOptions,
       filteredClientPickerOptions: filteredClientPickerOptions,

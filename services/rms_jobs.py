@@ -385,3 +385,30 @@ def update_job(
         can_write=_job_action_allowed(db, ctx, int(job_id), RmsJob, Client, action="write"),
         can_delete=_job_action_allowed(db, ctx, int(job_id), RmsJob, Client, action="delete"),
     )
+
+
+def delete_job(
+    db: Session,
+    ctx: AuthContext,
+    job_id: int,
+    RmsJob: Type[Any],
+    RmsApplication: Type[Any],
+    Client: Type[Any],
+) -> Dict[str, Any]:
+    row = (
+        rms_ds.scoped_jobs_query(db, ctx, RmsJob, Client, action="delete")
+        .filter(RmsJob.id == job_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="岗位不存在")
+    app_count = (
+        db.query(RmsApplication)
+        .filter(RmsApplication.job_id == job_id)
+        .count()
+    )
+    if app_count:
+        raise HTTPException(status_code=409, detail="该岗位有关联推荐记录，无法删除")
+    db.delete(row)
+    db.commit()
+    return {"ok": True, "id": job_id}

@@ -7,6 +7,8 @@
   function createDeliveryReviewState(deps) {
     var ref = deps.ref;
     var reactive = deps.reactive;
+    var computed = deps.computed;
+    var watch = deps.watch;
     var activeTab = deps.activeTab;
     var scheduleCandidatesTableColumnFit = deps.scheduleCandidatesTableColumnFit;
     var rmsRequest = deps.rmsRequest;
@@ -15,8 +17,53 @@
     var toast = deps.toast;
     var loadApplications = deps.loadApplications;
     var CandidateReport = deps.RmsCandidateReport || {};
+    var appCandidateName = deps.appCandidateName || function () { return ""; };
+    var appClientName = deps.appClientName || function () { return ""; };
+    var appJobTitle = deps.appJobTitle || function () { return ""; };
+    var Core = global.CrmRmsCore || {};
 
     var deliveryReviewState = reactive({ loading: false, items: [], error: "" });
+    var deliveryReviewFilterPanelExpanded = ref(false);
+    var deliveryReviewKeyword = ref("");
+    var deliveryReviewScrollWrap = ref(null);
+
+    var filteredDeliveryReviewItems = computed(function () {
+      var rows = deliveryReviewState.items.slice();
+      var q = (deliveryReviewKeyword.value || "").trim().toLowerCase();
+      if (!q) return rows;
+      return rows.filter(function (a) {
+        var haystack = [
+          appCandidateName(a),
+          appClientName(a),
+          appJobTitle(a),
+          a.recommender_label,
+        ].join(" ").toLowerCase();
+        return haystack.indexOf(q) !== -1;
+      });
+    });
+
+    var deliveryReviewPagination = Core.createListPagination
+      ? Core.createListPagination({
+          ref: ref,
+          computed: computed,
+          watch: watch,
+          filteredRows: filteredDeliveryReviewItems,
+          prefix: "deliveryReview",
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        })
+      : {
+          pagedRows: filteredDeliveryReviewItems,
+          deliveryReviewCurrentPage: ref(1),
+          deliveryReviewTotalPages: computed(function () { return 1; }),
+          deliveryReviewPageNumbers: computed(function () { return [1]; }),
+          deliveryReviewGoPage: function () {},
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        };
+
+    function scrollDeliveryReviewToTop() {
+      var el = deliveryReviewScrollWrap.value;
+      if (el) el.scrollTop = 0;
+    }
     var reviewModal = ref(null);
     var reviewFailPromptOpen = ref(false);
     var reviewModalSaving = ref(false);
@@ -105,6 +152,17 @@
 
     return {
       deliveryReviewState: deliveryReviewState,
+      deliveryReviewFilterPanelExpanded: deliveryReviewFilterPanelExpanded,
+      deliveryReviewKeyword: deliveryReviewKeyword,
+      deliveryReviewScrollWrap: deliveryReviewScrollWrap,
+      scrollDeliveryReviewToTop: scrollDeliveryReviewToTop,
+      filteredDeliveryReviewItems: filteredDeliveryReviewItems,
+      pagedDeliveryReviewItems: deliveryReviewPagination.pagedRows,
+      deliveryReviewCurrentPage: deliveryReviewPagination.deliveryReviewCurrentPage || deliveryReviewPagination.currentPage,
+      deliveryReviewTotalPages: deliveryReviewPagination.deliveryReviewTotalPages || deliveryReviewPagination.totalPages,
+      deliveryReviewPageNumbers: deliveryReviewPagination.deliveryReviewPageNumbers || deliveryReviewPagination.pageNumbers,
+      deliveryReviewGoPage: deliveryReviewPagination.deliveryReviewGoPage || deliveryReviewPagination.goPage,
+      deliveryReviewPageSize: deliveryReviewPagination.pageSize,
       reviewModal: reviewModal,
       reviewFailPromptOpen: reviewFailPromptOpen,
       reviewModalSaving: reviewModalSaving,

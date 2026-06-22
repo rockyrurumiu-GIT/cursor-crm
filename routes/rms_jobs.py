@@ -64,3 +64,14 @@ def register_rms_jobs_routes(
         if not data:
             raise HTTPException(status_code=400, detail="无更新字段")
         return job_svc.update_job(db, ctx, job_id, data, RmsJob, RmsApplication, Client)
+
+    @app.delete("/api/rms/jobs/{job_id}")
+    async def api_delete_job(
+        job_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("rms.jobs.delete")),
+    ):
+        return job_svc.delete_job(
+            db, ctx, job_id, RmsJob, RmsApplication, Client
+        )

@@ -34,6 +34,7 @@
     var ref = deps.ref;
     var reactive = deps.reactive;
     var computed = deps.computed;
+    var watch = deps.watch;
     var Labels = deps.Labels;
     var rmsRequest = deps.rmsRequest;
     var toast = deps.toast;
@@ -97,6 +98,25 @@
         return pipelineStatusMatches(a.status, appliedStatuses, Labels);
       });
     });
+
+    var Core = global.CrmRmsCore || {};
+    var pipelinePagination = Core.createListPagination
+      ? Core.createListPagination({
+          ref: ref,
+          computed: computed,
+          watch: watch,
+          filteredRows: filteredPipelineApplications,
+          prefix: "pipeline",
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        })
+      : {
+          pagedRows: filteredPipelineApplications,
+          pipelineCurrentPage: ref(1),
+          pipelineTotalPages: computed(function () { return 1; }),
+          pipelinePageNumbers: computed(function () { return [1]; }),
+          pipelineGoPage: function () {},
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        };
 
     function resetPipelineFilter() {
       pipelineFilter.keyword = "";
@@ -312,6 +332,12 @@
       applyPipelineStatusFilter: applyPipelineStatusFilter,
       resetPipelineFilter: resetPipelineFilter,
       filteredPipelineApplications: filteredPipelineApplications,
+      pagedPipelineApplications: pipelinePagination.pagedRows,
+      pipelineCurrentPage: pipelinePagination.pipelineCurrentPage || pipelinePagination.currentPage,
+      pipelineTotalPages: pipelinePagination.pipelineTotalPages || pipelinePagination.totalPages,
+      pipelinePageNumbers: pipelinePagination.pipelinePageNumbers || pipelinePagination.pageNumbers,
+      pipelineGoPage: pipelinePagination.pipelineGoPage || pipelinePagination.goPage,
+      pipelinePageSize: pipelinePagination.pageSize,
       progressOptions: progressOptions,
       progressOptionsForCorrection: progressOptionsForCorrection,
       openCorrectionPickerModal: openCorrectionPickerModal,

@@ -15,6 +15,7 @@
     var ref = deps.ref;
     var reactive = deps.reactive;
     var computed = deps.computed;
+    var watch = deps.watch;
     var activeTab = deps.activeTab;
     var me = deps.me;
     var rmsRequest = deps.rmsRequest;
@@ -340,6 +341,25 @@
       return rows;
     });
 
+    var Core = global.CrmRmsCore || {};
+    var offerPagination = Core.createListPagination
+      ? Core.createListPagination({
+          ref: ref,
+          computed: computed,
+          watch: watch,
+          filteredRows: filteredOfferRecords,
+          prefix: "offer",
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        })
+      : {
+          pagedRows: filteredOfferRecords,
+          offerCurrentPage: ref(1),
+          offerTotalPages: computed(function () { return 1; }),
+          offerPageNumbers: computed(function () { return [1]; }),
+          offerGoPage: function () {},
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        };
+
     function resetOfferFilter() {
       offerFilter.keyword = "";
       offerFilter.statuses.splice(0, offerFilter.statuses.length);
@@ -485,9 +505,9 @@
     function canApproveOfferRow(row) {
       if (!row || row.status !== "pending") return false;
       if (row.can_approve === true) return true;
-      if (row.can_approve === false) return false;
       var uid = currentMeUserId();
       if (uid == null) return false;
+      if (row.pending_approver_user_id == null) return false;
       return Number(row.pending_approver_user_id) === uid;
     }
 
@@ -732,6 +752,12 @@
       offerState: offerState,
       offerFilter: offerFilter,
       filteredOfferRecords: filteredOfferRecords,
+      pagedOfferRecords: offerPagination.pagedRows,
+      offerCurrentPage: offerPagination.offerCurrentPage || offerPagination.currentPage,
+      offerTotalPages: offerPagination.offerTotalPages || offerPagination.totalPages,
+      offerPageNumbers: offerPagination.offerPageNumbers || offerPagination.pageNumbers,
+      offerGoPage: offerPagination.offerGoPage || offerPagination.goPage,
+      offerPageSize: offerPagination.pageSize,
       resetOfferFilter: resetOfferFilter,
       offerStatusFilterOptions: OFFER_STATUS_FILTER_OPTIONS,
       offerStatusDropdownOpen: offerStatusDropdownOpen,

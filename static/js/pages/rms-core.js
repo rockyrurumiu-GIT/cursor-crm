@@ -83,6 +83,67 @@
     return String(haystack || "").toLowerCase().indexOf(n) !== -1;
   }
 
+  /** RMS list tabs use 8 rows/page (independent of global table defaults). */
+  var RMS_LIST_PAGE_SIZE = 8;
+
+  /** Client-side list pagination (pageSize default 10; RMS callers pass RMS_LIST_PAGE_SIZE). */
+  function createListPagination(deps) {
+    var ref = deps.ref;
+    var computed = deps.computed;
+    var watch = deps.watch;
+    var filteredRows = deps.filteredRows;
+    var pageSize = deps.pageSize || 10;
+    var prefix = deps.prefix || "";
+
+    var currentPage = ref(1);
+    var totalPages = computed(function () {
+      var len = filteredRows.value ? filteredRows.value.length : 0;
+      return Math.max(1, Math.ceil(len / pageSize));
+    });
+    var pagedRows = computed(function () {
+      var rows = filteredRows.value || [];
+      var start = (currentPage.value - 1) * pageSize;
+      return rows.slice(start, start + pageSize);
+    });
+    var pageNumbers = computed(function () {
+      var total = totalPages.value;
+      var max = 7;
+      var start = Math.max(1, currentPage.value - 3);
+      var end = Math.min(total, start + max - 1);
+      start = Math.max(1, end - max + 1);
+      var arr = [];
+      for (var i = start; i <= end; i++) arr.push(i);
+      return arr;
+    });
+    function goPage(p) {
+      currentPage.value = Math.min(Math.max(1, p), totalPages.value);
+    }
+    if (watch && filteredRows) {
+      watch(filteredRows, function () {
+        currentPage.value = 1;
+      });
+      watch(totalPages, function (tp) {
+        if (currentPage.value > tp) currentPage.value = tp;
+      });
+    }
+
+    var out = {
+      currentPage: currentPage,
+      pageSize: pageSize,
+      totalPages: totalPages,
+      pagedRows: pagedRows,
+      pageNumbers: pageNumbers,
+      goPage: goPage,
+    };
+    if (prefix) {
+      out[prefix + "CurrentPage"] = currentPage;
+      out[prefix + "TotalPages"] = totalPages;
+      out[prefix + "PageNumbers"] = pageNumbers;
+      out[prefix + "GoPage"] = goPage;
+    }
+    return out;
+  }
+
   function coreToast(msg, isError) {
     if (global.crmToast) {
       if (isError && global.crmToast.error) global.crmToast.error(msg);
@@ -261,6 +322,8 @@
     jobSalaryCapInRange: jobSalaryCapInRange,
     formatJobSalaryCapDisplay: formatJobSalaryCapDisplay,
     fuzzyMatch: fuzzyMatch,
+    RMS_LIST_PAGE_SIZE: RMS_LIST_PAGE_SIZE,
+    createListPagination: createListPagination,
     showValidationPrompt: showValidationPrompt,
     showRmsBootError: showRmsBootError,
     initOfferApprovalHintPopovers: initOfferApprovalHintPopovers,

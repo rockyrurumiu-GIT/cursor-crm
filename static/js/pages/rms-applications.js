@@ -8,6 +8,7 @@
     var ref = deps.ref;
     var reactive = deps.reactive;
     var computed = deps.computed;
+    var watch = deps.watch;
     var rmsRequest = deps.rmsRequest;
     var toast = deps.toast;
     var candidatesState = deps.candidatesState;
@@ -136,6 +137,25 @@
       }
       return rows;
     });
+
+    var Core = global.CrmRmsCore || {};
+    var applicationsPagination = Core.createListPagination
+      ? Core.createListPagination({
+          ref: ref,
+          computed: computed,
+          watch: watch,
+          filteredRows: filteredApplications,
+          prefix: "applications",
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        })
+      : {
+          pagedRows: filteredApplications,
+          applicationsCurrentPage: ref(1),
+          applicationsTotalPages: computed(function () { return 1; }),
+          applicationsPageNumbers: computed(function () { return [1]; }),
+          applicationsGoPage: function () {},
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        };
 
     function resetApplicationFilter() {
       applicationsFilter.keyword = "";
@@ -329,6 +349,12 @@
       clearApplicationStatusDraft: clearApplicationStatusDraft,
       applyApplicationStatusFilter: applyApplicationStatusFilter,
       filteredApplications: filteredApplications,
+      pagedApplications: applicationsPagination.pagedRows,
+      applicationsCurrentPage: applicationsPagination.applicationsCurrentPage || applicationsPagination.currentPage,
+      applicationsTotalPages: applicationsPagination.applicationsTotalPages || applicationsPagination.totalPages,
+      applicationsPageNumbers: applicationsPagination.applicationsPageNumbers || applicationsPagination.pageNumbers,
+      applicationsGoPage: applicationsPagination.applicationsGoPage || applicationsPagination.goPage,
+      applicationsPageSize: applicationsPagination.pageSize,
       resetApplicationFilter: resetApplicationFilter,
       applicationDetailModal: applicationDetailModal,
       applicationDetailFailNote: applicationDetailFailNote,

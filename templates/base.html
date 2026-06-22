@@ -2308,7 +2308,10 @@
             document.addEventListener('click', function (e) {
                 var btn = e.target && e.target.closest ? e.target.closest('.crm-op-btn-delete') : null;
                 if (!btn) { return; }
-                if ((btn.textContent || '').trim() !== '删除') { return; }
+                if ((btn.textContent || '').trim() !== '删除') {
+                    var aria = (btn.getAttribute('aria-label') || '').trim();
+                    if (aria !== '删除' && !btn.getAttribute('data-crm-delete-title')) { return; }
+                }
                 if (window.crmIsDeleteConfirmExempt(btn)) { return; }
                 if (btn.getAttribute(CONFIRMED_ATTR) === '1') {
                     btn.removeAttribute(CONFIRMED_ATTR);
@@ -2913,7 +2916,7 @@
         })();
     </script>
     {% block page_scripts %}{% endblock %}
-    <script src="/static/js/crm-table-resize.js?v=32"></script>
+    <script src="/static/js/crm-table-resize.js?v=33"></script>
     <script src="/static/js/crm-cell-clip-pop.js?v=12"></script>
 </body>
 </html>

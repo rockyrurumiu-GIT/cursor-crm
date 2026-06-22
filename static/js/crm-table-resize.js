@@ -48,7 +48,6 @@
     function isOpColumnTh(th) {
         return th.classList.contains('crm-sticky-right-op')
             || th.classList.contains('roster-sticky-op')
-            || th.classList.contains('rms-sticky-recommend')
             || th.classList.contains('rms-col-manage')
             || th.classList.contains('crm-op-col-wide')
             || th.classList.contains('crm-op-col-xl')
@@ -68,6 +67,19 @@
         return Math.round(OP_COL_WIDTH_WIDE * (3 / 4));
     }
 
+    function rmsPipelineOpColumnWidthPx(th) {
+        const table = th && th.closest ? th.closest('table[data-table-id="rms-pipeline"]') : null;
+        if (!table) return null;
+        const fontPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const raw = getComputedStyle(table).getPropertyValue('--rms-pipeline-op-col-width').trim();
+        const num = parseFloat(raw);
+        if (Number.isFinite(num) && num > 0) {
+            if (raw.includes('rem')) return Math.round(num * fontPx);
+            return Math.round(num);
+        }
+        return null;
+    }
+
     function rmsJobsStickyColWidthPx(th, varName, fallbackPx) {
         const table = th && th.closest ? th.closest('.rms-jobs-table') : null;
         if (!table) return null;
@@ -81,12 +93,8 @@
         return Math.round(num);
     }
 
-    function rmsJobsRecommendColumnWidthPx(th) {
-        return rmsJobsStickyColWidthPx(th, '--rms-jobs-recommend-col-width', 120);
-    }
-
     function rmsJobsManageColumnWidthPx(th) {
-        return rmsJobsStickyColWidthPx(th, '--rms-jobs-manage-col-width', OP_COL_WIDTH);
+        return rmsJobsStickyColWidthPx(th, '--rms-jobs-manage-col-width', OP_COL_WIDTH_XL);
     }
 
     function isRmsPipelinePresetColumnTh(th) {
@@ -110,7 +118,7 @@
         }
         return th.classList.contains('rms-pipeline-next-op')
             ? Math.round(15.75 * fontPx)
-            : Math.round(7 * fontPx);
+            : Math.round(12 * fontPx);
     }
 
     function opColumnWidthPx(th) {
@@ -129,8 +137,9 @@
             const drW = rmsDeliveryReviewOpColumnWidthPx(th);
             if (drW != null) return drW;
         }
-        if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-sticky-recommend')) {
-            return rmsJobsRecommendColumnWidthPx(th);
+        if (th && th.classList.contains('crm-sticky-right-op') && th.closest('table[data-table-id="rms-pipeline"]')) {
+            const plW = rmsPipelineOpColumnWidthPx(th);
+            if (plW != null) return plW;
         }
         if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-col-manage')) {
             return rmsJobsManageColumnWidthPx(th);
@@ -347,16 +356,12 @@
         const w = opColumnWidthPx(th);
         col.classList.remove(
             'crm-col-op', 'crm-col-op-wide', 'crm-col-op-xl',
-            'crm-col-rms-jobs-recommend', 'crm-col-rms-jobs-manage', 'rms-delivery-review-op-col',
+            'crm-col-rms-jobs-manage', 'rms-delivery-review-op-col',
         );
         if (th && th.classList.contains('rms-delivery-review-op')) {
             col.classList.add('rms-delivery-review-op-col');
-        } else if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-sticky-recommend')) {
-            col.classList.add('crm-col-rms-jobs-recommend');
         } else if (th && th.closest('.rms-jobs-table') && th.classList.contains('rms-col-manage')) {
             col.classList.add('crm-col-rms-jobs-manage');
-        } else if (th && th.closest('.rms-jobs-table') && th.classList.contains('crm-op-col-xl')) {
-            col.classList.add('crm-col-rms-jobs-recommend');
         } else if (th && th.classList.contains('crm-op-col-xl')) col.classList.add('crm-col-op-xl');
         else if (th && th.classList.contains('crm-op-col-wide')) col.classList.add('crm-col-op-wide');
         else col.classList.add('crm-col-op');

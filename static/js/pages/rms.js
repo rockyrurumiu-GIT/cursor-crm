@@ -23,6 +23,12 @@
   const showValidationPrompt = Core.showValidationPrompt ? Core.showValidationPrompt.bind(Core) : function (m) { return String(m || ""); };
   const showRmsBootError = Core.showRmsBootError ? Core.showRmsBootError.bind(Core) : function () {};
 
+  /** setup 内模块初始化失败时必须 throw，禁止 return {}（Vue 仍会 mount，页面只剩 v-cloak 空白）。 */
+  function abortBoot(msg) {
+    showRmsBootError(msg);
+    throw new Error(msg);
+  }
+
   const EDUCATION_OPTIONS = ["重本", "统本", "专科", "硕士", "留学生", "民教网", "其他"];
   const GENDER_OPTIONS = ["男", "女"];
   const SOURCE_OPTIONS = ["内部RMS", "Boss", "linkedin", "猎聘", "内推", "挂靠", "外协", "其他"];
@@ -133,6 +139,7 @@
             ref: ref,
             reactive: reactive,
             computed: computed,
+            watch: watch,
             nextTick: nextTick,
             modal: modal,
             modalError: modalError,
@@ -306,13 +313,13 @@
       var loadDeliveryReviewBridge = async function () {};
 
       if (!window.CrmRmsApplications || typeof window.CrmRmsApplications.createApplicationsState !== "function") {
-        showRmsBootError("RMS 推荐记录模块未加载，请刷新后重试。");
-        return {};
+        abortBoot("RMS 推荐记录模块未加载，请刷新后重试。");
       }
       const applications = window.CrmRmsApplications.createApplicationsState({
         ref: ref,
         reactive: reactive,
         computed: computed,
+        watch: watch,
         rmsRequest: rmsRequest,
         toast: toast,
         Labels: Labels,
@@ -333,18 +340,17 @@
       const applicationsState = applications.applicationsState;
       const loadApplications = applications.loadApplications;
       if (!applicationsState || !loadApplications) {
-        showRmsBootError("RMS 推荐记录状态初始化失败，请刷新后重试。");
-        return {};
+        abortBoot("RMS 推荐记录状态初始化失败，请刷新后重试。");
       }
 
       if (!window.CrmRmsPipeline || typeof window.CrmRmsPipeline.createPipelineState !== "function") {
-        showRmsBootError("RMS Pipeline 模块未加载，请刷新后重试。");
-        return {};
+        abortBoot("RMS Pipeline 模块未加载，请刷新后重试。");
       }
       const pipeline = window.CrmRmsPipeline.createPipelineState({
         ref: ref,
         reactive: reactive,
         computed: computed,
+        watch: watch,
         Labels: Labels,
         rmsRequest: rmsRequest,
         toast: toast,
@@ -358,12 +364,13 @@
       });
 
       if (!window.CrmRmsDeliveryReview || typeof window.CrmRmsDeliveryReview.createDeliveryReviewState !== "function") {
-        showRmsBootError("RMS 交付内审模块未加载，请刷新后重试。");
-        return {};
+        abortBoot("RMS 交付内审模块未加载，请刷新后重试。");
       }
       const deliveryReview = window.CrmRmsDeliveryReview.createDeliveryReviewState({
         ref: ref,
         reactive: reactive,
+        computed: computed,
+        watch: watch,
         activeTab: activeTab,
         scheduleCandidatesTableColumnFit: scheduleCandidatesTableColumnFit,
         rmsRequest: rmsRequest,
@@ -372,16 +379,17 @@
         toast: toast,
         loadApplications: loadApplications,
         RmsCandidateReport: window.RmsCandidateReport || {},
+        appCandidateName: appCandidateName,
+        appClientName: appClientName,
+        appJobTitle: appJobTitle,
       });
       if (!deliveryReview.loadDeliveryReview) {
-        showRmsBootError("RMS 交付内审状态初始化失败，请刷新后重试。");
-        return {};
+        abortBoot("RMS 交付内审状态初始化失败，请刷新后重试。");
       }
       loadDeliveryReviewBridge = deliveryReview.loadDeliveryReview;
 
       if (!window.CrmRmsRosterConversion || typeof window.CrmRmsRosterConversion.createRosterConversionState !== "function") {
-        showRmsBootError("RMS 转入花名册模块未加载，请刷新后重试。");
-        return {};
+        abortBoot("RMS 转入花名册模块未加载，请刷新后重试。");
       }
       const rosterConversion = window.CrmRmsRosterConversion.createRosterConversionState({
         ref: ref,
@@ -394,18 +402,17 @@
         isSuper: isSuper,
       });
       if (!rosterConversion.submitRosterConvert) {
-        showRmsBootError("RMS 转入花名册状态初始化失败，请刷新后重试。");
-        return {};
+        abortBoot("RMS 转入花名册状态初始化失败，请刷新后重试。");
       }
 
       if (!window.CrmRmsOfferManagement || typeof window.CrmRmsOfferManagement.createOfferManagementState !== "function") {
-        showRmsBootError("RMS Offer 管理模块未加载，请刷新后重试。");
-        return {};
+        abortBoot("RMS Offer 管理模块未加载，请刷新后重试。");
       }
       const offerManagement = window.CrmRmsOfferManagement.createOfferManagementState({
         ref: ref,
         reactive: reactive,
         computed: computed,
+        watch: watch,
         Labels: Labels,
         activeTab: activeTab,
         me: me,
@@ -417,14 +424,12 @@
         appJobTitle: appJobTitle,
       });
       if (!offerManagement.loadOfferRecords) {
-        showRmsBootError("RMS Offer 管理状态初始化失败，请刷新后重试。");
-        return {};
+        abortBoot("RMS Offer 管理状态初始化失败，请刷新后重试。");
       }
 
       let report = null;
       if (!window.CrmRmsReport || typeof window.CrmRmsReport.createReportState !== "function") {
-        showRmsBootError("RMS 推荐报告模块未加载，请刷新后重试。");
-        return {};
+        abortBoot("RMS 推荐报告模块未加载，请刷新后重试。");
       }
       report = window.CrmRmsReport.createReportState({
         ref: ref,
@@ -458,8 +463,7 @@
 
       const reportMode = report.reportMode;
       if (!reportMode) {
-        showRmsBootError("RMS 推荐报告状态初始化失败，请刷新后重试。");
-        return {};
+        abortBoot("RMS 推荐报告状态初始化失败，请刷新后重试。");
       }
 
       const canRecommendExistingCandidate = computed(function () {
@@ -547,7 +551,7 @@
         }
         } catch (err) {
           const msg = err && err.message ? err.message : String(err);
-          setModalError("保存失败：" + msg);
+          modalError.value = "保存失败：" + msg;
         } finally {
           modalSaving.value = false;
         }

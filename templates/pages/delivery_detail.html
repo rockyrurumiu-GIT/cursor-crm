@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ module_title }} · 交付 · ITO BMS{% endblock %}
-{% block shell_extra_class %}{% if module_key in ['requirements', 'interviews', 'handbook'] %}bms-shell-flat{% endif %}{% endblock %}
+{% block shell_extra_class %}{% if module_key in ['requirements', 'interviews', 'handbook', 'employee_files'] %}bms-shell-flat{% endif %}{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/plyr@3.7.8/dist/plyr.css" crossorigin="anonymous" />
@@ -635,11 +635,33 @@
         gap: 0.125rem;
     }
     .handbook-table th.crm-sticky-right-op.handbook-op-col,
-    .handbook-table td.crm-sticky-right-op.handbook-op-col {
+    .handbook-table td.crm-sticky-right-op.handbook-op-col,
+    .employee-files-table th.crm-sticky-right-op.employee-files-op-col,
+    .employee-files-table td.crm-sticky-right-op.employee-files-op-col {
         width: calc(var(--crm-op-col-width-xl) - 4em) !important;
         min-width: calc(var(--crm-op-col-width-xl) - 4em) !important;
         max-width: calc(var(--crm-op-col-width-xl) - 4em) !important;
     }
+    #delivery-detail-app .employee-files-table .crm-op-actions {
+        flex-wrap: nowrap;
+        gap: 0.125rem;
+    }
+    #delivery-detail-app .employee-files-table .crm-op-btn-detail,
+    #delivery-detail-app .employee-files-table .crm-op-btn-edit,
+    #delivery-detail-app .employee-files-table .crm-op-btn-delete {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem;
+    }
+    #delivery-detail-app .employee-files-table .crm-op-btn-detail svg,
+    #delivery-detail-app .employee-files-table .crm-op-btn-edit svg,
+    #delivery-detail-app .employee-files-table .crm-op-btn-delete svg {
+        width: 15px;
+        height: 15px;
+    }
+    #delivery-detail-app .employee-files-table tbody td.crm-sticky-right-op { overflow: visible !important; }
+    #delivery-detail-app .employee-files-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
     #delivery-detail-app .handbook-upload-dropzone {
         border: 2px dashed #d0d7de;
         border-radius: 0.5rem;
@@ -717,15 +739,15 @@
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="delivery-detail-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6" :class="moduleKey === 'interviews' || moduleKey === 'handbook' ? '' : 'py-4 sm:py-5'">
-    <div class="max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="moduleKey === 'interviews' || moduleKey === 'handbook' ? '' : ['bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6', moduleKey === 'requirements' ? 'requirements-detail-card' : '']">
-        <span v-if="moduleKey !== 'requirements' && moduleKey !== 'interviews' && moduleKey !== 'handbook'" class="group relative inline-flex shrink-0 self-start">
+<div id="delivery-detail-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6" :class="moduleKey === 'interviews' || moduleKey === 'handbook' || moduleKey === 'employee_files' ? '' : 'py-4 sm:py-5'">
+    <div class="max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="moduleKey === 'interviews' || moduleKey === 'handbook' || moduleKey === 'employee_files' ? '' : ['bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6', moduleKey === 'requirements' ? 'requirements-detail-card' : '']">
+        <span v-if="moduleKey !== 'requirements' && moduleKey !== 'interviews' && moduleKey !== 'handbook' && moduleKey !== 'employee_files'" class="group relative inline-flex shrink-0 self-start">
             <a :href="`/delivery/${moduleKey}`" :aria-label="`返回${moduleTitle}客户列表`" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
             </a>
             <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">返回{{ moduleTitle }}客户列表</span>
         </span>
-        <div class="flex flex-wrap items-center justify-between gap-3 shrink-0" :class="moduleKey === 'interviews' || moduleKey === 'handbook' ? 'mt-8 mb-4' : 'mt-2'">
+        <div class="flex flex-wrap items-center justify-between gap-3 shrink-0" :class="moduleKey === 'interviews' || moduleKey === 'handbook' || moduleKey === 'employee_files' ? 'mt-8 mb-4' : 'mt-2'">
             <div class="min-w-0">
                 <h1 class="text-2xl font-bold text-gray-900">
                     <template v-if="isInterviewAggregate">整体员工访谈<span class="text-gray-400 font-normal text-base"> · 全部客户</span></template>
@@ -735,16 +757,6 @@
                     </template>
                 </h1>
                 <p v-if="clientOwner" class="text-sm text-gray-500 mt-1">负责人 {{ clientOwner }}</p>
-            </div>
-            <div v-if="moduleKey === 'employee_files'" class="flex flex-wrap items-center gap-2 shrink-0">
-                <span v-if="!employeeFileSelectedFiles.length" class="max-w-[14rem] truncate text-xs text-[#57606a]">未选择文件</span>
-                <span v-else class="inline-flex items-center gap-1 max-w-[16rem] rounded-lg border border-[#d0d7de] bg-white px-2 h-[2.25rem] min-h-[2.25rem] text-xs text-[#1f2328]">
-                    <span class="truncate min-w-0" :title="employeeFileSelectedFileSummary">{{ employeeFileSelectedFileSummary }}</span>
-                    <button type="button" class="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]" title="清除已选文件" aria-label="清除已选文件" @click="clearEmployeeFileSelectedFiles">×</button>
-                </span>
-                <button type="button" class="crm-filter-item rounded-lg border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="employeeFileUploading" @click="employeeFileInput && employeeFileInput.click()">选择文件</button>
-                <button type="button" class="crm-filter-item rounded-lg bg-[#4C6491] px-3 text-xs font-medium text-white hover:bg-[#3D5176] disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="employeeFileUploading || !employeeFileSelectedFiles.length" @click="uploadSelectedEmployeeFiles">{{ employeeFileUploading ? '上传中…' : '上传' }}</button>
-                <input ref="employeeFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar" @change="onEmployeeFilesSelected" />
             </div>
         </div>
         <div v-if="moduleKey === 'pipeline'" class="mt-4 flex flex-col flex-1 min-h-0 gap-3">
@@ -1576,57 +1588,101 @@
                 </div>
             </div>
         </div>
-        <div v-else-if="moduleKey === 'employee_files'" class="mt-4 flex flex-col flex-1 min-h-0 gap-4">
+        <div v-else-if="moduleKey === 'employee_files'" class="crm-skin flex flex-col flex-1 min-h-0 gap-2">
             <div v-if="employeeFileUploadError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shrink-0">{{ employeeFileUploadError }}</div>
-            <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3 shrink-0">
-                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                    <div class="crm-filter-row flex-1 min-w-0">
-                        <input v-model.trim="employeeFileFilter.keyword" type="text" class="crm-filter-item crm-filter-control w-[12rem]" placeholder="关键字模糊查询" title="关键字模糊查询" />
+            <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] shrink-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="group relative inline-flex shrink-0">
+                        <a :href="`/delivery/${moduleKey}`" :aria-label="`返回${moduleTitle}客户列表`" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+                        </a>
+                        <span class="pointer-events-none absolute left-0 top-full z-50 mt-1.5 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">返回{{ moduleTitle }}客户列表</span>
+                    </span>
+                    <div class="relative w-full sm:w-[280px]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                        <input v-model.trim="employeeFileFilter.keyword" type="search" placeholder="搜索文件名、状态、类型…" class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30" />
+                    </div>
+                    <button type="button" @click="toggleEmployeeFileFilterPanel" :class="employeeFileFilterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'" class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                        筛选
+                    </button>
+                    <p class="ml-auto min-w-0 self-center leading-none text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">合计（符合筛选条件）：<span>{{ filteredEmployeeFiles.length }}</span> 条</p>
+                    <div class="flex items-center gap-1.5">
+                        <span class="group relative inline-flex">
+                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3D5176] disabled:opacity-50" :disabled="employeeFileUploading" aria-label="上传材料" @click="openEmployeeFileUploadModal">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 0L8 7m4-4 4 4M4 15v2.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V15"/></svg>
+                            </button>
+                            <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">上传材料</span>
+                        </span>
+                    </div>
+                </div>
+                <div v-if="employeeFileFilterPanelExpanded" class="mt-2.5 border-t border-[#EEF0F2] pt-2.5">
+                    <div class="flex flex-wrap items-center gap-2">
                         <select v-model="employeeFileStatusFilter" class="crm-filter-item crm-filter-control w-[10rem]" title="状态">
-                            <option value="">状态</option>
+                            <option value="">状态（全部）</option>
                             <option value="draft">草稿</option>
                             <option value="published">已发布</option>
                             <option value="deprecated">已作废</option>
                         </select>
                         <button type="button" class="crm-filter-item crm-filter-reset" @click="resetEmployeeFileFilter">清除筛选</button>
                     </div>
-                    <p class="text-sm font-semibold text-[#1f2328] shrink-0">
-                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredEmployeeFiles.length }}</span> 条
-                    </p>
                 </div>
             </div>
-            <div class="border border-gray-200 rounded-lg overflow-hidden flex flex-col flex-1 min-h-0 bg-white">
-                <div v-if="!filteredEmployeeFiles.length" class="p-10 text-center text-gray-400 text-sm">暂无员工文件，请上传。</div>
-                <div v-else class="overflow-x-auto crm-table-scroll">
-                    <table class="crm-table handbook-table min-w-full text-sm" data-table-id="employee-files">
-                        <thead>
-                            <tr>
-                                <th class="crm-th text-left">文件</th>
-                                <th class="crm-th">状态</th>
-                                <th class="crm-th">类型</th>
-                                <th class="crm-th">时间</th>
-                                <th class="crm-th crm-sticky-right-op crm-op-col-xl">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="f in filteredEmployeeFiles" :key="f.id">
-                                <td class="crm-td crm-name-cell handbook-col-text"><div class="crm-cell-clip">{{ f.original_filename }}</div></td>
-                                <td class="crm-td"><span class="rounded-full px-2 py-0.5 text-xs" :class="employeeFileStatusClass(f.status)">{{ employeeFileStatusLabel(f.status) }}</span></td>
-                                <td class="crm-td">{{ employeeFileMediaLabel(f) }}</td>
-                                <td class="crm-td text-xs whitespace-nowrap">{{ formatDate(f.created_at) }}</td>
-                                <td class="crm-td whitespace-nowrap crm-sticky-right-op crm-op-col-xl">
-                                    <div class="crm-op-actions">
-                                        <button type="button" class="crm-op-btn-edit" @click="downloadEmployeeFile(f)">下载</button>
-                                        <button v-if="canDeletePermission('delivery.employee_files.delete')" type="button" class="crm-op-btn-delete"
-                                            data-crm-delete-title="确认删除文件"
-                                            data-crm-delete-target-prefix="将删除文件："
-                                            data-crm-delete-hint="删除后将从当前员工文件列表移除。"
-                                            @click="removeEmployeeFile(f)">删除</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+            <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
+                <table class="crm-table employee-files-table handbook-table min-w-full text-sm" data-table-id="employee-files">
+                    <thead>
+                        <tr>
+                            <th class="crm-th text-left"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3.5h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1ZM14 3.5V9h5"/></svg>文件</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM8.5 12l2.5 2.5 4.5-4.5"/></svg>状态</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h10"/></svg>类型</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0-8.5-12M12 7.5V12l3 1.8"/></svg>时间</th>
+                            <th class="crm-th crm-sticky-right-op employee-files-op-col"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="f in pagedEmployeeFiles" :key="f.id">
+                            <td class="crm-td crm-name-cell handbook-col-text">
+                                <button type="button" class="crm-name-link" @click="openEmployeeFileDetailDrawer(f)"><span class="crm-cell-clip">{{ f.original_filename }}</span></button>
+                            </td>
+                            <td class="crm-td"><span class="rounded-full px-2 py-0.5 text-xs" :class="employeeFileStatusClass(f.status)">{{ employeeFileStatusLabel(f.status) }}</span></td>
+                            <td class="crm-td">{{ employeeFileMediaLabel(f) }}</td>
+                            <td class="crm-td text-xs whitespace-nowrap">{{ employeeFileDisplayDate(f.created_at) }}</td>
+                            <td class="crm-td whitespace-nowrap crm-sticky-right-op employee-files-op-col">
+                                <div class="crm-op-actions">
+                                    <span v-if="employeeFileCanPreview(f)" class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-detail" aria-label="预览" @click="openEmployeeFilePreview(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">预览</span>
+                                    </span>
+                                    <span class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-edit" aria-label="下载" @click="downloadEmployeeFile(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">下载</span>
+                                    </span>
+                                    <span v-if="canDeletePermission('delivery.employee_files.delete')" class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-delete" aria-label="删除" @click="removeEmployeeFile(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">删除</span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="!pagedEmployeeFiles.length">
+                            <td colspan="5" class="crm-td text-center text-gray-400 py-8">暂无员工文件，请上传。</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div v-if="filteredEmployeeFiles.length" class="flex flex-wrap items-center justify-between gap-3 px-1 pt-3 pb-4 shrink-0">
+                <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ filteredEmployeeFiles.length }}</span> 条，第 {{ employeeFileCurrentPage }} / {{ employeeFileTotalPages }} 页</p>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" @click="employeeFileGoPage(employeeFileCurrentPage - 1)" :disabled="employeeFileCurrentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+                    <button v-for="p in employeeFilePageNumbers" :key="'efpg-' + p" type="button" @click="employeeFileGoPage(p)" :class="p === employeeFileCurrentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors">{{ p }}</button>
+                    <button type="button" @click="employeeFileGoPage(employeeFileCurrentPage + 1)" :disabled="employeeFileCurrentPage >= employeeFileTotalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+                    <span class="ml-1 text-[0.8rem] text-[#6B7280]">10 条 / 页</span>
                 </div>
             </div>
         </div>
@@ -1984,6 +2040,70 @@
                     <button type="submit" class="rounded-lg bg-[#456595] px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176] disabled:opacity-50" :disabled="handbookUploading">{{ handbookUploading ? '上传中…' : '保存' }}</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div v-if="employeeFileUploadModalOpen && moduleKey === 'employee_files'" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeEmployeeFileUploadModal" @dragover.prevent @drop.prevent>
+        <div class="crm-form-modal-panel max-w-2xl rounded-xl shadow-2xl" @click.stop>
+            <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg text-gray-900">上传材料</h3>
+                <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeEmployeeFileUploadModal">&times;</button>
+            </div>
+            <form class="flex flex-col flex-1 min-h-0" novalidate @submit.prevent="submitEmployeeFileUpload">
+                <div class="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 text-sm">
+                    <label class="flex flex-col gap-1 max-w-xs">
+                        <span class="text-[#57606a]">状态</span>
+                        <select v-model="employeeFileUploadForm.status" class="crm-form-control">
+                            <option value="draft">草稿</option>
+                            <option value="published">已发布</option>
+                            <option value="deprecated">已作废</option>
+                        </select>
+                    </label>
+                    <div>
+                        <span class="block text-[#57606a] mb-2">文件<span class="text-red-500">*</span></span>
+                        <div
+                            class="handbook-upload-dropzone"
+                            :class="{ 'has-file': !!employeeFileUploadSelectedSummary, 'is-dragging': employeeFileUploadDragging }"
+                            @click="triggerEmployeeFileUploadPick"
+                            @dragover.prevent
+                            @dragenter.prevent="employeeFileUploadDragging = true"
+                            @dragleave.prevent="employeeFileUploadDragging = false"
+                            @drop.prevent="onEmployeeFileUploadDrop"
+                        >
+                            <template v-if="!employeeFileUploadSelectedSummary">
+                                <span class="text-sm text-[#57606a]">点击或拖拽文件到此处</span>
+                                <span class="mt-1 text-xs text-[#656d76]">支持 PDF、Word、Excel、图片、压缩包等格式，可多选</span>
+                            </template>
+                            <div v-else class="handbook-upload-file-row">
+                                <span class="min-w-0 truncate text-sm text-[#0969da]">{{ employeeFileUploadSelectedSummary }}</span>
+                                <button type="button" class="handbook-upload-file-remove shrink-0" aria-label="移除文件" @click.stop="clearEmployeeFileUploadFiles">&times;</button>
+                            </div>
+                            <input ref="employeeFileUploadFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar" @change="onEmployeeFileUploadFileChange" />
+                        </div>
+                    </div>
+                    <p v-if="employeeFileUploadError" class="text-sm text-red-600">{{ employeeFileUploadError }}</p>
+                </div>
+                <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-end shrink-0">
+                    <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-800 hover:bg-gray-50" @click="closeEmployeeFileUploadModal">取消</button>
+                    <button type="submit" class="rounded-lg bg-[#456595] px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176] disabled:opacity-50" :disabled="employeeFileUploading">{{ employeeFileUploading ? '上传中…' : '保存' }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div v-if="employeeFilePreviewRow && moduleKey === 'employee_files'" class="crm-esc-modal fixed inset-0 z-[200] flex flex-col bg-black/50 p-3" @click.self="closeEmployeeFilePreview">
+        <div class="relative flex flex-col flex-1 min-h-0 w-full max-w-5xl mx-auto overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl" @click.stop>
+            <div class="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4 py-3">
+                <p class="text-sm font-semibold text-gray-900 truncate">{{ employeeFilePreviewRow.original_filename }}</p>
+                <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="closeEmployeeFilePreview">关闭</button>
+            </div>
+            <div class="flex flex-1 min-h-0 items-center justify-center p-4">
+                <p v-if="employeeFilePreviewMode === 'loading'" class="text-sm text-gray-500 py-12">正在加载预览…</p>
+                <iframe v-else-if="employeeFilePreviewMode === 'pdf' && employeeFilePreviewUrl" :src="employeeFilePreviewUrl + '#toolbar=0&navpanes=0'" type="application/pdf" class="w-full h-[70vh] border border-gray-200 rounded-lg" title="文件预览"></iframe>
+                <video v-else-if="employeeFilePreviewMode === 'video' && employeeFilePreviewUrl" :src="employeeFilePreviewUrl" controls class="max-w-full max-h-[70vh] rounded-lg bg-black"></video>
+                <audio v-else-if="employeeFilePreviewMode === 'audio' && employeeFilePreviewUrl" :src="employeeFilePreviewUrl" controls class="w-full max-w-md"></audio>
+                <p v-else class="text-sm text-gray-500 py-12">预览失败，请尝试下载后查看。</p>
+            </div>
         </div>
     </div>
 
@@ -2346,6 +2466,38 @@
         </div>
     </aside>
 
+    <div v-if="employeeFileDetailRow && moduleKey === 'employee_files'" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeEmployeeFileDetailDrawer"></div>
+    <aside v-if="employeeFileDetailRow && moduleKey === 'employee_files'" class="crm-esc-modal crm-right-drawer open">
+        <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
+            <div class="min-w-0">
+                <h3 class="text-lg font-bold text-gray-900 truncate">{{ employeeFileDetailRow.original_filename || '员工文件详情' }}</h3>
+                <p class="text-sm text-gray-500 mt-0.5">{{ employeeFileMediaLabel(employeeFileDetailRow) }}</p>
+            </div>
+            <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closeEmployeeFileDetailDrawer">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-5">
+            <dl class="grid grid-cols-1 gap-y-3 text-sm">
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">状态</dt>
+                    <dd><span class="rounded-full px-2 py-0.5 text-xs" :class="employeeFileStatusClass(employeeFileDetailRow.status)">{{ employeeFileStatusLabel(employeeFileDetailRow.status) }}</span></dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">类型</dt>
+                    <dd class="font-medium text-gray-800">{{ employeeFileMediaLabel(employeeFileDetailRow) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">上传时间</dt>
+                    <dd class="font-medium text-gray-800">{{ employeeFileDisplayDate(employeeFileDetailRow.created_at) }}</dd>
+                </div>
+            </dl>
+        </div>
+        <div class="px-5 py-4 border-t border-gray-200 flex flex-wrap justify-end gap-2 shrink-0">
+            <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="closeEmployeeFileDetailDrawer">关闭</button>
+            <button v-if="employeeFileCanPreview(employeeFileDetailRow)" type="button" class="px-4 py-2 rounded-lg border border-[#456595] text-sm text-[#456595] hover:bg-blue-50" @click="openEmployeeFilePreviewFromDetail">预览</button>
+            <button type="button" class="px-4 py-2 rounded-lg bg-[#456595] text-sm text-white hover:bg-[#3a567f]" @click="downloadEmployeeFile(employeeFileDetailRow)">下载</button>
+        </div>
+    </aside>
+
     <div v-if="interviewDetailRow" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeInterviewDetailDrawer"></div>
     <aside v-if="interviewDetailRow" class="crm-esc-modal crm-right-drawer open">
         <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
@@ -2556,7 +2708,7 @@ window.__CRM_DELIVERY_DETAIL__ = {
 <script src="/static/js/pages/delivery-detail-pipeline.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-interviews.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-handbook.js?v=delete-perm-20260617"></script>
-<script src="/static/js/pages/delivery-detail-employee-files.js?v=20260619"></script>
+<script src="/static/js/pages/delivery-detail-employee-files.js?v=20260622"></script>
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } = Vue;
 const {
@@ -3005,27 +3157,54 @@ createApp({
             ref,
             reactive,
             computed,
+            watch,
             clientId,
             moduleKey,
             authHeader: window.crmAuthHeader,
             downloadBlob: window.crmDownloadBlob,
+            displayDateSlash,
         });
         const {
             employeeFileFilter,
             employeeFileStatusFilter,
+            employeeFileFilterPanelExpanded,
+            toggleEmployeeFileFilterPanel,
             filteredEmployeeFiles,
+            pagedEmployeeFiles,
+            employeeFileCurrentPage,
+            employeeFileTotalPages,
+            employeeFilePageNumbers,
+            employeeFileGoPage,
             resetEmployeeFileFilter,
-            clearEmployeeFileSelectedFiles,
-            employeeFileInput,
+            employeeFileUploadModalOpen,
+            employeeFileUploadForm,
+            employeeFileUploadFiles,
+            employeeFileUploadFileInput,
+            employeeFileUploadDragging,
+            employeeFileUploadSelectedSummary,
             employeeFileUploading,
             employeeFileUploadError,
-            employeeFileSelectedFiles,
-            employeeFileSelectedFileSummary,
+            employeeFileDetailRow,
+            employeeFilePreviewRow,
+            employeeFilePreviewUrl,
+            employeeFilePreviewMode,
             employeeFileStatusLabel,
             employeeFileStatusClass,
             employeeFileMediaLabel,
-            onEmployeeFilesSelected,
-            uploadSelectedEmployeeFiles,
+            employeeFileCanPreview,
+            employeeFileDisplayDate,
+            openEmployeeFileUploadModal,
+            closeEmployeeFileUploadModal,
+            triggerEmployeeFileUploadPick,
+            onEmployeeFileUploadFileChange,
+            onEmployeeFileUploadDrop,
+            clearEmployeeFileUploadFiles,
+            submitEmployeeFileUpload,
+            openEmployeeFileDetailDrawer,
+            closeEmployeeFileDetailDrawer,
+            openEmployeeFilePreview,
+            openEmployeeFilePreviewFromDetail,
+            closeEmployeeFilePreview,
             downloadEmployeeFile,
             removeEmployeeFile,
             mountEmployeeFiles,
@@ -3122,10 +3301,17 @@ createApp({
             openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
             handbookReaderMediaUrl,
             openHandbookMetaModal, saveHandbookMeta, openHandbookCuesModal, saveHandbookCues, rebuildHandbookOutline,
-            employeeFileFilter, employeeFileStatusFilter, filteredEmployeeFiles, resetEmployeeFileFilter, clearEmployeeFileSelectedFiles,
-            employeeFileInput, employeeFileUploading, employeeFileUploadError, employeeFileSelectedFiles, employeeFileSelectedFileSummary,
-            employeeFileStatusLabel, employeeFileStatusClass, employeeFileMediaLabel,
-            onEmployeeFilesSelected, uploadSelectedEmployeeFiles, downloadEmployeeFile, removeEmployeeFile,
+            employeeFileFilter, employeeFileStatusFilter, employeeFileFilterPanelExpanded, toggleEmployeeFileFilterPanel,
+            filteredEmployeeFiles, pagedEmployeeFiles, employeeFileCurrentPage, employeeFileTotalPages, employeeFilePageNumbers, employeeFileGoPage,
+            resetEmployeeFileFilter, employeeFileUploadModalOpen, employeeFileUploadForm, employeeFileUploadFileInput, employeeFileUploadDragging,
+            employeeFileUploadSelectedSummary, employeeFileUploading, employeeFileUploadError,
+            employeeFileDetailRow, openEmployeeFileDetailDrawer, closeEmployeeFileDetailDrawer,
+            employeeFilePreviewRow, employeeFilePreviewUrl, employeeFilePreviewMode,
+            openEmployeeFileUploadModal, closeEmployeeFileUploadModal, triggerEmployeeFileUploadPick,
+            onEmployeeFileUploadFileChange, onEmployeeFileUploadDrop, clearEmployeeFileUploadFiles, submitEmployeeFileUpload,
+            openEmployeeFilePreview, openEmployeeFilePreviewFromDetail, closeEmployeeFilePreview,
+            employeeFileStatusLabel, employeeFileStatusClass, employeeFileMediaLabel, employeeFileCanPreview, employeeFileDisplayDate,
+            downloadEmployeeFile, removeEmployeeFile,
             pipelineScrollWrap,
             PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,
             pipelinePeriodValue, pipelinePeriodDisplay, pipelinePeriodPanelStyle, togglePipelinePeriodDropdown, setPipelinePeriodHoverMonth, selectPipelinePeriod, clearPipelinePeriodField,

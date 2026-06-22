@@ -25,6 +25,7 @@
     var ref = deps.ref;
     var reactive = deps.reactive;
     var computed = deps.computed;
+    var watch = deps.watch;
     var nextTick = deps.nextTick;
     var modal = deps.modal;
     var modalError = deps.modalError;
@@ -50,6 +51,8 @@
     });
     var jobModalMode = ref("create");
     var editingJobId = ref(null);
+    var jobDetailOpen = ref(false);
+    var jobDetailRow = ref(null);
     var clientOptions = ref([]);
     var userOptions = ref([]);
     var jobFormOptionsError = ref("");
@@ -116,6 +119,26 @@
       }
       return rows;
     });
+
+    var rmsPageSize = Core.RMS_LIST_PAGE_SIZE || 8;
+
+    var jobsPagination = Core.createListPagination
+      ? Core.createListPagination({
+          ref: ref,
+          computed: computed,
+          watch: watch,
+          filteredRows: filteredJobs,
+          prefix: "jobs",
+          pageSize: rmsPageSize,
+        })
+      : {
+          pagedRows: filteredJobs,
+          jobsCurrentPage: ref(1),
+          jobsTotalPages: computed(function () { return 1; }),
+          jobsPageNumbers: computed(function () { return [1]; }),
+          jobsGoPage: function () {},
+          pageSize: Core.RMS_LIST_PAGE_SIZE || 8,
+        };
 
     var jobTitleById = computed(function () {
       var m = {};
@@ -379,8 +402,30 @@
       await loadJobFormOptions();
     }
 
-    function removeJob(row) {
-      toast("岗位删除功能暂未开放", true);
+    async function openJobView(row) {
+      if (!row) return;
+      jobDetailRow.value = row;
+      jobDetailOpen.value = true;
+    }
+
+    function closeJobDetail() {
+      jobDetailOpen.value = false;
+      jobDetailRow.value = null;
+    }
+
+    async function removeJob(row) {
+      if (!row || row.id == null) return;
+      var base = "/api/rms/jobs/" + row.id;
+      var r = await rmsRequest("DELETE", base);
+      if (!r.ok && r.status === 405) {
+        r = await rmsRequest("POST", base + "/delete");
+      }
+      if (!r.ok) {
+        toast(r.message, true);
+        return;
+      }
+      toast("已删除岗位", false);
+      await loadJobs();
     }
 
     function onJobSalaryCapInput() {
@@ -477,6 +522,12 @@
       jobModalReadonly: jobModalReadonly,
       jobModalShowSave: jobModalShowSave,
       filteredJobs: filteredJobs,
+      pagedJobs: jobsPagination.pagedRows,
+      jobsCurrentPage: jobsPagination.jobsCurrentPage || jobsPagination.currentPage,
+      jobsTotalPages: jobsPagination.jobsTotalPages || jobsPagination.totalPages,
+      jobsPageNumbers: jobsPagination.jobsPageNumbers || jobsPagination.pageNumbers,
+      jobsGoPage: jobsPagination.jobsGoPage || jobsPagination.goPage,
+      jobsPageSize: jobsPagination.pageSize,
       openJobs: openJobs,
       priorityOptions: PRIORITY_OPTIONS,
       statusOptions: STATUS_OPTIONS,
@@ -491,6 +542,10 @@
       onJobClientChange: onJobClientChange,
       openJobModal: openJobModal,
       openJobEdit: openJobEdit,
+      openJobView: openJobView,
+      jobDetailOpen: jobDetailOpen,
+      jobDetailRow: jobDetailRow,
+      closeJobDetail: closeJobDetail,
       removeJob: removeJob,
       onJobSalaryCapInput: onJobSalaryCapInput,
       formatJobSalaryCapField: formatJobSalaryCapField,
