@@ -454,6 +454,7 @@ class DeliverySettlementEntry(Base):
     serial_no = Column(String, default="")
     progress_updated_at = Column(String, default="")
     customer_name = Column(String, default="")
+    invoice_customer_entity = Column(String, default="")
     fee_month = Column(String, default="")
     chase_month = Column(String, default="")
     amount = Column(String, default="")
@@ -471,6 +472,7 @@ class DeliverySettlementEntry(Base):
     invoice_no = Column(String, default="")
     remarks = Column(Text, default="")
     created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class DeliveryPipelineEntry(Base):
@@ -955,6 +957,26 @@ _ensure_contracts_schema_compat()
 
 run_schema_migrations(engine)
 _ensure_rms_jobs_schema_compat()
+
+
+def _ensure_settlement_schema_compat():
+    with engine.begin() as conn:
+        try:
+            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(delivery_settlement_entries)").fetchall()}
+        except Exception:
+            return
+        if "updated_at" not in existing:
+            conn.exec_driver_sql("ALTER TABLE delivery_settlement_entries ADD COLUMN updated_at DATETIME")
+            conn.exec_driver_sql(
+                "UPDATE delivery_settlement_entries SET updated_at = created_at WHERE updated_at IS NULL"
+            )
+        if "invoice_customer_entity" not in existing:
+            conn.exec_driver_sql(
+                "ALTER TABLE delivery_settlement_entries ADD COLUMN invoice_customer_entity VARCHAR DEFAULT ''"
+            )
+
+
+_ensure_settlement_schema_compat()
 from models.rms import register_rms_models
 
 RMS_MODELS = register_rms_models(Base)

@@ -167,6 +167,7 @@ createApp({
         };
 
         const showAddModal = ref(false);
+        const detailRow = ref(null);
         const addSaving = ref(false);
         const addFormReadonly = ref(false);
         const editingId = ref(null);
@@ -338,17 +339,32 @@ createApp({
             }
             return list;
         });
-        const displayCountHint = computed(() => {
-            const n = filteredRows.value.length;
-            const total = rows.value.length;
-            if (!total) return '';
-            const onlyChecked = showOnlyChecked.value;
-            const filtered = hasActiveFilters.value;
-            if (onlyChecked && filtered && n !== total) return `（勾选且筛选后 ${n} 条）`;
-            if (onlyChecked) return `（勾选显示 ${n} 条）`;
-            if (filtered && n !== total) return `（筛选后 ${n} 条）`;
-            return '';
+        const pageSize = 10;
+        const currentPage = ref(1);
+        const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)));
+        const pagedRows = computed(() => {
+            const start = (currentPage.value - 1) * pageSize;
+            return filteredRows.value.slice(start, start + pageSize);
         });
+        const pageNumbers = computed(() => {
+            const total = totalPages.value;
+            const cur = currentPage.value;
+            const max = 7;
+            if (total <= max) return Array.from({ length: total }, (_, i) => i + 1);
+            let start = Math.max(1, cur - 3);
+            const end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+        });
+        const goPage = (p) => {
+            currentPage.value = Math.min(Math.max(1, p), totalPages.value);
+        };
+        watch(() => filteredRows.value.length, () => {
+            if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+        });
+        watch([filters, showOnlyChecked], () => {
+            currentPage.value = 1;
+        }, { deep: true });
         const emptyStateText = computed(() => {
             if (showOnlyChecked.value) {
                 if (!checkedCount.value) return '暂无勾选条目';
@@ -748,6 +764,7 @@ createApp({
             });
         };
         const openAddForm = () => {
+            closeDetail();
             resetAddForm();
             editingId.value = null;
             addFormReadonly.value = false;
@@ -778,12 +795,13 @@ createApp({
             });
         };
         const openDetail = (row) => {
-            fillAddFormFromRow(row);
-            editingId.value = parseRosterRowId(row);
-            addFormReadonly.value = true;
-            showAddModal.value = true;
+            detailRow.value = row;
+        };
+        const closeDetail = () => {
+            detailRow.value = null;
         };
         const openEdit = (row) => {
+            closeDetail();
             fillAddFormFromRow(row);
             editingId.value = parseRosterRowId(row);
             addFormReadonly.value = false;
@@ -847,11 +865,24 @@ createApp({
             }
         };
         const removeRow = async (row) => {
+            const name = String(row.full_name || '').trim() || '该档案';
+            let ok = false;
+            if (typeof window.crmConfirmDeleteDialog === 'function') {
+                ok = await window.crmConfirmDeleteDialog({
+                    title: '确认删除',
+                    targetText: '将删除：' + name,
+                    hint: '删除后将从离职档案池移除。',
+                });
+            } else {
+                ok = window.confirm('确定删除「' + name + '」？');
+            }
+            if (!ok) return;
             const r = await fetch(`/api/roster/${row.id}`, { method: 'DELETE', headers: window.crmAuthHeader() });
             if (!r.ok) {
                 alert('删除失败');
                 return;
             }
+            if (detailRow.value && detailRow.value.id === row.id) closeDetail();
             await loadRows();
         };
         const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
@@ -949,7 +980,21 @@ createApp({
             return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
         };
         const restoreLatestBackup = async () => {
-            const ok = window.confirm('将使用「最近一次离职档案备份」覆盖当前离职池，是否继续？（不影响在职花名册）');
+            let ok = false;
+            if (typeof window.crmConfirmActionDialog === 'function') {
+                const result = await window.crmConfirmActionDialog({
+                    title: '确认回滚',
+                    lines: [{ label: '操作', value: '使用最近一次离职档案备份覆盖当前离职池' }],
+                    hint: '不影响在职花名册。',
+                    confirmText: '确认回滚',
+                    cancelText: '取消',
+                    confirmClass: 'flex-1 py-2 rounded-md bg-red-600 text-white text-sm font-medium hover:bg-red-700',
+                    zIndex: 200,
+                });
+                ok = !!(result && result.ok);
+            } else {
+                ok = window.confirm('将使用「最近一次离职档案备份」覆盖当前离职池，是否继续？（不影响在职花名册）');
+            }
             if (!ok) return;
             const r = await fetch('/api/roster/turnover/restore/latest', {
                 method: 'POST',
@@ -975,10 +1020,11 @@ createApp({
             window.crmScheduleTableColumnResize?.();
         });
         return {
-            rows, filteredRows, loading,
+            rows, filteredRows, pagedRows, loading,
+            pageSize, currentPage, totalPages, pageNumbers, goPage,
             filters, positionTitleOptions, workLocationOptions, customerNameOptions, separationTypeOptions,
             clearFilters,
-            showOnlyChecked, filterPanelExpanded, canViewLogs, displayCountHint, emptyStateText,
+            showOnlyChecked, filterPanelExpanded, canViewLogs, emptyStateText,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,
             totalCompensation, totalQuote, totalProfit, totalProfitRate, formatAmount, parseAmount,
             fileInput, triggerImport, onImportFile, exportCsv, restoreLatestBackup,
@@ -990,7 +1036,7 @@ createApp({
             openDashboard, closeDashboard, loadDashboard, resetDashboardFilters, onDashScopeChange, dashTrendRollingShareText, dashTrendRollingShareBarStyle, monthlyRateCell, dashTenureBarPct, dashBusinessBarPct,
             turnoverDepartureLinesForTooltip, analysisPeriodTooltipLines,
             showAddModal, addForm, addSaving, addFormReadonly, editingId, addTenurePreview, openAddForm, closeAddForm, saveAddForm, onAmountFieldInput,
-            openDetail, openEdit, removeRow, canDeletePermission,
+            detailRow, openDetail, closeDetail, openEdit, removeRow, canDeletePermission,
             showLogs, logsLoading, logs, openLogs, closeLogs, formatDate,
         };
     }

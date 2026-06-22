@@ -17,7 +17,8 @@ SETTLEMENT_EXPORT_HEADERS = [
     "序号",
     "结算进度更新日期",
     "客户",
-    "费用月份",
+    "开票客户主体",
+    "工作量月份",
     "追款月份",
     "金额",
     "内部确认考勤",
@@ -28,7 +29,7 @@ SETTLEMENT_EXPORT_HEADERS = [
     "预计回款时间",
     "实际回款时间",
     "回款天数",
-    "回款周期",
+    "合同账期",
     "回款性质",
     "PO单",
     "发票号",
@@ -39,7 +40,8 @@ SETTLEMENT_HEADER_MAP = {
     "序号": "serial_no",
     "结算进度更新日期": "progress_updated_at",
     "客户": "customer_name",
-    "费用月份": "fee_month",
+    "开票客户主体": "invoice_customer_entity",
+    "工作量月份": "fee_month",
     "追款月份": "chase_month",
     "金额": "amount",
     "内部确认考勤": "internal_attendance_confirm",
@@ -50,11 +52,16 @@ SETTLEMENT_HEADER_MAP = {
     "预计回款时间": "expected_payment_date",
     "实际回款时间": "actual_payment_date",
     "回款天数": "payment_days",
-    "回款周期": "payment_cycle",
+    "合同账期": "payment_cycle",
     "回款性质": "payment_nature",
     "PO单": "po_no",
     "发票号": "invoice_no",
     "备注": "remarks",
+}
+
+SETTLEMENT_IMPORT_HEADER_ALIASES = {
+    "费用月份": "fee_month",
+    "回款周期": "payment_cycle",
 }
 
 SETTLEMENT_REQUIRED_FIELDS = (
@@ -70,14 +77,24 @@ SETTLEMENT_REQUIRED_FIELDS = (
 
 SETTLEMENT_REQUIRED_LABELS = {
     "customer_name": "客户",
-    "fee_month": "费用月份",
+    "fee_month": "工作量月份",
     "amount": "金额",
     "internal_attendance_confirm": "内部确认考勤",
     "client_confirm": "客户确认",
     "invoiced": "是否开票",
     "paid": "是否回款",
-    "payment_cycle": "回款周期",
+    "payment_cycle": "合同账期",
 }
+
+
+def _settlement_updated_date_str(e) -> str:
+    dt = getattr(e, "updated_at", None) or getattr(e, "created_at", None)
+    if dt is None:
+        return ""
+    if hasattr(dt, "strftime"):
+        return dt.strftime("%Y-%m-%d")
+    s = str(dt).strip().replace("T", " ").split(".")[0]
+    return s[:10] if len(s) >= 10 else s
 
 
 def settlement_entry_to_dict(e) -> Dict[str, Any]:
@@ -87,6 +104,7 @@ def settlement_entry_to_dict(e) -> Dict[str, Any]:
         "serial_no": e.serial_no or "",
         "progress_updated_at": e.progress_updated_at or "",
         "customer_name": e.customer_name or "",
+        "invoice_customer_entity": e.invoice_customer_entity or "",
         "fee_month": e.fee_month or "",
         "chase_month": e.chase_month or "",
         "amount": e.amount or "",
@@ -103,6 +121,7 @@ def settlement_entry_to_dict(e) -> Dict[str, Any]:
         "po_no": e.po_no or "",
         "invoice_no": e.invoice_no or "",
         "remarks": e.remarks or "",
+        "updated_at": _settlement_updated_date_str(e),
     }
 
 
@@ -118,11 +137,25 @@ def normalize_settlement_amount(raw: str) -> str:
     return f"{n:.2f}"
 
 
+def map_settlement_import_row(row: Dict[str, Any]) -> Dict[str, str]:
+    mapped: Dict[str, str] = {}
+    for hk, fk in SETTLEMENT_HEADER_MAP.items():
+        mapped[fk] = str(row.get(hk, "") or "").strip()
+    for hk, fk in SETTLEMENT_IMPORT_HEADER_ALIASES.items():
+        if mapped.get(fk):
+            continue
+        val = str(row.get(hk, "") or "").strip()
+        if val:
+            mapped[fk] = val
+    return mapped
+
+
 def normalize_settlement_payload(d: Dict[str, Any]) -> Dict[str, str]:
     keys = [
         "serial_no",
         "progress_updated_at",
         "customer_name",
+        "invoice_customer_entity",
         "fee_month",
         "chase_month",
         "amount",
@@ -168,7 +201,7 @@ def validate_settlement_payload(data: Dict[str, str]) -> None:
 
     payment_cycle = str(data.get("payment_cycle", "")).strip()
     if payment_cycle and payment_cycle not in ("月度", "双月", "季度", "半年度"):
-        raise HTTPException(status_code=400, detail="回款周期仅支持：月度、双月、季度、半年度")
+        raise HTTPException(status_code=400, detail="合同账期仅支持：月度、双月、季度、半年度")
 
     payment_nature = str(data.get("payment_nature", "")).strip()
     if payment_nature and payment_nature not in ("增量回款", "存量回款"):

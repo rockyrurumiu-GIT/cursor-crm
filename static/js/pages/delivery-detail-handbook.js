@@ -39,11 +39,28 @@ function flattenHandbookOutline(nodes, depth = 0) {
                     keyword: '',
                 });
                 const handbookStatusFilter = ref('');
+                const handbookFilterPanelExpanded = ref(false);
+                const toggleHandbookFilterPanel = () => {
+                    handbookFilterPanelExpanded.value = !handbookFilterPanelExpanded.value;
+                };
                 const handbookFiles = ref([]);
-                const handbookFileInput = ref(null);
+                const handbookUploadModalOpen = ref(false);
+                const handbookUploadForm = reactive({
+                    version_label: '',
+                    status: 'draft',
+                    tags: '',
+                    permission_departments: '交付部',
+                    permission_levels: '1',
+                });
+                const handbookUploadFile = ref(null);
+                const handbookUploadFileInput = ref(null);
+                const handbookUploadDragging = ref(false);
                 const handbookUploading = ref(false);
                 const handbookUploadError = ref('');
-                const handbookSelectedFiles = ref([]);
+                const handbookUploadSelectedName = computed(() => {
+                    const f = handbookUploadFile.value;
+                    return f && f.name ? f.name : '';
+                });
                 const handbookFsPanelOpen = ref(false);
                 const handbookFsQuery = ref('');
                 const handbookFsResults = ref([]);
@@ -82,6 +99,7 @@ function flattenHandbookOutline(nodes, depth = 0) {
                 const handbookCuesModalOpen = ref(false);
                 const handbookCuesEdit = ref([]);
                 const handbookCuesEditingId = ref(null);
+                const handbookDetailRow = ref(null);
                 const filteredHandbookFiles = computed(() => {
                     let rows = Array.isArray(handbookFiles.value) ? [...handbookFiles.value] : [];
                     const st = handbookStatusFilter.value;
@@ -112,27 +130,54 @@ function flattenHandbookOutline(nodes, depth = 0) {
                     handbookFilter.keyword = '';
                     handbookStatusFilter.value = '';
                 }
-                function clearHandbookSelectedFiles() {
-                    handbookSelectedFiles.value = [];
+                function resetHandbookUploadForm() {
+                    handbookUploadForm.version_label = '';
+                    handbookUploadForm.status = 'draft';
+                    handbookUploadForm.tags = '';
+                    handbookUploadForm.permission_departments = '交付部';
+                    handbookUploadForm.permission_levels = '1';
+                    handbookUploadFile.value = null;
+                    handbookUploadDragging.value = false;
                     handbookUploadError.value = '';
-                    if (handbookFileInput.value) handbookFileInput.value = '';
+                    if (handbookUploadFileInput.value) handbookUploadFileInput.value.value = '';
                 }
-                function buildHandbookUploadMetaFromFiles(files) {
-                    const names = (files || []).map((f) => String(f.name || '').replace(/\.[^.]+$/, '').trim()).filter(Boolean);
-                    const tagSource = names.length ? names.join(', ') : '手册';
-                    return {
-                        version_label: '',
-                        tags: tagSource,
-                        permission_departments: '交付部',
-                        permission_levels: '1',
-                    };
+                function openHandbookUploadModal() {
+                    resetHandbookUploadForm();
+                    handbookUploadModalOpen.value = true;
                 }
-                const handbookSelectedFileSummary = computed(() => {
-                    const files = Array.isArray(handbookSelectedFiles.value) ? handbookSelectedFiles.value : [];
-                    if (!files.length) return '';
-                    if (files.length === 1) return files[0].name || '已选择 1 个文件';
-                    return `已选择 ${files.length} 个文件：${files.map((f) => f.name || '未命名').join('、')}`;
-                });
+                function closeHandbookUploadModal() {
+                    handbookUploadModalOpen.value = false;
+                    resetHandbookUploadForm();
+                }
+                function triggerHandbookUploadFilePick() {
+                    if (handbookUploadFileInput.value) handbookUploadFileInput.value.click();
+                }
+                function applyHandbookUploadFile(file) {
+                    if (!file) return;
+                    handbookUploadFile.value = file;
+                    handbookUploadError.value = '';
+                    if (!String(handbookUploadForm.tags || '').trim()) {
+                        const base = String(file.name || '').replace(/\.[^.]+$/, '').trim();
+                        handbookUploadForm.tags = base || '手册';
+                    }
+                }
+                function onHandbookUploadFileChange(ev) {
+                    const input = ev.target;
+                    const file = input && input.files && input.files[0] ? input.files[0] : null;
+                    if (input) input.value = '';
+                    applyHandbookUploadFile(file);
+                }
+                function onHandbookUploadDrop(ev) {
+                    handbookUploadDragging.value = false;
+                    const file = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0]
+                        ? ev.dataTransfer.files[0]
+                        : null;
+                    applyHandbookUploadFile(file);
+                }
+                function clearHandbookUploadFile() {
+                    handbookUploadFile.value = null;
+                    if (handbookUploadFileInput.value) handbookUploadFileInput.value.value = '';
+                }
                 const handbookPdfOutlineFlat = computed(() => {
                     const row = handbookReaderRow.value;
                     if (!row || row.media_kind !== 'pdf') return [];
@@ -615,6 +660,20 @@ function flattenHandbookOutline(nodes, depth = 0) {
                     handbookMetaForm.permission_levels = Array.isArray(f.permission_levels) ? f.permission_levels.join(', ') : '';
                     handbookMetaModalOpen.value = true;
                 };
+                const openHandbookDetailDrawer = (row) => {
+                    handbookDetailRow.value = row || null;
+                };
+                const closeHandbookDetailDrawer = () => {
+                    handbookDetailRow.value = null;
+                };
+                const openHandbookReaderFromDetail = async (row) => {
+                    closeHandbookDetailDrawer();
+                    if (row) await openHandbookReader(row);
+                };
+                const openHandbookMetaFromDetail = (row) => {
+                    closeHandbookDetailDrawer();
+                    if (row) openHandbookMetaModal(row);
+                };
                 const saveHandbookMeta = async () => {
                     const id = handbookMetaForm.id;
                     if (!id) return;
@@ -698,35 +757,27 @@ function flattenHandbookOutline(nodes, depth = 0) {
                     const r = await fetch(`/api/clients/${clientId}/delivery/handbooks`, { headers: hdr() });
                     handbookFiles.value = r.ok ? await r.json() : [];
                 };
-                const onHandbookFilesSelected = async (ev) => {
-                    const input = ev.target;
-                    const list = input && input.files ? Array.from(input.files) : [];
-                    if (input) input.value = '';
-                    handbookSelectedFiles.value = list;
-                    handbookUploadError.value = '';
-                };
-                const validateHandbookUploadMeta = () => {
-                    if (!handbookSelectedFiles.value.length) return '请选择文件';
+                const validateHandbookUploadForm = () => {
+                    if (!handbookUploadFile.value) return '请选择文件';
                     return '';
                 };
-                const uploadSelectedHandbookFiles = async () => {
-                    const list = Array.isArray(handbookSelectedFiles.value) ? handbookSelectedFiles.value : [];
-                    const validationMsg = validateHandbookUploadMeta();
+                const submitHandbookUpload = async () => {
+                    const validationMsg = validateHandbookUploadForm();
                     if (validationMsg) {
                         handbookUploadError.value = validationMsg;
                         return;
                     }
-                    const uploadMeta = buildHandbookUploadMetaFromFiles(list);
+                    const file = handbookUploadFile.value;
                     handbookUploadError.value = '';
                     handbookUploading.value = true;
                     try {
                         const fd = new FormData();
-                        list.forEach((file) => fd.append('files', file));
-                        fd.append('version_label', uploadMeta.version_label || '');
-                        fd.append('status', 'draft');
-                        fd.append('tags', uploadMeta.tags || '');
-                        fd.append('permission_departments', uploadMeta.permission_departments || '');
-                        fd.append('permission_levels', uploadMeta.permission_levels || '');
+                        fd.append('files', file);
+                        fd.append('version_label', handbookUploadForm.version_label || '');
+                        fd.append('status', handbookUploadForm.status || 'draft');
+                        fd.append('tags', handbookUploadForm.tags || '');
+                        fd.append('permission_departments', handbookUploadForm.permission_departments || '');
+                        fd.append('permission_levels', handbookUploadForm.permission_levels || '');
                         const r = await fetch(`/api/clients/${clientId}/delivery/handbooks`, {
                             method: 'POST',
                             headers: hdr(),
@@ -745,12 +796,23 @@ function flattenHandbookOutline(nodes, depth = 0) {
                             return;
                         }
                         await loadHandbooks();
-                        handbookSelectedFiles.value = [];
+                        closeHandbookUploadModal();
                     } finally {
                         handbookUploading.value = false;
                     }
                 };
                 const removeHandbook = async (row) => {
+                    if (typeof window.crmConfirmDeleteDialog !== 'function') {
+                        if (!window.confirm(`确认删除文件「${row.original_filename || ''}」？`)) return;
+                    } else {
+                        const ok = await window.crmConfirmDeleteDialog({
+                            title: '确认删除文件',
+                            targetLabel: row.original_filename || '',
+                            targetPrefix: '将删除文件：',
+                            hint: '删除后将从当前交付手册列表移除。',
+                        });
+                        if (!ok) return;
+                    }
                     if (handbookReaderRow.value && Number(handbookReaderRow.value.id) === Number(row.id)) {
                         handbookReaderRow.value = null;
                     }
@@ -771,6 +833,14 @@ function flattenHandbookOutline(nodes, depth = 0) {
                         return;
                     }
                     if (e.key !== 'Escape') return;
+                    if (handbookDetailRow.value) {
+                        closeHandbookDetailDrawer();
+                        return;
+                    }
+                    if (handbookUploadModalOpen.value) {
+                        closeHandbookUploadModal();
+                        return;
+                    }
                     if (handbookFsDetailOpen.value) {
                         closeHandbookFsDetail();
                         return;
@@ -798,7 +868,7 @@ function flattenHandbookOutline(nodes, depth = 0) {
         };
 
         return {
-            handbookFilter, handbookStatusFilter, filteredHandbookFiles, resetHandbookFilter, clearHandbookSelectedFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
+            handbookFilter, handbookStatusFilter, handbookFilterPanelExpanded, toggleHandbookFilterPanel, filteredHandbookFiles, resetHandbookFilter, handbookPdfOutlineFlat, handbookPdfIframeSrc,
             handbookPdfSearchQuery, handbookPdfSearchResults, handbookPdfSearchCount, handbookPdfSearchActive,
             handbookPdfRenderedPageSrc, handbookPdfRenderedPageUrl, handbookPdfRenderBusy,
             handbookPdfTextBusy, handbookPdfTextError, loadHandbookPdfText, clearHandbookPdfSearch,
@@ -807,11 +877,12 @@ function flattenHandbookOutline(nodes, depth = 0) {
             handbookFsDetailOpen, handbookFsDetailHit, closeHandbookFsDetail, openHandbookFsExcerptDetail, openHandbookReaderFromFsDetail,
             handbookReindexBusy, handbookFtsSyncBusy, runHandbookGlobalSearch, queueHandbookReindexStale, syncHandbookFtsFromBody,
             highlightHandbookSearchHtml,
-            handbookFiles, handbookFileInput, handbookUploading, handbookUploadError, handbookSelectedFiles, handbookSelectedFileSummary, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
+            handbookFiles, handbookUploadModalOpen, handbookUploadForm, handbookUploadFile, handbookUploadFileInput, handbookUploadDragging, handbookUploadSelectedName, handbookUploading, handbookUploadError, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
             handbookReaderPipBrowseMode, restoreHandbookReaderFromPipBrowse,
             handbookMetaModalOpen, handbookMetaForm, handbookCuesModalOpen, handbookCuesEdit,
+            handbookDetailRow, openHandbookDetailDrawer, closeHandbookDetailDrawer, openHandbookReaderFromDetail, openHandbookMetaFromDetail,
             handbookStatusLabel, handbookStatusClass, handbookMediaLabel, handbookSearchStatusLabel, handbookSearchStatusClass, formatHandbookSeconds,
-            loadHandbooks, onHandbookFilesSelected, uploadSelectedHandbookFiles, removeHandbook, downloadHandbookFile,
+            loadHandbooks, openHandbookUploadModal, closeHandbookUploadModal, triggerHandbookUploadFilePick, onHandbookUploadFileChange, onHandbookUploadDrop, clearHandbookUploadFile, submitHandbookUpload, removeHandbook, downloadHandbookFile,
             openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
             handbookReaderMediaUrl,
             openHandbookMetaModal, saveHandbookMeta, openHandbookCuesModal, saveHandbookCues, rebuildHandbookOutline,

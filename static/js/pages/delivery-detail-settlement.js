@@ -7,10 +7,11 @@
 
     const SETTLEMENT_FIELDS = [
         { key: 'serial_no', label: '序号' },
-        { key: 'progress_updated_at', label: '结算进度更新时间', type: 'date' },
+        { key: 'progress_updated_at', label: '结算进度更新时间', type: 'date', hiddenInForm: true },
         { key: 'customer_name', label: '客户' },
-        { key: 'fee_month', label: '费用月份' },
-        { key: 'chase_month', label: '追款月份' },
+        { key: 'invoice_customer_entity', label: '开票客户主体' },
+        { key: 'fee_month', label: '工作量月份' },
+        { key: 'chase_month', label: '追款月份', hiddenInForm: true },
         { key: 'amount', label: '金额' },
         { key: 'internal_attendance_confirm', label: '内部确认考勤' },
         { key: 'client_confirm', label: '客户确认' },
@@ -20,14 +21,14 @@
         { key: 'expected_payment_date', label: '预计回款时间', type: 'date' },
         { key: 'actual_payment_date', label: '实际回款时间', type: 'date' },
         { key: 'payment_days', label: '回款天数' },
-        { key: 'payment_cycle', label: '回款周期' },
-        { key: 'payment_nature', label: '回款性质' },
+        { key: 'payment_cycle', label: '合同账期' },
+        { key: 'payment_nature', label: '回款性质', hiddenInForm: true },
         { key: 'po_no', label: 'PO单' },
         { key: 'invoice_no', label: '发票号' },
         { key: 'remarks', label: '备注', type: 'textarea' },
     ];
     const SETTLEMENT_TEXTAREA_KEYS = new Set(['remarks']);
-    const SETTLEMENT_COMPACT_FIELDS = SETTLEMENT_FIELDS.filter((f) => !SETTLEMENT_TEXTAREA_KEYS.has(f.key));
+    const SETTLEMENT_COMPACT_FIELDS = SETTLEMENT_FIELDS.filter((f) => !SETTLEMENT_TEXTAREA_KEYS.has(f.key) && !f.hiddenInForm);
     const SETTLEMENT_TEXTAREA_FIELDS = SETTLEMENT_FIELDS.filter((f) => SETTLEMENT_TEXTAREA_KEYS.has(f.key));
     const SETTLEMENT_DATE_FIELD_KEYS = new Set(
         SETTLEMENT_FIELDS.filter((f) => f.type === 'date').map((f) => f.key)

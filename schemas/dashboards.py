@@ -263,7 +263,7 @@ DATA_SOURCES: Dict[str, DataSourceDef] = {
         resource_code=RESOURCE_DELIVERY_SETTLEMENT,
         model_attr="DeliverySettlementEntry",
         fields=(
-            SourceFieldDef("fee_month", "费用月份", "text"),
+            SourceFieldDef("fee_month", "工作量月份", "text"),
             SourceFieldDef("amount", "金额", "numeric"),
             SourceFieldDef("created_at", "创建时间", "datetime"),
         ),

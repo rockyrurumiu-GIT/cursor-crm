@@ -20,6 +20,7 @@ from auth.service import AuthContext
 from services.delivery_settlement import (
     SETTLEMENT_EXPORT_HEADERS,
     SETTLEMENT_HEADER_MAP,
+    map_settlement_import_row,
     normalize_settlement_payload,
     resequence_settlement_serial_no_all,
     resolve_settlement_client_id,
@@ -72,7 +73,10 @@ def register_delivery_settlement_routes(
             data["serial_no"] = str(int(max_id_row.serial_no) + 1)
         else:
             data["serial_no"] = "1"
+        now = datetime.now()
         entry = DeliverySettlementEntry(client_id=client_id, **data)
+        entry.created_at = now
+        entry.updated_at = now
         db.add(entry)
         db.commit()
         db.refresh(entry)
@@ -97,6 +101,7 @@ def register_delivery_settlement_routes(
             if k == "serial_no":
                 continue
             setattr(entry, k, v)
+        entry.updated_at = datetime.now()
         db.commit()
         db.refresh(entry)
         db.add(AuditLog(client_id=entry.client_id or 0, operator=user, action=f"结算回款修改行 id={row_id}"))
@@ -151,9 +156,7 @@ def register_delivery_settlement_routes(
         skipped_details: List[Dict[str, str]] = []
         seen_keys: set = set()
         for row_index, row in enumerate(reader, start=2):
-            mapped: Dict[str, str] = {}
-            for hk, fk in SETTLEMENT_HEADER_MAP.items():
-                mapped[fk] = str(row.get(hk, "") or "").strip()
+            mapped: Dict[str, str] = map_settlement_import_row(row)
             mapped["serial_no"] = ""
             if not any(mapped.values()):
                 continue
@@ -171,7 +174,7 @@ def register_delivery_settlement_routes(
                         {
                             "serial_no": shown,
                             "reason": (
-                                "客户+费用月份+金额+备注重复"
+                                "客户+工作量月份+金额+备注重复"
                                 f"（{mapped.get('customer_name', '')} / {mapped.get('fee_month', '')} / {mapped.get('amount', '')} / {mapped.get('remarks', '')}）"
                             ),
                         }
@@ -192,7 +195,7 @@ def register_delivery_settlement_routes(
             operator=user,
             action=(
                 f"结算回款 CSV 导入前备份 {cleared_existing} 行到 {backup_file or '无备份'}，"
-                f"清空 {cleared_existing} 行，导入新增 {imported} 行（按客户+费用月份+金额+备注去重跳过 {skipped_duplicates} 行）"
+                f"清空 {cleared_existing} 行，导入新增 {imported} 行（按客户+工作量月份+金额+备注去重跳过 {skipped_duplicates} 行）"
             ),
         )
         db.add(log)
@@ -265,9 +268,7 @@ def register_delivery_settlement_routes(
 
         restored_rows = 0
         for row in rows:
-            mapped: Dict[str, str] = {}
-            for hk, fk in SETTLEMENT_HEADER_MAP.items():
-                mapped[fk] = str(row.get(hk, "") or "").strip()
+            mapped: Dict[str, str] = map_settlement_import_row(row)
             if not any(mapped.values()):
                 continue
             validate_settlement_payload(mapped)

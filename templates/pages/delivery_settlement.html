@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ module_title }} · 交付 · ITO BMS{% endblock %}
+{% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -38,12 +39,11 @@
         min-width: 12rem;
         max-height: 14rem;
     }
-    /* 与 delivery_detail 结算模块一致：前三列冻结 + 客户高亮（crm-name-cell） */
+    /* 与 delivery_detail 结算模块一致：前两列冻结 + 客户高亮（crm-name-cell） */
     .crm-table.settlement-table {
         border-collapse: separate;
         border-spacing: 0;
         --settlement-sticky-serial-width: 4.5rem;
-        --settlement-sticky-date-width: 11rem;
         --settlement-sticky-customer-width: 7.5rem;
     }
     .crm-table.settlement-table .crm-th,
@@ -55,7 +55,6 @@
     }
     /* 列宽由 colgroup + 拖拽脚本同步的 CSS 变量控制，勿写死 min/max 以免拖宽后出现空白 */
     .settlement-sticky-serial,
-    .settlement-sticky-date,
     .settlement-sticky-customer {
         position: sticky;
         background: #fff;
@@ -66,43 +65,28 @@
     .settlement-sticky-serial {
         left: 0;
     }
-    .settlement-sticky-date {
-        left: var(--settlement-sticky-serial-width);
-    }
     .settlement-sticky-customer {
-        left: calc(var(--settlement-sticky-serial-width) + var(--settlement-sticky-date-width));
+        left: var(--settlement-sticky-serial-width);
     }
     .crm-table tbody .settlement-sticky-serial {
         z-index: 3;
     }
-    .crm-table tbody .settlement-sticky-date {
-        z-index: 2;
-    }
     .crm-table tbody .settlement-sticky-customer {
-        z-index: 1;
+        z-index: 2;
     }
     .crm-table thead .settlement-sticky-serial {
         top: 0;
         z-index: 32;
-        background: #2f75b5;
-    }
-    .crm-table thead .settlement-sticky-date {
-        top: 0;
-        z-index: 31;
-        background: #2f75b5;
     }
     .crm-table thead .settlement-sticky-customer {
         top: 0;
-        z-index: 30;
-        background: #2f75b5;
+        z-index: 31;
     }
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-serial,
-    .crm-table.settlement-table tbody tr:hover .settlement-sticky-date,
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-customer {
         background: #eef6ff;
     }
     .crm-table.settlement-table tfoot .settlement-sticky-serial,
-    .crm-table.settlement-table tfoot .settlement-sticky-date,
     .crm-table.settlement-table tfoot .settlement-sticky-customer {
         background: #f8fafc;
     }
@@ -144,7 +128,7 @@
     .settlement-detail-modal-overlay {
         position: fixed;
         inset: 0;
-        z-index: 50;
+        z-index: 200;
         display: flex;
         align-items: flex-start;
         justify-content: center;
@@ -176,175 +160,500 @@
         font-size: 0.875rem;
         font-weight: 500;
     }
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table thead th.crm-th,
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table thead .settlement-sticky-serial,
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table thead .settlement-sticky-customer {
+        background: #F9FAFB;
+        color: #6B7280;
+        border-color: #E5E7EB;
+        border-bottom-color: #E5E7EB;
+    }
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table thead th.crm-th .ct-th-icon {
+        color: #16A39A;
+    }
+    #main-shell.bms-sidebar-dark #delivery-settlement-app.crm-skin {
+        --ct-th-dark-bg: #3B6699;
+        --ct-th-dark-text: #FFFFFF;
+        --ct-th-dark-border: rgba(255, 255, 255, 0.12);
+        --ct-th-dark-icon: #CBD9EC;
+    }
+    #main-shell.bms-sidebar-dark #delivery-settlement-app.crm-skin .crm-table.settlement-table thead th.crm-th,
+    #main-shell.bms-sidebar-dark #delivery-settlement-app.crm-skin .crm-table.settlement-table thead .settlement-sticky-serial,
+    #main-shell.bms-sidebar-dark #delivery-settlement-app.crm-skin .crm-table.settlement-table thead .settlement-sticky-customer {
+        background: var(--ct-th-dark-bg);
+        color: var(--ct-th-dark-text);
+        border-color: var(--ct-th-dark-border);
+        border-bottom-color: var(--ct-th-dark-border);
+    }
+    #main-shell.bms-sidebar-dark #delivery-settlement-app.crm-skin .crm-table.settlement-table thead th.crm-th .ct-th-icon {
+        color: var(--ct-th-dark-icon);
+    }
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table td.crm-td {
+        border: 0;
+        border-bottom: 1px solid #EEF0F2;
+        color: #1A1D1F;
+        background: #fff;
+    }
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table tbody tr:nth-child(even) td.crm-td,
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table tbody tr:nth-child(even) .settlement-sticky-serial,
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table tbody tr:nth-child(even) .settlement-sticky-customer {
+        background: #fff;
+    }
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table tbody tr:hover td.crm-td,
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table tbody tr:hover .settlement-sticky-serial,
+    #delivery-settlement-app.crm-skin .crm-table.settlement-table tbody tr:hover .settlement-sticky-customer {
+        background: #F9FAFB;
+    }
+    #delivery-settlement-app.crm-skin .crm-table td.crm-td.crm-name-cell .crm-name-link {
+        color: #0969da;
+        font-weight: 700;
+    }
+    #delivery-settlement-app .crm-table tbody td.crm-sticky-right-op { overflow: visible !important; }
+    #delivery-settlement-app .crm-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
+    #delivery-settlement-app .crm-op-btn-edit,
+    #delivery-settlement-app .crm-op-btn-delete {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem;
+    }
+    #delivery-settlement-app .crm-op-btn-edit svg,
+    #delivery-settlement-app .crm-op-btn-delete svg { width: 15px; height: 15px; }
+    #delivery-settlement-app .settlement-drawer-body {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 0.75rem 1rem 1rem;
+    }
+    #delivery-settlement-app .settlement-drawer-field {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.35rem 0;
+        font-size: 0.875rem;
+    }
+    #delivery-settlement-app .settlement-drawer-field-label {
+        flex: 0 0 6.5rem;
+        color: #57606a;
+    }
+    #delivery-settlement-app .settlement-drawer-field-value {
+        flex: 1 1 auto;
+        min-width: 0;
+        color: #1f2328;
+        word-break: break-word;
+        white-space: pre-wrap;
+    }
+    .roster-validation-modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(15, 23, 42, 0.45);
+        padding: 1rem;
+    }
+    .roster-validation-modal {
+        width: 100%;
+        max-width: 42rem;
+        max-height: min(85vh, 720px);
+        border-radius: 0.875rem;
+        background: #fff;
+        box-shadow: 0 24px 48px rgba(15, 23, 42, 0.18);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .roster-validation-list {
+        overflow-y: auto;
+        padding: 1rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+        background: #f6f8fa;
+    }
+    .roster-validation-card {
+        border-radius: 12px;
+        background: #fff;
+        border-left: 4px solid #1a56ad;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.04);
+        padding: 0.85rem 1rem 0.9rem;
+    }
+    .roster-validation-card-title {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-bottom: 0.55rem;
+    }
+    .roster-validation-card-dot {
+        flex: 0 0 auto;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 9999px;
+        background: #1a56ad;
+    }
+    .roster-validation-card-name {
+        color: #1a56ad;
+        font-weight: 700;
+        font-size: 0.92rem;
+    }
+    button.roster-validation-card-name {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+    }
+    .roster-validation-card-customer {
+        color: #64748b;
+        font-size: 0.78rem;
+        font-weight: 500;
+    }
+    .roster-validation-card-category {
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: #64748b;
+        white-space: nowrap;
+    }
+    .roster-validation-card-text {
+        margin: 0;
+        color: #333;
+        font-size: 0.84rem;
+        line-height: 1.55;
+    }
+    .roster-validation-card-text + .roster-validation-card-text {
+        margin-top: 0.35rem;
+    }
+    .roster-validation-card-label {
+        color: #1a56ad;
+        font-weight: 700;
+    }
+    .roster-validation-tip {
+        padding: 0.75rem 1.25rem;
+        border-top: 1px solid #e5e7eb;
+        background: #fff;
+        color: #64748b;
+        font-size: 0.78rem;
+        line-height: 1.45;
+    }
+    .settlement-reminder-section {
+        margin: 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #475569;
+        letter-spacing: 0.02em;
+    }
+    .settlement-reminder-section.is-follow { color: #2563eb; }
+    .settlement-reminder-section.is-follow-sum { color: #0d9488; }
+    .settlement-reminder-section.is-overdue { color: #dc2626; }
+    .settlement-reminder-section.is-overdue-sum { color: #7c3aed; }
+    .settlement-reminder-section:not(:first-child) {
+        margin-top: 0.15rem;
+    }
+    .settlement-reminder-card {
+        border-radius: 12px;
+        background: #fff;
+        border-left: 4px solid #1a56ad;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.04);
+        padding: 0.85rem 1rem 0.9rem;
+    }
+    .settlement-reminder-card.is-follow { border-left-color: #2563eb; }
+    .settlement-reminder-card.is-follow-sum { border-left-color: #0d9488; }
+    .settlement-reminder-card.is-overdue { border-left-color: #dc2626; }
+    .settlement-reminder-card.is-overdue-sum { border-left-color: #7c3aed; }
+    .settlement-reminder-card.is-follow .settlement-reminder-card-dot,
+    .settlement-reminder-card.is-follow .settlement-reminder-card-label,
+    .settlement-reminder-card.is-follow .settlement-reminder-card-name { color: #2563eb; }
+    .settlement-reminder-card.is-follow .settlement-reminder-card-dot { background: #2563eb; }
+    .settlement-reminder-card.is-follow-sum .settlement-reminder-card-dot,
+    .settlement-reminder-card.is-follow-sum .settlement-reminder-card-label,
+    .settlement-reminder-card.is-follow-sum .settlement-reminder-card-name { color: #0d9488; }
+    .settlement-reminder-card.is-follow-sum .settlement-reminder-card-dot { background: #0d9488; }
+    .settlement-reminder-card.is-overdue .settlement-reminder-card-dot,
+    .settlement-reminder-card.is-overdue .settlement-reminder-card-label,
+    .settlement-reminder-card.is-overdue .settlement-reminder-card-name { color: #dc2626; }
+    .settlement-reminder-card.is-overdue .settlement-reminder-card-dot { background: #dc2626; }
+    .settlement-reminder-card.is-overdue-sum .settlement-reminder-card-dot,
+    .settlement-reminder-card.is-overdue-sum .settlement-reminder-card-label,
+    .settlement-reminder-card.is-overdue-sum .settlement-reminder-card-name { color: #7c3aed; }
+    .settlement-reminder-card.is-overdue-sum .settlement-reminder-card-dot { background: #7c3aed; }
+    .settlement-reminder-card-title {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-bottom: 0.55rem;
+    }
+    .settlement-reminder-card-dot {
+        flex: 0 0 auto;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 9999px;
+        background: #1a56ad;
+    }
+    .settlement-reminder-card-name {
+        font-weight: 700;
+        font-size: 0.92rem;
+    }
+    button.settlement-reminder-card-name {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+    }
+    button.settlement-reminder-card-name:hover { text-decoration: underline; }
+    .settlement-reminder-card-category {
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: #64748b;
+        white-space: nowrap;
+    }
+    .settlement-reminder-card-text {
+        margin: 0;
+        color: #333;
+        font-size: 0.84rem;
+        line-height: 1.55;
+    }
+    .settlement-reminder-card-text + .settlement-reminder-card-text {
+        margin-top: 0.35rem;
+    }
+    .settlement-reminder-card-label {
+        font-weight: 700;
+    }
+    .settlement-reminder-group-box {
+        margin: 0 0 0.45rem;
+        padding: 0.55rem 0.65rem;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+    }
+    .settlement-reminder-card.is-follow .settlement-reminder-group-box { background: #eff6ff; border-color: #bfdbfe; }
+    .settlement-reminder-card.is-overdue .settlement-reminder-group-box { background: #fef2f2; border-color: #fecaca; }
+    .settlement-reminder-group-line {
+        margin: 0;
+        font-size: 0.82rem;
+        line-height: 1.5;
+        color: #334155;
+    }
+    .settlement-reminder-group-line + .settlement-reminder-group-line {
+        margin-top: 0.35rem;
+        padding-top: 0.35rem;
+        border-top: 1px dashed rgba(148, 163, 184, 0.45);
+    }
+    button.settlement-reminder-group-fee {
+        font-weight: 600;
+        background: none;
+        border: none;
+        padding: 0;
+        margin-right: 0.25rem;
+        cursor: pointer;
+    }
+    button.settlement-reminder-group-fee:hover { text-decoration: underline; }
+    .settlement-reminder-card.is-follow button.settlement-reminder-group-fee { color: #2563eb; }
+    .settlement-reminder-card.is-overdue button.settlement-reminder-group-fee { color: #dc2626; }
+    .settlement-reminder-total-box {
+        padding: 0.65rem 0.75rem;
+        border-radius: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        font-size: 0.875rem;
+        line-height: 1.5;
+        margin-bottom: 0.55rem;
+    }
+    .settlement-reminder-card.is-follow-sum .settlement-reminder-total-box {
+        background: #ecfdf5;
+        border-color: #99f6e4;
+        margin-bottom: 0.55rem;
+    }
+    .settlement-reminder-card.is-overdue-sum .settlement-reminder-total-box {
+        background: #f5f3ff;
+        border-color: #ddd6fe;
+        margin-bottom: 0.55rem;
+    }
+    .settlement-reminder-card.is-follow-sum .settlement-reminder-sum-details {
+        background: #ecfdf5;
+        border-color: #99f6e4;
+    }
+    .settlement-reminder-card.is-follow-sum .settlement-reminder-sum-details .settlement-reminder-group-fee {
+        color: #0d9488;
+        font-weight: 700;
+    }
+    .settlement-reminder-card.is-overdue-sum .settlement-reminder-sum-details {
+        background: #f5f3ff;
+        border-color: #ddd6fe;
+    }
+    .settlement-reminder-card.is-overdue-sum .settlement-reminder-sum-details .settlement-reminder-group-fee {
+        color: #7c3aed;
+        font-weight: 700;
+    }
+    span.settlement-reminder-group-fee {
+        cursor: default;
+    }
+    .settlement-reminder-total-amount {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1e293b;
+        letter-spacing: 0.01em;
+    }
+    .settlement-reminder-card.is-follow-sum .settlement-reminder-total-amount { color: #0f766e; }
+    .settlement-reminder-card.is-overdue-sum .settlement-reminder-total-amount { color: #6d28d9; }
 </style>
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="delivery-settlement-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 py-4 sm:px-6 sm:py-5">
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6 flex-1 min-h-0 flex flex-col gap-3">
-        <h1 class="text-2xl font-bold text-gray-900 shrink-0">结算回款</h1>
-        <div class="flex justify-end gap-2 flex-wrap shrink-0">
-            <button type="button" class="inline-flex h-10 w-[92px] items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]" @click="openAdd">新增</button>
-            <button
-                type="button"
-                class="inline-flex h-10 w-[92px] items-center justify-center rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100"
-                @click="showPaymentReminders"
-            >
-                提示
-            </button>
-            <button
-                type="button"
-                class="inline-flex h-10 w-[92px] flex-col items-center justify-center rounded-lg border border-amber-400 bg-amber-50 px-2 text-[11px] font-semibold leading-tight text-amber-700 hover:bg-amber-100"
-                @click="fillPaymentDaysByDates"
-            >
-                <span>回款天数</span>
-                <span>统计</span>
-            </button>
-            <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerImport">导入</button>
-            <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
-            <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportCsv">导出</button>
-            <button v-if="canViewLogs" type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openLogs">日志</button>
-            <button type="button" class="crm-btn-rollback" @click="restoreLatestBackup">回滚</button>
-        </div>
-        <div class="rounded-lg border border-gray-200 bg-gray-50 p-2 sm:p-3 shrink-0">
-            <div
-                v-if="!filterPanelExpanded"
-                class="flex flex-wrap items-center justify-between gap-2"
-            >
-                <p class="text-sm font-semibold text-gray-700 min-w-0">
-                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredRows.length }}</span> 条
-                </p>
-                <button
-                    type="button"
-                    class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 shrink-0"
-                    @click="filterPanelExpanded = true"
-                >展开筛选</button>
+<div id="delivery-settlement-app" class="crm-skin container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6 min-w-0 gap-2">
+    <div class="shrink-0 mt-8 mb-4">
+        <h1 class="text-2xl font-bold text-gray-900">结算回款</h1>
+    </div>
+
+    <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] shrink-0">
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="group relative inline-flex shrink-0">
+                <a href="/delivery" aria-label="返回交付首页" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+                </a>
+                <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">返回交付首页</span>
+            </span>
+            <div class="relative w-full sm:w-[260px]">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                <input v-model.trim="filters.keyword" type="search" placeholder="搜索客户、工作量月份、发票号…" class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30" />
             </div>
-            <div v-else class="space-y-2">
+            <button type="button" @click="filterPanelExpanded = !filterPanelExpanded" :class="filterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'" class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                筛选
+            </button>
+            <p class="ml-auto min-w-0 self-center leading-none text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">
+                合计（符合筛选条件）：<span>{{ filteredRows.length }}</span> 条
+            </p>
+            <div class="flex items-center gap-1.5">
+                <span class="group relative inline-flex">
+                    <button type="button" @click="openAdd" aria-label="新增" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3a567f]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">新增</span>
+                </span>
+                <span class="group relative inline-flex">
+                    <button type="button" @click="showPaymentReminders" aria-label="提示" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-amber-300 bg-white text-amber-700 transition-colors hover:bg-amber-50">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">提示</span>
+                </span>
+                <span class="group relative inline-flex">
+                    <button type="button" @click="fillPaymentDaysByDates" aria-label="回款天数统计" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-amber-300 bg-white text-amber-700 transition-colors hover:bg-amber-50">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">回款天数统计</span>
+                </span>
+                <span class="group relative inline-flex">
+                    <button type="button" @click="triggerImport" aria-label="导入" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 15v2.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V15"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">导入</span>
+                </span>
+                <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onImportFile" />
+                <span class="group relative inline-flex">
+                    <button type="button" @click="exportCsv" aria-label="导出" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21V11m0 0 4 4m-4-4-4 4M4 7.5V6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v1"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">导出</span>
+                </span>
+                <span v-if="canViewLogs" class="group relative inline-flex">
+                    <button type="button" @click="openLogs" aria-label="日志" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">日志</span>
+                </span>
+                <span class="group relative inline-flex">
+                    <button type="button" @click="restoreLatestBackup" aria-label="回滚" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-red-300 bg-white text-red-600 transition-colors hover:bg-red-50">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a5 5 0 0 1 5 5v1M3 10l4-4M3 10l4 4"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">回滚</span>
+                </span>
+            </div>
+        </div>
+        <div v-if="filterPanelExpanded" class="mt-2.5 border-t border-[#EEF0F2] pt-2.5">
             <div class="crm-filter-row settlement-filter-row">
-            <div ref="customerFilterRoot" class="crm-filter-item settlement-filter-item relative settlement-filter-text">
-                <button
-                    type="button"
-                    class="crm-filter-control settlement-filter-text settlement-customer-filter-btn w-full truncate"
-                    @click.stop="customerFilterOpen = !customerFilterOpen"
-                >
-                    {{ customerFilterSummary }}
-                </button>
-                <div
-                    v-show="customerFilterOpen"
-                    class="settlement-customer-filter-panel absolute left-0 top-full z-50 mt-1 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
-                    @click.stop
-                >
-                    <template v-if="settlementCustomerNames.length">
-                        <label class="flex cursor-pointer items-center gap-2 border-b border-gray-100 bg-gray-50 px-2 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-100">
-                            <input v-model="customerFilterSelectAll" type="checkbox" class="rounded border-gray-300" />
-                            <span>全选</span>
-                        </label>
-                        <label
-                            v-for="name in settlementCustomerNames"
-                            :key="name"
-                            class="flex cursor-pointer items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50"
-                        >
-                            <input v-model="filters.selectedCustomers" type="checkbox" class="rounded border-gray-300" :value="name" />
-                            <span class="min-w-0 truncate" :title="name">{{ name }}</span>
-                        </label>
-                    </template>
-                    <div v-else class="px-2 py-2 text-sm text-gray-400">暂无结算客户</div>
+                <div ref="customerFilterRoot" class="crm-filter-item settlement-filter-item relative settlement-filter-text">
+                    <button type="button" class="crm-filter-control settlement-filter-text settlement-customer-filter-btn w-full truncate" @click.stop="customerFilterOpen = !customerFilterOpen">{{ customerFilterSummary }}</button>
+                    <div v-show="customerFilterOpen" class="settlement-customer-filter-panel absolute left-0 top-full z-50 mt-1 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg" @click.stop>
+                        <template v-if="settlementCustomerNames.length">
+                            <label class="flex cursor-pointer items-center gap-2 border-b border-gray-100 bg-gray-50 px-2 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-100">
+                                <input v-model="customerFilterSelectAll" type="checkbox" class="rounded border-gray-300" />
+                                <span>全选</span>
+                            </label>
+                            <label v-for="name in settlementCustomerNames" :key="name" class="flex cursor-pointer items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50">
+                                <input v-model="filters.selectedCustomers" type="checkbox" class="rounded border-gray-300" :value="name" />
+                                <span class="min-w-0 truncate">{{ name }}</span>
+                            </label>
+                        </template>
+                        <div v-else class="px-2 py-2 text-sm text-gray-400">暂无结算客户</div>
+                    </div>
                 </div>
-            </div>
-            <input v-model="filters.feeMonth" type="text" placeholder="筛选费用月份" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-text" />
-            <select v-model="filters.invoiced" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
-                <option value="">是否开票（全部）</option>
-                <option value="是">是</option>
-                <option value="否">否</option>
-            </select>
-            <select v-model="filters.paid" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
-                <option value="">是否回款（全部）</option>
-                <option value="是">是</option>
-                <option value="否">否</option>
-            </select>
-            <select v-model="filters.paymentCycle" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
-                <option value="">回款周期（全部）</option>
-                <option value="月度">月度</option>
-                <option value="双月">双月</option>
-                <option value="季度">季度</option>
-                <option value="半年度">半年度</option>
-            </select>
-            <div class="crm-filter-item settlement-filter-item crm-filter-date settlement-filter-date">
-                <span class="crm-filter-date-label settlement-filter-date-label">预计回款起点</span>
-                <input
-                    type="date"
-                    class="crm-filter-date-input settlement-filter-date-input"
-                    title="预计回款时间起点"
-                    :value="filters.expectedPaymentStart"
-                    @change="onExpectedPaymentFilterStartDateInput"
-                    @input="onExpectedPaymentFilterStartDateInput"
-                    @blur="onExpectedPaymentFilterStartDateInput"
-                />
-            </div>
-            <div class="crm-filter-item settlement-filter-item crm-filter-date settlement-filter-date">
-                <span class="crm-filter-date-label settlement-filter-date-label">预计回款终点</span>
-                <input
-                    type="date"
-                    class="crm-filter-date-input settlement-filter-date-input"
-                    title="预计回款时间终点"
-                    :value="filters.expectedPaymentEnd"
-                    @change="onExpectedPaymentFilterEndDateInput"
-                    @input="onExpectedPaymentFilterEndDateInput"
-                    @blur="onExpectedPaymentFilterEndDateInput"
-                />
-            </div>
-            <button type="button" class="crm-filter-item settlement-filter-item crm-filter-reset settlement-filter-reset" @click="clearFilters">重置</button>
-            </div>
-            <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-sm font-semibold text-gray-700 min-w-0">
-                    合计（符合筛选条件）：<span class="text-blue-700">{{ filteredRows.length }}</span> 条
-                </p>
-                <button
-                    type="button"
-                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 shrink-0"
-                    title="收起筛选区"
-                    @click="filterPanelExpanded = false"
-                >
-                    <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
-                </button>
-            </div>
+                <input v-model="filters.feeMonth" type="text" placeholder="筛选工作量月份" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-text" />
+                <select v-model="filters.invoiced" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
+                    <option value="">是否开票（全部）</option>
+                    <option value="是">是</option>
+                    <option value="否">否</option>
+                </select>
+                <select v-model="filters.paid" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
+                    <option value="">是否回款（全部）</option>
+                    <option value="是">是</option>
+                    <option value="否">否</option>
+                </select>
+                <select v-model="filters.paymentCycle" class="crm-filter-item settlement-filter-item crm-filter-control settlement-filter-select">
+                    <option value="">合同账期（全部）</option>
+                    <option value="月度">月度</option>
+                    <option value="双月">双月</option>
+                    <option value="季度">季度</option>
+                    <option value="半年度">半年度</option>
+                </select>
+                <div class="crm-filter-item settlement-filter-item crm-filter-date settlement-filter-date">
+                    <span class="crm-filter-date-label settlement-filter-date-label">预计回款起点</span>
+                    <input type="date" class="crm-filter-date-input settlement-filter-date-input" title="预计回款时间起点" :value="filters.expectedPaymentStart" @change="onExpectedPaymentFilterStartDateInput" @input="onExpectedPaymentFilterStartDateInput" @blur="onExpectedPaymentFilterStartDateInput" />
+                </div>
+                <div class="crm-filter-item settlement-filter-item crm-filter-date settlement-filter-date">
+                    <span class="crm-filter-date-label settlement-filter-date-label">预计回款终点</span>
+                    <input type="date" class="crm-filter-date-input settlement-filter-date-input" title="预计回款时间终点" :value="filters.expectedPaymentEnd" @change="onExpectedPaymentFilterEndDateInput" @input="onExpectedPaymentFilterEndDateInput" @blur="onExpectedPaymentFilterEndDateInput" />
+                </div>
+                <button type="button" class="crm-filter-item settlement-filter-item crm-filter-reset settlement-filter-reset" @click="clearFilters">重置</button>
             </div>
         </div>
-        <p v-if="expectedPaymentFilterWarning" class="text-sm text-amber-700 shrink-0">{{ expectedPaymentFilterWarning }}</p>
-        <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-scroll-fill flex-1 min-h-0">
-            <table class="crm-table settlement-table" data-table-id="settlement" data-table-min-width="1900">
+    </div>
+
+    <p v-if="expectedPaymentFilterWarning" class="text-sm text-amber-700 shrink-0">{{ expectedPaymentFilterWarning }}</p>
+
+    <div class="bg-white rounded-lg overflow-hidden border border-[#E5E7EB] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)] flex-1 min-h-0 flex flex-col min-w-0">
+        <div class="crm-h-scroll crm-table-scroll delivery-table-scroll-fill flex-1 min-h-0 min-w-0">
+            <table class="crm-table settlement-table" data-table-id="settlement" data-table-min-width="1800">
                 <thead>
                     <tr>
-                        <th class="crm-th settlement-col-serial settlement-sticky-serial">序号</th>
-                        <th class="crm-th settlement-col-date settlement-sticky-date">结算进度更新日期</th>
-                        <th class="crm-th settlement-col-customer settlement-sticky-customer">客户</th>
-                        <th class="crm-th min-w-[8rem] whitespace-nowrap">费用月份</th>
-                        <th class="crm-th min-w-[8rem] whitespace-nowrap">追款月份</th>
-                        <th class="crm-th crm-currency-cell">金额</th>
-                        <th class="crm-th">内部确认考勤</th>
-                        <th class="crm-th">客户确认</th>
-                        <th class="crm-th">是否开票</th>
-                        <th class="crm-th">开票日期</th>
-                        <th class="crm-th">是否回款</th>
-                        <th class="crm-th">预计回款时间</th>
-                        <th class="crm-th">实际回款时间</th>
-                        <th class="crm-th">回款天数</th>
-                        <th class="crm-th">回款周期</th>
-                        <th class="crm-th" data-col-min="96">回款性质</th>
-                        <th class="crm-th">PO单</th>
-                        <th class="crm-th">发票号</th>
-                        <th class="crm-th min-w-[6em] whitespace-nowrap">备注</th>
-                        <th class="crm-th crm-sticky-right-op">操作</th>
+                        <th class="crm-th settlement-col-serial settlement-sticky-serial"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h8"/></svg>序号</th>
+                        <th class="crm-th settlement-col-customer settlement-sticky-customer"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M6 21V7l6-4 6 4v14"/></svg>客户</th>
+                        <th class="crm-th min-w-[8rem] whitespace-nowrap"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M6 21V7l6-4 6 4v14"/></svg>开票客户主体</th>
+                        <th class="crm-th min-w-[8rem] whitespace-nowrap"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 4v3M17 4v3M4.5 9.5h15M5.5 6.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1Z"/></svg>工作量月份</th>
+                        <th class="crm-th crm-currency-cell"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>金额</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 11l3 3L22 4M4 12h4"/></svg>内部确认考勤</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 11l3 3L22 4M4 12h4"/></svg>客户确认</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5"/></svg>是否开票</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 4v3M17 4v3M4.5 9.5h15M5.5 6.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1Z"/></svg>开票日期</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>是否回款</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 4v3M17 4v3M4.5 9.5h15M5.5 6.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1Z"/></svg>预计回款时间</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 4v3M17 4v3M4.5 9.5h15M5.5 6.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V7.5a1 1 0 0 1 1-1Z"/></svg>实际回款时间</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>回款天数</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M20 9A8 8 0 0 0 7.05 5.05L4 8M4 15a8 8 0 0 0 12.95 3.95L20 16"/></svg>合同账期</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5"/></svg>PO单</th>
+                        <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5"/></svg>发票号</th>
+                        <th class="crm-th min-w-[6em] whitespace-nowrap"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"/></svg>备注</th>
+                        <th class="crm-th whitespace-nowrap"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>更改时间</th>
+                        <th class="crm-th crm-sticky-right-op"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in filteredRows" :key="row.id">
+                    <tr v-for="row in pagedRows" :key="row.id">
                         <td class="crm-td settlement-col-serial settlement-sticky-serial">{{ row.serial_no }}</td>
-                        <td class="crm-td settlement-col-date settlement-sticky-date">{{ displayDateSlash(row.progress_updated_at) }}</td>
-                        <td class="crm-td crm-name-cell settlement-col-customer settlement-sticky-customer whitespace-nowrap">{{ row.customer_name }}</td>
+                        <td class="crm-td crm-name-cell settlement-col-customer settlement-sticky-customer whitespace-nowrap">
+                            <button type="button" class="crm-name-link" @click="openDetail(row)">{{ row.customer_name }}</button>
+                        </td>
+                        <td class="crm-td whitespace-nowrap">{{ row.invoice_customer_entity }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.fee_month }}</td>
-                        <td class="crm-td whitespace-nowrap">{{ row.chase_month }}</td>
                         <td class="crm-td crm-currency-cell">{{ displayAmountInteger(row.amount) }}</td>
                         <td class="crm-td">{{ row.internal_attendance_confirm }}</td>
                         <td class="crm-td">{{ row.client_confirm }}</td>
@@ -355,34 +664,39 @@
                         <td class="crm-td">{{ displayDateSlash(row.actual_payment_date) }}</td>
                         <td class="crm-td">{{ row.payment_days }}</td>
                         <td class="crm-td">{{ row.payment_cycle }}</td>
-                        <td class="crm-td whitespace-nowrap">{{ row.payment_nature }}</td>
                         <td class="crm-td">{{ row.po_no }}</td>
                         <td class="crm-td">{{ row.invoice_no }}</td>
                         <td class="crm-td whitespace-nowrap">{{ row.remarks }}</td>
+                        <td class="crm-td whitespace-nowrap">{{ row.updated_at || '—' }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
                             <div class="crm-op-actions">
-                                <button type="button" class="crm-op-btn-detail" @click="openDetail(row)">详情</button>
-                                <button type="button" class="crm-op-btn-edit" @click="openEdit(row)">修改</button>
-                                <button v-if="canDeletePermission('delivery.settlement.delete')" type="button" class="crm-op-btn-delete" @click="removeRow(row)">删除</button>
+                                <span class="group relative inline-flex">
+                                    <button type="button" class="crm-op-btn-edit" @click="openEdit(row)" aria-label="修改">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                    </button>
+                                    <span class="pointer-events-none absolute left-1/2 bottom-full z-[60] mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">修改</span>
+                                </span>
+                                <span v-if="canDeletePermission('delivery.settlement.delete')" class="group relative inline-flex">
+                                    <button type="button" class="crm-op-btn-delete" @click="removeRow(row)" aria-label="删除">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                    </button>
+                                    <span class="pointer-events-none absolute left-1/2 bottom-full z-[60] mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">删除</span>
+                                </span>
                             </div>
                         </td>
                     </tr>
                     <tr v-if="!filteredRows.length">
-                        <td colspan="20" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
+                        <td colspan="19" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
                     </tr>
                 </tbody>
                 <tfoot v-if="filteredRows.length">
                     <tr class="crm-total-row">
-                        <td colspan="5" class="crm-td px-3 py-3 align-middle">
-                            <span class="crm-total-label">筛选合计</span>
-                        </td>
+                        <td colspan="4" class="crm-td px-3 py-3 align-middle"><span class="crm-total-label">筛选合计</span></td>
                         <td class="crm-td px-3 py-3 crm-currency-cell">{{ totalAmountDisplay }}</td>
                         <td colspan="14" class="crm-td"></td>
                     </tr>
                     <tr class="crm-total-row" v-if="rows.length !== filteredRows.length">
-                        <td colspan="5" class="crm-td px-3 py-3 align-middle">
-                            <span class="crm-total-label">全量合计</span>
-                        </td>
+                        <td colspan="4" class="crm-td px-3 py-3 align-middle"><span class="crm-total-label">全量合计</span></td>
                         <td class="crm-td px-3 py-3 crm-currency-cell">{{ totalAmountAllDisplay }}</td>
                         <td colspan="14" class="crm-td"></td>
                     </tr>
@@ -391,10 +705,89 @@
         </div>
     </div>
 
+    <div v-if="filteredRows.length" class="flex flex-wrap items-center justify-between gap-3 px-1 pt-3 pb-4 shrink-0">
+        <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ filteredRows.length }}</span> 条，第 {{ currentPage }} / {{ totalPages }} 页</p>
+        <div class="flex items-center gap-1.5">
+            <button type="button" @click="goPage(currentPage - 1)" :disabled="currentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+            <button v-for="p in pageNumbers" :key="'pg-' + p" type="button" @click="goPage(p)" :class="p === currentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors">{{ p }}</button>
+            <button type="button" @click="goPage(currentPage + 1)" :disabled="currentPage >= totalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+            <span class="ml-1 inline-flex h-8 items-center rounded-[6px] border border-[#D7DBE0] bg-white px-2.5 text-sm text-[#6B7280]">10 条 / 页</span>
+        </div>
+    </div>
+
+    <div v-if="detailRow" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeDetail"></div>
+    <aside v-if="detailRow" class="crm-esc-modal crm-right-drawer open">
+        <div class="flex items-center justify-between gap-2 border-b border-[#d0d7de] px-4 py-3 shrink-0">
+            <h3 class="text-lg font-semibold text-[#1f2328] truncate">{{ detailRow.customer_name || '结算回款详情' }}</h3>
+            <button type="button" @click="closeDetail" class="text-2xl leading-none text-[#57606a] hover:text-[#1f2328] shrink-0" aria-label="关闭">&times;</button>
+        </div>
+        <div class="settlement-drawer-body">
+            <div v-for="f in fields" :key="f.key" class="settlement-drawer-field">
+                <div class="settlement-drawer-field-label">{{ f.label }}</div>
+                <div class="settlement-drawer-field-value">{{ formatDrawerField(detailRow, f) }}</div>
+            </div>
+        </div>
+    </aside>
+
+    <div v-if="showPaymentReminder" class="roster-validation-modal-overlay" @click.self="closePaymentReminder">
+        <div class="roster-validation-modal" role="dialog" aria-modal="true" aria-labelledby="settlement-reminder-title">
+            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
+                <div class="min-w-0">
+                    <h3 id="settlement-reminder-title" class="text-lg font-bold text-gray-900">结算回款 · 回款提示</h3>
+                    <p class="text-sm text-gray-500 mt-1">当前筛选范围内需跟进 {{ paymentReminderItemCount }} 条回款记录</p>
+                </div>
+                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closePaymentReminder">&times;</button>
+            </div>
+            <div class="roster-validation-list">
+                <template v-for="card in paymentReminderCards" :key="card.key">
+                    <h4 v-if="card.kind === 'header'" :class="['settlement-reminder-section', card.section ? `is-${card.section}` : '']">
+                        {{ card.title }}<span v-if="card.count">（{{ card.count }} 条）</span>
+                    </h4>
+                    <article v-else :class="['settlement-reminder-card', card.section ? `is-${card.section}` : '']">
+                        <div class="settlement-reminder-card-title">
+                            <span class="settlement-reminder-card-dot" aria-hidden="true"></span>
+                            <span class="settlement-reminder-card-name">{{ card.name }}</span>
+                            <span class="settlement-reminder-card-category">
+                                {{ card.category }}<span v-if="card.items && card.items.length > 1"> · {{ card.items.length }} 条</span>
+                            </span>
+                        </div>
+                        <div v-if="card.kind === 'group'" class="settlement-reminder-group-box">
+                            <p v-for="item in card.items" :key="item.key" class="settlement-reminder-group-line">
+                                <button type="button" class="settlement-reminder-group-fee" @click="openPaymentReminderDetail(item.row)">{{ item.sub }}</button>{{ item.issue }}
+                            </p>
+                        </div>
+                        <template v-else-if="card.kind === 'total'">
+                            <div class="settlement-reminder-total-box">
+                                <span class="settlement-reminder-card-label">汇总：</span>
+                                <span class="settlement-reminder-total-amount">{{ card.issue }}</span>
+                            </div>
+                            <div v-if="card.details && card.details.length" class="settlement-reminder-group-box settlement-reminder-sum-details">
+                                <p v-for="d in card.details" :key="d.key" class="settlement-reminder-group-line">
+                                    <span class="settlement-reminder-group-fee">{{ d.name }}</span>&nbsp;&nbsp;{{ d.issue }}
+                                </p>
+                            </div>
+                        </template>
+                        <p v-if="card.action" class="settlement-reminder-card-text">
+                            <span class="settlement-reminder-card-label">建议处理：</span>{{ card.action }}
+                        </p>
+                    </article>
+                </template>
+            </div>
+            <div class="roster-validation-tip">
+                在列表或详情中更新回款状态后保存，并再次点击「提示」复核。
+                <span v-if="paymentReminderCopied" class="ml-2 text-emerald-600 font-medium">提示结果已复制到剪贴板</span>
+            </div>
+            <div class="px-5 py-4 border-t border-gray-200 flex justify-end gap-2 shrink-0">
+                <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="copyPaymentReminderResults">复制结果</button>
+                <button type="button" class="px-4 py-2 rounded-lg bg-blue-600 text-sm text-white hover:bg-[#3D5176]" @click="closePaymentReminder">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <div v-if="showForm" class="crm-esc-modal settlement-detail-modal-overlay">
         <div class="settlement-detail-modal-panel">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">{{ formDetailReadonly ? '结算回款详情' : (editingId ? '修改结算回款' : '新增结算回款') }}</h3>
+                <h3 class="font-bold text-lg">{{ editingId ? '修改结算回款' : '新增结算回款' }}</h3>
                 <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showForm=false; formDetailReadonly=false">&times;</button>
             </div>
             <div class="settlement-detail-modal-body">
@@ -434,7 +827,7 @@
         </div>
     </div>
 
-    <div v-if="showLogs" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+    <div v-if="showLogs" class="crm-esc-modal crm-form-modal-overlay z-[200] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="text-lg font-bold text-gray-900">结算回款日志</h3>
@@ -463,5 +856,5 @@
 <script src="/static/js/core/crm-dom.js"></script>
 <script src="/static/js/core/crm-download.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
-<script src="/static/js/pages/delivery-settlement.js?v=delete-perm-20260617"></script>
+<script src="/static/js/pages/delivery-settlement.js?v=page-conv-20260623g"></script>
 {% endblock %}

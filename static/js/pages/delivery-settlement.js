@@ -6,10 +6,11 @@
 const { createApp, ref, reactive, computed, onMounted, onUnmounted, watch } = Vue;
 const FIELDS = [
     { key: 'serial_no', label: '序号', readonly: true },
-    { key: 'progress_updated_at', label: '结算进度更新日期', type: 'date' },
+    { key: 'progress_updated_at', label: '结算进度更新日期', type: 'date', hiddenInForm: true },
     { key: 'customer_name', label: '客户', required: true },
-    { key: 'fee_month', label: '费用月份', required: true },
-    { key: 'chase_month', label: '追款月份' },
+    { key: 'invoice_customer_entity', label: '开票客户主体' },
+    { key: 'fee_month', label: '工作量月份', required: true },
+    { key: 'chase_month', label: '追款月份', hiddenInForm: true },
     { key: 'amount', label: '金额', required: true },
     { key: 'internal_attendance_confirm', label: '内部确认考勤', type: 'select', required: true, options: ['是', '否'] },
     { key: 'client_confirm', label: '客户确认', type: 'select', required: true, options: ['是', '否'] },
@@ -19,14 +20,14 @@ const FIELDS = [
     { key: 'expected_payment_date', label: '预计回款时间', type: 'date' },
     { key: 'actual_payment_date', label: '实际回款时间', type: 'date' },
     { key: 'payment_days', label: '回款天数' },
-    { key: 'payment_cycle', label: '回款周期', type: 'select', required: true, options: ['月度', '双月', '季度', '半年度'] },
-    { key: 'payment_nature', label: '回款性质', type: 'select', options: ['增量回款', '存量回款'] },
+    { key: 'payment_cycle', label: '合同账期', type: 'select', required: true, options: ['月度', '双月', '季度', '半年度'] },
+    { key: 'payment_nature', label: '回款性质', type: 'select', options: ['增量回款', '存量回款'], hiddenInForm: true },
     { key: 'po_no', label: 'PO单' },
     { key: 'invoice_no', label: '发票号' },
     { key: 'remarks', label: '备注', type: 'textarea' },
 ];
 const DETAIL_TEXTAREA_KEYS = new Set(['remarks']);
-const DETAIL_COMPACT_FIELDS = FIELDS.filter((f) => !DETAIL_TEXTAREA_KEYS.has(f.key));
+const DETAIL_COMPACT_FIELDS = FIELDS.filter((f) => !DETAIL_TEXTAREA_KEYS.has(f.key) && !f.hiddenInForm);
 const DETAIL_TEXTAREA_FIELDS = FIELDS.filter((f) => DETAIL_TEXTAREA_KEYS.has(f.key));
 const DATE_FIELD_KEYS = new Set(
     FIELDS.filter((f) => f.type === 'date').map((f) => f.key)
@@ -161,7 +162,9 @@ createApp({
         const canViewLogs = computed(() => !!window.crmIsSuper);
         const customerFilterOpen = ref(false);
         const customerFilterRoot = ref(null);
+        const detailRow = ref(null);
         const filters = reactive({
+            keyword: '',
             selectedCustomers: [],
             feeMonth: '',
             invoiced: '',
@@ -177,6 +180,11 @@ createApp({
         const showLogs = ref(false);
         const logsLoading = ref(false);
         const logs = ref([]);
+        const showPaymentReminder = ref(false);
+        const paymentReminderCopied = ref(false);
+        const paymentReminderCards = ref([]);
+        const paymentReminderItemCount = ref(0);
+        const paymentReminderText = ref('');
         const showForm = ref(false);
         const editingId = ref(null);
         const formDetailReadonly = ref(false);
@@ -240,6 +248,19 @@ createApp({
                     ? new Set(selectedNames.map((s) => String(s || '').trim()).filter(Boolean))
                     : null;
             return rows.value.filter((row) => {
+                const kw = ci(filters.keyword);
+                if (kw) {
+                    const match = [
+                        row.customer_name,
+                        row.invoice_customer_entity,
+                        row.fee_month,
+                        row.chase_month,
+                        row.invoice_no,
+                        row.po_no,
+                        row.remarks,
+                    ].some((v) => ci(v).includes(kw));
+                    if (!match) return false;
+                }
                 if (selectedSet && selectedSet.size) {
                     const name = String(row.customer_name || '').trim();
                     if (!selectedSet.has(name)) return false;
@@ -265,6 +286,32 @@ createApp({
                 return true;
             });
         });
+        const pageSize = 10;
+        const currentPage = ref(1);
+        const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)));
+        const pagedRows = computed(() => {
+            const start = (currentPage.value - 1) * pageSize;
+            return filteredRows.value.slice(start, start + pageSize);
+        });
+        const pageNumbers = computed(() => {
+            const total = totalPages.value;
+            const cur = currentPage.value;
+            const max = 7;
+            if (total <= max) return Array.from({ length: total }, (_, i) => i + 1);
+            let start = Math.max(1, cur - 3);
+            const end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+        });
+        const goPage = (p) => {
+            currentPage.value = Math.min(Math.max(1, p), totalPages.value);
+        };
+        watch(() => filteredRows.value.length, () => {
+            if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+        });
+        watch(filters, () => {
+            currentPage.value = 1;
+        }, { deep: true });
         const parseAmount = (raw) => {
             if (raw == null) return NaN;
             const s = String(raw).replace(/[¥￥,\s\u00a0]/g, '').trim();
@@ -291,9 +338,8 @@ createApp({
             const endTs = Date.UTC(end.y, end.mo - 1, end.d);
             return Math.round((endTs - startTs) / 86400000);
         };
-        const buildPaymentReminderText = (sourceRows) => {
-            const followUpItems = [];
-            const overdueItems = [];
+        const buildPaymentReminderData = (sourceRows) => {
+            const cards = [];
             const followUpAmountByCustomer = new Map();
             const overdueAmountByCustomer = new Map();
             const appendCustomerAmount = (targetMap, row) => {
@@ -302,15 +348,53 @@ createApp({
                 const prev = Number(targetMap.get(customer) || 0);
                 targetMap.set(customer, prev + (Number.isFinite(amount) ? amount : 0));
             };
-            const pushCustomerAmountSummary = (lines, title, amountMap) => {
+            const pushSummaryCards = (target, title, amountMap) => {
                 if (!(amountMap instanceof Map) || !amountMap.size) return;
-                lines.push(`${title}金额汇总`);
-                [...amountMap.entries()]
-                    .sort((a, b) => a[0].localeCompare(b[0], 'zh-CN'))
-                    .forEach(([customer, total], idx) => {
-                        lines.push(`${idx + 1}. ${customer}｜¥${Number(total || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-                    });
+                const section = title === '催付' ? 'follow-sum' : 'overdue-sum';
+                const grandTotal = [...amountMap.values()].reduce((sum, v) => sum + (Number(v) || 0), 0);
+                target.push({ kind: 'header', key: `hdr-sum-${title}`, title: `${title}金额汇总`, section });
+                target.push({
+                    kind: 'total',
+                    key: `total-${title}`,
+                    section,
+                    name: '总计',
+                    category: `${title}金额汇总`,
+                    issue: `合计 ${formatAmountPlain(grandTotal)}`,
+                    details: [...amountMap.entries()]
+                        .sort((a, b) => a[0].localeCompare(b[0], 'zh-CN'))
+                        .map(([customer, total]) => ({
+                            key: `sum-detail-${title}-${customer}`,
+                            name: customer,
+                            issue: `合计 ${formatAmountPlain(total)}`,
+                        })),
+                });
             };
+            const mergeItemsByCustomer = (items, section) => {
+                const map = new Map();
+                items.forEach((card) => {
+                    const name = card.name;
+                    if (!map.has(name)) {
+                        map.set(name, {
+                            kind: 'group',
+                            key: `${section}-group-${name}`,
+                            section,
+                            name,
+                            category: card.category,
+                            action: card.action,
+                            items: [],
+                        });
+                    }
+                    map.get(name).items.push({
+                        key: card.key,
+                        sub: card.sub,
+                        issue: card.issue,
+                        row: card.row,
+                    });
+                });
+                return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+            };
+            let followUpCount = 0;
+            let overdueCount = 0;
             (Array.isArray(sourceRows) ? sourceRows : []).forEach((row) => {
                 const expectedDate = normalizeDateForInput(row && row.expected_payment_date != null ? String(row.expected_payment_date) : '', false);
                 if (!expectedDate) return;
@@ -319,37 +403,98 @@ createApp({
                 if (actualDate || paid === '是') return;
                 const overdueDays = calcDateDiffDays(expectedDate, todayInputDate());
                 if (!Number.isFinite(overdueDays) || overdueDays <= 0) return;
-                const label = paymentReminderLabel(row);
+                const customer = String(row.customer_name || '').trim() || '客户';
+                const feeMonth = String(row.fee_month || '').trim() || '—';
+                const amountStr = formatAmountPlain(parseAmount(row.amount));
+                const expectedSlash = displayDateSlash(row.expected_payment_date) || expectedDate;
                 if (overdueDays <= 7) {
-                    followUpItems.push(label);
+                    followUpCount += 1;
                     appendCustomerAmount(followUpAmountByCustomer, row);
+                    cards.push({
+                        kind: 'item',
+                        key: `follow-${row.id}`,
+                        section: 'follow',
+                        name: customer,
+                        sub: feeMonth,
+                        category: '催付',
+                        issue: `预计回款 ${expectedSlash} 已到期 ${overdueDays} 天，工作量月份 ${feeMonth}，金额 ${amountStr}，尚未回款。`,
+                        action: '请及时跟进催付，回款后在列表中更新「是否回款」与「实际回款时间」。',
+                        row,
+                    });
                 } else {
-                    overdueItems.push(label);
+                    overdueCount += 1;
                     appendCustomerAmount(overdueAmountByCustomer, row);
+                    cards.push({
+                        kind: 'item',
+                        key: `overdue-${row.id}`,
+                        section: 'overdue',
+                        name: customer,
+                        sub: feeMonth,
+                        category: '超期AR',
+                        issue: `预计回款 ${expectedSlash} 已超期 ${overdueDays} 天，工作量月份 ${feeMonth}，金额 ${amountStr}，尚未回款。`,
+                        action: '请优先处理超期应收，跟进客户并更新回款状态。',
+                        row,
+                    });
                 }
             });
-            if (!followUpItems.length && !overdueItems.length) return '';
+            const groupedCards = [];
+            if (followUpCount) {
+                groupedCards.push({ kind: 'header', key: 'hdr-follow', title: '催付', section: 'follow', count: followUpCount });
+                groupedCards.push(...mergeItemsByCustomer(cards.filter((c) => c.kind === 'item' && c.category === '催付'), 'follow'));
+                pushSummaryCards(groupedCards, '催付', followUpAmountByCustomer);
+            }
+            if (overdueCount) {
+                groupedCards.push({ kind: 'header', key: 'hdr-overdue', title: '超期AR', section: 'overdue', count: overdueCount });
+                groupedCards.push(...mergeItemsByCustomer(cards.filter((c) => c.kind === 'item' && c.category === '超期AR'), 'overdue'));
+                pushSummaryCards(groupedCards, '超期AR', overdueAmountByCustomer);
+            }
+            const flatCards = groupedCards;
+            const text = buildPaymentReminderTextFromCards(flatCards, followUpCount, overdueCount);
+            return { cards: flatCards, itemCount: followUpCount + overdueCount, text };
+        };
+        const formatAmountPlain = (n) => {
+            if (!Number.isFinite(n)) return String(n || '');
+            return `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        };
+        const buildPaymentReminderTextFromCards = (cards, followUpCount, overdueCount) => {
+            if (!followUpCount && !overdueCount) return '';
             const lines = ['【结算回款提示】'];
-            if (followUpItems.length) {
-                lines.push('催付');
-                followUpItems.forEach((item, idx) => {
-                    lines.push(`${idx + 1}. ${item}`);
-                });
-                pushCustomerAmountSummary(lines, '催付', followUpAmountByCustomer);
-            }
-            if (overdueItems.length) {
-                lines.push('超期AR');
-                overdueItems.forEach((item, idx) => {
-                    lines.push(`${idx + 1}. ${item}`);
-                });
-                pushCustomerAmountSummary(lines, '超期AR', overdueAmountByCustomer);
-            }
+            let sectionIdx = 0;
+            cards.forEach((card) => {
+                if (card.kind === 'header') {
+                    lines.push(card.title);
+                    sectionIdx = 0;
+                    return;
+                }
+                if (card.kind === 'group') {
+                    card.items.forEach((item) => {
+                        sectionIdx += 1;
+                        lines.push(`${sectionIdx}. ${paymentReminderLabel(item.row)}`);
+                    });
+                    return;
+                }
+                if (card.kind === 'total') {
+                    const amt = String(card.issue || '').replace(/^合计\s*/, '');
+                    lines.push(`总计｜${amt}`);
+                    if (Array.isArray(card.details)) {
+                        card.details.forEach((d, idx) => {
+                            const dAmt = String(d.issue || '').replace(/^合计\s*/, '');
+                            lines.push(`${idx + 1}. ${d.name}｜${dAmt}`);
+                        });
+                    }
+                    return;
+                }
+                sectionIdx += 1;
+                if (card.kind === 'item') {
+                    lines.push(`${sectionIdx}. ${paymentReminderLabel(card.row)}`);
+                }
+            });
             return lines.join('\n');
         };
         const displayAmountInteger = (raw) => {
             const n = parseAmount(raw);
             if (!Number.isFinite(n)) return String(raw || '');
-            return `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            return formatAmountPlain(n);
         };
         const totalAmountDisplay = computed(() => {
             let sum = 0;
@@ -411,7 +556,7 @@ createApp({
             const skipDetails = Array.isArray(j.skipped_details) ? j.skipped_details : [];
             let msg = `${backupFile ? `已备份到 ${backupFile}\n` : ''}已清空 ${cleared} 行，导入成功：${imported} 行`;
             if (skipTotal > 0) {
-                msg += `\n共跳过 ${skipTotal} 行（客户+费用月份+金额+备注重复 ${skipDup} 行）`;
+                msg += `\n共跳过 ${skipTotal} 行（客户+工作量月份+金额+备注重复 ${skipDup} 行）`;
                 const lines = skipDetails.map((item) => `- ${item.serial_no || '-'}：${item.reason || '未知原因'}`);
                 if (lines.length) msg += `\n跳过明细：\n${lines.join('\n')}`;
             }
@@ -445,7 +590,16 @@ createApp({
             return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
         };
         const restoreLatestBackup = async () => {
-            const ok = window.confirm('将使用"最近一次结算回款备份"覆盖当前数据，是否继续？');
+            let ok = false;
+            if (typeof window.crmConfirmActionDialog === 'function') {
+                const result = await window.crmConfirmActionDialog({
+                    title: '回滚结算回款数据',
+                    lines: ['将使用最近一次结算回款备份覆盖当前数据。'],
+                });
+                ok = !!(result && result.ok);
+            } else {
+                ok = window.confirm('将使用"最近一次结算回款备份"覆盖当前数据，是否继续？');
+            }
             if (!ok) return;
             try {
                 const j = await crmApi.post('/api/delivery/settlement/restore/latest', {});
@@ -456,6 +610,7 @@ createApp({
             }
         };
         const clearFilters = () => {
+            filters.keyword = '';
             filters.selectedCustomers.splice(0);
             filters.feeMonth = '';
             filters.invoiced = '';
@@ -603,36 +758,70 @@ createApp({
             crmToast.success(`回款天数统计完成：更新 ${updated} 条，跳过 ${skipped} 条，失败 ${failed} 条`);
         };
         const showPaymentReminders = async () => {
-            const text = buildPaymentReminderText(filteredRows.value);
-            if (!text) {
+            const data = buildPaymentReminderData(filteredRows.value);
+            if (!data.itemCount) {
                 crmToast.info('当前没有需要提示的回款记录');
                 return;
             }
-            let copied = false;
+            paymentReminderCards.value = data.cards;
+            paymentReminderItemCount.value = data.itemCount;
+            paymentReminderText.value = data.text;
+            paymentReminderCopied.value = data.text
+                ? await copyTextToClipboard(data.text)
+                : false;
+            showPaymentReminder.value = true;
+        };
+        const closePaymentReminder = () => {
+            showPaymentReminder.value = false;
+            paymentReminderCopied.value = false;
+        };
+        const copyPaymentReminderResults = async () => {
+            paymentReminderCopied.value = paymentReminderText.value
+                ? await copyTextToClipboard(paymentReminderText.value)
+                : false;
+        };
+        const openPaymentReminderDetail = (row) => {
+            if (!row) return;
+            closePaymentReminder();
+            openDetail(row);
+        };
+        const copyTextToClipboard = async (text) => {
             try {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                     await navigator.clipboard.writeText(text);
-                    copied = true;
-                } else {
-                    const ta = document.createElement('textarea');
-                    ta.value = text;
-                    ta.setAttribute('readonly', '');
-                    ta.style.position = 'fixed';
-                    ta.style.opacity = '0';
-                    document.body.appendChild(ta);
-                    ta.focus();
-                    ta.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(ta);
-                    copied = true;
+                    return true;
                 }
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.focus();
+                ta.select();
+                const ok = document.execCommand('copy');
+                document.body.removeChild(ta);
+                return ok;
             } catch (err) {
-                copied = false;
+                return false;
             }
-            if (copied) crmToast.success('提示结果已复制到剪贴板');
-            alert(text);
+        };
+        const formatDrawerField = (row, f) => {
+            if (!row || !f) return '—';
+            const raw = row[f.key];
+            if (raw == null || String(raw).trim() === '') return '—';
+            if (f.key === 'amount') return displayAmountInteger(raw);
+            if (DATE_FIELD_KEYS.has(f.key)) return displayDateSlash(raw);
+            return String(raw);
+        };
+        const closeDetail = () => {
+            detailRow.value = null;
+        };
+        const openDetail = (row) => {
+            detailRow.value = row;
         };
         const openAdd = () => {
+            closeDetail();
             editingId.value = null;
             formDetailReadonly.value = false;
             Object.assign(form, emptyForm());
@@ -640,6 +829,7 @@ createApp({
             showForm.value = true;
         };
         const openEdit = (row) => {
+            closeDetail();
             editingId.value = row.id;
             formDetailReadonly.value = false;
             FIELDS.forEach((f) => {
@@ -649,10 +839,6 @@ createApp({
                     : raw;
             });
             showForm.value = true;
-        };
-        const openDetail = (row) => {
-            openEdit(row);
-            formDetailReadonly.value = true;
         };
         const saveForm = async () => {
             if (formDetailReadonly.value) return;
@@ -675,9 +861,22 @@ createApp({
             await loadRows();
         };
         const removeRow = async (row) => {
+            const label = paymentReminderLabel(row);
+            let ok = false;
+            if (typeof window.crmConfirmDeleteDialog === 'function') {
+                ok = await window.crmConfirmDeleteDialog({
+                    title: '确认删除',
+                    targetText: '将删除：' + label,
+                    hint: '删除后无法恢复。',
+                });
+            } else {
+                ok = window.confirm('确定删除「' + label + '」？');
+            }
+            if (!ok) return;
             try {
                 await crmApi.del(`/api/delivery/settlement/row/${row.id}`);
                 crmToast.success('已删除');
+                if (detailRow.value && detailRow.value.id === row.id) closeDetail();
                 await loadRows();
             } catch (e) {
                 crmToast.error(e.message || '删除失败');
@@ -694,11 +893,13 @@ createApp({
         });
         return {
             rows, settlementCustomerNames, customerFilterSelectAll, customerFilterOpen, customerFilterRoot, customerFilterSummary,
-            filterPanelExpanded, canViewLogs, filters, filteredRows, fields, detailCompactFields: DETAIL_COMPACT_FIELDS, detailTextareaFields: DETAIL_TEXTAREA_FIELDS, fileInput, showLogs, logsLoading, logs,
-            totalAmountDisplay, totalAmountAllDisplay,
+            filterPanelExpanded, canViewLogs, filters, filteredRows, pagedRows, currentPage, totalPages, pageNumbers, goPage,
+            fields, detailCompactFields: DETAIL_COMPACT_FIELDS, detailTextareaFields: DETAIL_TEXTAREA_FIELDS, fileInput, showLogs, logsLoading, logs,
+            totalAmountDisplay, totalAmountAllDisplay, detailRow, closeDetail, formatDrawerField,
             expectedPaymentFilterWarning, onExpectedPaymentFilterStartDateInput, onExpectedPaymentFilterEndDateInput,
             showForm, editingId, formDetailReadonly, form, hasErrors,
-            openAdd, openEdit, openDetail, saveForm, removeRow, showPaymentReminders, canDeletePermission,
+            openAdd, openEdit, openDetail, saveForm, removeRow, showPaymentReminders, closePaymentReminder, copyPaymentReminderResults, openPaymentReminderDetail,
+            showPaymentReminder, paymentReminderCopied, paymentReminderCards, paymentReminderItemCount, canDeletePermission,
             triggerImport, onImportFile, exportCsv, restoreLatestBackup, openLogs, formatDate, clearFilters, clearDateField, fillPaymentDaysByDates, onSettlementFieldChange, displayAmountInteger, displayDateSlash,
         };
     }

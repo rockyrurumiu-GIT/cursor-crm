@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ module_title }} · 交付 · ITO BMS{% endblock %}
-{% block shell_extra_class %}{% if module_key in ['requirements', 'interviews'] %}bms-shell-flat{% endif %}{% endblock %}
+{% block shell_extra_class %}{% if module_key in ['requirements', 'interviews', 'handbook'] %}bms-shell-flat{% endif %}{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/plyr@3.7.8/dist/plyr.css" crossorigin="anonymous" />
@@ -186,6 +186,31 @@
     }
     #delivery-detail-app .interview-table tbody td.crm-sticky-right-op { overflow: visible !important; }
     #delivery-detail-app .interview-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
+    /* 交付手册：操作列图标按钮 */
+    #delivery-detail-app .handbook-table .crm-op-btn-detail,
+    #delivery-detail-app .handbook-table .crm-op-btn-edit,
+    #delivery-detail-app .handbook-table .crm-op-btn-delete,
+    #delivery-detail-app .handbook-table .crm-op-btn-handoff {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem;
+    }
+    #delivery-detail-app .handbook-table .crm-op-btn-detail svg,
+    #delivery-detail-app .handbook-table .crm-op-btn-edit svg,
+    #delivery-detail-app .handbook-table .crm-op-btn-delete svg,
+    #delivery-detail-app .handbook-table .crm-op-btn-handoff svg {
+        width: 15px;
+        height: 15px;
+    }
+    #delivery-detail-app .handbook-table .crm-op-btn-detail:hover,
+    #delivery-detail-app .handbook-table .crm-op-btn-edit:hover,
+    #delivery-detail-app .handbook-table .crm-op-btn-delete:hover,
+    #delivery-detail-app .handbook-table .crm-op-btn-handoff:hover {
+        text-decoration: none;
+    }
+    #delivery-detail-app .handbook-table tbody td.crm-sticky-right-op { overflow: visible !important; }
+    #delivery-detail-app .handbook-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
     /* 需求清单：JD 默认 30 汉字宽，超出省略，悬停原位展开 */
     .crm-table[data-table-id="requirements-jobs"] {
         table-layout: fixed;
@@ -550,12 +575,11 @@
     .crm-table tbody tr:hover .delivery-sticky-left-key {
         background: #eef6ff;
     }
-    /* 结算回款：前三列冻结（序号 / 结算进度更新时间 / 客户） */
+    /* 结算回款：前两列冻结（序号 / 客户） */
     .crm-table.settlement-table {
         border-collapse: separate;
         border-spacing: 0;
         --settlement-sticky-serial-width: 4.5rem;
-        --settlement-sticky-date-width: 11rem;
         --settlement-sticky-customer-width: 7.5rem;
     }
     .crm-table.settlement-table .crm-th,
@@ -566,7 +590,6 @@
         min-width: 6.5rem;
     }
     .settlement-sticky-serial,
-    .settlement-sticky-date,
     .settlement-sticky-customer {
         position: sticky;
         background: #fff;
@@ -577,55 +600,94 @@
     .settlement-sticky-serial {
         left: 0;
     }
-    .settlement-sticky-date {
-        left: var(--settlement-sticky-serial-width);
-    }
     .settlement-sticky-customer {
-        left: calc(var(--settlement-sticky-serial-width) + var(--settlement-sticky-date-width));
+        left: var(--settlement-sticky-serial-width);
     }
     .crm-table tbody .settlement-sticky-serial {
         z-index: 3;
     }
-    .crm-table tbody .settlement-sticky-date {
-        z-index: 2;
-    }
     .crm-table tbody .settlement-sticky-customer {
-        z-index: 1;
+        z-index: 2;
     }
     .crm-table thead .settlement-sticky-serial {
         top: 0;
         z-index: 32;
         background: #2f75b5;
     }
-    .crm-table thead .settlement-sticky-date {
+    .crm-table thead .settlement-sticky-customer {
         top: 0;
         z-index: 31;
         background: #2f75b5;
     }
-    .crm-table thead .settlement-sticky-customer {
-        top: 0;
-        z-index: 30;
-        background: #2f75b5;
-    }
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-serial,
-    .crm-table.settlement-table tbody tr:hover .settlement-sticky-date,
     .crm-table.settlement-table tbody tr:hover .settlement-sticky-customer {
         background: #eef6ff;
     }
-    /* 交付手册列表：各列宽约为默认值的 2/3 */
+    /* 交付手册列表：文本列宽 */
     .handbook-table {
         --handbook-col-text-max: calc(14rem * 2 / 3);
-        --handbook-op-col-width: calc(18rem * 2 / 3);
-    }
-    .handbook-table col.crm-col-op-xl,
-    .handbook-table th.crm-sticky-right-op,
-    .handbook-table td.crm-sticky-right-op {
-        width: var(--handbook-op-col-width) !important;
-        min-width: var(--handbook-op-col-width) !important;
-        max-width: var(--handbook-op-col-width) !important;
     }
     .handbook-table .handbook-col-text {
         max-width: var(--handbook-col-text-max);
+    }
+    #delivery-detail-app .handbook-table .crm-op-actions {
+        flex-wrap: nowrap;
+        gap: 0.125rem;
+    }
+    .handbook-table th.crm-sticky-right-op.handbook-op-col,
+    .handbook-table td.crm-sticky-right-op.handbook-op-col {
+        width: calc(var(--crm-op-col-width-xl) - 4em) !important;
+        min-width: calc(var(--crm-op-col-width-xl) - 4em) !important;
+        max-width: calc(var(--crm-op-col-width-xl) - 4em) !important;
+    }
+    #delivery-detail-app .handbook-upload-dropzone {
+        border: 2px dashed #d0d7de;
+        border-radius: 0.5rem;
+        padding: 1.25rem 1rem;
+        min-height: 7rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+    }
+    #delivery-detail-app .handbook-upload-dropzone:hover {
+        border-color: #a5b4fc;
+        background: #f6f8fa;
+    }
+    #delivery-detail-app .handbook-upload-dropzone.is-dragging {
+        border-color: #0969da;
+        background: #eef6ff;
+    }
+    #delivery-detail-app .handbook-upload-dropzone.has-file {
+        min-height: 6rem;
+        align-items: stretch;
+        text-align: left;
+    }
+    #delivery-detail-app .handbook-upload-file-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        width: 100%;
+    }
+    #delivery-detail-app .handbook-upload-file-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 0.25rem;
+        color: #57606a;
+        font-size: 1.125rem;
+        line-height: 1;
+    }
+    #delivery-detail-app .handbook-upload-file-remove:hover {
+        background: #f6f8fa;
+        color: #1f2328;
     }
     /* 手册音视频：Plyr 极简条 + indigo 主色（与站内强调色一致） */
     .handbook-plyr-audio-wrap .plyr--audio .plyr__controls {
@@ -655,15 +717,15 @@
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="delivery-detail-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6" :class="moduleKey === 'interviews' ? '' : 'py-4 sm:py-5'">
-    <div class="max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="moduleKey === 'interviews' ? '' : ['bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6', moduleKey === 'requirements' ? 'requirements-detail-card' : '']">
-        <span v-if="moduleKey !== 'requirements' && moduleKey !== 'interviews'" class="group relative inline-flex shrink-0 self-start">
+<div id="delivery-detail-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6" :class="moduleKey === 'interviews' || moduleKey === 'handbook' ? '' : 'py-4 sm:py-5'">
+    <div class="max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="moduleKey === 'interviews' || moduleKey === 'handbook' ? '' : ['bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6', moduleKey === 'requirements' ? 'requirements-detail-card' : '']">
+        <span v-if="moduleKey !== 'requirements' && moduleKey !== 'interviews' && moduleKey !== 'handbook'" class="group relative inline-flex shrink-0 self-start">
             <a :href="`/delivery/${moduleKey}`" :aria-label="`返回${moduleTitle}客户列表`" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
             </a>
             <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">返回{{ moduleTitle }}客户列表</span>
         </span>
-        <div class="flex flex-wrap items-center justify-between gap-3 shrink-0" :class="moduleKey === 'interviews' ? 'mt-8 mb-4' : 'mt-2'">
+        <div class="flex flex-wrap items-center justify-between gap-3 shrink-0" :class="moduleKey === 'interviews' || moduleKey === 'handbook' ? 'mt-8 mb-4' : 'mt-2'">
             <div class="min-w-0">
                 <h1 class="text-2xl font-bold text-gray-900">
                     <template v-if="isInterviewAggregate">整体员工访谈<span class="text-gray-400 font-normal text-base"> · 全部客户</span></template>
@@ -673,16 +735,6 @@
                     </template>
                 </h1>
                 <p v-if="clientOwner" class="text-sm text-gray-500 mt-1">负责人 {{ clientOwner }}</p>
-            </div>
-            <div v-if="moduleKey === 'handbook'" class="flex flex-wrap items-center gap-2 shrink-0">
-                <span v-if="!handbookSelectedFiles.length" class="max-w-[14rem] truncate text-xs text-[#57606a]">未选择文件</span>
-                <span v-else class="inline-flex items-center gap-1 max-w-[16rem] rounded-lg border border-[#d0d7de] bg-white px-2 h-[2.25rem] min-h-[2.25rem] text-xs text-[#1f2328]">
-                    <span class="truncate min-w-0" :title="handbookSelectedFileSummary">{{ handbookSelectedFileSummary }}</span>
-                    <button type="button" class="shrink-0 inline-flex h-5 w-5 items-center justify-center rounded text-[#57606a] hover:bg-[#f6f8fa] hover:text-[#1f2328]" title="清除已选文件" aria-label="清除已选文件" @click="clearHandbookSelectedFiles">×</button>
-                </span>
-                <button type="button" class="crm-filter-item rounded-lg border border-blue-200 bg-white px-3 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="handbookUploading" @click="handbookFileInput && handbookFileInput.click()">选择文件</button>
-                <button type="button" class="crm-filter-item rounded-lg bg-[#4C6491] px-3 text-xs font-medium text-white hover:bg-[#3D5176] disabled:opacity-50 h-[2.25rem] min-h-[2.25rem]" :disabled="handbookUploading || !handbookSelectedFiles.length" @click="uploadSelectedHandbookFiles">{{ handbookUploading ? '上传中…' : '上传' }}</button>
-                <input ref="handbookFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookFilesSelected" />
             </div>
             <div v-if="moduleKey === 'employee_files'" class="flex flex-wrap items-center gap-2 shrink-0">
                 <span v-if="!employeeFileSelectedFiles.length" class="max-w-[14rem] truncate text-xs text-[#57606a]">未选择文件</span>
@@ -1332,14 +1384,13 @@
                 <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]" @click="openAdd">新增</button>
             </div>
             <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
-                <table class="crm-table settlement-table" data-table-id="settlement" data-table-min-width="1900">
+                <table class="crm-table settlement-table" data-table-id="settlement" data-table-min-width="1700">
                 <thead>
                     <tr>
                         <th class="crm-th settlement-col-serial settlement-sticky-serial">序号</th>
-                        <th class="crm-th settlement-col-date settlement-sticky-date">结算进度更新时间</th>
                         <th class="crm-th settlement-col-customer settlement-sticky-customer">客户</th>
-                        <th class="crm-th">费用月份</th>
-                        <th class="crm-th">追款月份</th>
+                        <th class="crm-th">开票客户主体</th>
+                        <th class="crm-th">工作量月份</th>
                         <th class="crm-th crm-currency-cell">金额</th>
                         <th class="crm-th">内部确认考勤</th>
                         <th class="crm-th">客户确认</th>
@@ -1349,21 +1400,20 @@
                         <th class="crm-th">预计回款时间</th>
                         <th class="crm-th">实际回款时间</th>
                         <th class="crm-th">回款天数</th>
-                        <th class="crm-th">回款周期</th>
-                        <th class="crm-th" data-col-min="96">回款性质</th>
+                        <th class="crm-th">合同账期</th>
                         <th class="crm-th">PO单</th>
                         <th class="crm-th">发票号</th>
                         <th class="crm-th">备注</th>
+                        <th class="crm-th">更改时间</th>
                         <th class="crm-th crm-sticky-right-op">操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="row in settlementRows" :key="row.id">
                         <td class="crm-td settlement-col-serial settlement-sticky-serial">{{ row.serial_no }}</td>
-                        <td class="crm-td settlement-col-date settlement-sticky-date">{{ displayDateSlash(row.progress_updated_at) }}</td>
                         <td class="crm-td crm-name-cell settlement-col-customer settlement-sticky-customer">{{ row.customer_name }}</td>
+                        <td class="crm-td">{{ row.invoice_customer_entity }}</td>
                         <td class="crm-td">{{ row.fee_month }}</td>
-                        <td class="crm-td">{{ row.chase_month }}</td>
                         <td class="crm-td crm-currency-cell">{{ formatSettlementAmount(row.amount) }}</td>
                         <td class="crm-td">{{ row.internal_attendance_confirm }}</td>
                         <td class="crm-td">{{ row.client_confirm }}</td>
@@ -1374,10 +1424,10 @@
                         <td class="crm-td">{{ displayDateSlash(row.actual_payment_date) }}</td>
                         <td class="crm-td">{{ row.payment_days }}</td>
                         <td class="crm-td">{{ row.payment_cycle }}</td>
-                        <td class="crm-td whitespace-nowrap">{{ row.payment_nature }}</td>
                         <td class="crm-td">{{ row.po_no }}</td>
                         <td class="crm-td">{{ row.invoice_no }}</td>
                         <td class="crm-td">{{ row.remarks }}</td>
+                        <td class="crm-td whitespace-nowrap">{{ row.updated_at || '—' }}</td>
                         <td class="crm-td whitespace-nowrap crm-sticky-right-op">
                             <div class="crm-op-actions">
                                 <button type="button" class="crm-op-btn-detail" @click="openSettlementDetail(row)">详情</button>
@@ -1387,84 +1437,142 @@
                         </td>
                     </tr>
                     <tr v-if="!settlementRows.length">
-                        <td colspan="20" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
+                        <td colspan="18" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
                     </tr>
                 </tbody>
             </table>
             </div>
         </div>
-        <div v-else-if="moduleKey === 'handbook'" class="mt-4 flex flex-col flex-1 min-h-0 gap-4">
+        <div v-else-if="moduleKey === 'handbook'" class="crm-skin flex flex-col flex-1 min-h-0 gap-2">
             <div v-if="handbookUploadError" class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 shrink-0">{{ handbookUploadError }}</div>
-            <div class="rounded-lg border border-[#d0d7de] bg-[#f6f8fa] mb-3 p-2 sm:p-3 shrink-0">
-                <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                    <div class="crm-filter-row flex-1 min-w-0">
-                        <input v-model.trim="handbookFilter.keyword" type="text" class="crm-filter-item crm-filter-control w-[12rem]" placeholder="关键字模糊查询" title="关键字模糊查询" />
+            <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] shrink-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="group relative inline-flex shrink-0">
+                        <a :href="`/delivery/${moduleKey}`" :aria-label="`返回${moduleTitle}客户列表`" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+                        </a>
+                        <span class="pointer-events-none absolute left-0 top-full z-50 mt-1.5 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">返回{{ moduleTitle }}客户列表</span>
+                    </span>
+                    <div class="relative w-full sm:w-[280px]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                        <input v-model.trim="handbookFilter.keyword" type="search" placeholder="搜索文件名、标签、权限…" class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30" />
+                    </div>
+                    <button type="button" @click="toggleHandbookFilterPanel" :class="handbookFilterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'" class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                        筛选
+                    </button>
+                    <p class="ml-auto min-w-0 self-center leading-none text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">合计（符合筛选条件）：<span>{{ filteredHandbookFiles.length }}</span> 条</p>
+                    <div class="flex items-center gap-1.5">
+                        <span class="group relative inline-flex">
+                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3D5176] disabled:opacity-50" :disabled="handbookUploading" aria-label="上传材料" @click="openHandbookUploadModal">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 0L8 7m4-4 4 4M4 15v2.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V15"/></svg>
+                            </button>
+                            <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">上传材料</span>
+                        </span>
+                    </div>
+                </div>
+                <div v-if="handbookFilterPanelExpanded" class="mt-2.5 border-t border-[#EEF0F2] pt-2.5">
+                    <div class="flex flex-wrap items-center gap-2">
                         <select v-model="handbookStatusFilter" class="crm-filter-item crm-filter-control w-[10rem]" title="状态">
-                            <option value="">状态</option>
+                            <option value="">状态（全部）</option>
                             <option value="draft">草稿</option>
                             <option value="published">已发布</option>
                             <option value="deprecated">已作废</option>
                         </select>
                         <button type="button" class="crm-filter-item crm-filter-reset" @click="resetHandbookFilter">清除筛选</button>
                     </div>
-                    <p class="text-sm font-semibold text-[#1f2328] shrink-0">
-                        合计（符合筛选条件）：<span class="text-[#0969da]">{{ filteredHandbookFiles.length }}</span> 条
-                    </p>
                 </div>
             </div>
-            <div class="border border-gray-200 rounded-lg overflow-hidden flex flex-col flex-1 min-h-0 bg-white">
-                <div v-if="!filteredHandbookFiles.length" class="p-10 text-center text-gray-400 text-sm">暂无手册，请上传。</div>
-                <div v-else class="overflow-x-auto crm-table-scroll">
-                    <table class="crm-table handbook-table min-w-full text-sm" data-table-id="handbook">
-                        <thead>
-                            <tr>
-                                <th class="crm-th text-left">文件</th>
-                                <th class="crm-th">版本</th>
-                                <th class="crm-th">状态</th>
-                                <th class="crm-th">类型</th>
-                                <th class="crm-th">全文索引</th>
-                                <th class="crm-th">标签 / 权限</th>
-                                <th class="crm-th">时间</th>
-                                <th class="crm-th crm-sticky-right-op crm-op-col-xl">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr v-for="f in filteredHandbookFiles" :key="f.id">
-                                <td class="crm-td crm-name-cell handbook-col-text"><div class="crm-cell-clip">{{ f.original_filename }}</div></td>
-                                <td class="crm-td">{{ f.version_label || '—' }}</td>
-                                <td class="crm-td"><span class="rounded-full px-2 py-0.5 text-xs" :class="handbookStatusClass(f.status)">{{ handbookStatusLabel(f.status) }}</span></td>
-                                <td class="crm-td">{{ handbookMediaLabel(f) }}</td>
-                                <td class="crm-td text-xs">
-                                    <span class="rounded px-1.5 py-0.5" :class="handbookSearchStatusClass(f)">{{ handbookSearchStatusLabel(f) }}</span>
-                                    <span v-if="f.search_method && f.search_status === 'indexed'" class="text-gray-500 ml-1">{{ f.search_method === 'ocr' ? 'OCR' : f.search_method === 'meta' ? '元数据' : '文本层' }}</span>
-                                    <div v-if="f.search_error" class="crm-cell-clip text-amber-700 mt-0.5">{{ f.search_error }}</div>
-                                </td>
-                                <td class="crm-td text-xs handbook-col-text">
-                                    <div class="crm-cell-clip">
-                                        <span v-if="(f.tags||[]).length">标：{{ (f.tags||[]).join('、') }}<br /></span>
-                                        <span v-if="(f.permission_departments||[]).length">部：{{ (f.permission_departments||[]).join('、') }}</span>
-                                        <span v-if="(f.permission_levels||[]).length"><br />级：{{ (f.permission_levels||[]).join('、') }}</span>
-                                        <span v-if="!(f.tags||[]).length && !(f.permission_departments||[]).length && !(f.permission_levels||[]).length">—</span>
-                                    </div>
-                                </td>
-                                <td class="crm-td text-xs whitespace-nowrap">{{ formatDate(f.created_at) }}</td>
-                                <td class="crm-td whitespace-nowrap crm-sticky-right-op crm-op-col-xl">
-                                    <div class="crm-op-actions">
-                                        <button v-if="f.media_kind === 'pdf'" type="button" class="crm-op-btn-detail" @click="openHandbookReader(f)">阅读</button>
-                                        <button v-else-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="crm-op-btn-detail" @click="openHandbookReader(f)">播放</button>
-                                        <button type="button" class="crm-op-btn-handoff" @click="openHandbookMetaModal(f)">元数据</button>
-                                        <button v-if="f.media_kind === 'video' || f.media_kind === 'audio'" type="button" class="crm-op-btn-handoff" @click="openHandbookCuesModal(f)">锚点</button>
-                                        <button type="button" class="crm-op-btn-edit" @click="downloadHandbookFile(f)">下载</button>
-                                        <button v-if="canDeletePermission('delivery.handbook.delete')" type="button" class="crm-op-btn-delete"
-                                            data-crm-delete-title="确认删除文件"
-                                            data-crm-delete-target-prefix="将删除文件："
-                                            data-crm-delete-hint="删除后将从当前交付手册列表移除。"
-                                            @click="removeHandbook(f)">删除</button>
-                                    </div>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+            <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
+                <table class="crm-table handbook-table min-w-full text-sm" data-table-id="handbook">
+                    <thead>
+                        <tr>
+                            <th class="crm-th text-left"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3.5h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1ZM14 3.5V9h5"/></svg>文件</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h10M7 12h10M7 17h6M5 4h14v16H5V4Z"/></svg>版本</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM8.5 12l2.5 2.5 4.5-4.5"/></svg>状态</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h10"/></svg>类型</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>全文索引</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 7h.01M7 3h5c.512 0 .953.386 1.007.898L13 7h5a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM9 11h6M9 15h4"/></svg>标签 / 权限</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0-8.5-12M12 7.5V12l3 1.8"/></svg>时间</th>
+                            <th class="crm-th crm-sticky-right-op handbook-op-col"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="f in pagedHandbookFiles" :key="f.id">
+                            <td class="crm-td crm-name-cell handbook-col-text">
+                                <button type="button" class="crm-name-link" @click="openHandbookDetailDrawer(f)"><span class="crm-cell-clip">{{ f.original_filename }}</span></button>
+                            </td>
+                            <td class="crm-td">{{ f.version_label || '—' }}</td>
+                            <td class="crm-td"><span class="rounded-full px-2 py-0.5 text-xs" :class="handbookStatusClass(f.status)">{{ handbookStatusLabel(f.status) }}</span></td>
+                            <td class="crm-td">{{ handbookMediaLabel(f) }}</td>
+                            <td class="crm-td text-xs">
+                                <span class="rounded px-1.5 py-0.5" :class="handbookSearchStatusClass(f)">{{ handbookSearchStatusLabel(f) }}</span>
+                                <span v-if="f.search_method && f.search_status === 'indexed'" class="text-gray-500 ml-1">{{ f.search_method === 'ocr' ? 'OCR' : f.search_method === 'meta' ? '元数据' : '文本层' }}</span>
+                                <div v-if="f.search_error" class="crm-cell-clip text-amber-700 mt-0.5">{{ f.search_error }}</div>
+                            </td>
+                            <td class="crm-td text-xs handbook-col-text">
+                                <div class="crm-cell-clip">
+                                    <span v-if="(f.tags||[]).length">标：{{ (f.tags||[]).join('、') }}<br /></span>
+                                    <span v-if="(f.permission_departments||[]).length">部：{{ (f.permission_departments||[]).join('、') }}</span>
+                                    <span v-if="(f.permission_levels||[]).length"><br />级：{{ (f.permission_levels||[]).join('、') }}</span>
+                                    <span v-if="!(f.tags||[]).length && !(f.permission_departments||[]).length && !(f.permission_levels||[]).length">—</span>
+                                </div>
+                            </td>
+                            <td class="crm-td text-xs whitespace-nowrap">{{ displayDateSlash(f.created_at) }}</td>
+                            <td class="crm-td whitespace-nowrap crm-sticky-right-op handbook-op-col">
+                                <div class="crm-op-actions">
+                                    <span v-if="f.media_kind === 'pdf'" class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-detail" aria-label="阅读" @click="openHandbookReader(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">阅读</span>
+                                    </span>
+                                    <span v-else-if="f.media_kind === 'video' || f.media_kind === 'audio'" class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-detail" aria-label="播放" @click="openHandbookReader(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">播放</span>
+                                    </span>
+                                    <span class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-handoff" aria-label="元数据" @click="openHandbookMetaModal(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">元数据</span>
+                                    </span>
+                                    <span v-if="f.media_kind === 'video' || f.media_kind === 'audio'" class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-handoff" aria-label="锚点" @click="openHandbookCuesModal(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20M5 7h14M5 17h14"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">锚点</span>
+                                    </span>
+                                    <span class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-edit" aria-label="下载" @click="downloadHandbookFile(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">下载</span>
+                                    </span>
+                                    <span v-if="canDeletePermission('delivery.handbook.delete')" class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-delete" aria-label="删除" @click="removeHandbook(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">删除</span>
+                                    </span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="!pagedHandbookFiles.length">
+                            <td colspan="8" class="crm-td text-center text-gray-400 py-8">暂无手册，请上传。</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div v-if="filteredHandbookFiles.length" class="flex flex-wrap items-center justify-between gap-3 px-1 pt-3 pb-4 shrink-0">
+                <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ filteredHandbookFiles.length }}</span> 条，第 {{ handbookCurrentPage }} / {{ handbookTotalPages }} 页</p>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" @click="handbookGoPage(handbookCurrentPage - 1)" :disabled="handbookCurrentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+                    <button v-for="p in handbookPageNumbers" :key="'hpg-' + p" type="button" @click="handbookGoPage(p)" :class="p === handbookCurrentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors">{{ p }}</button>
+                    <button type="button" @click="handbookGoPage(handbookCurrentPage + 1)" :disabled="handbookCurrentPage >= handbookTotalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+                    <span class="ml-1 text-[0.8rem] text-[#6B7280]">10 条 / 页</span>
                 </div>
             </div>
         </div>
@@ -1631,7 +1739,7 @@
     <Teleport to="body">
     <div
         v-if="handbookReaderRow"
-        class="crm-esc-modal fixed inset-0 z-[110] box-border flex flex-col p-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"
+        class="crm-esc-modal fixed inset-0 z-[200] box-border flex flex-col p-3 pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"
         :class="handbookReaderPipBrowseMode ? 'pointer-events-none bg-transparent' : 'bg-black/50'"
         role="dialog"
         aria-modal="true"
@@ -1759,7 +1867,7 @@
         </div>
         <div
             v-if="handbookReaderRow && handbookReaderPipBrowseMode"
-            class="fixed bottom-5 right-5 z-[120] flex flex-col gap-2 pointer-events-auto max-w-[14rem]"
+            class="fixed bottom-5 right-5 z-[210] flex flex-col gap-2 pointer-events-auto max-w-[14rem]"
         >
             <div class="rounded-lg border border-slate-200 bg-white/95 px-3 py-2 text-xs text-gray-700 shadow-lg backdrop-blur-sm">
                 画中画已开启，可在下方继续操作手册列表；需要重新看到完整窗口请点击「恢复」。
@@ -1806,7 +1914,80 @@
         </div>
     </Teleport>
 
-    <div v-if="handbookMetaModalOpen" class="crm-esc-modal fixed inset-0 z-[58] flex items-center justify-center bg-black/45 p-4">
+    <div v-if="handbookUploadModalOpen" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeHandbookUploadModal" @dragover.prevent @drop.prevent>
+        <div class="crm-form-modal-panel max-w-2xl rounded-xl shadow-2xl" @click.stop>
+            <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
+                <h3 class="font-bold text-lg text-gray-900">上传材料</h3>
+                <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeHandbookUploadModal">&times;</button>
+            </div>
+            <form class="flex flex-col flex-1 min-h-0" novalidate @submit.prevent="submitHandbookUpload">
+                <div class="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 text-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                        <label class="flex flex-col gap-1">
+                            <span class="text-[#57606a]">版本号</span>
+                            <input v-model="handbookUploadForm.version_label" type="text" class="crm-form-control" placeholder="如 V1.0" />
+                        </label>
+                        <label class="flex flex-col gap-1">
+                            <span class="text-[#57606a]">状态</span>
+                            <select v-model="handbookUploadForm.status" class="crm-form-control">
+                                <option value="draft">草稿</option>
+                                <option value="published">已发布</option>
+                                <option value="deprecated">已作废</option>
+                            </select>
+                        </label>
+                        <label class="flex flex-col gap-1 sm:col-span-2">
+                            <span class="text-[#57606a]">标签（逗号分隔）</span>
+                            <input v-model="handbookUploadForm.tags" type="text" class="crm-form-control" placeholder="入职、宣贯、对外素材…" />
+                        </label>
+                        <label class="flex flex-col gap-1">
+                            <span class="text-[#57606a]">阅读·部门</span>
+                            <input v-model="handbookUploadForm.permission_departments" type="text" class="crm-form-control" />
+                        </label>
+                        <label class="flex flex-col gap-1">
+                            <span class="text-[#57606a]">阅读·级别</span>
+                            <select v-model="handbookUploadForm.permission_levels" class="crm-form-control">
+                                <option value="">请选择级别</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div>
+                        <span class="block text-[#57606a] mb-2">文件<span class="text-red-500">*</span></span>
+                        <div
+                            class="handbook-upload-dropzone"
+                            :class="{ 'has-file': !!handbookUploadSelectedName, 'is-dragging': handbookUploadDragging }"
+                            @click="triggerHandbookUploadFilePick"
+                            @dragover.prevent
+                            @dragenter.prevent="handbookUploadDragging = true"
+                            @dragleave.prevent="handbookUploadDragging = false"
+                            @drop.prevent="onHandbookUploadDrop"
+                        >
+                            <template v-if="!handbookUploadSelectedName">
+                                <span class="text-sm text-[#57606a]">点击或拖拽文件到此处</span>
+                                <span class="mt-1 text-xs text-[#656d76]">支持 PDF、Word、MP4、MP3 等交付手册格式</span>
+                            </template>
+                            <div v-else class="handbook-upload-file-row">
+                                <span class="min-w-0 truncate text-sm text-[#0969da]">{{ handbookUploadSelectedName }}</span>
+                                <button type="button" class="handbook-upload-file-remove shrink-0" aria-label="移除文件" @click.stop="clearHandbookUploadFile">&times;</button>
+                            </div>
+                            <input ref="handbookUploadFileInput" type="file" class="hidden" accept=".pdf,.doc,.docx,.mp4,.webm,.mp3,.wav,.m4a,.mov,.ogg,.aac,.flac" @change="onHandbookUploadFileChange" />
+                        </div>
+                    </div>
+                    <p v-if="handbookUploadError" class="text-sm text-red-600">{{ handbookUploadError }}</p>
+                </div>
+                <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-end shrink-0">
+                    <button type="button" class="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-800 hover:bg-gray-50" @click="closeHandbookUploadModal">取消</button>
+                    <button type="submit" class="rounded-lg bg-[#456595] px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176] disabled:opacity-50" :disabled="handbookUploading">{{ handbookUploading ? '上传中…' : '保存' }}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div v-if="handbookMetaModalOpen" class="crm-esc-modal delivery-detail-modal-overlay">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg text-gray-900">编辑手册元数据</h3>
@@ -1841,7 +2022,7 @@
         </div>
     </div>
 
-    <div v-if="handbookCuesModalOpen" class="crm-esc-modal fixed inset-0 z-[58] flex items-center justify-center bg-black/45 p-4">
+    <div v-if="handbookCuesModalOpen" class="crm-esc-modal delivery-detail-modal-overlay">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg text-gray-900">时间戳锚点</h3>
@@ -2103,6 +2284,67 @@
             </div>
         </div>
     </div>
+
+    <div v-if="handbookDetailRow && moduleKey === 'handbook'" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeHandbookDetailDrawer"></div>
+    <aside v-if="handbookDetailRow && moduleKey === 'handbook'" class="crm-esc-modal crm-right-drawer open">
+        <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
+            <div class="min-w-0">
+                <h3 class="text-lg font-bold text-gray-900 truncate">{{ handbookDetailRow.original_filename || '交付手册详情' }}</h3>
+                <p class="text-sm text-gray-500 mt-0.5">{{ handbookMediaLabel(handbookDetailRow) }} · {{ handbookDetailRow.version_label || '无版本号' }}</p>
+            </div>
+            <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closeHandbookDetailDrawer">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-5">
+            <dl class="grid grid-cols-1 gap-y-3 text-sm">
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">状态</dt>
+                    <dd><span class="rounded-full px-2 py-0.5 text-xs" :class="handbookStatusClass(handbookDetailRow.status)">{{ handbookStatusLabel(handbookDetailRow.status) }}</span></dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">类型</dt>
+                    <dd class="font-medium text-gray-800">{{ handbookMediaLabel(handbookDetailRow) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">全文索引</dt>
+                    <dd class="font-medium text-gray-800">
+                        {{ handbookSearchStatusLabel(handbookDetailRow) }}
+                        <span v-if="handbookDetailRow.search_method && handbookDetailRow.search_status === 'indexed'" class="text-gray-500">（{{ handbookDetailRow.search_method === 'ocr' ? 'OCR' : handbookDetailRow.search_method === 'meta' ? '元数据' : '文本层' }}）</span>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">标签</dt>
+                    <dd class="font-medium text-gray-800 break-words">{{ (handbookDetailRow.tags || []).length ? (handbookDetailRow.tags || []).join('、') : '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">阅读·部门</dt>
+                    <dd class="font-medium text-gray-800 break-words">{{ (handbookDetailRow.permission_departments || []).length ? (handbookDetailRow.permission_departments || []).join('、') : '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">阅读·级别</dt>
+                    <dd class="font-medium text-gray-800 break-words">{{ (handbookDetailRow.permission_levels || []).length ? (handbookDetailRow.permission_levels || []).join('、') : '—' }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">上传时间</dt>
+                    <dd class="font-medium text-gray-800">{{ displayDateSlash(handbookDetailRow.created_at) }}</dd>
+                </div>
+                <div v-if="(handbookDetailRow.media_cues || []).length">
+                    <dt class="text-xs text-gray-400 mb-0.5">时间戳锚点</dt>
+                    <dd class="space-y-1">
+                        <div v-for="(c, i) in handbookDetailRow.media_cues" :key="'hd-cue-'+i" class="text-gray-800">
+                            <span class="font-mono text-xs text-gray-500">{{ formatHandbookSeconds(c.seconds) }}</span>
+                            {{ c.label || '锚点' }}
+                        </div>
+                    </dd>
+                </div>
+            </dl>
+        </div>
+        <div class="px-5 py-4 border-t border-gray-200 flex flex-wrap justify-end gap-2 shrink-0">
+            <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="closeHandbookDetailDrawer">关闭</button>
+            <button v-if="handbookDetailRow.media_kind === 'pdf' || handbookDetailRow.media_kind === 'video' || handbookDetailRow.media_kind === 'audio'" type="button" class="px-4 py-2 rounded-lg border border-[#456595] text-sm text-[#456595] hover:bg-blue-50" @click="openHandbookReaderFromDetail(handbookDetailRow)">{{ handbookDetailRow.media_kind === 'pdf' ? '阅读' : '播放' }}</button>
+            <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="openHandbookMetaFromDetail(handbookDetailRow)">修改元数据</button>
+            <button type="button" class="px-4 py-2 rounded-lg bg-[#456595] text-sm text-white hover:bg-[#3a567f]" @click="downloadHandbookFile(handbookDetailRow)">下载</button>
+        </div>
+    </aside>
 
     <div v-if="interviewDetailRow" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeInterviewDetailDrawer"></div>
     <aside v-if="interviewDetailRow" class="crm-esc-modal crm-right-drawer open">
@@ -2715,7 +2957,7 @@ createApp({
             downloadBlob: window.crmDownloadBlob,
         });
         const {
-            handbookFilter, handbookStatusFilter, filteredHandbookFiles, resetHandbookFilter, clearHandbookSelectedFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
+            handbookFilter, handbookStatusFilter, handbookFilterPanelExpanded, toggleHandbookFilterPanel, filteredHandbookFiles, resetHandbookFilter, handbookPdfOutlineFlat, handbookPdfIframeSrc,
             handbookPdfSearchQuery, handbookPdfSearchResults, handbookPdfSearchCount, handbookPdfSearchActive,
             handbookPdfRenderedPageSrc, handbookPdfRenderedPageUrl, handbookPdfRenderBusy,
             handbookPdfTextBusy, handbookPdfTextError, loadHandbookPdfText, clearHandbookPdfSearch,
@@ -2724,11 +2966,12 @@ createApp({
             handbookFsDetailOpen, handbookFsDetailHit, closeHandbookFsDetail, openHandbookFsExcerptDetail, openHandbookReaderFromFsDetail,
             handbookReindexBusy, handbookFtsSyncBusy, runHandbookGlobalSearch, queueHandbookReindexStale, syncHandbookFtsFromBody,
             highlightHandbookSearchHtml,
-            handbookFiles, handbookFileInput, handbookUploading, handbookUploadError, handbookSelectedFiles, handbookSelectedFileSummary, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
+            handbookFiles, handbookUploadModalOpen, handbookUploadForm, handbookUploadFile, handbookUploadFileInput, handbookUploadDragging, handbookUploadSelectedName, handbookUploading, handbookUploadError, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
             handbookReaderPipBrowseMode, restoreHandbookReaderFromPipBrowse,
             handbookMetaModalOpen, handbookMetaForm, handbookCuesModalOpen, handbookCuesEdit,
+            handbookDetailRow, openHandbookDetailDrawer, closeHandbookDetailDrawer, openHandbookReaderFromDetail, openHandbookMetaFromDetail,
             handbookStatusLabel, handbookStatusClass, handbookMediaLabel, handbookSearchStatusLabel, handbookSearchStatusClass, formatHandbookSeconds,
-            loadHandbooks, onHandbookFilesSelected, uploadSelectedHandbookFiles, removeHandbook, downloadHandbookFile,
+            loadHandbooks, openHandbookUploadModal, closeHandbookUploadModal, triggerHandbookUploadFilePick, onHandbookUploadFileChange, onHandbookUploadDrop, clearHandbookUploadFile, submitHandbookUpload, removeHandbook, downloadHandbookFile,
             openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
             handbookReaderMediaUrl,
             openHandbookMetaModal, saveHandbookMeta, openHandbookCuesModal, saveHandbookCues, rebuildHandbookOutline,
@@ -2736,6 +2979,28 @@ createApp({
             mountHandbook,
             unmountHandbook,
         } = handbook;
+        // 交付手册：每页 10 条分页（对齐客户列表）
+        const handbookPageSize = ref(10);
+        const handbookCurrentPage = ref(1);
+        const handbookTotalPages = computed(() => Math.max(1, Math.ceil(filteredHandbookFiles.value.length / handbookPageSize.value)));
+        const pagedHandbookFiles = computed(() => {
+            const start = (handbookCurrentPage.value - 1) * handbookPageSize.value;
+            return filteredHandbookFiles.value.slice(start, start + handbookPageSize.value);
+        });
+        const handbookPageNumbers = computed(() => {
+            const total = handbookTotalPages.value;
+            const max = 7;
+            let start = Math.max(1, handbookCurrentPage.value - 3);
+            let end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            const arr = [];
+            for (let i = start; i <= end; i++) arr.push(i);
+            return arr;
+        });
+        const handbookGoPage = (p) => { handbookCurrentPage.value = Math.min(Math.max(1, p), handbookTotalPages.value); };
+        watch(handbookFilter, () => { handbookCurrentPage.value = 1; }, { deep: true });
+        watch(handbookStatusFilter, () => { handbookCurrentPage.value = 1; });
+        watch(filteredHandbookFiles, () => { if (handbookCurrentPage.value > handbookTotalPages.value) handbookCurrentPage.value = handbookTotalPages.value; });
         const employeeFiles = window.CrmDeliveryDetailEmployeeFiles.createEmployeeFilesState({
             ref,
             reactive,
@@ -2839,7 +3104,7 @@ createApp({
             showOnlyCheckedPipeline, toggleShowOnlyCheckedPipeline,
             isPipelineRowChecked, setPipelineRowChecked,
             pipelineFields, pipelineCompactFields, pipelineTextareaFields, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput,
-            handbookFilter, handbookStatusFilter, filteredHandbookFiles, resetHandbookFilter, clearHandbookSelectedFiles, handbookPdfOutlineFlat, handbookPdfIframeSrc,
+            handbookFilter, handbookStatusFilter, handbookFilterPanelExpanded, toggleHandbookFilterPanel, filteredHandbookFiles, pagedHandbookFiles, handbookCurrentPage, handbookTotalPages, handbookPageNumbers, handbookGoPage, resetHandbookFilter, handbookPdfOutlineFlat, handbookPdfIframeSrc,
             handbookPdfSearchQuery, handbookPdfSearchResults, handbookPdfSearchCount, handbookPdfSearchActive,
             handbookPdfRenderedPageSrc, handbookPdfRenderedPageUrl, handbookPdfRenderBusy,
             handbookPdfTextBusy, handbookPdfTextError, loadHandbookPdfText, clearHandbookPdfSearch,
@@ -2848,11 +3113,12 @@ createApp({
             handbookFsDetailOpen, handbookFsDetailHit, closeHandbookFsDetail, openHandbookFsExcerptDetail, openHandbookReaderFromFsDetail,
             handbookReindexBusy, handbookFtsSyncBusy, runHandbookGlobalSearch, queueHandbookReindexStale, syncHandbookFtsFromBody,
             highlightHandbookSearchHtml,
-            handbookFiles, handbookFileInput, handbookUploading, handbookUploadError, handbookSelectedFiles, handbookSelectedFileSummary, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
+            handbookFiles, handbookUploadModalOpen, handbookUploadForm, handbookUploadFile, handbookUploadFileInput, handbookUploadDragging, handbookUploadSelectedName, handbookUploading, handbookUploadError, handbookReaderRow, handbookReaderPdfPage, handbookMediaRef,
             handbookReaderPipBrowseMode, restoreHandbookReaderFromPipBrowse,
             handbookMetaModalOpen, handbookMetaForm, handbookCuesModalOpen, handbookCuesEdit,
+            handbookDetailRow, openHandbookDetailDrawer, closeHandbookDetailDrawer, openHandbookReaderFromDetail, openHandbookMetaFromDetail,
             handbookStatusLabel, handbookStatusClass, handbookMediaLabel, handbookSearchStatusLabel, handbookSearchStatusClass, formatHandbookSeconds,
-            loadHandbooks, onHandbookFilesSelected, uploadSelectedHandbookFiles, removeHandbook, downloadHandbookFile,
+            loadHandbooks, openHandbookUploadModal, closeHandbookUploadModal, triggerHandbookUploadFilePick, onHandbookUploadFileChange, onHandbookUploadDrop, clearHandbookUploadFile, submitHandbookUpload, removeHandbook, downloadHandbookFile,
             openHandbookReader, closeHandbookReader, handbookReaderBackdropClick, setHandbookPdfPage, seekHandbookMedia,
             handbookReaderMediaUrl,
             openHandbookMetaModal, saveHandbookMeta, openHandbookCuesModal, saveHandbookCues, rebuildHandbookOutline,
