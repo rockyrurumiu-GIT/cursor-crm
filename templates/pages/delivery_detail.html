@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ module_title }} · 交付 · ITO BMS{% endblock %}
+{% block shell_extra_class %}{% if module_key in ['requirements', 'interviews'] %}bms-shell-flat{% endif %}{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/plyr@3.7.8/dist/plyr.css" crossorigin="anonymous" />
@@ -146,6 +147,45 @@
     .crm-table.interview-table .crm-cell-clip-pop {
         max-width: 30em;
     }
+    /* 员工访谈表：对齐客户列表皮肤——仅保留行线（去竖线），深色侧栏表头同色 #3B6699 */
+    #delivery-detail-app .crm-table.interview-table td.crm-td {
+        border-left: 0;
+        border-right: 0;
+        border-top: 0;
+        border-bottom: 1px solid #EEF0F2;
+    }
+    #delivery-detail-app .crm-table.interview-table tbody tr:nth-child(even) td.crm-td {
+        background: #fff;
+    }
+    #delivery-detail-app .crm-table.interview-table tbody tr:hover td.crm-td {
+        background: #F9FAFB;
+    }
+    #main-shell.bms-sidebar-dark #delivery-detail-app .crm-table.interview-table th.crm-th,
+    #main-shell.bms-sidebar-dark #delivery-detail-app .crm-table.interview-table thead .delivery-sticky-left-serial,
+    #main-shell.bms-sidebar-dark #delivery-detail-app .crm-table.interview-table thead th.crm-sticky-right-op {
+        background: #3B6699;
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.12);
+    }
+    /* 操作列：修改 / 删除 改为图标按钮 */
+    #delivery-detail-app .interview-table .crm-op-btn-edit,
+    #delivery-detail-app .interview-table .crm-op-btn-delete {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem;
+    }
+    #delivery-detail-app .interview-table .crm-op-btn-edit svg,
+    #delivery-detail-app .interview-table .crm-op-btn-delete svg {
+        width: 15px;
+        height: 15px;
+    }
+    #delivery-detail-app .interview-table .crm-op-btn-edit:hover,
+    #delivery-detail-app .interview-table .crm-op-btn-delete:hover {
+        text-decoration: none;
+    }
+    #delivery-detail-app .interview-table tbody td.crm-sticky-right-op { overflow: visible !important; }
+    #delivery-detail-app .interview-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
     /* 需求清单：JD 默认 30 汉字宽，超出省略，悬停原位展开 */
     .crm-table[data-table-id="requirements-jobs"] {
         table-layout: fixed;
@@ -199,6 +239,11 @@
         width: var(--req-sticky-title-width);
         min-width: var(--req-sticky-title-width);
         max-width: var(--req-sticky-title-width);
+    }
+    .crm-table[data-table-id="requirements-jobs"] .crm-th.crm-sticky-right-op,
+    .crm-table[data-table-id="requirements-jobs"] .crm-td.crm-sticky-right-op {
+        overflow: visible !important;
+        text-overflow: clip !important;
     }
     .crm-table[data-table-id="requirements-jobs"] .crm-td.rms-col-jd,
     .crm-table[data-table-id="requirements-jobs"] .crm-th.rms-col-jd,
@@ -427,7 +472,7 @@
     .delivery-detail-modal-overlay {
         position: fixed;
         inset: 0;
-        z-index: 50;
+        z-index: 200;
         display: flex;
         align-items: flex-start;
         justify-content: center;
@@ -610,11 +655,25 @@
 {% endblock %}
 {% block content %}
 {% raw %}
-<div id="delivery-detail-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6" :class="moduleKey === 'interviews' ? 'py-3 sm:py-4' : 'py-4 sm:py-5'">
-    <div class="bg-white rounded-xl border border-gray-200 shadow-sm max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="[moduleKey === 'interviews' ? 'p-4 sm:p-5' : 'p-5 sm:p-6', moduleKey === 'requirements' ? 'requirements-detail-card' : '']">
-        <a :href="`/delivery/${moduleKey}`" class="text-sm text-blue-600 hover:underline shrink-0">← 返回{{ moduleTitle }}客户列表</a>
-        <div class="flex flex-wrap items-center justify-between gap-3 shrink-0" :class="moduleKey === 'interviews' ? 'mt-1' : 'mt-2'">
-            <h1 class="font-bold text-gray-900" :class="moduleKey === 'interviews' ? 'text-xl sm:text-2xl' : 'text-2xl'">{{ clientName }} · {{ moduleTitle }}</h1>
+<div id="delivery-detail-app" class="container mx-auto max-w-[1280px] flex-1 min-h-0 flex flex-col px-4 sm:px-6" :class="moduleKey === 'interviews' ? '' : 'py-4 sm:py-5'">
+    <div class="max-w-[1200px] flex-1 min-h-0 flex flex-col" :class="moduleKey === 'interviews' ? '' : ['bg-white rounded-xl border border-gray-200 shadow-sm p-5 sm:p-6', moduleKey === 'requirements' ? 'requirements-detail-card' : '']">
+        <span v-if="moduleKey !== 'requirements' && moduleKey !== 'interviews'" class="group relative inline-flex shrink-0 self-start">
+            <a :href="`/delivery/${moduleKey}`" :aria-label="`返回${moduleTitle}客户列表`" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+            </a>
+            <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">返回{{ moduleTitle }}客户列表</span>
+        </span>
+        <div class="flex flex-wrap items-center justify-between gap-3 shrink-0" :class="moduleKey === 'interviews' ? 'mt-8 mb-4' : 'mt-2'">
+            <div class="min-w-0">
+                <h1 class="text-2xl font-bold text-gray-900">
+                    <template v-if="isInterviewAggregate">整体员工访谈<span class="text-gray-400 font-normal text-base"> · 全部客户</span></template>
+                    <template v-else>
+                        {{ clientName }}
+                        <span class="text-gray-400 font-normal text-base">· {{ moduleTitle }}</span>
+                    </template>
+                </h1>
+                <p v-if="clientOwner" class="text-sm text-gray-500 mt-1">负责人 {{ clientOwner }}</p>
+            </div>
             <div v-if="moduleKey === 'handbook'" class="flex flex-wrap items-center gap-2 shrink-0">
                 <span v-if="!handbookSelectedFiles.length" class="max-w-[14rem] truncate text-xs text-[#57606a]">未选择文件</span>
                 <span v-else class="inline-flex items-center gap-1 max-w-[16rem] rounded-lg border border-[#d0d7de] bg-white px-2 h-[2.25rem] min-h-[2.25rem] text-xs text-[#1f2328]">
@@ -914,53 +973,66 @@
                 </div>
             </div>
         </div>
-        <div v-else-if="moduleKey === 'interviews'" class="mt-2 flex flex-col flex-1 min-h-0 gap-2">
-            <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                <button type="button" class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-[#3D5176]" @click="openInterviewAdd">新增行</button>
-                <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100" @click="runInterviewRosterHints">提示</button>
-                <button v-if="canViewDeliveryLogs" type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openInterviewLogs">日志</button>
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerInterviewImport">导入</button>
-                <input ref="interviewFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onInterviewImportFile" />
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportInterviewCsv">导出</button>
-                <button type="button" class="crm-btn-rollback !py-1.5 !px-3 !text-sm" @click="restoreInterviewLatestBackup">回滚</button>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-gray-50 shrink-0">
-                <div
-                    v-if="!interviewFilterPanelExpanded"
-                    class="flex flex-wrap items-center justify-between gap-2 px-2 py-2 sm:px-3 sm:py-2.5"
-                >
-                    <p class="text-sm font-semibold text-gray-700 min-w-0">
-                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredInterviewRows.length }}</span> 条
-                    </p>
-                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                        <button
-                            type="button"
-                            class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                            title="展开筛选区"
-                            aria-label="展开筛选区"
-                            @click="toggleInterviewFilterPanel"
-                        >
-                            展开筛选
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="inline-block h-4 w-4 ml-0.5 align-text-bottom text-gray-500">
-                                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                            title="回到顶部"
-                            aria-label="回到顶部"
-                            @click="scrollToTop"
-                        >
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-                                <path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
+        <div v-else-if="moduleKey === 'interviews'" class="crm-skin flex flex-col flex-1 min-h-0 gap-2">
+            <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] shrink-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="group relative inline-flex shrink-0">
+                        <a :href="`/delivery/${moduleKey}`" :aria-label="`返回${moduleTitle}客户列表`" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+                        </a>
+                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">返回{{ moduleTitle }}客户列表</span>
+                    </span>
+                    <div class="relative w-full sm:w-[260px]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                        <input v-model.trim="interviewFilter.full_name" type="search" placeholder="搜索员工姓名…" title="员工姓名（模糊）" class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30" />
+                    </div>
+                    <button type="button" @click="toggleInterviewFilterPanel" :class="interviewFilterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'" class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                        筛选
+                    </button>
+                    <p class="ml-auto min-w-0 self-center leading-none text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">合计（符合筛选条件）：<span>{{ filteredInterviewRows.length }}</span> 条</p>
+                    <div class="flex items-center gap-1.5">
+                        <span v-if="!isInterviewAggregate" class="group relative inline-flex">
+                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#456595] bg-[#456595] text-white transition-colors hover:bg-[#3D5176]" aria-label="新增行" @click="openInterviewAdd">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg>
+                            </button>
+                            <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">新增行</span>
+                        </span>
+                        <span class="group relative inline-flex">
+                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-amber-300 bg-white text-amber-700 transition-colors hover:bg-amber-50" aria-label="提示" @click="runInterviewRosterHints">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+                            </button>
+                            <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">提示</span>
+                        </span>
+                        <span v-if="canViewDeliveryLogs && !isInterviewAggregate" class="group relative inline-flex">
+                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]" aria-label="日志" @click="openInterviewLogs">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+                            </button>
+                            <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">日志</span>
+                        </span>
+                        <span v-if="!isInterviewAggregate" class="group relative inline-flex">
+                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]" aria-label="导入" @click="triggerInterviewImport">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                            </button>
+                            <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">导入</span>
+                        </span>
+                        <input v-if="!isInterviewAggregate" ref="interviewFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onInterviewImportFile" />
+                        <span class="group relative inline-flex">
+                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]" aria-label="导出" @click="exportInterviewCsv">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 0 4 4m-4-4-4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+                            </button>
+                            <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">导出</span>
+                        </span>
+                        <span v-if="!isInterviewAggregate" class="group relative inline-flex">
+                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-red-300 bg-white text-red-600 transition-colors hover:bg-red-50" aria-label="回滚" @click="restoreInterviewLatestBackup">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/></svg>
+                            </button>
+                            <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">回滚</span>
+                        </span>
                     </div>
                 </div>
-                <div v-else class="p-2 sm:p-3 space-y-2">
+                <div v-if="interviewFilterPanelExpanded" class="mt-2.5 border-t border-[#EEF0F2] pt-2.5">
                 <div class="crm-filter-row interview-filter-row">
-                    <input v-model.trim="interviewFilter.full_name" type="text" placeholder="员工姓名（模糊）" title="员工姓名（模糊）" class="crm-filter-item crm-filter-control w-[12rem]" />
                     <select v-model="interviewFilter.employment_status" class="crm-filter-item crm-filter-control w-[7.2rem]" title="在职/离职">
                         <option value="">在职/离职</option>
                         <option value="在职">在职</option>
@@ -1046,35 +1118,6 @@
                     </div>
                     <button type="button" class="crm-filter-item crm-filter-reset" @click="resetInterviewFilter">清除筛选</button>
                 </div>
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-sm font-semibold text-gray-700 min-w-0">
-                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredInterviewRows.length }}</span> 条
-                    </p>
-                    <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-                        <button
-                            type="button"
-                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                            title="收起筛选区"
-                            aria-label="收起筛选区"
-                            @click="toggleInterviewFilterPanel"
-                        >
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-                                <path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
-                        <button
-                            type="button"
-                            class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                            title="回到顶部"
-                            aria-label="回到顶部"
-                            @click="scrollToTop"
-                        >
-                            <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-                                <path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
                 </div>
             </div>
             <div
@@ -1107,8 +1150,10 @@
                     <p class="text-xs text-amber-800">下列花名册中为「在职」的员工尚无任何员工访谈记录，请在本页补录：点击「新建访谈」将打开新增窗口并预填姓名，完成后保存即可。</p>
                     <div class="max-h-32 overflow-y-auto text-sm text-amber-900 space-y-1">
                         <div v-for="(item, idx) in interviewHints.activeMissing" :key="'am-'+idx" class="flex items-start justify-between gap-2">
-                            <span>{{ item.name }}：{{ item.text }}</span>
+                            <span><template v-if="isInterviewAggregate">「{{ item.clientName }}」</template>{{ item.name }}：{{ item.text }}</span>
+                            <a v-if="isInterviewAggregate" :href="item.href" class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100">前往</a>
                             <button
+                                v-else
                                 type="button"
                                 class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
                                 @click="openInterviewAddForHintName(item.name)"
@@ -1121,8 +1166,9 @@
                     <p class="text-xs text-amber-800">下列姓名出现在访谈中，但花名册中无对应员工，请核实是否仍应在职、是否需补录花名册：</p>
                     <div class="max-h-32 overflow-y-auto text-sm text-amber-900 space-y-1">
                         <div v-for="(item, idx) in interviewHints.activeInterviewNotInRoster" :key="'anr-'+idx" class="flex items-start justify-between gap-2">
-                            <span>{{ item.name }}：{{ item.text }}</span>
-                            <div class="shrink-0 flex flex-wrap items-center gap-1 justify-end">
+                            <span><template v-if="isInterviewAggregate">「{{ item.clientName }}」</template>{{ item.name }}：{{ item.text }}</span>
+                            <a v-if="isInterviewAggregate" :href="item.href" class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100">前往花名册</a>
+                            <div v-else class="shrink-0 flex flex-wrap items-center gap-1 justify-end">
                                 <button
                                     type="button"
                                     class="rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
@@ -1142,9 +1188,10 @@
                     <p class="text-xs text-amber-800">访谈中通常不应出现「待入职」状态，请确认下列员工的在职情况：</p>
                     <div class="max-h-32 overflow-y-auto text-sm text-amber-900 space-y-1">
                         <div v-for="(item, idx) in interviewHints.pendingInInterview" :key="'pe-'+idx" class="flex items-start justify-between gap-2">
-                            <span>{{ item.name }}：{{ item.text }}</span>
+                            <span><template v-if="isInterviewAggregate">「{{ item.clientName }}」</template>{{ item.name }}：{{ item.text }}</span>
+                            <a v-if="isInterviewAggregate" :href="item.href" class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100">前往</a>
                             <a
-                                v-if="item.rowId"
+                                v-else-if="item.rowId"
                                 :href="`/delivery/interviews/${clientId}?edit_row_id=${item.rowId}`"
                                 class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
                             >去修改</a>
@@ -1156,9 +1203,9 @@
                     <p class="text-xs text-amber-800">下列员工在访谈中为「离职」，但花名册中仍有记录。请确认是否需更新花名册中的在职情况：</p>
                     <div class="max-h-32 overflow-y-auto text-sm text-amber-900 space-y-1">
                         <div v-for="(item, idx) in interviewHints.leftOnRoster" :key="'lr-'+idx" class="flex items-start justify-between gap-2">
-                            <span>{{ item.name }}（花名册：{{ item.rosterStatus || '—' }}）：{{ item.text }}</span>
+                            <span><template v-if="isInterviewAggregate">「{{ item.clientName }}」</template>{{ item.name }}（花名册：{{ item.rosterStatus || '—' }}）：{{ item.text }}</span>
                             <a
-                                :href="`/customers/roster/${clientId}`"
+                                :href="isInterviewAggregate ? item.href : `/customers/roster/${clientId}`"
                                 class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
                             >去花名册</a>
                         </div>
@@ -1169,8 +1216,10 @@
                     <p class="text-xs text-amber-800">下列员工的阶段访谈为空或 N，且已超过应完成时间，请尽快新建访谈并完成沟通：</p>
                     <div class="max-h-32 overflow-y-auto text-sm text-amber-900 space-y-1">
                         <div v-for="(item, idx) in interviewHints.overdueFollowups" :key="'of-'+idx" class="flex items-start justify-between gap-2">
-                            <span>{{ item.name }}：{{ item.text }}</span>
+                            <span><template v-if="isInterviewAggregate">「{{ item.clientName }}」</template>{{ item.name }}：{{ item.text }}</span>
+                            <a v-if="isInterviewAggregate" :href="item.href" class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100">前往</a>
                             <button
+                                v-else
                                 type="button"
                                 class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
                                 @click="openInterviewAddForHintName(item.name)"
@@ -1183,8 +1232,10 @@
                     <p class="text-xs text-amber-800">下列花名册中在职员工最近一次访谈已超过 180 天，请新建访谈记录：</p>
                     <div class="max-h-32 overflow-y-auto text-sm text-amber-900 space-y-1">
                         <div v-for="(item, idx) in interviewHints.staleInterviewNeedNew" :key="'si-'+idx" class="flex items-start justify-between gap-2">
-                            <span>{{ item.name }}：{{ item.text }}</span>
+                            <span><template v-if="isInterviewAggregate">「{{ item.clientName }}」</template>{{ item.name }}：{{ item.text }}</span>
+                            <a v-if="isInterviewAggregate" :href="item.href" class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100">前往</a>
                             <button
+                                v-else
                                 type="button"
                                 class="shrink-0 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-amber-700 hover:bg-amber-100"
                                 @click="openInterviewAddForHintName(item.name)"
@@ -1197,30 +1248,34 @@
                 <table class="crm-table interview-table" data-table-id="interview">
                 <thead>
                     <tr>
-                        <th class="crm-th interview-col-tight interview-col-name delivery-sticky-left-serial">员工姓名</th>
-                        <th class="crm-th interview-col-tight">在职/离职</th>
-                        <th class="crm-th interview-col-contact">联系方式</th>
-                        <th class="crm-th interview-col-tight">所属项目</th>
-                        <th class="crm-th interview-col-position">岗位</th>
-                        <th class="crm-th interview-col-tight">员工加1</th>
-                        <th class="crm-th interview-col-tight">入职时间</th>
-                        <th class="crm-th interview-col-tight">访谈时间</th>
-                        <th class="crm-th interview-col-tight">满意度</th>
-                        <th class="crm-th interview-col-text-wide">交付判断</th>
-                        <th class="crm-th interview-col-text-wide">员工诉求</th>
-                        <th class="crm-th interview-col-text-wide">交付待办事项</th>
-                        <th class="crm-th interview-col-tight">工作地</th>
-                        <th class="crm-th interview-col-tight">老家</th>
-                        <th class="crm-th interview-col-tight">1 D</th>
-                        <th class="crm-th interview-col-tight">7 D</th>
-                        <th class="crm-th interview-col-tight">30 D</th>
-                        <th class="crm-th interview-col-tight">90 D</th>
-                        <th class="crm-th crm-sticky-right-op">操作</th>
+                        <th class="crm-th interview-col-tight interview-col-name delivery-sticky-left-serial"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>员工姓名</th>
+                        <th v-if="isInterviewAggregate" class="crm-th interview-col-contact"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 21h18M5 21V4a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v17M19 21V9h-4M8 7h.01M8 11h.01M8 15h.01M11 7h.01M11 11h.01M11 15h.01"/></svg>客户</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5h17v10a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5v-10ZM8.5 8.5V6.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/></svg>在职/离职</th>
+                        <th class="crm-th interview-col-contact"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6.5 4h3l1.5 4-2 1.5a11 11 0 0 0 5 5l1.5-2 4 1.5v3a2 2 0 0 1-2 2A16 16 0 0 1 4.5 6a2 2 0 0 1 2-2Z"/></svg>联系方式</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 21V5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1v16M15 21V9h3a1 1 0 0 1 1 1v11M3 21h18M8 8h.01M8 12h.01M11 8h.01M11 12h.01"/></svg>所属项目</th>
+                        <th class="crm-th interview-col-position"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8.5 14.5 7 21l5-2 5 2-1.5-6.5M12 3a6 6 0 1 0 0 12 6 6 0 0 0 0-12Z"/></svg>岗位</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19a6 6 0 0 0-12 0M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM18 8v6M21 11h-6"/></svg>员工加1</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3v3M17 3v3M4 8.5h16M5 6.5h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1Z"/></svg>入职时间</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3v3M17 3v3M4 8.5h16M5 6.5h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1ZM9 14l2 2 4-4"/></svg>访谈时间</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3l2.6 5.6 6 .8-4.4 4.2 1.1 6L12 17l-5.3 2.8 1.1-6L3.4 9.6l6-.8L12 3Z"/></svg>满意度</th>
+                        <th class="crm-th interview-col-text-wide"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 11l3 3 8-8M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>交付判断</th>
+                        <th class="crm-th interview-col-text-wide"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z"/></svg>员工诉求</th>
+                        <th class="crm-th interview-col-text-wide"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 6h12M9 12h12M9 18h12M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>交付待办事项</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21c4-4 6-7.2 6-10a6 6 0 1 0-12 0c0 2.8 2 6 6 10ZM12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>工作地</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 11.5 12 4l9 7.5M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>老家</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>1 D</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>7 D</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>30 D</th>
+                        <th class="crm-th interview-col-tight"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>90 D</th>
+                        <th v-if="!isInterviewAggregate" class="crm-th crm-sticky-right-op"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="row in filteredInterviewRows" :key="row.id">
-                        <td class="crm-td crm-name-cell interview-col-tight interview-col-name delivery-sticky-left-serial">{{ row.full_name }}</td>
+                    <tr v-for="row in pagedInterviewRows" :key="row.id">
+                        <td class="crm-td crm-name-cell interview-col-tight interview-col-name delivery-sticky-left-serial">
+                            <button type="button" class="crm-name-link" @click="openInterviewDetailDrawer(row)">{{ row.full_name }}</button>
+                        </td>
+                        <td v-if="isInterviewAggregate" class="crm-td interview-col-contact">{{ row.client_name }}</td>
                         <td class="crm-td interview-col-tight">{{ row.employment_status }}</td>
                         <td class="crm-td interview-col-contact">{{ row.contact }}</td>
                         <td class="crm-td interview-col-tight">{{ row.project_name }}</td>
@@ -1238,19 +1293,37 @@
                         <td class="crm-td interview-col-tight">{{ row.followup_7d }}</td>
                         <td class="crm-td interview-col-tight">{{ row.followup_30d }}</td>
                         <td class="crm-td interview-col-tight">{{ row.followup_90d }}</td>
-                        <td class="crm-td whitespace-nowrap crm-sticky-right-op">
+                        <td v-if="!isInterviewAggregate" class="crm-td whitespace-nowrap crm-sticky-right-op">
                             <div class="crm-op-actions">
-                                <button type="button" class="crm-op-btn-detail" @click="openInterviewDetail(row)">详情</button>
-                                <button type="button" class="crm-op-btn-edit" @click="openInterviewEdit(row)">修改</button>
-                                <button v-if="canDeletePermission('delivery.interviews.delete')" type="button" class="crm-op-btn-delete" @click="removeInterviewRow(row)">删除</button>
+                                <span class="group relative inline-flex">
+                                    <button type="button" class="crm-op-btn-edit" aria-label="修改" @click="openInterviewEdit(row)">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                                    </button>
+                                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">修改</span>
+                                </span>
+                                <span v-if="canDeletePermission('delivery.interviews.delete')" class="group relative inline-flex">
+                                    <button type="button" class="crm-op-btn-delete" aria-label="删除" @click="removeInterviewRow(row)">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                                    </button>
+                                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">删除</span>
+                                </span>
                             </div>
                         </td>
                     </tr>
-                    <tr v-if="!filteredInterviewRows.length">
-                        <td colspan="19" class="crm-td text-center text-gray-400 py-8">暂无数据，可新增行或导入 CSV（表头需与导出模板一致）</td>
+                    <tr v-if="!pagedInterviewRows.length">
+                        <td colspan="19" class="crm-td text-center text-gray-400 py-8">{{ isInterviewAggregate ? '暂无员工访谈记录' : '暂无数据，可新增行或导入 CSV（表头需与导出模板一致）' }}</td>
                     </tr>
                 </tbody>
             </table>
+            </div>
+            <div v-if="filteredInterviewRows.length" class="flex flex-wrap items-center justify-between gap-3 px-1 pt-3 pb-4 shrink-0">
+                <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ filteredInterviewRows.length }}</span> 条，第 {{ interviewCurrentPage }} / {{ interviewTotalPages }} 页</p>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" @click="interviewGoPage(interviewCurrentPage - 1)" :disabled="interviewCurrentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+                    <button v-for="p in interviewPageNumbers" :key="'ipg-' + p" type="button" @click="interviewGoPage(p)" :class="p === interviewCurrentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors">{{ p }}</button>
+                    <button type="button" @click="interviewGoPage(interviewCurrentPage + 1)" :disabled="interviewCurrentPage >= interviewTotalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+                    <span class="ml-1 inline-flex h-8 items-center rounded-[6px] border border-[#D7DBE0] bg-white px-2.5 text-sm text-[#6B7280]">10 条 / 页</span>
+                </div>
             </div>
         </div>
         <div v-else-if="moduleKey === 'settlement'" class="mt-4 flex flex-col flex-1 min-h-0 gap-3">
@@ -1449,7 +1522,7 @@
                 </div>
             </div>
         </div>
-        <div v-else-if="moduleKey === 'requirements'" class="requirements-jobs-module flex flex-col flex-1 min-h-0 mt-4">
+        <div v-else-if="moduleKey === 'requirements'" class="crm-skin requirements-jobs-module flex flex-col flex-1 min-h-0 mt-4">
             <div v-if="requirementJobsLoading" class="text-sm text-gray-500 py-8 text-center">加载中…</div>
             <div v-else-if="requirementJobsForbidden" class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 暂无权限查看招聘岗位需求。
@@ -1459,6 +1532,12 @@
             <template v-else>
             <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] mb-3 shrink-0">
                 <div class="flex flex-wrap items-center gap-2">
+                    <span class="group relative inline-flex shrink-0">
+                        <a :href="`/delivery/${moduleKey}`" :aria-label="`返回${moduleTitle}客户列表`" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/></svg>
+                        </a>
+                        <span class="pointer-events-none absolute left-0 top-full z-50 mt-1.5 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">返回{{ moduleTitle }}客户列表</span>
+                    </span>
                     <div class="relative w-full sm:w-[280px]">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
                         <input v-model.trim="reqFilter.keyword" type="text" placeholder="搜索岗位、城市、招聘、JD…" class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30" title="关键词（模糊）" />
@@ -2025,6 +2104,33 @@
         </div>
     </div>
 
+    <div v-if="interviewDetailRow" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeInterviewDetailDrawer"></div>
+    <aside v-if="interviewDetailRow" class="crm-esc-modal crm-right-drawer open">
+        <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
+            <div class="min-w-0">
+                <h3 class="text-lg font-bold text-gray-900 truncate">{{ interviewDetailRow.full_name || '员工详情' }}</h3>
+                <p class="text-sm text-gray-500 mt-0.5">员工访谈详细信息</p>
+            </div>
+            <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closeInterviewDetailDrawer">&times;</button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-5">
+            <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                <div v-if="isInterviewAggregate" class="col-span-2">
+                    <dt class="text-xs text-gray-400 mb-0.5">客户</dt>
+                    <dd class="font-medium text-gray-800 break-words">{{ interviewDetailRow.client_name || '—' }}</dd>
+                </div>
+                <div v-for="f in interviewFields" :key="f.key" :class="{ 'col-span-2': isInterviewWideField(f.key) }">
+                    <dt class="text-xs text-gray-400 mb-0.5">{{ f.label }}</dt>
+                    <dd class="font-medium text-gray-800 break-words whitespace-pre-line">{{ interviewDetailValue(interviewDetailRow, f) }}</dd>
+                </div>
+            </dl>
+        </div>
+        <div class="px-5 py-4 border-t border-gray-200 flex justify-end gap-2 shrink-0">
+            <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="closeInterviewDetailDrawer">关闭</button>
+            <button v-if="!isInterviewAggregate" type="button" class="px-4 py-2 rounded-lg bg-[#456595] text-sm text-white hover:bg-[#3a567f]" @click="openInterviewEdit(interviewDetailRow); closeInterviewDetailDrawer()">修改</button>
+        </div>
+    </aside>
+
     <div v-if="showForm && moduleKey === 'settlement'" class="crm-esc-modal delivery-detail-modal-overlay">
         <div class="delivery-detail-modal-panel max-w-7xl">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
@@ -2182,9 +2288,17 @@ window.__CRM_DELIVERY_DETAIL__ = {
         top: 0 !important;
         z-index: 45 !important;
         overflow: visible !important;
-        background: #2f75b5 !important;
-        color: #fff !important;
-        border-color: #1f5a94 !important;
+    }
+    /* 首列表头底色随 crm-skin（浅色/深色），与其它列保持一致 */
+    .crm-skin .crm-table-scroll .crm-table[data-table-id="requirements-jobs"] thead th.crm-th.req-sticky-title {
+        background: #F9FAFB !important;
+        color: #6B7280 !important;
+        border-color: #E5E7EB !important;
+    }
+    #main-shell.bms-sidebar-dark .crm-skin .crm-table-scroll .crm-table[data-table-id="requirements-jobs"] thead th.crm-th.req-sticky-title {
+        background: var(--ct-th-dark-bg) !important;
+        color: var(--ct-th-dark-text) !important;
+        border-color: var(--ct-th-dark-border) !important;
     }
     .crm-table-scroll .crm-table[data-table-id="requirements-jobs"] tbody td.crm-td.req-sticky-title {
         position: sticky !important;
@@ -2228,6 +2342,7 @@ createApp({
         const moduleTitle = cfg.moduleTitle;
         const clientId = cfg.clientId;
         const clientName = ref(`客户#${clientId}`);
+        const clientOwner = ref('');
         const requirementJobs = ref([]);
         const requirementJobsLoading = ref(false);
         const requirementJobsError = ref('');
@@ -2342,7 +2457,7 @@ createApp({
         watch(filteredRequirementJobs, () => { if (reqCurrentPage.value > reqTotalPages.value) reqCurrentPage.value = reqTotalPages.value; });
         const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
         const canViewDeliveryLogs = computed(() => !!window.crmIsSuper);
-        const loadBrief = () => loadClientBrief(clientId, clientName);
+        const loadBrief = () => loadClientBrief(clientId, clientName, clientOwner);
         const settlement = window.CrmDeliveryDetailSettlement.createSettlementState({
             ref,
             reactive,
@@ -2486,6 +2601,7 @@ createApp({
             authHeader: window.crmAuthHeader,
         });
         const {
+            isInterviewAggregate,
             loadInterviewRows,
             interviewFileInput,
             interviewRows,
@@ -2551,6 +2667,39 @@ createApp({
             interviewCompactFields,
             interviewTextareaFields,
         } = interviews;
+        // 员工访谈：每页 10 条分页（对齐客户列表）
+        const interviewPageSize = ref(10);
+        const interviewCurrentPage = ref(1);
+        const interviewTotalPages = computed(() => Math.max(1, Math.ceil(filteredInterviewRows.value.length / interviewPageSize.value)));
+        const pagedInterviewRows = computed(() => {
+            const start = (interviewCurrentPage.value - 1) * interviewPageSize.value;
+            return filteredInterviewRows.value.slice(start, start + interviewPageSize.value);
+        });
+        const interviewPageNumbers = computed(() => {
+            const total = interviewTotalPages.value;
+            const max = 7;
+            let start = Math.max(1, interviewCurrentPage.value - 3);
+            let end = Math.min(total, start + max - 1);
+            start = Math.max(1, end - max + 1);
+            const arr = [];
+            for (let i = start; i <= end; i++) arr.push(i);
+            return arr;
+        });
+        const interviewGoPage = (p) => { interviewCurrentPage.value = Math.min(Math.max(1, p), interviewTotalPages.value); };
+        watch(interviewFilter, () => { interviewCurrentPage.value = 1; }, { deep: true });
+        watch(filteredInterviewRows, () => { if (interviewCurrentPage.value > interviewTotalPages.value) interviewCurrentPage.value = interviewTotalPages.value; });
+        // 员工访谈：点击姓名 → 右侧抽屉看详情
+        const interviewDetailRow = ref(null);
+        const openInterviewDetailDrawer = (row) => { interviewDetailRow.value = row || null; };
+        const closeInterviewDetailDrawer = () => { interviewDetailRow.value = null; };
+        const isInterviewWideField = (key) => ['delivery_judgment', 'employee_requests', 'delivery_todos'].includes(key);
+        const interviewDetailValue = (row, field) => {
+            if (!row || !field) return '—';
+            const raw = row[field.key];
+            if (field.type === 'date') return displayDateSlash(raw) || '—';
+            const s = raw != null ? String(raw).trim() : '';
+            return s || '—';
+        };
         const handbook = window.CrmDeliveryDetailHandbook.createHandbookState({
             ref,
             reactive,
@@ -2644,7 +2793,7 @@ createApp({
             document.addEventListener('focusin', handleDocumentFocusIn);
             document.addEventListener('keydown', onHandbookReaderEscape);
             document.addEventListener('keydown', handleRequirementJobDetailEscape);
-            await loadBrief();
+            if (!isInterviewAggregate) await loadBrief();
             await loadSettlementRows();
             await loadPipelineRows();
             await loadInterviewRows();
@@ -2673,7 +2822,7 @@ createApp({
             unmountHandbook();
         });
         return {
-            moduleKey, moduleTitle, clientId, clientName,
+            moduleKey, moduleTitle, clientId, clientName, clientOwner,
             requirementJobs, requirementJobsLoading, requirementJobsError, requirementJobsForbidden,
             reqFilter, reqFilterPanelExpanded, reqPriorityOptions, reqStatusOptions, reqCityOptions,
             filteredRequirementJobs, pagedRequirementJobs, reqCurrentPage, reqTotalPages, reqPageNumbers, reqGoPage, resetReqFilter,
@@ -2722,6 +2871,9 @@ createApp({
             showForm, editingId, settlementFormReadonly, form,
             openPipelineAdd, openPipelineEdit, savePipelineForm, removePipelineRow,
             interviewRows, interviewDisplayRows, filteredInterviewRows, interviewFields, interviewCompactFields, interviewTextareaFields,
+            isInterviewAggregate,
+            pagedInterviewRows, interviewCurrentPage, interviewTotalPages, interviewPageNumbers, interviewGoPage,
+            interviewDetailRow, openInterviewDetailDrawer, closeInterviewDetailDrawer, isInterviewWideField, interviewDetailValue,
             interviewFilter, interviewSelectOptions, interviewOptionSearch,
             interviewPositionDropdownOpen, interviewSatisfactionDropdownOpen,
             interviewFilterPanelExpanded, toggleInterviewFilterPanel,

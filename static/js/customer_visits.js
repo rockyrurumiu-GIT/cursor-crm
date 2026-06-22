@@ -223,7 +223,7 @@ createApp({
             const table = document.querySelector('#visits-app .visit-table');
             if (table && window.crmInitTableColumnResize) {
                 table.dataset.tableResizeKey = VISIT_COL_STORAGE;
-                table.dataset.tableMinWidth = '1672';
+                table.dataset.tableMinWidth = '1640';
                 window.crmInitTableColumnResize(table, {
                     defaults: VISIT_COL_DEFAULTS,
                     minWidth: VISIT_COL_MIN,

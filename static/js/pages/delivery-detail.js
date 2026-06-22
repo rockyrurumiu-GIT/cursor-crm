@@ -171,11 +171,12 @@
         return Number.isNaN(t.getTime()) ? String(ds) : t.toLocaleString();
     }
 
-    async function loadClientBrief(clientId, clientNameRef) {
+    async function loadClientBrief(clientId, clientNameRef, clientOwnerRef) {
         const r = await fetch(`/api/clients/${clientId}/brief`, { headers: window.crmAuthHeader() });
         if (r.ok) {
             const d = await r.json();
             clientNameRef.value = d.name || clientNameRef.value;
+            if (clientOwnerRef) clientOwnerRef.value = d.owner || '';
         }
     }
 

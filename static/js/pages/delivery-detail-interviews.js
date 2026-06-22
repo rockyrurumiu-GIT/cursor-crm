@@ -71,6 +71,7 @@ function flattenInterviewHintItems(hints) {
         (Array.isArray(list) ? list : []).forEach((item) => {
             items.push({
                 issueType,
+                clientName: item.clientName || '',
                 name: item.name || '',
                 detail: detailBuilder ? detailBuilder(item) : (item.text || ''),
                 actionLabel,
@@ -91,7 +92,8 @@ function buildInterviewHintCopyText(clientName, hints) {
     if (!items.length) return '';
     const lines = [`【${clientName || '客户'} - 员工访谈待处理】`];
     items.forEach((item, idx) => {
-        lines.push(`${idx + 1}. ${item.name}｜${item.issueType}｜${item.detail}｜建议动作：${item.actionLabel}｜跳转建议：${item.jumpSuggestion}`);
+        const prefix = item.clientName ? `${item.clientName}·` : '';
+        lines.push(`${idx + 1}. ${prefix}${item.name}｜${item.issueType}｜${item.detail}｜建议动作：${item.actionLabel}｜跳转建议：${item.jumpSuggestion}`);
     });
     return lines.join('\n');
 }
@@ -99,7 +101,7 @@ function buildInterviewHintCsv(clientName, hints) {
     const items = flattenInterviewHintItems(hints);
     const rows = [
         ['客户', '员工姓名', '问题类型', '问题说明', '建议动作', '跳转建议'],
-        ...items.map((item) => [clientName || '', item.name || '', item.issueType || '', item.detail || '', item.actionLabel || '', item.jumpSuggestion || '']),
+        ...items.map((item) => [item.clientName || clientName || '', item.name || '', item.issueType || '', item.detail || '', item.actionLabel || '', item.jumpSuggestion || '']),
     ];
     return rows.map((row) => row.map(csvCell).join(',')).join('\n');
 }
@@ -323,9 +325,13 @@ function emptyInterviewFilter() {
             interviewPositionDropdownOpen.value = false;
             interviewSatisfactionDropdownOpen.value = false;
         };
+        const isInterviewAggregate = Number(clientId) === 0;
         const loadInterviewRows = async () => {
             if (moduleKey !== 'interviews') return;
-            const r = await fetch(`/api/clients/${clientId}/delivery/interviews`, { headers: hdr() });
+            const url = isInterviewAggregate
+                ? '/api/delivery/interviews/all'
+                : `/api/clients/${clientId}/delivery/interviews`;
+            const r = await fetch(url, { headers: hdr() });
             const list = r.ok ? await r.json() : [];
             interviewRows.value = Array.isArray(list) ? list : [];
         };
@@ -364,14 +370,9 @@ function emptyInterviewFilter() {
             const s = row && row.full_name != null ? String(row.full_name).trim() : '';
             return s || normKey;
         };
-        const runInterviewRosterHints = async () => {
-            if (moduleKey !== 'interviews') return;
-            interviewHintRan.value = true;
-            await loadRosterRows();
-            await loadInterviewRows();
-            const todayDate = todayInputDate();
-            const roster = Array.isArray(rosterRows.value) ? rosterRows.value : [];
-            const interviews = Array.isArray(interviewRows.value) ? interviewRows.value : [];
+        const computeInterviewHints = (rosterInput, interviewsInput, todayDate) => {
+            const roster = Array.isArray(rosterInput) ? rosterInput : [];
+            const interviews = Array.isArray(interviewsInput) ? interviewsInput : [];
             const rosterByName = new Map();
             roster.forEach((row) => {
                 const nk = interviewNameKey(row.full_name);
@@ -506,7 +507,7 @@ function emptyInterviewFilter() {
                 });
             });
             staleInterviewNeedNew.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
-            interviewHints.value = {
+            return {
                 activeMissing,
                 activeInterviewNotInRoster,
                 pendingInInterview,
@@ -514,15 +515,64 @@ function emptyInterviewFilter() {
                 overdueFollowups,
                 staleInterviewNeedNew,
             };
+        };
+        const loadAllRosterRows = async () => {
+            const r = await fetch('/api/roster', { headers: hdr() });
+            return r.ok ? await r.json() : [];
+        };
+        const loadClientNameMap = async () => {
+            const r = await fetch('/api/clients', { headers: hdr() });
+            const list = r.ok ? await r.json() : [];
+            const m = new Map();
+            (Array.isArray(list) ? list : []).forEach((c) => m.set(Number(c.id), c.name || ('客户#' + c.id)));
+            return m;
+        };
+        const interviewHintHrefFor = (cid, item, kind) => {
+            if (kind === 'roster') return `/customers/roster/${cid}`;
+            return item.rowId ? `/delivery/interviews/${cid}?edit_row_id=${item.rowId}` : `/delivery/interviews/${cid}`;
+        };
+        const runInterviewRosterHints = async () => {
+            if (moduleKey !== 'interviews') return;
+            interviewHintRan.value = true;
+            const todayDate = todayInputDate();
+            if (isInterviewAggregate) {
+                await loadInterviewRows();
+                const [allRoster, nameById] = await Promise.all([loadAllRosterRows(), loadClientNameMap()]);
+                const interviewsByClient = new Map();
+                (Array.isArray(interviewRows.value) ? interviewRows.value : []).forEach((row) => {
+                    const cid = Number(row.client_id);
+                    if (!interviewsByClient.has(cid)) interviewsByClient.set(cid, []);
+                    interviewsByClient.get(cid).push(row);
+                });
+                const rosterByClient = new Map();
+                (Array.isArray(allRoster) ? allRoster : []).forEach((row) => {
+                    const cid = Number(row.client_id);
+                    if (!rosterByClient.has(cid)) rosterByClient.set(cid, []);
+                    rosterByClient.get(cid).push(row);
+                });
+                const merged = emptyInterviewRosterHints();
+                const rosterKind = new Set(['activeInterviewNotInRoster', 'leftOnRoster']);
+                const clientIds = Array.from(new Set([...interviewsByClient.keys(), ...rosterByClient.keys()])).sort((a, b) => a - b);
+                clientIds.forEach((cid) => {
+                    const cName = nameById.get(cid) || ('客户#' + cid);
+                    const h = computeInterviewHints(rosterByClient.get(cid) || [], interviewsByClient.get(cid) || [], todayDate);
+                    Object.keys(merged).forEach((key) => {
+                        (h[key] || []).forEach((item) => {
+                            item.clientName = cName;
+                            item.clientId = cid;
+                            item.href = interviewHintHrefFor(cid, item, rosterKind.has(key) ? 'roster' : 'interviews');
+                            merged[key].push(item);
+                        });
+                    });
+                });
+                interviewHints.value = merged;
+            } else {
+                await loadRosterRows();
+                await loadInterviewRows();
+                interviewHints.value = computeInterviewHints(rosterRows.value, interviewRows.value, todayDate);
+            }
             await nextTick();
-            const tot =
-                activeMissing.length +
-                activeInterviewNotInRoster.length +
-                pendingInInterview.length +
-                leftOnRoster.length +
-                overdueFollowups.length +
-                staleInterviewNeedNew.length;
-            if (tot > 0 && interviewHintBannerRef.value && typeof interviewHintBannerRef.value.scrollIntoView === 'function') {
+            if (interviewHintTotal.value > 0 && interviewHintBannerRef.value && typeof interviewHintBannerRef.value.scrollIntoView === 'function') {
                 interviewHintBannerRef.value.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         };
@@ -708,6 +758,18 @@ function emptyInterviewFilter() {
             await loadInterviewRows();
         };
         const removeInterviewRow = async (row) => {
+            if (!row) return;
+            if (typeof window.crmConfirmDeleteDialog !== 'function') {
+                alert('确认对话框不可用');
+                return;
+            }
+            const name = String(row.full_name || '').trim() || `#${row.id}`;
+            const ok = await window.crmConfirmDeleteDialog({
+                title: '确认删除记录',
+                targetText: `将删除：${name}`,
+                hint: '删除后将从当前员工访谈列表移除。',
+            });
+            if (!ok) return;
             const r = await fetch(`/api/delivery/interviews/row/${row.id}`, { method: 'DELETE', headers: hdr() });
             if (!r.ok) {
                 alert('删除失败');
@@ -779,14 +841,18 @@ function emptyInterviewFilter() {
             await loadInterviewRows();
         };
         const exportInterviewCsv = async () => {
-            const r = await fetch(`/api/clients/${clientId}/delivery/interviews/export`, { headers: hdr() });
+            const url = isInterviewAggregate
+                ? '/api/delivery/interviews/export/all'
+                : `/api/clients/${clientId}/delivery/interviews/export`;
+            const r = await fetch(url, { headers: hdr() });
             if (!r.ok) {
                 alert('导出失败');
                 return;
             }
             const disposition = r.headers.get('Content-Disposition') || '';
             const blob = await r.blob();
-            window.crmDownloadBlob(blob, disposition, `员工访谈_${Date.now()}.csv`);
+            const fallback = isInterviewAggregate ? `整体员工访谈_${Date.now()}.csv` : `员工访谈_${Date.now()}.csv`;
+            window.crmDownloadBlob(blob, disposition, fallback);
         };
         const openInterviewLogs = async () => {
             if (!window.crmIsSuper) return;
@@ -821,7 +887,8 @@ function emptyInterviewFilter() {
             await openInterviewLogs();
         };
         const copyInterviewHints = async () => {
-            const text = buildInterviewHintCopyText(clientName.value, interviewHints.value);
+            const hintClientLabel = isInterviewAggregate ? '整体员工访谈' : clientName.value;
+            const text = buildInterviewHintCopyText(hintClientLabel, interviewHints.value);
             if (!text) {
                 alert('当前没有可复制的提示结果');
                 return;
@@ -846,13 +913,14 @@ function emptyInterviewFilter() {
             }
         };
         const exportInterviewHintsCsv = () => {
-            const csv = buildInterviewHintCsv(clientName.value, interviewHints.value);
+            const hintClientLabel = isInterviewAggregate ? '整体员工访谈' : clientName.value;
+            const csv = buildInterviewHintCsv(hintClientLabel, interviewHints.value);
             if (!csv) {
                 alert('当前没有可导出的提示结果');
                 return;
             }
             const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-            const safeClientName = String(clientName.value || '客户').trim() || '客户';
+            const safeClientName = String(hintClientLabel || '客户').trim() || '客户';
             window.crmDownloadBlob(blob, '', `${safeClientName}_员工访谈提示_${Date.now()}.csv`);
         };
 
@@ -883,6 +951,7 @@ function emptyInterviewFilter() {
         }
 
         return {
+            isInterviewAggregate,
             loadInterviewRows,
             interviewFileInput,
             interviewRows,

@@ -63,6 +63,23 @@ def register_delivery_interviews_routes(
         )
         return [interview_entry_to_dict(r) for r in rows]
 
+    # --- List (aggregate across all clients, read-only) ---
+
+    @app.get("/api/delivery/interviews/all")
+    async def interview_list_all(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.read"))):
+        rows = (
+            db.query(InterviewEntry, Client.name)
+            .join(Client, Client.id == InterviewEntry.client_id)
+            .order_by(Client.name, InterviewEntry.id)
+            .all()
+        )
+        out: List[Dict[str, Any]] = []
+        for entry, client_name in rows:
+            d = interview_entry_to_dict(entry)
+            d["client_name"] = client_name or ""
+            out.append(d)
+        return out
+
     # --- Create ---
 
     @app.post("/api/clients/{client_id}/delivery/interviews")
@@ -340,6 +357,41 @@ def register_delivery_interviews_routes(
             response,
             chinese_filename=f"{c.name}_员工访谈_{ts}.csv",
             ascii_base=f"client_{client_id}_interviews_{ts}",
+        )
+        return response
+
+    # --- Export (aggregate across all clients, read-only) ---
+
+    @app.get("/api/delivery/interviews/export/all")
+    async def interview_export_csv_all(db: Session = Depends(get_db), user: str = Depends(require_permission("delivery.interviews.read"))):
+        clients = (
+            db.query(Client.id, Client.name)
+            .join(InterviewEntry, InterviewEntry.client_id == Client.id)
+            .distinct()
+            .order_by(Client.name)
+            .all()
+        )
+        output = io.StringIO()
+        output.write("\ufeff")
+        writer = csv.writer(output)
+        writer.writerow(["客户"] + INTERVIEW_EXPORT_HEADERS)
+        for cid, cname in clients:
+            rows = (
+                db.query(InterviewEntry)
+                .filter(InterviewEntry.client_id == cid)
+                .order_by(InterviewEntry.id)
+                .all()
+            )
+            for sn, e in interview_display_serial_pairs(rows):
+                d = interview_entry_to_dict(e)
+                cells = [cname or "", str(sn)] + [d.get(INTERVIEW_HEADER_MAP[h], "") for h in INTERVIEW_EXPORT_HEADERS[1:]]
+                writer.writerow(cells)
+        response = StreamingResponse(io.BytesIO(output.getvalue().encode("utf-8-sig")), media_type="text/csv")
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        set_csv_download_headers(
+            response,
+            chinese_filename=f"整体员工访谈_{ts}.csv",
+            ascii_base=f"interviews_all_{ts}",
         )
         return response
 
