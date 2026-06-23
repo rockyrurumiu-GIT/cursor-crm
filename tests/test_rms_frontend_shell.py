@@ -706,6 +706,7 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert picker_marker in html
     picker_start = html.index(picker_marker)
     picker_slice = html[picker_start : picker_start + 5500]
+    assert "z-[210]" in picker_slice
     assert "resumeViewUrl" in picker_slice
     assert ">简历</a>" in picker_slice or ">简历</" in picker_slice
     assert "候选人摘要" not in picker_slice
