@@ -1640,6 +1640,7 @@
     <script>
         window.crmPermissions = [];
         window.crmIsSuper = false;
+        window.crmRecruitmentNavOnly = false;
         window.crmAuthMode = (document.body && document.body.getAttribute('data-crm-auth-mode')) || 'rbac';
         window.crmMeUser = null;
 
@@ -1778,7 +1779,21 @@
             if (window.crmAuthMode !== 'rbac') {
                 return;
             }
-            document.querySelectorAll('[data-crm-nav-perm],[data-crm-nav-any]').forEach(function (el) {
+            if (window.crmRecruitmentNavOnly) {
+                document.querySelectorAll('.bms-nav-group:not([data-crm-nav-recruitment-allow])').forEach(function (el) {
+                    el.style.display = 'none';
+                });
+                var brand = document.querySelector('.bms-brand');
+                if (brand) brand.setAttribute('href', '/rms');
+            }
+            document.querySelectorAll('[data-crm-nav-perm],[data-crm-nav-any],[data-crm-nav-super]').forEach(function (el) {
+                if (window.crmRecruitmentNavOnly && !el.closest('[data-crm-nav-recruitment-allow]')) {
+                    return;
+                }
+                if (el.hasAttribute('data-crm-nav-super')) {
+                    el.style.display = window.crmIsSuper ? '' : 'none';
+                    return;
+                }
                 var ok = false;
                 var any = el.getAttribute('data-crm-nav-any');
                 if (any) {
@@ -2156,6 +2171,45 @@
                     });
                     return values;
                 }
+                function validateDialogInput(values) {
+                    var firstMsg = '';
+                    fields.forEach(function (field) {
+                        if (!field || !field.name) { return; }
+                        var val = String(values[field.name] == null ? '' : values[field.name]).trim();
+                        if (field.required && !val) {
+                            if (!firstMsg) { firstMsg = '请填写' + String(field.label || field.name); }
+                            return;
+                        }
+                        var minLen = Number(field.minLength || 0);
+                        if (minLen > 0 && val.length < minLen) {
+                            if (!firstMsg) {
+                                firstMsg = String(
+                                    field.minLengthMessage
+                                    || (String(field.label || '输入') + '至少 ' + minLen + ' 个字')
+                                ).trim();
+                            }
+                        }
+                    });
+                    if (firstMsg) { return { ok: false, message: firstMsg }; }
+                    if (typeof options.validate === 'function') {
+                        var vr = options.validate(values);
+                        if (!vr || vr.ok === false) {
+                            return {
+                                ok: false,
+                                message: String((vr && vr.message) || '请检查输入').trim(),
+                            };
+                        }
+                    }
+                    return { ok: true };
+                }
+                function showDialogError(msg) {
+                    errorEl.textContent = String(msg || '').trim();
+                    if (errorEl.textContent) {
+                        errorEl.classList.remove('hidden');
+                    } else {
+                        errorEl.classList.add('hidden');
+                    }
+                }
                 function finish(ok) {
                     if (done) { return; }
                     done = true;
@@ -2259,6 +2313,13 @@
 
                 var actions = document.createElement('div');
                 actions.className = 'flex gap-2 mt-4';
+                var errorEl = document.createElement('p');
+                errorEl.className = 'text-sm text-red-600 mt-3 hidden';
+                errorEl.setAttribute('data-crm-dialog-error', '1');
+                panel.appendChild(errorEl);
+                if (options.initialError) {
+                    showDialogError(options.initialError);
+                }
                 var cancelBtn = document.createElement('button');
                 cancelBtn.type = 'button';
                 cancelBtn.className = 'flex-1 py-2 rounded-md bg-gray-100 text-gray-800 text-sm font-medium hover:bg-gray-200';
@@ -2268,6 +2329,7 @@
                 confirmBtn.type = 'button';
                 confirmBtn.className = confirmClass;
                 confirmBtn.textContent = confirmText;
+                confirmBtn.setAttribute('data-crm-dialog-confirm', '1');
                 actions.appendChild(cancelBtn);
                 actions.appendChild(confirmBtn);
                 panel.appendChild(actions);
@@ -2276,7 +2338,18 @@
                     if (e.target === overlay) { finish(false); }
                 });
                 cancelBtn.addEventListener('click', function () { finish(false); });
-                confirmBtn.addEventListener('click', function () { finish(true); });
+                confirmBtn.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var values = collectValues();
+                    var vr = validateDialogInput(values);
+                    if (!vr.ok) {
+                        showDialogError(vr.message);
+                        return;
+                    }
+                    showDialogError('');
+                    finish(true);
+                });
                 document.addEventListener('keydown', onKeyDown, true);
                 document.body.appendChild(overlay);
             });
@@ -2728,6 +2801,7 @@
                 window.crmAuthMode = data.auth_mode || 'legacy';
                 window.crmPermissions = data.permissions || [];
                 window.crmIsSuper = (data.roles || []).indexOf('SUPER_ADMIN') >= 0;
+                window.crmRecruitmentNavOnly = !!data.recruitment_nav_only;
                 window.crmMeUser = data.user || null;
                 var u = (data.user && data.user.display_name) || (data.user && data.user.username) || '';
                 document.getElementById('header-user').textContent = u || '';

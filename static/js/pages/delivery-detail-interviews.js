@@ -335,6 +335,102 @@ function emptyInterviewFilter() {
             const list = r.ok ? await r.json() : [];
             interviewRows.value = Array.isArray(list) ? list : [];
         };
+        const interviewNameDropdownOpen = ref(false);
+        const interviewNameFilterRef = ref(null);
+        const ensureInterviewRosterCatalog = async () => {
+            if (moduleKey !== 'interviews') return;
+            if (isInterviewAggregate) {
+                if (!Array.isArray(rosterRows.value) || !rosterRows.value.length) {
+                    rosterRows.value = await loadAllRosterRows();
+                }
+                return;
+            }
+            await loadRosterRows();
+        };
+        const findRosterRowByExactName = (displayName) => {
+            const nk = interviewNameKey(displayName);
+            if (!nk) return null;
+            const matches = (Array.isArray(rosterRows.value) ? rosterRows.value : [])
+                .filter((row) => interviewNameKey(row.full_name) === nk);
+            if (!matches.length) return null;
+            if (matches.length === 1) return matches[0];
+            const active = matches.find((row) => classifyEmploymentStatus(row.employment_status) === 'active');
+            return active || matches[0];
+        };
+        const rosterEmploymentStatusForInterview = (raw) => (
+            classifyEmploymentStatus(raw) === 'left' ? '离职' : '在职'
+        );
+        const filteredInterviewRosterNameOptions = computed(() => {
+            const q = String(interviewForm.full_name || '').trim();
+            if (!q || interviewFormReadonly.value) return [];
+            const pool = Array.isArray(rosterRows.value) ? rosterRows.value : [];
+            return pool
+                .filter((row) => fuzzyMatch(row.full_name, q))
+                .slice(0, 12);
+        });
+        const applyInterviewOnlyFieldsFromLatestRow = (displayName) => {
+            const nk = interviewNameKey(displayName);
+            if (!nk) return false;
+            const latest = pickLatestInterviewRowForNormKey(nk, interviewRows.value);
+            if (!latest) return false;
+            interviewForm.hometown = latest.hometown != null ? String(latest.hometown).trim() : '';
+            const d1 = String(latest.followup_1d || '').trim().toUpperCase();
+            const d7 = String(latest.followup_7d || '').trim().toUpperCase();
+            if (d1 === 'Y' && d7 === 'Y' && isEmptyOrNoValue(latest.followup_30d)) {
+                interviewForm.followup_1d = 'Y';
+                interviewForm.followup_7d = 'Y';
+                interviewForm.followup_30d = '';
+                interviewForm.followup_90d = '';
+            } else {
+                ['followup_1d', 'followup_7d', 'followup_30d', 'followup_90d'].forEach((k) => {
+                    const v = latest[k] != null ? String(latest[k]).trim() : '';
+                    const u = v.toUpperCase();
+                    interviewForm[k] = u === 'Y' || u === 'N' ? u : '';
+                });
+            }
+            return true;
+        };
+        const applyInterviewFormPrefillFromRosterRow = (rosterRow, { fillName = true } = {}) => {
+            if (!rosterRow) return false;
+            if (fillName) {
+                interviewForm.full_name = normalizePersonName(rosterRow.full_name) || interviewForm.full_name;
+            }
+            interviewForm.employment_status = rosterEmploymentStatusForInterview(rosterRow.employment_status);
+            interviewForm.contact = rosterRow.contact_info != null ? String(rosterRow.contact_info).trim() : '';
+            const project = rosterRow.customer_name != null ? String(rosterRow.customer_name).trim() : '';
+            interviewForm.project_name = project || (!isInterviewAggregate ? String(clientName.value || '').trim() : '');
+            interviewForm.position = rosterRow.position_title != null ? String(rosterRow.position_title).trim() : '';
+            interviewForm.employee_q1 = rosterRow.employee_plus1 != null ? String(rosterRow.employee_plus1).trim() : '';
+            interviewForm.onboarding_time = normalizeDateForInput(
+                rosterRow.entry_date != null ? String(rosterRow.entry_date) : '',
+                false,
+            );
+            interviewForm.work_location = rosterRow.work_location != null ? String(rosterRow.work_location).trim() : '';
+            applyInterviewOnlyFieldsFromLatestRow(interviewForm.full_name);
+            return true;
+        };
+        const pickInterviewRosterOption = (row) => {
+            if (!row) return;
+            applyInterviewFormPrefillFromRosterRow(row);
+            interviewNameDropdownOpen.value = false;
+            clearInterviewFieldErrorKey('full_name');
+        };
+        const onInterviewFormFullNameInput = () => {
+            if (interviewFormReadonly.value) return;
+            interviewNameDropdownOpen.value = !!String(interviewForm.full_name || '').trim();
+            clearInterviewFieldErrorKey('full_name');
+        };
+        const onInterviewFormFullNameFocus = () => {
+            if (interviewFormReadonly.value) return;
+            if (String(interviewForm.full_name || '').trim()) {
+                interviewNameDropdownOpen.value = true;
+            }
+        };
+        const onInterviewFormFullNameBlur = () => {
+            window.setTimeout(() => {
+                interviewNameDropdownOpen.value = false;
+            }, 150);
+        };
         const loadRosterRows = async () => {
             if (moduleKey !== 'interviews') return;
             const r = await fetch(`/api/clients/${clientId}/roster`, { headers: hdr() });
@@ -630,57 +726,56 @@ function emptyInterviewFilter() {
                 false,
             );
             interviewForm.work_location = latest.work_location != null ? String(latest.work_location).trim() : '';
-            interviewForm.hometown = latest.hometown != null ? String(latest.hometown).trim() : '';
-            const d1 = String(latest.followup_1d || '').trim().toUpperCase();
-            const d7 = String(latest.followup_7d || '').trim().toUpperCase();
-            if (d1 === 'Y' && d7 === 'Y' && isEmptyOrNoValue(latest.followup_30d)) {
-                interviewForm.followup_1d = 'Y';
-                interviewForm.followup_7d = 'Y';
-                interviewForm.followup_30d = '';
-                interviewForm.followup_90d = '';
-            } else {
-                ['followup_1d', 'followup_7d', 'followup_30d', 'followup_90d'].forEach((k) => {
-                    const v = latest[k] != null ? String(latest[k]).trim() : '';
-                    const u = v.toUpperCase();
-                    interviewForm[k] = u === 'Y' || u === 'N' ? u : '';
-                });
-            }
+            applyInterviewOnlyFieldsFromLatestRow(n);
             return true;
         };
-        /** 新增员工访谈：输入姓名并离开输入框后，与提示「新建访谈」相同的预填逻辑 */
+        /** 新增员工访谈：输入姓名并离开输入框后，优先花名册精确匹配，否则沿用最近访谈预填 */
         const onInterviewFormCompactBlur = (key) => {
             if (key !== 'full_name') return;
             if (!showInterviewForm.value || interviewEditingId.value || interviewFormReadonly.value) return;
+            const rosterRow = findRosterRowByExactName(interviewForm.full_name);
+            if (rosterRow) {
+                applyInterviewFormPrefillFromRosterRow(rosterRow);
+                return;
+            }
             applyInterviewFormPrefillFromLatestRow(interviewForm.full_name);
         };
-        const openInterviewAdd = () => {
+        const openInterviewAdd = async () => {
             interviewEditingId.value = null;
             interviewFormReadonly.value = false;
             Object.assign(interviewForm, emptyInterviewForm());
             resetInterviewFieldErrors();
+            await ensureInterviewRosterCatalog();
             showInterviewForm.value = true;
         };
         /** 花名册有而访谈无：直接打开新增并预填姓名（缺访谈应补录访谈，而非跳转花名册）；
          * 若已有历史访谈，则按最近一条预填可继承字段（含工作地、老家；历史为空则留空）；阶段项在「1D/7D 已完成、30D 未做」时继承 1D/7D=Y 并清空 30D/90D 供本次补录。 */
-        const openInterviewAddForHintName = (displayName) => {
+        const openInterviewAddForHintName = async (displayName) => {
             interviewEditingId.value = null;
             interviewFormReadonly.value = false;
             Object.assign(interviewForm, emptyInterviewForm());
             resetInterviewFieldErrors();
+            await ensureInterviewRosterCatalog();
             const n = displayName != null ? String(displayName).trim() : '';
             if (n) {
                 interviewForm.full_name = n;
             }
-            const hadLatest = n ? applyInterviewFormPrefillFromLatestRow(n) : false;
-            if (n && !hadLatest) {
-                interviewForm.employment_status = '在职';
+            const rosterRow = n ? findRosterRowByExactName(n) : null;
+            if (rosterRow) {
+                applyInterviewFormPrefillFromRosterRow(rosterRow);
+            } else {
+                const hadLatest = n ? applyInterviewFormPrefillFromLatestRow(n) : false;
+                if (n && !hadLatest) {
+                    interviewForm.employment_status = '在职';
+                }
             }
             showInterviewForm.value = true;
         };
-        const openInterviewEdit = (row) => {
+        const openInterviewEdit = async (row) => {
             interviewEditingId.value = row.id;
             interviewFormReadonly.value = false;
             resetInterviewFieldErrors();
+            await ensureInterviewRosterCatalog();
             INTERVIEW_FIELDS.forEach((f) => {
                 const raw = row[f.key] != null ? String(row[f.key]) : '';
                 interviewForm[f.key] = INTERVIEW_DATE_FIELD_KEYS.has(f.key)
@@ -933,6 +1028,11 @@ function emptyInterviewFilter() {
             });
         }
         function closeInterviewDropdownsForTarget(target) {
+            const rawNameRoot = interviewNameFilterRef.value;
+            const interviewNameRoot = Array.isArray(rawNameRoot) ? rawNameRoot[0] : rawNameRoot;
+            if (interviewNameDropdownOpen.value && interviewNameRoot && !rootContainsTarget(interviewNameRoot, target)) {
+                interviewNameDropdownOpen.value = false;
+            }
             const interviewPositionRoot = interviewPositionFilterRef.value;
             if (interviewPositionDropdownOpen.value && interviewPositionRoot && !rootContainsTarget(interviewPositionRoot, target)) {
                 interviewPositionDropdownOpen.value = false;
@@ -998,7 +1098,15 @@ function emptyInterviewFilter() {
             goRosterAddForInterviewHint,
             markInterviewHintLeftForName,
             applyInterviewFormPrefillFromLatestRow,
+            applyInterviewFormPrefillFromRosterRow,
             onInterviewFormCompactBlur,
+            interviewNameDropdownOpen,
+            interviewNameFilterRef,
+            filteredInterviewRosterNameOptions,
+            pickInterviewRosterOption,
+            onInterviewFormFullNameInput,
+            onInterviewFormFullNameFocus,
+            onInterviewFormFullNameBlur,
             openInterviewAdd,
             openInterviewAddForHintName,
             openInterviewEdit,

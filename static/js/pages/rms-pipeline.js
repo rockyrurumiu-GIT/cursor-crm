@@ -197,21 +197,27 @@
       hiredAtDates[String(appId)] = value;
     }
 
-    async function submitProgressConfirm(applicationId, toStatus, mode, formValues) {
+    function validateProgressFormValues(formValues, mode, targetStatus) {
       formValues = formValues || {};
       var note = String(formValues.note || "").trim();
       if (mode === "correction" && note.length < 2) {
-        toast("状态修正备注至少 2 个字", true);
-        return;
+        return "状态修正备注至少 2 个字";
       }
+      if (targetStatus === "hired") {
+        var dateVal = String(formValues.hired_at || "").trim();
+        if (!dateVal) {
+          return "请填写入职时间";
+        }
+      }
+      return "";
+    }
+
+    async function submitProgressConfirm(applicationId, toStatus, mode, formValues) {
+      formValues = formValues || {};
+      var note = String(formValues.note || "").trim();
       var body = { to_status: toStatus, mode: mode, note: note };
       if (toStatus === "hired") {
-        var dateVal = String(formValues.hired_at || todayDateStr()).trim();
-        if (!dateVal) {
-          toast("请填写入职时间", true);
-          return;
-        }
-        body.hired_at = dateVal;
+        body.hired_at = String(formValues.hired_at || todayDateStr()).trim();
       }
       var r = await rmsRequest("POST", "/api/rms/applications/" + applicationId + "/status", body);
       if (!r.ok) {
@@ -230,48 +236,68 @@
       await loadApplications();
     }
 
-    async function openProgressConfirmModal(app, targetStatus, mode) {
+    async function openProgressConfirmModal(app, targetStatus, mode, dialogError) {
       if (!app || app.id == null || !targetStatus) return;
       if (typeof global.crmConfirmActionDialog !== "function") {
         toast("确认对话框不可用", true);
         return;
       }
-      var lines = [
-        { label: "候选人", value: appCandidateName(app) },
-        { label: "岗位", value: appJobTitle(app) },
-        { label: "当前状态", value: progressLabel(app.status) },
-        { label: "目标状态", value: progressLabel(targetStatus) },
-        { label: "操作类型", value: mode === "correction" ? "状态修正" : "正常推进" },
-      ];
-      var hint = "";
-      if (app.status === "hired" && targetStatus !== "hired") {
-        hint = "确认后将清空入职时间。";
-      }
-      var fields = [{
-        type: "textarea",
-        name: "note",
-        label: "备注/原因",
-        placeholder: mode === "correction" ? "必填，至少 2 个字" : "可选",
-      }];
-      if (targetStatus === "hired") {
-        fields.push({
-          type: "date",
-          name: "hired_at",
-          label: "入职时间",
-          value: hiredAtFor(app.id),
+      while (true) {
+        var lines = [
+          { label: "候选人", value: appCandidateName(app) },
+          { label: "岗位", value: appJobTitle(app) },
+          { label: "当前状态", value: progressLabel(app.status) },
+          { label: "目标状态", value: progressLabel(targetStatus) },
+          { label: "操作类型", value: mode === "correction" ? "状态修正" : "正常推进" },
+        ];
+        var hint = "";
+        if (app.status === "hired" && targetStatus !== "hired") {
+          hint = "确认后将清空入职时间。";
+        }
+        var fields = [{
+          type: "textarea",
+          name: "note",
+          label: "备注/原因",
+          placeholder: mode === "correction" ? "必填，至少 2 个字" : "可选",
+          required: mode === "correction",
+          minLength: mode === "correction" ? 2 : 0,
+          minLengthMessage: "状态修正备注至少 2 个字",
+        }];
+        if (targetStatus === "hired") {
+          fields.push({
+            type: "date",
+            name: "hired_at",
+            label: "入职时间",
+            value: hiredAtFor(app.id),
+            required: true,
+          });
+        }
+        var result = await global.crmConfirmActionDialog({
+          title: "确认变更招聘进展",
+          lines: lines,
+          hint: hint,
+          fields: fields,
+          confirmText: "确认",
+          cancelText: "取消",
+          zIndex: 120,
+          initialError: dialogError || "",
+          validate: function (values) {
+            var err = validateProgressFormValues(values, mode, targetStatus);
+            if (err) {
+              return { ok: false, message: err };
+            }
+            return { ok: true };
+          },
         });
+        if (!result || !result.ok) return;
+        var validationError = validateProgressFormValues(result.values || {}, mode, targetStatus);
+        if (validationError) {
+          dialogError = validationError;
+          continue;
+        }
+        await submitProgressConfirm(app.id, targetStatus, mode, result.values || {});
+        return;
       }
-      var result = await global.crmConfirmActionDialog({
-        title: "确认变更招聘进展",
-        lines: lines,
-        hint: hint,
-        fields: fields,
-        confirmText: "确认",
-        cancelText: "取消",
-        zIndex: 120,
-      });
-      if (!result || !result.ok) return;
-      await submitProgressConfirm(app.id, targetStatus, mode, result.values || {});
     }
 
     async function openCorrectionPickerModal(app) {

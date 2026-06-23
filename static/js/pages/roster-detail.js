@@ -120,6 +120,7 @@ function normalizeAmountText(str) {
     return String(str || '').replace(/[¥￥,\s\u00a0]/g, '').trim();
 }
 const ROSTER_AMOUNT_FIELD_KEYS = new Set(['monthly_quote_tax', 'pre_tax_salary', 'gms']);
+const GM_CALC_OUTPUT_FIELD_KEYS = new Set(['gms', 'gm_pct']);
 function formatAmountThousandsInput(raw) {
     const digits = normalizeAmountText(raw);
     if (!digits) return '';
@@ -664,6 +665,9 @@ const rosterDetailApp = createApp({
         };
         const isAmountField = (key) => ROSTER_AMOUNT_FIELD_KEYS.has(key);
         const isGmPctField = (key) => key === 'gm_pct';
+        const isGmCalcOutputField = (key) => GM_CALC_OUTPUT_FIELD_KEYS.has(key);
+        const isCalcInputLockedField = (key) =>
+            calcFieldsLocked.value && (key === 'monthly_quote_tax' || key === 'pre_tax_salary');
         const onAmountFieldInput = (key, e) => {
             form[key] = formatAmountThousandsInput(e && e.target ? e.target.value : '');
             markTouched(key);
@@ -1379,7 +1383,7 @@ const rosterDetailApp = createApp({
             rosterCustomerSelectOptions,
             onboardingChannelSelectOptions,
             openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, canUseGmCalc, saveForm, doDelete, canDeletePermission,
-            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
+            triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, isGmCalcOutputField, isCalcInputLockedField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
             showRosterValidation, closeValidation, copyValidationResults,
             showRegularizationReminder, closeRegularizationReminder, copyRegularizationReminderResults,
             isRowChecked, setRowChecked, toggleShowCheckedOnly,

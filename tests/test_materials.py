@@ -689,7 +689,10 @@ def test_crm_api_exposes_patch():
 def test_materials_delete_button_text():
     root = Path(__file__).resolve().parent.parent
     html = (root / "templates/pages/materials.html").read_text(encoding="utf-8")
-    assert '@click="archiveMaterial(row)">删除</button>' in html
+    assert '@click="archiveMaterial(row)"' in html
+    assert 'aria-label="删除"' in html
+    assert 'title="删除"' in html
+    assert '@click="archiveMaterial(row)">删除</button>' not in html
     assert '@click="archiveMaterial(row)">归档</button>' not in html
     assert ">归档</button>" not in html
 

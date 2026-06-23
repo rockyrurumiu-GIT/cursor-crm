@@ -14,6 +14,13 @@ from tests.test_rms_phase0_permissions import _create_user, _login
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
+
+def _html_table_slice(html: str, table_open_marker: str) -> str:
+    start = html.index(table_open_marker)
+    end = html.index("</table>", start) + len("</table>")
+    return html[start:end]
+
+
 RMS_JS_BUNDLE_FILES = (
     "static/js/pages/rms-application-labels.js",
     "static/js/pages/rms-core.js",
@@ -110,8 +117,8 @@ def test_rms_frontend_js_assets_exist():
     assert "r3a-20260614" not in rms_html
     assert "r3b-20260614" not in rms_html
     assert "r3c-20260614" not in rms_html
-    assert "rms-ui-20260624" in rms_html
-    assert rms_html.count("rms-ui-20260624") >= 11
+    assert "rms-ui-20260636" in rms_html
+    assert rms_html.count("rms-ui-20260636") >= 11
 
     for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError", "createListPagination", "RMS_LIST_PAGE_SIZE"):
         assert sym in core_src, f"missing core symbol: {sym}"
@@ -676,12 +683,11 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     dr_table_marker = (
         '<table class="crm-table rms-candidates-table" data-table-id="rms-delivery-review">'
     )
-    dr_table_start = html.index(dr_table_marker)
-    dr_slice = html[dr_table_start : dr_table_start + 4000]
+    dr_slice = _html_table_slice(html, dr_table_marker)
     for col in (">年龄</th>", ">年限</th>", ">当前薪资</th>", ">期望薪资</th>", ">到岗时间</th>", ">学历</th>"):
         assert col in dr_slice, f"missing delivery review column {col}"
     assert ">简历</th>" not in dr_slice
-    assert 'class="crm-op-btn-detail">简历</a>' in dr_slice
+    assert 'class="crm-op-btn-detail" aria-label="简历"' in dr_slice
     assert "rms-delivery-review-op" in dr_slice
     assert "--rms-delivery-review-op-col-width" in html
     resize_js = (REPO_ROOT / "static/js/crm-table-resize.js").read_text(encoding="utf-8")
@@ -714,19 +720,17 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert ">详情</button>" not in picker_slice
 
     candidate_table_marker = '<table class="crm-table rms-candidates-table" data-table-id="rms-candidates">'
-    candidate_table_start = html.index(candidate_table_marker)
-    candidate_table_slice = html[candidate_table_start : candidate_table_start + 7000]
+    candidate_table_slice = _html_table_slice(html, candidate_table_marker)
     assert 'v-if="c.can_write"' in candidate_table_slice and 'openCandidateEdit(c)' in candidate_table_slice
     assert 'v-if="c.can_delete"' in candidate_table_slice and 'removeCandidate(c)' in candidate_table_slice
-    assert 'v-if="c.can_download_resume" :href="resumeDownloadUrl(c)"' in candidate_table_slice
-    assert 'aria-label="简历预览"' in candidate_table_slice or '简历预览' in candidate_table_slice
+    assert 'c.can_download_resume' in candidate_table_slice and 'resumeDownloadUrl(c)' in candidate_table_slice
+    assert 'resumeCanView(c)' in candidate_table_slice and 'aria-label="简历预览"' in candidate_table_slice
     assert '>简历</th>' not in candidate_table_slice
     assert 'v-if="canWriteCandidates" type="button" class="crm-op-btn-edit" @click="openCandidateEdit(c)"' not in candidate_table_slice
     assert 'v-if="canDeleteCandidates" type="button" class="crm-op-btn-delete"' not in candidate_table_slice
 
     jobs_table_marker = '<table class="crm-table rms-jobs-table" data-table-id="rms-jobs">'
-    jobs_table_start = html.index(jobs_table_marker)
-    jobs_table_slice = html[jobs_table_start : jobs_table_start + 7000]
+    jobs_table_slice = _html_table_slice(html, jobs_table_marker)
     assert 'v-if="j.can_write"' in jobs_table_slice and 'openJobEdit(j)' in jobs_table_slice
     assert 'openJobView(j)' in jobs_table_slice
     assert 'job-detail' in html or 'data-rms-region="job-detail"' in html
@@ -764,8 +768,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert ">年限</th>" in html
     cand_region = _extract_rms_region(html, "candidates")
     assert cand_region, "candidates region not found"
-    cand_table_start = html.index('data-table-id="rms-candidates"')
-    cand_slice = html[cand_table_start : cand_table_start + 3000]
+    cand_table_marker = '<table class="crm-table rms-candidates-table" data-table-id="rms-candidates">'
+    cand_slice = _html_table_slice(html, cand_table_marker)
     assert cand_slice.index(">来源</th>") < cand_slice.index(">推荐时间</th>")
     assert ">简历</th>" not in cand_slice
     assert ">详情</" in cand_region or "openCandidateDetail" in cand_region
@@ -817,7 +821,6 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert 'data-rms-action="progress-confirm-open"' in pipe_region
     assert 'data-rms-action="correction-picker-open"' in pipe_region
     assert "openCorrectionPickerModal" in pipe_region
-    assert "修改状态/历史更改" in pipe_region
     assert 'aria-label="修改"' in pipe_region or "openCorrectionPickerModal" in pipe_region
     assert 'aria-label="历史"' in pipe_region or "openStatusHistoryModal" in pipe_region
     assert "只看活动状态" in pipe_region
@@ -830,6 +833,10 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     applications_js = (REPO_ROOT / "static/js/pages/rms-applications.js").read_text(encoding="utf-8")
     assert "openProgressConfirmModal" in pipeline_js
     assert "progressOptionsForCorrection" in pipeline_js
+    assert "validate: function" in pipeline_js
+    assert "minLengthMessage" in pipeline_js
+    base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
+    assert "validateDialogInput" in base_html
     assert 'data-rms-action="progress-transition"' not in pipe_region
     assert "transitionProgress" not in pipe_region
     assert "progressOptions" in pipe_region
@@ -843,8 +850,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "statusMatchesFilter" in labels_src
     assert "isPipelineListRow" in labels_src
     assert ">确定</button>" in pipe_region
-    base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
     assert "crmConfirmActionDialog" in base_html
+    assert "options.validate" in base_html
     assert "openApplicationDetailModal" in apps_region
     assert "application-detail" in html or 'data-rms-region="application-detail"' in html
     assert "rms-candidate-drawer-section-title" in html
@@ -959,8 +966,8 @@ def test_rms_offer_management_shell():
     assert "resetOfferFilter" in offer_js
     assert "offerFilterPanelExpanded" in offer_js
     assert "scrollOffersToTop" in offer_js
+    assert "...offerManagement" in rms_js
     assert "合计（符合筛选条件）" in rms_html
-    assert "scrollOffersToTop" in rms_html
     assert "关键字模糊查询" in rms_html
     assert "入职日起" in rms_html
     assert "入职日止" in rms_html

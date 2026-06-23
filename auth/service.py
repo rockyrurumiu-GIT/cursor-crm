@@ -875,6 +875,24 @@ def list_roles(db: Session) -> List[Dict[str, Any]]:
             "SELECT id, code, name, description, is_builtin, created_at FROM sys_role ORDER BY id"
         )
     ).mappings().all()
+    user_rows = db.execute(
+        text(
+            "SELECT ur.role_id, u.id, u.username, u.display_name "
+            "FROM sys_user_role ur "
+            "JOIN sys_user u ON u.id = ur.user_id "
+            "ORDER BY ur.role_id, COALESCE(u.display_name, u.username), u.username"
+        )
+    ).mappings().all()
+    users_by_role: Dict[int, List[Dict[str, Any]]] = {}
+    for row in user_rows:
+        role_id = int(row["role_id"])
+        users_by_role.setdefault(role_id, []).append(
+            {
+                "id": int(row["id"]),
+                "username": str(row["username"]),
+                "display_name": str(row["display_name"] or row["username"]),
+            }
+        )
     out = []
     for row in rows:
         d = dict(row)
@@ -882,11 +900,9 @@ def list_roles(db: Session) -> List[Dict[str, Any]]:
         d["permissions"] = _role_permission_codes(db, rid)
         code = str(d.get("code") or "")
         d["is_builtin"] = bool(int(d.get("is_builtin") or 0)) or code in RESERVED_ROLE_CODES
-        cnt = db.execute(
-            text("SELECT COUNT(*) FROM sys_user_role WHERE role_id = :rid"),
-            {"rid": rid},
-        ).fetchone()
-        d["user_count"] = int(cnt[0]) if cnt else 0
+        bound = users_by_role.get(rid, [])
+        d["user_count"] = len(bound)
+        d["bound_users"] = bound
         out.append(d)
     return out
 

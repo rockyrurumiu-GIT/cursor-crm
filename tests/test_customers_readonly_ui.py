@@ -36,12 +36,18 @@ def test_customers_list_hides_client_write_controls():
     assert "hasPermission('delivery.handoff.read')" in html
     assert "hasPermission('delivery.handoff.review')" in html
 
-    assert 'v-if="canWriteClients" href="/customers/new"' in html
-    assert 'v-if="canReviewHandoff" href="/customers/reviews"' in html
-    assert 'v-if="canExportClients" type="button" @click="exportCSV"' in html
-    assert 'v-if="canWriteClients" :href="`/customers/${c.id}/edit`"' in html
-    assert 'v-if="canDeleteClients" type="button" @click="confirmDelete(c)"' in html
-    assert 'v-if="canWriteClients" :href="`/customers/${selectedClient.id}/edit`"' in html
+    assert 'v-if="canWriteClients"' in html
+    assert '@click="openCreateClient"' in html
+    assert 'aria-label="新增客户"' in html
+    assert 'v-if="canReviewHandoff"' in html
+    assert 'href="/customers/reviews"' in html
+    assert 'v-if="canExportClients"' in html
+    assert '@click="exportCSV"' in html
+    assert 'v-if="canWriteClients"' in html
+    assert '@click="openEditClient(c)"' in html
+    assert 'v-if="canDeleteClients"' in html
+    assert '@click="confirmDelete(c)"' in html
+    assert '@click="openEditClient(selectedClient)"' in html
     assert ':disabled="!canWriteClients"' in html
     assert 'v-if="canWriteClients" type="button" @click="updateClient(selectedClient)"' in html
     assert 'v-if="canReadContacts" href="/contacts/all"' in html

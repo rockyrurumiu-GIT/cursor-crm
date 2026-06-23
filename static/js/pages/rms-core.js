@@ -39,7 +39,8 @@
   }
 
   function workflowMessageForStatus(status, detail, endpoint) {
-    if (status === 404) {
+    var d = formatDetail(detail);
+    if (status === 404 && !d) {
       if (endpoint === "parse-draft") return "简历解析接口暂未接通";
       if (endpoint === "candidate-report") return "推荐上报接口暂未接通";
       if (endpoint === "delivery-review") return "交付内审接口暂未接通";

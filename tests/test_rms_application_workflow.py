@@ -32,6 +32,7 @@ from tests.test_rms_phase2_mvp import (
     _trial_job_and_candidate,
     _unique_phone,
 )
+from auth.data_scope_catalog import RESOURCE_RMS_CANDIDATE, SCOPE_NONE
 
 PARSE_DRAFT_URL = "/api/rms/applications/candidate-report/parse-draft"
 DELIVERY_REVIEW_LIST_URL = "/api/rms/applications/delivery-review"
@@ -916,6 +917,28 @@ def test_submit_candidate_report_creates_candidate_and_application(
         item for item in listed.json() if item["id"] == body["candidate"]["id"]
     )
     assert cand_row["recommended_at"] == body["application"]["recommended_at"]
+
+
+def test_submit_candidate_report_allows_resume_upload_without_candidate_write_scope(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    from tests.test_rms_phase2_mvp import _set_role_data_scope
+
+    _set_role_data_scope(
+        rms_engine, ROLE_DELIVERY, RESOURCE_RMS_CANDIDATE, "write", SCOPE_NONE
+    )
+    login, job_id, _cand_id, client_id = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, f"report_scope_{uniq}"
+    )
+    report = _full_candidate_report(job_id, client_id, phone=_unique_phone())
+    r = client_rbac.post(
+        "/api/rms/applications/candidate-report",
+        cookies=login.cookies,
+        data={"report_json": json.dumps(report, ensure_ascii=False)},
+        files={"file": ("resume.txt", b"resume content", "text/plain")},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["application"]["resume_id"]
 
 
 def test_submit_candidate_report_persists_txt_parse(

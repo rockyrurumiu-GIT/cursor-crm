@@ -463,9 +463,9 @@
         });
     }
 
-    function deptBoundUsersCell(dept) {
-        var users = dept.bound_users || [];
-        var count = dept.user_count != null ? dept.user_count : users.length;
+    function boundUsersCountCell(item) {
+        var users = item.bound_users || [];
+        var count = item.user_count != null ? item.user_count : users.length;
         if (!count) return '<span class="text-gray-400">0</span>';
         var labels = users.map(function (u) {
             return escHtml(u.display_name || u.username);
@@ -504,7 +504,7 @@
                 + '<td class="crm-td">' + typeCell + '</td>'
                 + '<td class="crm-td text-gray-600"><span class="block truncate" title="' + escAttr(parentLabel) + '">' + escHtml(parentLabel) + '</span></td>'
                 + '<td class="crm-td text-gray-600"><span class="block truncate" title="' + escAttr(headLabel) + '">' + escHtml(headLabel) + '</span></td>'
-                + '<td class="crm-td spc-dept-users-cell">' + deptBoundUsersCell(d) + '</td>'
+                + '<td class="crm-td spc-bound-users-cell">' + boundUsersCountCell(d) + '</td>'
                 + '<td class="crm-td">' + escHtml(d.status) + '</td>'
                 + '<td class="crm-td text-gray-600 font-mono text-xs">' + escHtml(d.code) + '</td>'
                 + '<td class="crm-td crm-sticky-right-op whitespace-nowrap">' + ops + '</td></tr>';
@@ -888,7 +888,7 @@
                 + '<td class="crm-td crm-name-cell"><span class="crm-name-link">' + (r.name || r.code) + '</span></td>'
                 + '<td class="crm-td text-gray-600 font-mono text-xs">' + r.code + '</td>'
                 + '<td class="crm-td">' + typeLabel + '</td>'
-                + '<td class="crm-td">' + (r.user_count || 0) + '</td>'
+                + '<td class="crm-td spc-bound-users-cell">' + boundUsersCountCell(r) + '</td>'
                 + '<td class="crm-td text-gray-600 max-w-xs truncate">' + desc + '</td>'
                 + '<td class="crm-td crm-sticky-right-op whitespace-nowrap">' + ops + '</td></tr>';
         }).join('');

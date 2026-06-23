@@ -47,7 +47,7 @@ def test_rms_nav_entry():
     rms_section = nav.split('class="nav-trigger cursor-default">招聘', 1)[1].split('class="nav-trigger cursor-default">权限中心', 1)[0]
     assert "帮助文件" not in rms_section
     help_section = nav.split('class="nav-trigger cursor-default">帮助中心', 1)[1]
-    assert 'href="/home/trash" data-crm-nav-perm="crm.clients.read">回收站与空间' in help_section
+    assert 'href="/home/trash" data-crm-nav-super="1">回收站与空间' in help_section
     assert 'href="/rms/import-help"' in help_section
     assert 'data-crm-nav-perm="rms.candidates.read">帮助文件-如何批量导入候选人' in help_section
     assert 'data-crm-nav-perm="rms.applications.write">帮助文件-如何分配非本人需求' in help_section
@@ -95,6 +95,14 @@ def test_home_digital_assets_nav():
     materials_idx = nav.index('href="/materials"')
     contracts_idx = nav.index('href="/contracts"')
     assert contracts_idx > materials_idx
+
+
+def test_trash_nav_super_admin_only():
+    sidebar = (Path(__file__).resolve().parent.parent / "templates" / "partials" / "sidebar_nav.html").read_text(encoding="utf-8")
+    base = (Path(__file__).resolve().parent.parent / "templates" / "base.html").read_text(encoding="utf-8")
+    assert 'href="/home/trash" data-crm-nav-super="1">回收站与空间' in sidebar
+    assert "data-crm-nav-super" in base
+    assert "window.crmIsSuper" in base
 
 
 def test_funnel_nav_under_customers_last():

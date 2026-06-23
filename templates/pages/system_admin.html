@@ -38,7 +38,15 @@
     .spc-audit-level-medium { background: #DBEAFE; color: #2563EB; border: 1px solid #BFDBFE; }
     .spc-audit-level-low { background: #F3F4F6; color: #1A1D1F; border: 1px solid #E5E7EB; }
     #permission-center-app.crm-skin .crm-table tbody td.crm-sticky-right-op { overflow: visible !important; }
-    #panel-depts .crm-table td.spc-dept-users-cell { overflow: visible !important; }
+    #panel-depts .crm-table td.spc-bound-users-cell,
+    #panel-roles .crm-table td.spc-bound-users-cell {
+        overflow: visible !important;
+    }
+    #panel-depts .crm-table tbody tr:hover td.spc-bound-users-cell,
+    #panel-roles .crm-table tbody tr:hover td.spc-bound-users-cell {
+        position: relative;
+        z-index: 20 !important;
+    }
     /* 部门管理：列宽分配 + 铺满容器 */
     #panel-depts .spc-depts-table {
         table-layout: fixed;
@@ -612,7 +620,7 @@
 </aside>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/system-permission-center.js?v=35"></script>
+<script src="/static/js/system-permission-center.js?v=37"></script>
 <script src="/static/js/gm-insurance-admin.js?v=3"></script>
 <script src="/static/js/rms-offer-approval-config-admin.js?v=2"></script>
 {% endblock %}

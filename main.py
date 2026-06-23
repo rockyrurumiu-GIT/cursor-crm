@@ -42,6 +42,7 @@ from auth.data_scope_catalog import (
 )
 from auth.deps import get_current_context
 from auth.migrate import run_all as run_schema_migrations
+from auth.recruitment_nav import recruitment_nav_middleware
 from auth.routes import build_router as build_auth_router
 from auth.service import AuthContext
 from services.date_utils import parse_loose_date as _parse_loose_date
@@ -1059,6 +1060,14 @@ app.add_middleware(
         is_authenticated=auth_deps.request_is_authenticated,
     )
 )
+app.add_middleware(
+    recruitment_nav_middleware(
+        get_db,
+        legacy_verify=_verify_admin_login,
+        legacy_effective_username=_effective_admin_username,
+        is_html_page_request=sec.is_html_page_request,
+    )
+)
 app.include_router(
     build_auth_router(
         get_db,
@@ -1745,7 +1754,10 @@ async def page_home_funnel(request: Request):
 
 
 @app.get("/home/trash", response_class=HTMLResponse)
-async def page_home_trash(request: Request):
+async def page_home_trash(
+    request: Request,
+    _ctx: AuthContext = Depends(auth_deps._require_super_admin),
+):
     return _page("pages/home_trash.html", request)
 
 

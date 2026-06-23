@@ -423,6 +423,30 @@ def _filtered_candidates_query(
     return q
 
 
+def get_candidate_for_write_action(
+    db: Session,
+    ctx: AuthContext,
+    candidate_id: int,
+    RmsCandidate: Type[Any],
+    RmsApplication: Type[Any],
+    Client: Type[Any],
+) -> Any:
+    """Resolve candidate for write/upload; creators may act on own records without candidate write scope."""
+    row = _filtered_candidates_query(
+        db, ctx, RmsCandidate, RmsApplication, Client, action="write"
+    ).filter(RmsCandidate.id == candidate_id).first()
+    if row is not None:
+        return row
+    row = db.query(RmsCandidate).filter(RmsCandidate.id == candidate_id).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="候选人不存在")
+    if ctx.is_super:
+        return row
+    if ctx.user_id is not None and int(row.created_by_user_id or 0) == int(ctx.user_id):
+        return row
+    raise HTTPException(status_code=404, detail="候选人不存在")
+
+
 def _candidate_action_allowed(
     db: Session,
     ctx: AuthContext,

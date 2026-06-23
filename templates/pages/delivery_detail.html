@@ -399,6 +399,36 @@
         height: 4.5rem;
         max-height: 4.5rem;
     }
+    .interview-name-suggest-dropdown {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: calc(100% + 4px);
+        z-index: 60;
+        max-height: 14rem;
+        overflow-y: auto;
+        border: 1px solid #d0d7de;
+        border-radius: 0.5rem;
+        background: #fff;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+    }
+    .interview-name-suggest-option {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.125rem;
+        width: 100%;
+        padding: 0.5rem 0.75rem;
+        text-align: left;
+        font-size: 0.8125rem;
+        color: #1f2328;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+    }
+    .interview-name-suggest-option:hover {
+        background: #f6f8fa;
+    }
     /* 管道/结算弹窗：编辑态默认两行高；详情只读态更高且不可拖拽 */
     .delivery-modal-textarea {
         width: 100%;
@@ -2017,6 +2047,31 @@
                             @input="clearInterviewFieldErrorKey(f.key)"
                             :class="['interview-modal-textarea rounded px-2 py-1.5 text-sm', interviewFieldErrors[f.key] ? 'border-2 border-red-400' : 'border border-gray-300']"
                         ></textarea>
+                        <div v-else-if="f.key === 'full_name'" ref="interviewNameFilterRef" class="relative">
+                            <input
+                                v-model="interviewForm.full_name"
+                                type="text"
+                                autocomplete="off"
+                                :disabled="interviewFormReadonly"
+                                placeholder="输入姓名搜索花名册…"
+                                @input="onInterviewFormFullNameInput"
+                                @focus="onInterviewFormFullNameFocus"
+                                @blur="onInterviewFormFullNameBlur(); onInterviewFormCompactBlur(f.key)"
+                                :class="[
+                                    'crm-form-control',
+                                    interviewFieldErrors[f.key] ? 'crm-form-control--error' : ''
+                                ]"
+                            />
+                            <ul v-if="!interviewFormReadonly && interviewNameDropdownOpen && filteredInterviewRosterNameOptions.length" class="interview-name-suggest-dropdown">
+                                <li v-for="opt in filteredInterviewRosterNameOptions" :key="'iname-' + opt.id">
+                                    <button type="button" class="interview-name-suggest-option" @mousedown.prevent="pickInterviewRosterOption(opt)">
+                                        <span class="font-medium">{{ opt.full_name }}</span>
+                                        <span class="text-xs text-gray-500">{{ opt.position_title || '—' }} · {{ opt.contact_info || '—' }}</span>
+                                        <span v-if="isInterviewAggregate && opt.customer_name" class="text-xs text-gray-400">{{ opt.customer_name }}</span>
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
                         <input
                             v-else
                             v-model="interviewForm[f.key]"
@@ -2437,7 +2492,7 @@ window.__CRM_DELIVERY_DETAIL__ = {
 <script src="/static/js/core/crm-download.js"></script>
 <script src="/static/js/pages/delivery-detail.js"></script>
 <script src="/static/js/pages/delivery-detail-settlement.js?v=delete-perm-20260617"></script>
-<script src="/static/js/pages/delivery-detail-interviews.js?v=delete-perm-20260617"></script>
+<script src="/static/js/pages/delivery-detail-interviews.js?v=20260626c"></script>
 <script src="/static/js/pages/delivery-detail-handbook.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-employee-files.js?v=20260626b"></script>
 <script>
@@ -2694,6 +2749,13 @@ createApp({
             openInterviewAdd,
             openInterviewAddForHintName,
             onInterviewFormCompactBlur,
+            interviewNameDropdownOpen,
+            interviewNameFilterRef,
+            filteredInterviewRosterNameOptions,
+            pickInterviewRosterOption,
+            onInterviewFormFullNameInput,
+            onInterviewFormFullNameFocus,
+            onInterviewFormFullNameBlur,
             openInterviewEdit,
             openInterviewDetail,
             saveInterviewForm,
@@ -2993,7 +3055,10 @@ createApp({
             showInterviewForm, interviewEditingId, interviewFormReadonly, interviewForm,
             interviewFieldErrors, interviewFieldRequired, clearInterviewFieldErrorKey, interviewTextLength, deliveryJudgmentDuplicate,
             showInterviewLogs, interviewLogsLoading, interviewLogs,
-            openInterviewAdd, openInterviewAddForHintName, onInterviewFormCompactBlur, openInterviewEdit, openInterviewDetail, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
+            openInterviewAdd, openInterviewAddForHintName, onInterviewFormCompactBlur,
+            interviewNameDropdownOpen, interviewNameFilterRef, filteredInterviewRosterNameOptions,
+            pickInterviewRosterOption, onInterviewFormFullNameInput, onInterviewFormFullNameFocus, onInterviewFormFullNameBlur,
+            openInterviewEdit, openInterviewDetail, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
             triggerInterviewImport, onInterviewImportFile,
             exportInterviewCsv, openInterviewLogs, restoreInterviewLatestBackup, copyInterviewHints, exportInterviewHintsCsv,
             formatDate, canDeletePermission, canViewDeliveryLogs,

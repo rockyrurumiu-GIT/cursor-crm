@@ -48,11 +48,9 @@ async def upload_candidate_resume(
     Client: Type[Any],
     RmsResume: Type[Any],
 ) -> Dict[str, Any]:
-    row = cand_svc._filtered_candidates_query(
-        db, ctx, RmsCandidate, RmsApplication, Client, action="write"
-    ).filter(RmsCandidate.id == candidate_id).first()
-    if not row:
-        raise HTTPException(status_code=404, detail="候选人不存在")
+    cand_svc.get_candidate_for_write_action(
+        db, ctx, candidate_id, RmsCandidate, RmsApplication, Client
+    )
 
     raw_name = upload.filename or ""
     ext = os.path.splitext(raw_name)[1].lower()
