@@ -604,6 +604,8 @@ class DeliveryEmployeeFile(Base):
     labor_contract_no = Column(String, default="")
     contract_sign_date = Column(String, default="")
     contract_valid_until = Column(String, default="")
+    upload_group_id = Column(String, default="")
+    remarks = Column(String, default="")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -952,6 +954,8 @@ def _ensure_employee_files_schema_compat():
             "labor_contract_no": "TEXT DEFAULT ''",
             "contract_sign_date": "TEXT DEFAULT ''",
             "contract_valid_until": "TEXT DEFAULT ''",
+            "upload_group_id": "TEXT DEFAULT ''",
+            "remarks": "TEXT DEFAULT ''",
         }
         for col, ddl in add_cols.items():
             if col not in existing:

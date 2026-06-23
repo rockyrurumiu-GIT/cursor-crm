@@ -1377,10 +1377,11 @@
                 </div>
             </div>
             <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
-                <table class="crm-table employee-files-table handbook-table min-w-full text-sm" data-table-id="employee-files" data-table-min-width="1280">
+                <table class="crm-table employee-files-table handbook-table min-w-full text-sm" data-table-id="employee-files" data-table-min-width="1360">
                     <colgroup>
                         <col class="employee-files-col-name">
                         <col class="employee-files-col-filename">
+                        <col>
                         <col>
                         <col>
                         <col>
@@ -1395,6 +1396,7 @@
                             <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h10"/></svg>文件类型</th>
                             <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM8.5 12l2.5 2.5 4.5-4.5"/></svg>状态</th>
                             <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6M9 16h6M9 8h6M5 4h14a2 2 0 0 1 2 2v14l-4-2-4 2-4-2-4 2V6a2 2 0 0 1 2-2Z"/></svg>劳动合同编号</th>
+                            <th class="crm-th text-left"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h10M4 17h14"/></svg>备注</th>
                             <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M4 11h16M6 5h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>有效期至</th>
                             <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0-8.5-12M12 7.5V12l3 1.8"/></svg>上传时间</th>
                             <th class="crm-th crm-sticky-right-op employee-files-op-col"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
@@ -1404,20 +1406,24 @@
                         <tr v-for="f in pagedEmployeeFiles" :key="f.id">
                             <td class="crm-td employee-files-col-name employee-files-sticky-name">{{ f.employee_full_name || '—' }}</td>
                             <td class="crm-td crm-name-cell handbook-col-text employee-files-col-filename employee-files-sticky-filename">
-                                <button type="button" class="crm-name-link" @click="openEmployeeFileDetailDrawer(f)"><span class="crm-cell-clip">{{ f.original_filename }}</span></button>
+                                <div v-if="employeeFileEntryIsGroup(f)" class="flex flex-col gap-0.5 min-w-0">
+                                    <button v-for="file in employeeFileEntryFiles(f)" :key="'ef-' + f.id + '-' + file.id" type="button" class="crm-name-link text-left" @click="openEmployeeFilePreviewFromFilename(f, file)"><span class="crm-cell-clip">{{ file.original_filename }}</span></button>
+                                </div>
+                                <button v-else type="button" class="crm-name-link" @click="openEmployeeFilePreviewFromFilename(f)"><span class="crm-cell-clip">{{ f.original_filename }}</span></button>
                             </td>
                             <td class="crm-td">{{ employeeFileDocumentTypeLabel(f) }}</td>
                             <td class="crm-td"><span class="rounded-full px-2 py-0.5 text-xs" :class="employeeFileStatusClass(f.status)">{{ employeeFileStatusLabel(f.status) }}</span></td>
                             <td class="crm-td text-xs whitespace-nowrap">{{ employeeFileLaborContractNoLabel(f) }}</td>
+                            <td class="crm-td handbook-col-text max-w-[10rem]"><span class="crm-cell-clip" :title="employeeFileRemarksLabel(f)">{{ employeeFileRemarksLabel(f) }}</span></td>
                             <td class="crm-td text-xs whitespace-nowrap">{{ employeeFileValidUntilLabel(f) }}</td>
                             <td class="crm-td text-xs whitespace-nowrap">{{ employeeFileDisplayDate(f.created_at) }}</td>
                             <td class="crm-td whitespace-nowrap crm-sticky-right-op employee-files-op-col">
                                 <div class="crm-op-actions">
-                                    <span v-if="employeeFileCanPreview(f)" class="group relative inline-flex">
-                                        <button type="button" class="crm-op-btn-detail" aria-label="预览" @click="openEmployeeFilePreview(f)">
+                                    <span class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-detail" aria-label="详情" @click="openEmployeeFileDetailDrawer(f)">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                                         </button>
-                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">预览</span>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">详情</span>
                                     </span>
                                     <span class="group relative inline-flex">
                                         <button type="button" class="crm-op-btn-edit" aria-label="下载" @click="downloadEmployeeFile(f)">
@@ -1441,7 +1447,7 @@
                             </td>
                         </tr>
                         <tr v-if="!pagedEmployeeFiles.length">
-                            <td colspan="8" class="crm-td text-center text-gray-400 py-8">暂无员工文件，请上传。</td>
+                            <td colspan="9" class="crm-td text-center text-gray-400 py-8">暂无员工文件，请上传。</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1851,6 +1857,18 @@
                             </label>
                         </div>
                     </template>
+                    <template v-else>
+                        <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+                            <label class="flex flex-col gap-1 min-w-0">
+                                <span class="text-[#57606a]">员工姓名</span>
+                                <input v-model.trim="employeeFileUploadForm.employee_full_name" type="text" class="crm-form-control" placeholder="可选" />
+                            </label>
+                            <label class="flex flex-col gap-1 min-w-0 col-span-2">
+                                <span class="text-[#57606a]">备注</span>
+                                <textarea v-model.trim="employeeFileUploadForm.remarks" rows="2" class="crm-form-control resize-y" placeholder="可选，例如批次说明"></textarea>
+                            </label>
+                        </div>
+                    </template>
                     <div>
                         <span class="block text-[#57606a] mb-2">文件<span class="text-red-500">*</span></span>
                         <div
@@ -1864,7 +1882,7 @@
                         >
                             <template v-if="!employeeFileUploadSelectedSummary">
                                 <span class="text-sm text-[#57606a]">点击或拖拽文件到此处</span>
-                                <span class="mt-1 text-xs text-[#656d76]">支持 PDF、Word、Excel、图片、压缩包等格式，可多选</span>
+                                <span class="mt-1 text-xs text-[#656d76]">{{ isLaborContractUpload ? '支持 PDF、Word、Excel 等格式，每次 1 个文件' : '支持 PDF、Word、Excel、图片、压缩包等格式，可多选' }}</span>
                             </template>
                             <div v-else class="handbook-upload-file-row">
                                 <span class="min-w-0 truncate text-sm text-[#0969da]">{{ employeeFileUploadSelectedSummary }}</span>
@@ -2139,8 +2157,8 @@
     <aside v-if="employeeFileDetailRow && moduleKey === 'employee_files'" class="crm-esc-modal crm-right-drawer open">
         <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
             <div class="min-w-0">
-                <h3 class="text-lg font-bold text-gray-900 truncate">{{ employeeFileDetailRow.original_filename || '员工文件详情' }}</h3>
-                <p class="text-sm text-gray-500 mt-0.5">{{ employeeFileMediaLabel(employeeFileDetailRow) }}</p>
+                <h3 class="text-lg font-bold text-gray-900 truncate">{{ employeeFileEntryLabel(employeeFileDetailRow) }}</h3>
+                <p class="text-sm text-gray-500 mt-0.5">{{ employeeFileDocumentTypeLabel(employeeFileDetailRow) }}<span v-if="employeeFileEntryIsGroup(employeeFileDetailRow)"> · {{ employeeFileEntryFiles(employeeFileDetailRow).length }} 个文件</span></p>
             </div>
             <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closeEmployeeFileDetailDrawer">&times;</button>
         </div>
@@ -2157,6 +2175,10 @@
                 <div v-if="employeeFileDetailRow.employee_full_name">
                     <dt class="text-xs text-gray-400 mb-0.5">员工姓名</dt>
                     <dd class="font-medium text-gray-800">{{ employeeFileDetailRow.employee_full_name }}</dd>
+                </div>
+                <div v-if="employeeFileDetailRow.remarks">
+                    <dt class="text-xs text-gray-400 mb-0.5">备注</dt>
+                    <dd class="font-medium text-gray-800 whitespace-pre-wrap">{{ employeeFileDetailRow.remarks }}</dd>
                 </div>
                 <div v-if="employeeFileDetailRow.employee_contact_info">
                     <dt class="text-xs text-gray-400 mb-0.5">手机号</dt>
@@ -2178,7 +2200,19 @@
                     <dt class="text-xs text-gray-400 mb-0.5">合同有效期至</dt>
                     <dd class="font-medium text-gray-800">{{ employeeFileDisplayDate(employeeFileDetailRow.contract_valid_until) }}</dd>
                 </div>
-                <div>
+                <div v-if="employeeFileEntryIsGroup(employeeFileDetailRow)">
+                    <dt class="text-xs text-gray-400 mb-0.5">文件列表</dt>
+                    <dd class="space-y-2">
+                        <div v-for="file in employeeFileEntryFiles(employeeFileDetailRow)" :key="'efd-' + file.id" class="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2">
+                            <span class="min-w-0 truncate text-sm text-gray-800" :title="file.original_filename">{{ file.original_filename }}</span>
+                            <div class="flex shrink-0 items-center gap-1">
+                                <button v-if="employeeFileCanPreview(file)" type="button" class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50" @click="openEmployeeFilePreview(file)">预览</button>
+                                <button type="button" class="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50" @click="downloadEmployeeFile(file)">下载</button>
+                            </div>
+                        </div>
+                    </dd>
+                </div>
+                <div v-else>
                     <dt class="text-xs text-gray-400 mb-0.5">格式</dt>
                     <dd class="font-medium text-gray-800">{{ employeeFileMediaLabel(employeeFileDetailRow) }}</dd>
                 </div>
@@ -2405,7 +2439,7 @@ window.__CRM_DELIVERY_DETAIL__ = {
 <script src="/static/js/pages/delivery-detail-settlement.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-interviews.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-handbook.js?v=delete-perm-20260617"></script>
-<script src="/static/js/pages/delivery-detail-employee-files.js?v=20260625c"></script>
+<script src="/static/js/pages/delivery-detail-employee-files.js?v=20260626b"></script>
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } = Vue;
 const {
@@ -2812,6 +2846,10 @@ createApp({
             employeeFileDocumentTypeLabel,
             employeeFileLaborContractNoLabel,
             employeeFileValidUntilLabel,
+            employeeFileRemarksLabel,
+            employeeFileEntryFiles,
+            employeeFileEntryIsGroup,
+            employeeFileEntryLabel,
             employeeFileCanPreview,
             isLaborContractUpload,
             employeeFileCanPublish,
@@ -2826,6 +2864,7 @@ createApp({
             openEmployeeFileDetailDrawer,
             closeEmployeeFileDetailDrawer,
             openEmployeeFilePreview,
+            openEmployeeFilePreviewFromFilename,
             openEmployeeFilePreviewFromDetail,
             closeEmployeeFilePreview,
             downloadEmployeeFile,
@@ -2870,8 +2909,10 @@ createApp({
                 await nextTick();
                 document.querySelectorAll('table[data-table-id="employee-files"]').forEach((table) => {
                     const nameTh = table.querySelector('thead th.employee-files-sticky-name');
-                    if (nameTh && nameTh.offsetWidth > 0) {
+                    const filenameTh = table.querySelector('thead th.employee-files-sticky-filename');
+                    if (nameTh && filenameTh && nameTh.offsetWidth > 0) {
                         table.style.setProperty('--employee-files-sticky-name-width', `${nameTh.offsetWidth}px`);
+                        table.style.setProperty('--employee-files-sticky-filename-left', `${nameTh.offsetWidth}px`);
                     }
                 });
             }
@@ -2925,9 +2966,10 @@ createApp({
             employeeFilePreviewRow, employeeFilePreviewUrl, employeeFilePreviewMode,
             openEmployeeFileUploadModal, closeEmployeeFileUploadModal, triggerEmployeeFileUploadPick,
             onEmployeeFileUploadFileChange, onEmployeeFileUploadDrop, clearEmployeeFileUploadFiles, submitEmployeeFileUpload,
-            openEmployeeFilePreview, openEmployeeFilePreviewFromDetail, closeEmployeeFilePreview,
+            openEmployeeFilePreview, openEmployeeFilePreviewFromFilename, openEmployeeFilePreviewFromDetail, closeEmployeeFilePreview,
             employeeFileStatusLabel, employeeFileStatusClass, employeeFileMediaLabel, employeeFileDocumentTypeLabel,
-            employeeFileLaborContractNoLabel, employeeFileValidUntilLabel,
+            employeeFileLaborContractNoLabel, employeeFileValidUntilLabel, employeeFileRemarksLabel,
+            employeeFileEntryFiles, employeeFileEntryIsGroup, employeeFileEntryLabel,
             employeeFileCanPreview, employeeFileCanPublish, employeeFileDisplayDate,
             isLaborContractUpload,
             downloadEmployeeFile, removeEmployeeFile, publishEmployeeFile,

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import time
+import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Tuple, Type
 
@@ -22,8 +23,11 @@ from schemas.delivery_employee_files import (
 )
 from services.delivery_employee_files import (
     employee_file_client_dir_rel,
+    employee_file_entry_dict_for_row,
     employee_file_normalize_status,
     employee_file_row_to_dict,
+    employee_file_resolve_group_rows,
+    employee_files_group_list,
     is_labor_contract_row,
     labor_contract_delete_is_hard,
     prepare_labor_contract_upload,
@@ -97,7 +101,7 @@ def register_delivery_employee_file_routes(
             .order_by(desc(DeliveryEmployeeFile.created_at))
             .all()
         )
-        return [_row_to_dict(r) for r in rows]
+        return employee_files_group_list(rows, sec.file_access_url)
 
     @app.post("/api/clients/{client_id}/delivery/employee-files")
     async def upload_delivery_employee_files(
@@ -109,6 +113,7 @@ def register_delivery_employee_file_routes(
         employee_contact_info: str = Form(default=""),
         contract_sign_date: str = Form(default=""),
         contract_valid_until: str = Form(default=""),
+        remarks: str = Form(default=""),
         confirm_same_year_renewal: int = Form(default=0),
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
@@ -156,6 +161,11 @@ def register_delivery_employee_file_routes(
         os.makedirs(abs_dir, exist_ok=True)
         ts_base = int(time.time() * 1000000)
         st = employee_file_normalize_status(status or "draft")
+        upload_group_id = ""
+        non_labor_name = str(employee_full_name or "").strip()
+        non_labor_remarks = str(remarks or "").strip()
+        if not is_labor and len(file_payloads) > 1:
+            upload_group_id = uuid.uuid4().hex
         saved: List = []
         written_paths: List[str] = []
         now = datetime.now()
@@ -182,6 +192,10 @@ def register_delivery_employee_file_routes(
                     row_kwargs.update(lc_ctx)
                 elif doc_type:
                     row_kwargs["document_type"] = doc_type
+                    row_kwargs["employee_full_name"] = non_labor_name
+                    row_kwargs["remarks"] = non_labor_remarks
+                    if upload_group_id:
+                        row_kwargs["upload_group_id"] = upload_group_id
                 row = DeliveryEmployeeFile(**row_kwargs)
                 db.add(row)
                 saved.append(row)
@@ -233,17 +247,34 @@ def register_delivery_employee_file_routes(
             raise HTTPException(status_code=404, detail="记录不存在")
         if not isinstance(body, dict):
             raise HTTPException(status_code=400, detail="无效请求体")
+        group_rows = employee_file_resolve_group_rows(db, client_id, row, DeliveryEmployeeFile)
+        now = datetime.now()
         if "status" in body:
             st = str(body.get("status") or "").strip().lower()
             if st not in EMPLOYEE_FILE_STATUS_SET:
                 raise HTTPException(status_code=400, detail="无效状态")
-            row.status = st
-        row.updated_at = datetime.now()
+            for member in group_rows:
+                member.status = st
+                member.updated_at = now
+        if "employee_full_name" in body and not is_labor_contract_row(row):
+            name = str(body.get("employee_full_name") or "").strip()
+            for member in group_rows:
+                member.employee_full_name = name
+                member.updated_at = now
+        if "remarks" in body and not is_labor_contract_row(row):
+            note = str(body.get("remarks") or "").strip()
+            for member in group_rows:
+                member.remarks = note
+                member.updated_at = now
+        if len(group_rows) == 1 and not any(k in body for k in ("status", "employee_full_name", "remarks")):
+            row.updated_at = now
         db.commit()
         db.refresh(row)
         db.add(AuditLog(client_id=client_id, operator=user, action=f"员工文件修改 id={row_id}"))
         db.commit()
-        return _row_to_dict(row)
+        return employee_file_entry_dict_for_row(
+            db, client_id, row, DeliveryEmployeeFile, sec.file_access_url
+        )
 
     @app.delete("/api/clients/{client_id}/delivery/employee-files/{row_id}")
     async def delete_delivery_employee_file(
@@ -270,12 +301,41 @@ def register_delivery_employee_file_routes(
         if not row:
             raise HTTPException(status_code=404, detail="记录不存在")
 
-        label = (row.original_filename or f"#{row_id}").strip()
+        group_rows = employee_file_resolve_group_rows(db, client_id, row, DeliveryEmployeeFile)
         if is_labor_contract_row(row):
-            label = (row.labor_contract_no or label).strip()
+            label = (row.labor_contract_no or row.original_filename or f"#{row_id}").strip()
+            if labor_contract_delete_is_hard(row):
+                sp = (row.stored_path or "").strip()
+                if sp:
+                    try:
+                        abs_path = sec.resolve_upload_path(upload_dir, sp)
+                        if os.path.isfile(abs_path):
+                            os.remove(abs_path)
+                    except (ValueError, OSError):
+                        pass
+                db.delete(row)
+                db.add(
+                    AuditLog(
+                        client_id=client_id,
+                        operator=user,
+                        action=f"员工文件删除(草稿劳动合同): {label}",
+                    )
+                )
+                db.commit()
+                return {"status": "ok"}
 
-        if labor_contract_delete_is_hard(row):
-            sp = (row.stored_path or "").strip()
+            row.status = "deprecated"
+            row.updated_at = datetime.now()
+            db.add(AuditLog(client_id=client_id, operator=user, action=f"员工文件作废: {label}"))
+            db.commit()
+            return {"status": "ok"}
+
+        labels = []
+        for member in group_rows:
+            labels.append((member.original_filename or f"#{member.id}").strip())
+        label = labels[0] if len(labels) == 1 else f"{labels[0]} 等 {len(labels)} 个文件"
+        for member in group_rows:
+            sp = (member.stored_path or "").strip()
             if sp:
                 try:
                     abs_path = sec.resolve_upload_path(upload_dir, sp)
@@ -283,33 +343,7 @@ def register_delivery_employee_file_routes(
                         os.remove(abs_path)
                 except (ValueError, OSError):
                     pass
-            db.delete(row)
-            db.add(
-                AuditLog(
-                    client_id=client_id,
-                    operator=user,
-                    action=f"员工文件删除(草稿劳动合同): {label}",
-                )
-            )
-            db.commit()
-            return {"status": "ok"}
-
-        if is_labor_contract_row(row):
-            row.status = "deprecated"
-            row.updated_at = datetime.now()
-            db.add(AuditLog(client_id=client_id, operator=user, action=f"员工文件作废: {label}"))
-            db.commit()
-            return {"status": "ok"}
-
-        sp = (row.stored_path or "").strip()
-        if sp:
-            try:
-                abs_path = sec.resolve_upload_path(upload_dir, sp)
-                if os.path.isfile(abs_path):
-                    os.remove(abs_path)
-            except (ValueError, OSError):
-                pass
-        db.delete(row)
+            db.delete(member)
         db.add(AuditLog(client_id=client_id, operator=user, action=f"员工文件删除: {label}"))
         db.commit()
         return {"status": "ok"}

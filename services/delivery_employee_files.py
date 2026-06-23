@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 import re
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -188,6 +188,100 @@ def employee_file_row_to_dict(r, file_access_url_fn: Callable[[str], str]) -> Di
         "labor_contract_no": getattr(r, "labor_contract_no", None) or "",
         "contract_sign_date": getattr(r, "contract_sign_date", None) or "",
         "contract_valid_until": getattr(r, "contract_valid_until", None) or "",
+        "upload_group_id": getattr(r, "upload_group_id", None) or "",
+        "remarks": getattr(r, "remarks", None) or "",
         "created_at": r.created_at.isoformat() if r.created_at else "",
         "updated_at": handbook_dt_iso(getattr(r, "updated_at", None)),
     }
+
+
+def _employee_file_filename_summary(files: List[Dict[str, Any]]) -> str:
+    names = [str(f.get("original_filename") or "").strip() for f in files if str(f.get("original_filename") or "").strip()]
+    if not names:
+        return ""
+    if len(names) == 1:
+        return names[0]
+    return f"{names[0]} 等 {len(names)} 个文件"
+
+
+def employee_file_entry_from_files(files: List[Dict[str, Any]]) -> Dict[str, Any]:
+    if not files:
+        raise ValueError("empty files")
+    ordered = sorted(files, key=lambda x: int(x.get("id") or 0))
+    primary = ordered[0]
+    gid = str(primary.get("upload_group_id") or "").strip()
+    is_group = len(ordered) > 1
+    return {
+        "id": primary["id"],
+        "client_id": primary.get("client_id"),
+        "upload_group_id": gid,
+        "file_count": len(ordered),
+        "is_group": is_group,
+        "files": ordered,
+        "original_filename": _employee_file_filename_summary(ordered) if is_group else (primary.get("original_filename") or ""),
+        "preview_url": primary.get("preview_url") or "",
+        "media_kind": primary.get("media_kind") or "",
+        "status": primary.get("status") or "draft",
+        "document_type": primary.get("document_type") or "",
+        "employee_full_name": primary.get("employee_full_name") or "",
+        "employee_contact_info": primary.get("employee_contact_info") or "",
+        "roster_entry_id": primary.get("roster_entry_id"),
+        "throme_staff_no": primary.get("throme_staff_no") or "",
+        "labor_contract_no": primary.get("labor_contract_no") or "",
+        "contract_sign_date": primary.get("contract_sign_date") or "",
+        "contract_valid_until": primary.get("contract_valid_until") or "",
+        "remarks": primary.get("remarks") or "",
+        "created_at": primary.get("created_at") or "",
+        "updated_at": primary.get("updated_at") or "",
+    }
+
+
+def employee_files_group_list(rows, file_access_url_fn: Callable[[str], str]) -> List[Dict[str, Any]]:
+    flat = [employee_file_row_to_dict(r, file_access_url_fn) for r in rows]
+    by_group: Dict[str, List[Dict[str, Any]]] = {}
+    singles: List[Dict[str, Any]] = []
+    for item in flat:
+        gid = str(item.get("upload_group_id") or "").strip()
+        if gid:
+            by_group.setdefault(gid, []).append(item)
+        else:
+            singles.append(item)
+    out: List[Dict[str, Any]] = []
+    for item in singles:
+        out.append(employee_file_entry_from_files([item]))
+    for group_files in by_group.values():
+        out.append(employee_file_entry_from_files(group_files))
+    out.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    return out
+
+
+def employee_file_resolve_group_rows(
+    db: Session,
+    client_id: int,
+    row,
+    DeliveryEmployeeFile: Type[Any],
+) -> List[Any]:
+    gid = str(getattr(row, "upload_group_id", None) or "").strip()
+    if gid:
+        return (
+            db.query(DeliveryEmployeeFile)
+            .filter(
+                DeliveryEmployeeFile.client_id == int(client_id),
+                DeliveryEmployeeFile.upload_group_id == gid,
+            )
+            .order_by(DeliveryEmployeeFile.id)
+            .all()
+        )
+    return [row]
+
+
+def employee_file_entry_dict_for_row(
+    db: Session,
+    client_id: int,
+    row,
+    DeliveryEmployeeFile: Type[Any],
+    file_access_url_fn: Callable[[str], str],
+) -> Dict[str, Any]:
+    group_rows = employee_file_resolve_group_rows(db, client_id, row, DeliveryEmployeeFile)
+    files = [employee_file_row_to_dict(r, file_access_url_fn) for r in group_rows]
+    return employee_file_entry_from_files(files)

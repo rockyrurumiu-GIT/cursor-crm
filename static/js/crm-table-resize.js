@@ -433,6 +433,7 @@
         }
         if (table.dataset.tableId === 'employee-files') {
             table.style.setProperty('--employee-files-sticky-name-width', px(0));
+            table.style.setProperty('--employee-files-sticky-filename-left', px(0));
             return;
         }
         if (table.dataset.tableId === 'customer-visits') {

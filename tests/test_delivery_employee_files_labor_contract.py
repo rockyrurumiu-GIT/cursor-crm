@@ -319,6 +319,44 @@ class TestLaborContractUpload:
         assert not body.get("employee_full_name")
         assert not body.get("labor_contract_no")
 
+    def test_non_labor_accepts_multiple_files(self, client, headers):
+        cid = _create_client(client, headers)
+        r = client.post(
+            f"/api/clients/{cid}/delivery/employee-files",
+            headers=headers,
+            files=[
+                ("files", ("a.pdf", _MIN_PDF, "application/pdf")),
+                ("files", ("b.pdf", _MIN_PDF, "application/pdf")),
+                ("files", ("c.pdf", _MIN_PDF, "application/pdf")),
+            ],
+            data={
+                "status": "draft",
+                "document_type": "入职材料",
+                "employee_full_name": "朱沿峰",
+                "remarks": "入职材料批次",
+            },
+        )
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert len(body) == 3
+        assert all(row.get("document_type") == "入职材料" for row in body)
+        assert all(row.get("employee_full_name") == "朱沿峰" for row in body)
+        assert all(row.get("remarks") == "入职材料批次" for row in body)
+        group_ids = {row.get("upload_group_id") for row in body}
+        assert len(group_ids) == 1
+        assert next(iter(group_ids))
+
+        list_r = client.get(f"/api/clients/{cid}/delivery/employee-files", headers=headers)
+        assert list_r.status_code == 200, list_r.text
+        items = list_r.json()
+        grouped = [x for x in items if int(x.get("file_count") or 0) > 1]
+        assert len(grouped) == 1
+        entry = grouped[0]
+        assert entry["employee_full_name"] == "朱沿峰"
+        assert entry["remarks"] == "入职材料批次"
+        assert len(entry.get("files") or []) == 3
+        assert entry.get("is_group") is True
+
     def test_forged_throme_and_labor_no_ignored(self, client, headers):
         cid = _create_client(client, headers)
         roster = _create_roster_entry(
@@ -358,7 +396,7 @@ class TestLaborContractUpload:
             },
         )
         assert r.status_code == 400
-        assert "每次只能上传 1 个文件" in r.json()["detail"]
+        assert "劳动合同每次只能上传 1 个文件" in r.json()["detail"]
 
     def test_deprecated_contract_preserves_number_sequence(self, client, headers):
         import main as crm_main
@@ -450,7 +488,9 @@ class TestLaborContractUpload:
             json={"status": "published"},
         )
         assert patch_r.status_code == 200, patch_r.text
-        assert patch_r.json()["status"] == "published"
+        updated = patch_r.json()
+        assert updated["status"] == "published"
+        assert updated.get("files") is not None or updated.get("id")
 
 
 class TestLaborContractDatascope:

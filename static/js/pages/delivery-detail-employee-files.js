@@ -37,6 +37,7 @@
             employee_contact_info: '',
             contract_sign_date: '',
             contract_valid_until: '',
+            remarks: '',
         });
         const employeeFileUploadFiles = ref([]);
         const employeeFileUploadFileInput = ref(null);
@@ -54,6 +55,25 @@
             String(employeeFileUploadForm.document_type || '').trim() === LABOR_CONTRACT_TYPE
         );
 
+        const employeeFileEntryFiles = (row) => {
+            if (Array.isArray(row && row.files) && row.files.length) return row.files;
+            return row && row.id ? [row] : [];
+        };
+        const employeeFileEntryIsGroup = (row) => employeeFileEntryFiles(row).length > 1;
+        const employeeFileEntryLabel = (row) => {
+            const files = employeeFileEntryFiles(row);
+            if (files.length <= 1) return files[0]?.original_filename || '该文件';
+            return `${files[0]?.original_filename || '文件'} 等 ${files.length} 个文件`;
+        };
+        const employeeFileFirstPreviewable = (row) =>
+            employeeFileEntryFiles(row).find((f) => {
+                const mk = String((f && f.media_kind) || '').toLowerCase();
+                return mk === 'pdf' || mk === 'video' || mk === 'audio';
+            }) || null;
+        const employeeFileRemarksLabel = (row) => {
+            const note = String((row && row.remarks) || '').trim();
+            return note || '—';
+        };
         const employeeFileStatusLabel = (s) => ({ draft: '草稿', published: '已发布', deprecated: '已作废' }[s] || s || '—');
         const employeeFileStatusClass = (s) => {
             if (s === 'published') return 'bg-green-100 text-green-800';
@@ -83,10 +103,7 @@
             if (!employeeFileIsLaborContract(row)) return 'NA';
             return employeeFileDisplayDate(row && row.contract_valid_until);
         };
-        const employeeFileCanPreview = (row) => {
-            const mk = String((row && row.media_kind) || '').toLowerCase();
-            return mk === 'pdf' || mk === 'video' || mk === 'audio';
-        };
+        const employeeFileCanPreview = (row) => !!employeeFileFirstPreviewable(row);
         const employeeFileCanPublish = (row) =>
             String((row && row.status) || '').trim() === 'draft';
         const employeeFileDisplayDate = (raw) => {
@@ -107,10 +124,12 @@
                         row.original_filename,
                         row.document_type,
                         row.employee_full_name,
+                        row.remarks,
                         row.labor_contract_no,
                         row.contract_valid_until,
                         employeeFileStatusLabel(row.status),
                         employeeFileMediaLabel(row),
+                        ...employeeFileEntryFiles(row).map((f) => f.original_filename),
                     ].join(' ').toLowerCase();
                     return hay.includes(keyword);
                 });
@@ -144,6 +163,17 @@
                 employeeFileCurrentPage.value = employeeFileTotalPages.value;
             }
         });
+        watch(isLaborContractUpload, (isLabor) => {
+            if (!isLabor) {
+                employeeFileUploadError.value = '';
+                return;
+            }
+            const list = Array.isArray(employeeFileUploadFiles.value) ? employeeFileUploadFiles.value : [];
+            if (list.length > 1) {
+                employeeFileUploadFiles.value = [list[0]];
+                employeeFileUploadError.value = '劳动合同每次只能上传 1 个文件';
+            }
+        });
 
         const toggleEmployeeFileFilterPanel = () => {
             employeeFileFilterPanelExpanded.value = !employeeFileFilterPanelExpanded.value;
@@ -167,6 +197,7 @@
             employeeFileUploadForm.employee_contact_info = '';
             employeeFileUploadForm.contract_sign_date = '';
             employeeFileUploadForm.contract_valid_until = '';
+            employeeFileUploadForm.remarks = '';
             employeeFileUploadFiles.value = [];
             employeeFileUploadDragging.value = false;
             employeeFileUploadError.value = '';
@@ -242,6 +273,9 @@
                 fd.append('contract_sign_date', employeeFileUploadForm.contract_sign_date || '');
                 fd.append('contract_valid_until', employeeFileUploadForm.contract_valid_until || '');
                 fd.append('confirm_same_year_renewal', String(confirmSameYearRenewal ? 1 : 0));
+            } else {
+                fd.append('employee_full_name', employeeFileUploadForm.employee_full_name || '');
+                fd.append('remarks', employeeFileUploadForm.remarks || '');
             }
             return fd;
         };
@@ -333,14 +367,15 @@
             employeeFilePreviewLoading.value = false;
         };
         const openEmployeeFilePreview = async (row) => {
-            if (!row || !employeeFileCanPreview(row)) return;
-            const mk = String(row.media_kind || '').toLowerCase();
-            employeeFilePreviewRow.value = row;
+            const target = employeeFileFirstPreviewable(row) || row;
+            if (!target || !employeeFileCanPreview(row)) return;
+            const mk = String(target.media_kind || '').toLowerCase();
+            employeeFilePreviewRow.value = target;
             employeeFilePreviewMode.value = 'loading';
             employeeFilePreviewLoading.value = true;
             revokeEmployeeFilePreviewBlob();
             employeeFilePreviewUrl.value = '';
-            const url = row.preview_url;
+            const url = target.preview_url;
             if (!url) {
                 employeeFilePreviewMode.value = 'error';
                 employeeFilePreviewLoading.value = false;
@@ -363,8 +398,20 @@
                 employeeFilePreviewLoading.value = false;
             }
         };
+        const openEmployeeFilePreviewFromFilename = (row, file) => {
+            const target = file || employeeFileFirstPreviewable(row);
+            if (!target) {
+                const msg = '该格式不支持预览，请下载后查看';
+                if (window.crmToast) window.crmToast.info(msg);
+                else alert(msg);
+                return;
+            }
+            openEmployeeFilePreview(target);
+        };
         const openEmployeeFilePreviewFromDetail = () => {
-            if (employeeFileDetailRow.value) openEmployeeFilePreview(employeeFileDetailRow.value);
+            if (!employeeFileDetailRow.value) return;
+            const target = employeeFileFirstPreviewable(employeeFileDetailRow.value);
+            if (target) openEmployeeFilePreview(target);
         };
 
         const openEmployeeFileDetailDrawer = (row) => {
@@ -375,21 +422,28 @@
         };
 
         const downloadEmployeeFile = async (row) => {
-            const url = row && row.preview_url;
-            if (!url) return;
-            try {
-                const r = await fetch(url, { headers: hdr() });
-                if (!r.ok) {
-                    if (window.crmToast) window.crmToast.error('下载失败');
-                    else alert('下载失败');
-                    return;
+            const files = employeeFileEntryFiles(row);
+            if (!files.length) return;
+            let failed = false;
+            for (const file of files) {
+                const url = file && file.preview_url;
+                if (!url) continue;
+                try {
+                    const r = await fetch(url, { headers: hdr() });
+                    if (!r.ok) {
+                        failed = true;
+                        continue;
+                    }
+                    const blob = await r.blob();
+                    const dl = typeof downloadBlob === 'function' ? downloadBlob : window.crmDownloadBlob;
+                    dl(blob, blob.type || 'application/octet-stream', file.original_filename || 'employee_file');
+                } catch (_) {
+                    failed = true;
                 }
-                const blob = await r.blob();
-                const dl = typeof downloadBlob === 'function' ? downloadBlob : window.crmDownloadBlob;
-                dl(blob, blob.type || 'application/octet-stream', row.original_filename || 'employee_file');
-            } catch (_) {
-                if (window.crmToast) window.crmToast.error('下载失败');
-                else alert('下载失败');
+            }
+            if (failed) {
+                if (window.crmToast) window.crmToast.error('部分文件下载失败');
+                else alert('部分文件下载失败');
             }
         };
 
@@ -397,12 +451,11 @@
             const isLabor = String((row && row.document_type) || '').trim() === LABOR_CONTRACT_TYPE;
             const isLaborDraft = isLabor && String((row && row.status) || '').trim() === 'draft';
             const isLaborVoid = isLabor && !isLaborDraft;
+            const label = employeeFileEntryLabel(row);
             if (typeof window.crmConfirmDeleteDialog === 'function') {
                 const ok = await window.crmConfirmDeleteDialog({
                     title: isLaborVoid ? '确认作废文件' : '确认删除文件',
-                    targetText: isLaborVoid
-                        ? `将作废：${row.original_filename || '该文件'}`
-                        : `将删除：${row.original_filename || '该文件'}`,
+                    targetText: isLaborVoid ? `将作废：${label}` : `将删除：${label}`,
                     hint: isLaborVoid
                         ? '作废后记录与劳动合同编号将保留。'
                         : (isLaborDraft
@@ -411,7 +464,7 @@
                     confirmText: isLaborVoid ? '确认作废' : '确认删除',
                 });
                 if (!ok) return;
-            } else if (!window.confirm(`确认${isLaborVoid ? '作废' : '删除'}文件「${row.original_filename || ''}」？`)) {
+            } else if (!window.confirm(`确认${isLaborVoid ? '作废' : '删除'}文件「${label}」？`)) {
                 return;
             }
             const r = await fetch(`${apiBase}/${row.id}`, { method: 'DELETE', headers: hdr() });
@@ -429,8 +482,9 @@
             if (employeeFileDetailRow.value && employeeFileDetailRow.value.id === row.id) {
                 closeEmployeeFileDetailDrawer();
             }
-            if (employeeFilePreviewRow.value && employeeFilePreviewRow.value.id === row.id) {
-                closeEmployeeFilePreview();
+            if (employeeFilePreviewRow.value) {
+                const previewIds = employeeFileEntryFiles(row).map((f) => f.id);
+                if (previewIds.includes(employeeFilePreviewRow.value.id)) closeEmployeeFilePreview();
             }
             await loadEmployeeFiles();
         };
@@ -438,18 +492,19 @@
         const publishEmployeeFile = async (row) => {
             if (!employeeFileCanPublish(row)) return;
             const isLabor = String((row && row.document_type) || '').trim() === LABOR_CONTRACT_TYPE;
+            const label = employeeFileEntryLabel(row);
             const hint = isLabor
                 ? '发布后劳动合同编号将锁定；若需移除，删除时将作废并保留记录。'
                 : '发布后若需移除，删除时将作废并保留记录。';
             if (typeof window.crmConfirmDeleteDialog === 'function') {
                 const ok = await window.crmConfirmDeleteDialog({
                     title: '确认发布',
-                    targetText: `将发布：${row.original_filename || '该文件'}`,
+                    targetText: `将发布：${label}`,
                     hint,
                     confirmText: '确认发布',
                 });
                 if (!ok) return;
-            } else if (!window.confirm(`确认发布文件「${row.original_filename || ''}」？`)) {
+            } else if (!window.confirm(`确认发布文件「${label}」？`)) {
                 return;
             }
             const r = await fetch(`${apiBase}/${row.id}`, {
@@ -519,6 +574,10 @@
             employeeFileDocumentTypeLabel,
             employeeFileLaborContractNoLabel,
             employeeFileValidUntilLabel,
+            employeeFileRemarksLabel,
+            employeeFileEntryFiles,
+            employeeFileEntryIsGroup,
+            employeeFileEntryLabel,
             employeeFileCanPreview,
             employeeFileCanPublish,
             employeeFileDisplayDate,
@@ -533,6 +592,7 @@
             openEmployeeFileDetailDrawer,
             closeEmployeeFileDetailDrawer,
             openEmployeeFilePreview,
+            openEmployeeFilePreviewFromFilename,
             openEmployeeFilePreviewFromDetail,
             closeEmployeeFilePreview,
             downloadEmployeeFile,
