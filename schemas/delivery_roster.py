@@ -15,6 +15,7 @@ ROSTER_FIELD_KEYS = frozenset(
         "business_line",
         "entry_date",
         "regularization_status",
+        "throme_staff_no",
         "regularization_date",
         "monthly_quote_tax",
         "pre_tax_salary",

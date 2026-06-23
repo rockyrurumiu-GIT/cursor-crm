@@ -12,7 +12,8 @@ from datetime import date, timedelta
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type
 
 from fastapi import HTTPException
-from sqlalchemy import and_, not_, or_
+from sqlalchemy import and_, not_, or_, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from auth import data_scope as ds
@@ -107,6 +108,79 @@ def roster_entries_turnover_pool(
 
 
 # ---------------------------------------------------------------------------
+# Throme staff number (索摩工号)
+# ---------------------------------------------------------------------------
+
+_THROME_STAFF_NO_CONFLICT_DETAIL = "索摩工号生成冲突，请重试"
+
+
+def generate_throme_staff_no(db: Session) -> str:
+    """Allocate next company-wide staff number: A1{0001}, A1{0002}, ..."""
+    row = db.execute(
+        text("SELECT next_value FROM roster_throme_staff_no_sequence WHERE id = 1")
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=500, detail="索摩工号序列表未初始化")
+    next_value = int(row[0])
+    staff_no = f"A1{next_value:04d}"
+    db.execute(
+        text("UPDATE roster_throme_staff_no_sequence SET next_value = :nv WHERE id = 1"),
+        {"nv": next_value + 1},
+    )
+    return staff_no
+
+
+def force_generate_throme_staff_no(db: Session, data: Dict[str, str]) -> None:
+    data.pop("throme_staff_no", None)
+    data["throme_staff_no"] = generate_throme_staff_no(db)
+
+
+def ensure_throme_staff_no(db: Session, data: Dict[str, str]) -> None:
+    if not str(data.get("throme_staff_no", "")).strip():
+        data["throme_staff_no"] = generate_throme_staff_no(db)
+
+
+def strip_immutable_roster_fields_on_update(data: Dict[str, str]) -> None:
+    data.pop("throme_staff_no", None)
+
+
+def add_roster_entry(
+    db: Session,
+    client_id: int,
+    data: Dict[str, str],
+    RosterEntry: Type[Any],
+    *,
+    preserve_throme_staff_no: bool = False,
+) -> Any:
+    """Insert roster row with throme_staff_no; retry once on unique-index conflict."""
+    merged = dict(data)
+    if preserve_throme_staff_no:
+        ensure_throme_staff_no(db, merged)
+    else:
+        force_generate_throme_staff_no(db, merged)
+    last_err: Optional[Exception] = None
+    for _ in range(2):
+        sp = db.begin_nested()
+        try:
+            entry = RosterEntry(client_id=client_id, **merged)
+            db.add(entry)
+            db.flush()
+            sp.commit()
+            return entry
+        except IntegrityError as exc:
+            sp.rollback()
+            last_err = exc
+            if preserve_throme_staff_no:
+                raise HTTPException(
+                    status_code=409, detail=_THROME_STAFF_NO_CONFLICT_DETAIL
+                ) from exc
+            force_generate_throme_staff_no(db, merged)
+    raise HTTPException(
+        status_code=409, detail=_THROME_STAFF_NO_CONFLICT_DETAIL
+    ) from last_err
+
+
+# ---------------------------------------------------------------------------
 # Serialization / normalization
 # ---------------------------------------------------------------------------
 
@@ -124,6 +198,7 @@ def roster_entry_to_dict(e: Any) -> dict:
         "business_line": e.business_line or "",
         "entry_date": e.entry_date or "",
         "regularization_status": e.regularization_status or "",
+        "throme_staff_no": e.throme_staff_no or "",
         "regularization_date": e.regularization_date or "",
         "monthly_quote_tax": e.monthly_quote_tax or "",
         "pre_tax_salary": e.pre_tax_salary or "",
@@ -164,6 +239,7 @@ def normalize_roster_payload(d: Dict[str, Any]) -> Dict[str, str]:
         "business_line",
         "entry_date",
         "regularization_status",
+        "throme_staff_no",
         "regularization_date",
         "monthly_quote_tax",
         "pre_tax_salary",

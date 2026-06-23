@@ -22,6 +22,7 @@ from schemas.delivery_roster import (
     ZNTX_ROSTER_EXPORT_HEADERS,
 )
 from services.delivery_roster import (
+    add_roster_entry,
     apply_roster_salary_quote_ratio,
     assert_roster_contact_unique,
     assert_roster_contact_unique_global,
@@ -40,6 +41,7 @@ from services.delivery_roster import (
     roster_entry_to_dict,
     sql_roster_employment_active_pool,
     sql_roster_employment_left,
+    strip_immutable_roster_fields_on_update,
     validate_roster_business_fields,
     write_roster_backup_csv,
     write_roster_backup_csv_all,
@@ -225,8 +227,7 @@ def register_delivery_roster_routes(
                 detail="整体花名册仅汇总各客户花名册：「客户」须能匹配到系统中的客户，或请到对应客户下的花名册中新增。",
             )
         data["customer_name"] = normalized_cn
-        entry = RosterEntry(client_id=mc.id, **data)
-        db.add(entry)
+        entry = add_roster_entry(db, int(mc.id), data, RosterEntry)
         db.commit()
         db.refresh(entry)
         resequence_roster_serial_no(db, int(mc.id), RosterEntry)
@@ -256,8 +257,7 @@ def register_delivery_roster_routes(
         mc, normalized_cn = resolve_roster_customer_client(db, data.get("customer_name", ""), Client)
         if mc:
             data["customer_name"] = normalized_cn
-        entry = RosterEntry(client_id=client_id, **data)
-        db.add(entry)
+        entry = add_roster_entry(db, client_id, data, RosterEntry)
         db.commit()
         db.refresh(entry)
         resequence_roster_serial_no(db, client_id, RosterEntry)
@@ -280,6 +280,7 @@ def register_delivery_roster_routes(
         old_cid = int(entry.client_id) if entry.client_id is not None else 0
         raw_body = body if isinstance(body, dict) else {}
         data = normalize_roster_payload(raw_body)
+        strip_immutable_roster_fields_on_update(data)
         for k in list(data.keys()):
             if k not in raw_body:
                 data[k] = getattr(entry, k) or ""
@@ -389,7 +390,7 @@ def register_delivery_roster_routes(
                 merged["customer_name"] = normalized_cn
             mapped_client_id = mc.id if mc else 0
             apply_roster_salary_quote_ratio(merged)
-            db.add(RosterEntry(client_id=mapped_client_id, **merged))
+            add_roster_entry(db, mapped_client_id, merged, RosterEntry)
             imported += 1
         resequence_roster_serial_no_all_clients(db, RosterEntry)
         db.commit()
@@ -457,7 +458,7 @@ def register_delivery_roster_routes(
                 merged["customer_name"] = normalized_cn
             mapped_client_id = mc.id if mc else 0
             apply_roster_salary_quote_ratio(merged)
-            db.add(RosterEntry(client_id=mapped_client_id, **merged))
+            add_roster_entry(db, mapped_client_id, merged, RosterEntry)
             imported += 1
         resequence_roster_serial_no_all_clients(db, RosterEntry)
         db.commit()
@@ -528,8 +529,7 @@ def register_delivery_roster_routes(
                     continue
                 seen_contact_keys.add(ck)
             apply_roster_salary_quote_ratio(merged)
-            entry = RosterEntry(client_id=client_id, **merged)
-            db.add(entry)
+            add_roster_entry(db, client_id, merged, RosterEntry)
             imported += 1
         resequence_roster_serial_no(db, client_id, RosterEntry)
         db.commit()
@@ -582,7 +582,9 @@ def register_delivery_roster_routes(
                 merged["customer_name"] = normalized_cn
             mapped_client_id = mc.id if mc else 0
             apply_roster_salary_quote_ratio(merged)
-            db.add(RosterEntry(client_id=mapped_client_id, **merged))
+            add_roster_entry(
+                db, mapped_client_id, merged, RosterEntry, preserve_throme_staff_no=True
+            )
             restored_rows += 1
         resequence_roster_serial_no_all_clients(db, RosterEntry)
         db.commit()
@@ -616,7 +618,9 @@ def register_delivery_roster_routes(
             if not any(merged.values()):
                 continue
             apply_roster_salary_quote_ratio(merged)
-            db.add(RosterEntry(client_id=client_id, **merged))
+            add_roster_entry(
+                db, client_id, merged, RosterEntry, preserve_throme_staff_no=True
+            )
             restored_rows += 1
         resequence_roster_serial_no(db, client_id, RosterEntry)
         db.commit()
@@ -652,7 +656,9 @@ def register_delivery_roster_routes(
                 merged["customer_name"] = normalized_cn
             mapped_client_id = mc.id if mc else 0
             apply_roster_salary_quote_ratio(merged)
-            db.add(RosterEntry(client_id=mapped_client_id, **merged))
+            add_roster_entry(
+                db, mapped_client_id, merged, RosterEntry, preserve_throme_staff_no=True
+            )
             restored_rows += 1
         resequence_roster_serial_no_all_clients(db, RosterEntry)
         db.commit()

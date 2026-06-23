@@ -438,6 +438,7 @@ class RosterEntry(Base):
     project_release_date = Column(String, default="")
     company_resign_date = Column(String, default="")
     zntx_staff_no = Column(String, default="")
+    throme_staff_no = Column(String, default="")
     zntx_separation_type = Column(String, default="")
     zntx_compensation_amount = Column(String, default="")
     delivery_communication = Column(String, default="")
@@ -705,6 +706,7 @@ def _ensure_roster_schema_compat():
         existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(roster_entries)").fetchall()}
         add_cols = {
             "regularization_status": "TEXT DEFAULT '未转正'",
+            "throme_staff_no": "TEXT DEFAULT ''",
             "zntx_staff_no": "TEXT DEFAULT ''",
             "zntx_onboarding_channel": "TEXT DEFAULT ''",
             "zntx_attendance_checkin": "TEXT DEFAULT ''",
@@ -718,6 +720,24 @@ def _ensure_roster_schema_compat():
         for col, ddl in add_cols.items():
             if col not in existing:
                 conn.exec_driver_sql(f"ALTER TABLE roster_entries ADD COLUMN {col} {ddl}")
+        conn.exec_driver_sql(
+            """
+            CREATE TABLE IF NOT EXISTS roster_throme_staff_no_sequence (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                next_value INTEGER NOT NULL
+            )
+            """
+        )
+        conn.exec_driver_sql(
+            "INSERT OR IGNORE INTO roster_throme_staff_no_sequence (id, next_value) VALUES (1, 1)"
+        )
+        conn.exec_driver_sql(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_roster_entries_throme_staff_no
+            ON roster_entries(throme_staff_no)
+            WHERE throme_staff_no IS NOT NULL AND throme_staff_no != ''
+            """
+        )
 
 
 def _ensure_handbook_schema_compat():

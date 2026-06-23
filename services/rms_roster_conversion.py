@@ -15,6 +15,7 @@ from schemas.rms import utc_date_str
 from services import rms_applications as app_svc
 from services import rms_scope as rms_ds
 from services.delivery_roster import (
+    add_roster_entry,
     apply_roster_salary_quote_ratio,
     assert_roster_contact_unique,
     normalize_roster_payload,
@@ -304,8 +305,7 @@ def convert_application_to_roster(
             data["zntx_onboarding_channel"] = source
 
     try:
-        entry = RosterEntry(client_id=int(app.client_id), **data)
-        db.add(entry)
+        entry = add_roster_entry(db, int(app.client_id), data, RosterEntry)
         db.flush()
         app.converted_to_roster_entry_id = entry.id
         app.converted_to_roster_at = utc_date_str()

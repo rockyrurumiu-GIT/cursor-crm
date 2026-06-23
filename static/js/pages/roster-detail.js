@@ -9,11 +9,13 @@ const CLIENT_ID = window.__ROSTER_CLIENT_ID__;
 const IS_GLOBAL_ROSTER = !CLIENT_ID || Number(CLIENT_ID) === 0;
 /** 与 GM 测算器一致：不含税月报价 = 含税月报价 ÷ 1.0672 */
 const TAX_DIVISOR = 1.0672;
+const THROME_STAFF_NO_FIELD = { key: 'throme_staff_no', label: '索摩工号' };
 const STANDARD_FORM_FIELDS = [
     { key: 'serial_no', label: '序号' },
     { key: 'full_name', label: '姓名' },
     { key: 'employment_status', label: '在职情况' },
     { key: 'regularization_status', label: '转正' },
+    THROME_STAFF_NO_FIELD,
     { key: 'contact_info', label: '联系方式' },
     { key: 'customer_name', label: '客户' },
     { key: 'work_location', label: '工作地' },
@@ -48,6 +50,7 @@ const ZNTX_FORM_FIELDS = [
     { key: 'full_name', label: '姓名' },
     { key: 'employment_status', label: '在职情况' },
     { key: 'regularization_status', label: '转正' },
+    THROME_STAFF_NO_FIELD,
     { key: 'zntx_staff_no', label: '工号' },
     { key: 'contact_info', label: '联系方式' },
     { key: 'customer_name', label: '客户' },
@@ -905,7 +908,10 @@ const rosterDetailApp = createApp({
                 return;
             }
             const payload = {};
-            FORM_FIELDS.forEach((f) => { payload[f.key] = form[f.key]; });
+            FORM_FIELDS.forEach((f) => {
+                if (f.key === 'throme_staff_no') return;
+                payload[f.key] = form[f.key];
+            });
             payload.zntx_onboarding_channel = String(form.zntx_onboarding_channel || '').trim();
             // 提交前规范化金额文本，兼容用户输入千分位/货币符号
             payload.monthly_quote_tax = normalizeAmountText(payload.monthly_quote_tax);

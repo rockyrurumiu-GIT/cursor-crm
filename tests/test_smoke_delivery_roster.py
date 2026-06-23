@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import re
 
 import pytest
 from starlette.testclient import TestClient
@@ -83,6 +84,8 @@ class TestRosterWrite:
         data = r.json()
         assert data["full_name"] == "测试员工_Smoke"
         assert data["id"] > 0
+        assert data.get("throme_staff_no")
+        assert re.fullmatch(r"A1\d{4}", data["throme_staff_no"])
 
     def test_delete_row(self, client, headers):
         cid = _get_first_client_id(client, headers)
