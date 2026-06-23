@@ -66,13 +66,14 @@ def test_delivery_nav_structure():
     assert "需求管理" not in nav
     roster_idx = nav.index('href="/customers/roster"')
     requirements_idx = nav.index('href="/delivery/requirements"')
-    pipeline_idx = nav.index('href="/delivery/pipeline"')
-    assert roster_idx < requirements_idx < pipeline_idx
     employee_files_idx = nav.index('href="/delivery/employee_files"')
+    assert roster_idx < requirements_idx < employee_files_idx
     interviews_idx = nav.index('href="/delivery/interviews"')
     turnover_idx = nav.index('href="/delivery/turnover"')
     assert employee_files_idx < interviews_idx < turnover_idx
     assert "员工文件" in nav
+    assert 'href="/delivery/pipeline"' not in nav
+    assert "管道数据" not in nav
 
 
 def test_home_digital_assets_nav():

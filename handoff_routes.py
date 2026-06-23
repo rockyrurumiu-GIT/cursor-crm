@@ -33,6 +33,7 @@ from handoff_core import (
 )
 from llm_service import get_llm_service
 from services.handoff_deadline import ensure_handoff_review_deadline, maintain_deadlines_on_session, start_deadline_reminder_thread
+from services.handoff_rms_sync import sync_handoff_positions_to_rms_jobs
 
 
 class HandoffUpdateBody(BaseModel):
@@ -111,7 +112,7 @@ def register_handoff_routes(
     HandoffReviewLog,
     CrmNotification,
     VisitRecord,
-    DeliveryPipelineInsightDemand,
+    RmsJob=None,
     Contract=None,
     ContractMilestone=None,
     review_dep: Optional[Callable] = None,
@@ -581,51 +582,35 @@ def register_handoff_routes(
         db.commit()
         return {"ok": True, "brief_md": brief_md, "gaps": gaps, "llm_available": llm.available}
 
-    @app.post("/api/handoffs/{handoff_id}/sync-pipeline-demand")
-    async def sync_pipeline_demand(
+    @app.post("/api/handoffs/{handoff_id}/sync-rms-jobs")
+    async def sync_handoff_rms_jobs(
         handoff_id: int,
         db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("delivery.handoff.write")),
     ):
+        if RmsJob is None:
+            raise HTTPException(status_code=500, detail="RMS 未初始化")
         h = _get_handoff_or_404(db, handoff_id)
         if h.status != "approved":
             raise HTTPException(status_code=400, detail="仅已通过的交接单可同步")
-        req = parse_requirement_json(h.requirement_json)
-        positions = req.get("positions") or []
-        period = datetime.now().strftime("%Y-%m")
-        synced = 0
-        for p in positions:
-            pos = str(p.get("role") or "").strip()
-            if not pos:
-                continue
-            qty = str(p.get("headcount") or "1")
-            region = str((req.get("context") or {}).get("location") or "")
-            existing = (
-                db.query(DeliveryPipelineInsightDemand)
-                .filter(
-                    DeliveryPipelineInsightDemand.client_id == h.client_id,
-                    DeliveryPipelineInsightDemand.period == period,
-                    DeliveryPipelineInsightDemand.position == pos,
-                    DeliveryPipelineInsightDemand.region == region,
-                )
-                .first()
-            )
-            if existing:
-                existing.demand_qty = qty
-            else:
-                db.add(
-                    DeliveryPipelineInsightDemand(
-                        client_id=h.client_id,
-                        period=period,
-                        position=pos,
-                        region=region,
-                        demand_qty=qty,
-                    )
-                )
-            synced += 1
-        _log_review(db, h.id, h.client_id, user, "sync_pipeline", f"同步 {synced} 条需求到管道洞察")
+        result = sync_handoff_positions_to_rms_jobs(
+            db,
+            h,
+            RmsJob=RmsJob,
+            operator_user_id=int(ctx.user_id or 0),
+        )
+        synced = int(result.get("synced") or 0)
+        _log_review(
+            db,
+            h.id,
+            h.client_id,
+            user,
+            "sync_rms_jobs",
+            f"同步 {synced} 条岗位需求到 RMS（新增 {result.get('created', 0)}，更新 {result.get('updated', 0)}）",
+        )
         db.commit()
-        return {"ok": True, "synced": synced}
+        return {"ok": True, **result}
 
     def _require_notification_user(user: str = Depends(get_current_user)) -> str:
         return user

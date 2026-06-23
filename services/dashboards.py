@@ -67,7 +67,6 @@ MODEL_MAP_KEYS = {
     "Opportunity": "Opportunity",
     "VisitRecord": "VisitRecord",
     "HandoffRequest": "HandoffRequest",
-    "DeliveryPipelineEntry": "DeliveryPipelineEntry",
     "RosterEntry": "RosterEntry",
     "DeliverySettlementEntry": "DeliverySettlementEntry",
     "DeliveryInterviewEntry": "DeliveryInterviewEntry",

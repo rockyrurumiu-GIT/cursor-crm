@@ -11,7 +11,6 @@ from auth.data_scope_catalog import (
     RESOURCE_CRM_VISIT,
     RESOURCE_DELIVERY_HANDOFF,
     RESOURCE_DELIVERY_INTERVIEWS,
-    RESOURCE_DELIVERY_PIPELINE,
     RESOURCE_DELIVERY_ROSTER,
     RESOURCE_DELIVERY_SETTLEMENT,
     RESOURCE_RMS_APPLICATION,
@@ -224,19 +223,6 @@ DATA_SOURCES: Dict[str, DataSourceDef] = {
         model_attr="HandoffRequest",
         fields=(
             SourceFieldDef("status", "状态", "text"),
-            SourceFieldDef("created_at", "创建时间", "datetime"),
-        ),
-    ),
-    "delivery_pipeline_entries": DataSourceDef(
-        key="delivery_pipeline_entries",
-        label="交付管道",
-        permission="delivery.pipeline.read",
-        resource_code=RESOURCE_DELIVERY_PIPELINE,
-        model_attr="DeliveryPipelineEntry",
-        fields=(
-            SourceFieldDef("position", "岗位", "text"),
-            SourceFieldDef("result", "结果", "text"),
-            SourceFieldDef("onboarded", "已入职", "text"),
             SourceFieldDef("created_at", "创建时间", "datetime"),
         ),
     ),

@@ -86,7 +86,6 @@ RESOURCE_CRM_OPPORTUNITY = "crm.opportunity"
 RESOURCE_CRM_CONTACT = "crm.contact"
 RESOURCE_CRM_VISIT = "crm.visit"
 RESOURCE_DELIVERY_ROSTER = "delivery.roster"
-RESOURCE_DELIVERY_PIPELINE = "delivery.pipeline"
 RESOURCE_DELIVERY_INTERVIEWS = "delivery.interviews"
 RESOURCE_DELIVERY_HANDBOOK = "delivery.handbook"
 RESOURCE_DELIVERY_EMPLOYEE_FILES = "delivery.employee_files"
@@ -104,7 +103,6 @@ RESOURCE_CODES: Tuple[str, ...] = (
     RESOURCE_CRM_CONTACT,
     RESOURCE_CRM_VISIT,
     RESOURCE_DELIVERY_ROSTER,
-    RESOURCE_DELIVERY_PIPELINE,
     RESOURCE_DELIVERY_INTERVIEWS,
     RESOURCE_DELIVERY_HANDBOOK,
     RESOURCE_DELIVERY_EMPLOYEE_FILES,
@@ -166,9 +164,6 @@ PERMISSION_TO_RESOURCE: Dict[str, str] = {
     "delivery.roster.read": RESOURCE_DELIVERY_ROSTER,
     "delivery.roster.write": RESOURCE_DELIVERY_ROSTER,
     "delivery.roster.delete": RESOURCE_DELIVERY_ROSTER,
-    "delivery.pipeline.read": RESOURCE_DELIVERY_PIPELINE,
-    "delivery.pipeline.write": RESOURCE_DELIVERY_PIPELINE,
-    "delivery.pipeline.delete": RESOURCE_DELIVERY_PIPELINE,
     "delivery.handbook.read": RESOURCE_DELIVERY_HANDBOOK,
     "delivery.handbook.write": RESOURCE_DELIVERY_HANDBOOK,
     "delivery.handbook.delete": RESOURCE_DELIVERY_HANDBOOK,
@@ -241,15 +236,6 @@ RESOURCE_SCOPE_ANCHOR: Mapping[str, ResourceScopeAnchor] = {
         scope_mode="delivery",
         inherit_via_client=True,
         client_fk=CLIENT_FK,
-    ),
-    RESOURCE_DELIVERY_PIPELINE: ResourceScopeAnchor(
-        resource_code=RESOURCE_DELIVERY_PIPELINE,
-        primary_table="delivery_pipeline_entries",
-        scope_mode="delivery",
-        inherit_via_client=True,
-        client_fk=CLIENT_FK,
-        entity_owner_col="recruiter_user_id",
-        fallback_inherit_client=True,
     ),
     RESOURCE_DELIVERY_INTERVIEWS: ResourceScopeAnchor(
         resource_code=RESOURCE_DELIVERY_INTERVIEWS,

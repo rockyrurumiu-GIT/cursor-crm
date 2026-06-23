@@ -285,12 +285,6 @@
                 list.splice(idx, 1);
             };
 
-            const syncPipeline = async () => {
-                const r = await fetch('/api/handoffs/' + selectedId.value + '/sync-pipeline-demand', { method: 'POST', headers: auth() });
-                const d = await r.json();
-                if (r.ok) alert('已同步 ' + d.synced + ' 条需求');
-                else alert(d.detail || '同步失败');
-            };
 
             onMounted(async () => {
                 await loadConfig();
@@ -305,7 +299,7 @@
                 spec, editable, canReview, canCreate, backUrl, backLabel, langsStr, mwStr, setLangs, setMw, statusBadge, formatLogTime,
                 aiLoading, aiBrief, aiGaps, showReject, rejectForm,
                 loadHandoff, createHandoff, saveDraft, submitHandoff, approveHandoff, confirmReject,
-                aiParse, aiReviewAssist, adoptReject, addPosition, requestRemovePosition, syncPipeline, onEstimatedAmountInput, onEstimatedAvgQuoteInput, onEstimatedGmPctInput, onPositionEstimatedQuoteInput,
+                aiParse, aiReviewAssist, adoptReject, addPosition, requestRemovePosition, onEstimatedAmountInput, onEstimatedAvgQuoteInput, onEstimatedGmPctInput, onPositionEstimatedQuoteInput,
             };
         },
     }).mount('#handoff-app');

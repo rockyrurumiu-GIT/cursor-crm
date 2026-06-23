@@ -216,14 +216,6 @@ def _assert_forbidden(resp, code: str):
         ),
         (
             None,
-            "delivery.pipeline.read",
-            "post",
-            None,
-            "delivery.pipeline.write",
-            lambda cid: {"period": "2026-05", "position": "Dev", "region": "SZ"},
-        ),
-        (
-            None,
             "delivery.handbook.read",
             "patch",
             None,
@@ -313,8 +305,6 @@ def test_restricted_module_forbidden(
     if read_path is None:
         if "roster" in read_perm:
             read_path = f"/api/clients/{cid}/roster"
-        elif "pipeline" in read_perm:
-            read_path = f"/api/clients/{cid}/delivery/pipeline"
         elif "handbook" in read_perm:
             read_path = f"/api/clients/{cid}/delivery/handbooks"
         elif "employee_files" in read_perm:
@@ -326,8 +316,6 @@ def test_restricted_module_forbidden(
     if write_path is None:
         if "roster" in write_perm:
             write_path = f"/api/clients/{cid}/roster"
-        elif "pipeline" in write_perm:
-            write_path = f"/api/clients/{cid}/delivery/pipeline"
         elif "handbook" in write_perm:
             write_path = f"/api/clients/{cid}/delivery/handbooks/999999"
         elif "employee_files" in write_perm:

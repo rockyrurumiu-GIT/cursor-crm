@@ -185,12 +185,6 @@
             };
             const removePosition = (idx) => form.value.requirement.positions.splice(idx, 1);
 
-            const syncPipeline = async () => {
-                const r = await fetch('/api/handoffs/' + selectedId.value + '/sync-pipeline-demand', { method: 'POST', headers: auth() });
-                const d = await r.json();
-                if (r.ok) alert('已同步 ' + d.synced + ' 条需求');
-                else alert(d.detail || '同步失败');
-            };
 
             onMounted(async () => {
                 await loadConfig();
@@ -205,7 +199,7 @@
                 spec, editable, canReview, canCreate, langsStr, mwStr, setLangs, setMw, statusBadge,
                 aiLoading, aiBrief, aiGaps, showReject, rejectForm,
                 loadHandoff, createHandoff, saveDraft, submitHandoff, approveHandoff, confirmReject,
-                aiParse, aiReviewAssist, adoptReject, addPosition, removePosition, syncPipeline,
+                aiParse, aiReviewAssist, adoptReject, addPosition, removePosition,
             };
         },
     }).mount('#handoff-app');

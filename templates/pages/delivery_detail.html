@@ -15,73 +15,7 @@
         min-height: 0;
         max-height: none !important;
     }
-    .pipeline-table th,
-    .pipeline-table td {
-        white-space: nowrap;
-    }
-    .pipeline-table th,
-    .pipeline-table td {
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .pipeline-table th:nth-child(4), .pipeline-table td:nth-child(4),   /* 岗位 */
-    .pipeline-table th:nth-child(5), .pipeline-table td:nth-child(5) {  /* 领域 */
-        text-align: right;
-    }
-    .pipeline-table th:nth-child(2), .pipeline-table td:nth-child(2),   /* 日期 */
-    .pipeline-table th:nth-child(3), .pipeline-table td:nth-child(3),   /* 姓名 */
-    .pipeline-table th:nth-child(6), .pipeline-table td:nth-child(6),   /* 年限 */
-    .pipeline-table th:nth-child(7), .pipeline-table td:nth-child(7),   /* 地域 */
-    .pipeline-table th:nth-child(9), .pipeline-table td:nth-child(9),   /* 学历 */
-    .pipeline-table th:nth-child(11), .pipeline-table td:nth-child(11), /* 简历筛选 */
-    .pipeline-table th:nth-child(12), .pipeline-table td:nth-child(12), /* 是否面试 */
-    .pipeline-table th:nth-child(13), .pipeline-table td:nth-child(13), /* 面试时间 */
-    .pipeline-table th:nth-child(14), .pipeline-table td:nth-child(14) { /* 面试官 */
-        width: auto;
-        max-width: none;
-    }
-    .pipeline-table th:nth-child(1), .pipeline-table td:nth-child(1) { min-width: 8rem; }   /* 简历时间 */
-    .pipeline-table th:nth-child(2), .pipeline-table td:nth-child(2) { min-width: 4em; }    /* 日期 */
-    .pipeline-table th:nth-child(3), .pipeline-table td:nth-child(3) { min-width: 6.5rem; }  /* 姓名 */
-    .pipeline-table th:nth-child(4), .pipeline-table td:nth-child(4) { min-width: 8.5rem; } /* 岗位 */
-    .pipeline-table th:nth-child(5), .pipeline-table td:nth-child(5) { min-width: 6.5rem; }  /* 领域 */
-    .pipeline-table th:nth-child(6), .pipeline-table td:nth-child(6) { min-width: 5rem; }    /* 年限 */
-    .pipeline-table th:nth-child(7), .pipeline-table td:nth-child(7) { min-width: 4em; }    /* 地域 */
-    .pipeline-table th:nth-child(8), .pipeline-table td:nth-child(8) { min-width: 8rem; }   /* 电话 */
-    .pipeline-table th:nth-child(9), .pipeline-table td:nth-child(9) { min-width: 4em; }    /* 学历 */
-    .pipeline-table th:nth-child(10), .pipeline-table td:nth-child(10) { min-width: 6rem; } /* 招聘 */
-    .pipeline-table th:nth-child(11), .pipeline-table td:nth-child(11) { min-width: 6rem; }  /* 简历筛选 */
-    .pipeline-table th:nth-child(12), .pipeline-table td:nth-child(12) { min-width: 6rem; }  /* 是否面试 */
-    .pipeline-table th:nth-child(13), .pipeline-table td:nth-child(13) { min-width: 7rem; }  /* 面试时间 */
-    .pipeline-table th:nth-child(14), .pipeline-table td:nth-child(14) { min-width: 6rem; }  /* 面试官 */
-    .pipeline-table th:nth-child(15), .pipeline-table td:nth-child(15) { min-width: 6rem; } /* 面试结果 */
-    .pipeline-table th:nth-child(16), .pipeline-table td:nth-child(16) { min-width: 8rem; } /* 是否拿offer */
-    .pipeline-table th:nth-child(17), .pipeline-table td:nth-child(17) { min-width: 8rem; } /* 入职时间 */
-    .pipeline-table th:nth-child(18), .pipeline-table td:nth-child(18) { min-width: 7rem; } /* 是否入职 */
-    .pipeline-table th:nth-child(19), .pipeline-table td:nth-child(19) {
-        min-width: 16rem; /* 情况 */
-        max-width: 28rem;
-        white-space: normal;
-        word-break: break-word;
-    }
-    .pipeline-table th:nth-child(20), .pipeline-table td:nth-child(20) { min-width: 6rem; } /* 操作 */
-    .pipeline-name-cell {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.45rem;
-        min-width: 0;
-    }
-    .pipeline-name-checkbox {
-        margin-top: 0.15rem;
-        flex: 0 0 auto;
-    }
-    .pipeline-name-text {
-        min-width: 0;
-        white-space: normal;
-        word-break: break-word;
-        overflow-wrap: anywhere;
-    }
-    .pipeline-table tbody tr:last-child td,
+    .settlement-table tbody tr:last-child td,
     .settlement-table tbody tr:last-child td {
         border-bottom: 1px solid #d1d5db;
     }
@@ -759,285 +693,7 @@
                 <p v-if="clientOwner" class="text-sm text-gray-500 mt-1">负责人 {{ clientOwner }}</p>
             </div>
         </div>
-        <div v-if="moduleKey === 'pipeline'" class="mt-4 flex flex-col flex-1 min-h-0 gap-3">
-            <div class="flex items-end justify-between gap-3 flex-wrap shrink-0">
-                <input v-model.trim="pipelineFilter.full_name" type="text" placeholder="姓名（模糊）" title="姓名（模糊）" class="crm-filter-item crm-filter-control pipeline-filter-control w-[10rem]" />
-                <div class="flex justify-end gap-2">
-                <button type="button" class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-[#3D5176]" @click="openPipelineAdd">新增</button>
-                <a :href="`/delivery/pipeline/${clientId}/insight`" class="rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100">数据透析</a>
-                <button type="button" class="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100" @click="openPipelineBatchModal">批量操作</button>
-                <button
-                    type="button"
-                    class="rounded-lg border px-4 py-2 text-sm font-medium"
-                    :class="showOnlyCheckedPipeline ? 'border-blue-600 bg-blue-50 text-blue-700' : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-50'"
-                    @click="toggleShowOnlyCheckedPipeline"
-                >仅显示勾选</button>
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="triggerPipelineImport">导入</button>
-                <input ref="pipelineFileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onPipelineImportFile" />
-                <button type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="exportPipelineCsv">导出</button>
-                <button v-if="canViewDeliveryLogs" type="button" class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50" @click="openPipelineLogs">日志</button>
-                <button type="button" class="crm-btn-rollback" @click="restorePipelineLatestBackup">回滚</button>
-                <button
-                    type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-800"
-                    title="回到顶部"
-                    aria-label="回到顶部"
-                    @click="scrollToTop"
-                >
-                    <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4">
-                        <path fill-rule="evenodd" d="M10 4.25a.75.75 0 0 1 .53.22l4 4a.75.75 0 1 1-1.06 1.06L10.75 6.81V15a.75.75 0 0 1-1.5 0V6.81L6.53 9.53a.75.75 0 0 1-1.06-1.06l4-4a.75.75 0 0 1 .53-.22Z" clip-rule="evenodd" />
-                    </svg>
-                </button>
-                </div>
-            </div>
-            <div class="rounded-lg border border-gray-200 bg-gray-50 shrink-0">
-                <div
-                    v-if="!pipelineFilterPanelExpanded"
-                    class="flex flex-wrap items-center justify-between gap-2 px-2 py-2 sm:px-3 sm:py-2.5"
-                >
-                    <p class="text-sm font-semibold text-gray-700 min-w-0">
-                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredPipelineRows.length }}</span> 条
-                    </p>
-                    <button
-                        type="button"
-                        class="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 shrink-0"
-                        title="展开筛选区"
-                        aria-label="展开筛选区"
-                        @click="togglePipelineFilterPanel"
-                    >展开筛选</button>
-                </div>
-                <div v-else class="p-3 sm:p-4 space-y-2">
-                <div class="crm-filter-row pipeline-filter-row">
-                    <div class="crm-filter-item pipeline-filter-item">
-                        <div ref="pipelineFilterPeriodPickerRef" class="relative">
-                            <button
-                                type="button"
-                                class="crm-filter-control pipeline-filter-control flex w-[6.8rem] items-center justify-between text-left"
-                                title="日期"
-                                @click="togglePipelineFilterPeriodDropdown"
-                            >
-                                <span :class="pipelineFilter.date ? 'text-gray-900' : 'text-gray-400'">
-                                    {{ pipelineFilter.date ? pipelinePeriodDisplay(pipelineFilter.date) : '日期' }}
-                                </span>
-                                <span class="ml-2 shrink-0 text-[10px] text-gray-500">{{ pipelineFilterPeriodDropdownOpen ? '▲' : '▼' }}</span>
-                            </button>
-                            <button
-                                v-if="pipelineFilter.date"
-                                type="button"
-                                class="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 hover:text-gray-700"
-                                @click.stop="clearPipelineFilterPeriod"
-                            >
-                                清空
-                            </button>
-                            <div
-                                v-if="pipelineFilterPeriodDropdownOpen"
-                                class="absolute left-0 top-[calc(100%+0.35rem)] z-30"
-                            >
-                                <div class="relative w-20 overflow-visible rounded-lg border border-gray-200 bg-white shadow-xl">
-                                    <button
-                                        v-for="month in PIPELINE_PERIOD_MONTHS"
-                                        :key="`filter-period-month-${month}`"
-                                        type="button"
-                                        class="flex h-9 w-full items-center justify-between px-3 text-sm hover:bg-gray-50"
-                                        :class="pipelineFilterPeriodHoverMonth === month ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700'"
-                                        @mouseenter="setPipelineFilterPeriodHoverMonth(month)"
-                                    >
-                                        <span>{{ month }}</span>
-                                        <span class="text-[10px] text-gray-400">&gt;</span>
-                                    </button>
-                                    <div
-                                        class="absolute left-[calc(100%+0.25rem)] w-24 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl"
-                                        :style="pipelinePeriodPanelStyle(pipelineFilterPeriodHoverMonth)"
-                                    >
-                                        <button
-                                            v-for="week in PIPELINE_PERIOD_WEEKS"
-                                            :key="`filter-period-week-${week}`"
-                                            type="button"
-                                            class="block h-9 w-full px-3 text-left text-sm hover:bg-blue-50"
-                                            :class="pipelinePeriodValue(pipelineFilterPeriodHoverMonth, week) === pipelineFilter.date ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700'"
-                                            @click="selectPipelineFilterPeriod(pipelineFilterPeriodHoverMonth, week)"
-                                        >
-                                            {{ week }}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <input v-model.trim="pipelineFilter.position" type="text" placeholder="岗位（模糊）" title="岗位（模糊）" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[7.2rem]" />
-                    <select v-model="pipelineFilter.region" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[5.8rem]" title="地域">
-                        <option value="">地域</option>
-                        <option v-for="v in pipelineSelectOptions.region" :key="v" :value="v">{{ v }}</option>
-                    </select>
-                    <select v-model="pipelineFilter.recruiter" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[5.8rem]" title="招聘">
-                        <option value="">招聘</option>
-                        <option v-for="v in pipelineSelectOptions.recruiter" :key="v" :value="v">{{ v }}</option>
-                    </select>
-                    <div ref="resumeScreeningFilterRef" class="crm-filter-item pipeline-filter-item pipeline-filter-dropdown relative">
-                        <button
-                            type="button"
-                            class="crm-filter-control pipeline-filter-control w-[7.2rem] text-left flex items-center justify-between"
-                            title="简历筛选"
-                            @click="toggleResumeScreeningDropdown"
-                        >
-                            <span class="truncate" :class="!(pipelineFilter.resume_screening || []).length ? 'text-gray-400' : ''">{{ resumeScreeningSummary }}</span>
-                            <span class="text-gray-400 ml-2">{{ resumeScreeningDropdownOpen ? '▴' : '▾' }}</span>
-                        </button>
-                        <div v-if="resumeScreeningDropdownOpen" class="pipeline-filter-dropdown-panel">
-                            <label v-for="v in pipelineSelectOptions.resume_screening" :key="v" class="pipeline-filter-dropdown-item">
-                                <input
-                                    type="checkbox"
-                                    :checked="pipelineFilter.resume_screening.includes(v)"
-                                    @change="toggleResumeScreeningOption(v)"
-                                />
-                                <span class="truncate">{{ v }}</span>
-                            </label>
-                            <div v-if="!pipelineSelectOptions.resume_screening.length" class="pipeline-filter-dropdown-empty">暂无可选项</div>
-                            <button
-                                type="button"
-                                class="w-full text-left px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
-                                @click="clearResumeScreeningOption"
-                            >清空</button>
-                        </div>
-                    </div>
-                    <select v-model="pipelineFilter.interviewed" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[6.0rem]" title="是否面试">
-                        <option value="">是否面试</option>
-                        <option v-for="v in pipelineSelectOptions.interviewed" :key="v" :value="v">{{ v }}</option>
-                    </select>
-                    <select v-model="pipelineFilter.result" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[5.8rem]" title="面试结果">
-                        <option value="">面试结果</option>
-                        <option v-for="v in pipelineSelectOptions.result" :key="v" :value="v">{{ v }}</option>
-                    </select>
-                    <select v-model="pipelineFilter.got_offer" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[6.4rem]" title="是否拿offer">
-                        <option value="">是否拿offer</option>
-                        <option v-for="v in pipelineSelectOptions.got_offer" :key="v" :value="v">{{ v }}</option>
-                    </select>
-                    <input v-model.trim="pipelineFilter.onboarded" type="text" placeholder="是否入职（模糊）" title="是否入职（模糊）" class="crm-filter-item pipeline-filter-item crm-filter-control pipeline-filter-control w-[7.2rem]" />
-                    <button type="button" class="crm-filter-item pipeline-filter-item crm-filter-reset" @click="resetPipelineFilter">清除筛选</button>
-                </div>
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p class="text-sm font-semibold text-gray-700 min-w-0">
-                        合计（符合筛选条件）：<span class="text-blue-700">{{ filteredPipelineRows.length }}</span> 条
-                    </p>
-                    <button
-                        type="button"
-                        class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 shrink-0"
-                        title="收起筛选区"
-                        aria-label="收起筛选区"
-                        @click="togglePipelineFilterPanel"
-                    >
-                        <svg viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4"><path fill-rule="evenodd" d="M4 10a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H4.75A.75.75 0 0 1 4 10z" clip-rule="evenodd" /></svg>
-                    </button>
-                </div>
-                </div>
-            </div>
-            <div class="flex items-center justify-between gap-3 shrink-0">
-                <h2 class="text-sm font-semibold text-gray-700">简历raw data（共 {{ pipelineRows.length }} 条）</h2>
-            </div>
-            <div ref="pipelineScrollWrap" class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
-            <table class="crm-table pipeline-table" data-table-id="pipeline" data-table-min-width="2400">
-                <thead>
-                    <tr>
-                        <th class="crm-th">简历时间</th>
-                        <th class="crm-th">日期</th>
-                        <th class="crm-th">姓名</th>
-                        <th class="crm-th">岗位</th>
-                        <th class="crm-th">领域</th>
-                        <th class="crm-th">年限</th>
-                        <th class="crm-th">地域</th>
-                        <th class="crm-th">电话</th>
-                        <th class="crm-th">学历</th>
-                        <th class="crm-th">招聘</th>
-                        <th class="crm-th">简历筛选</th>
-                        <th class="crm-th">是否面试</th>
-                        <th class="crm-th">面试时间</th>
-                        <th class="crm-th">面试官</th>
-                        <th class="crm-th">面试结果</th>
-                        <th class="crm-th">是否拿offer</th>
-                        <th class="crm-th">入职时间</th>
-                        <th class="crm-th">是否入职</th>
-                        <th class="crm-th">情况</th>
-                        <th class="crm-th crm-sticky-right-op">操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="row in filteredPipelineRows" :key="row.id">
-                        <td class="crm-td">{{ displayDateSlash(row.resume_time) }}</td>
-                        <td class="crm-td">{{ displayDateSlash(row.date) }}</td>
-                        <td class="crm-td">
-                            <label class="pipeline-name-cell">
-                                <input
-                                    type="checkbox"
-                                    class="pipeline-name-checkbox"
-                                    :checked="isPipelineRowChecked(row.id)"
-                                    @change="setPipelineRowChecked(row.id, $event.target.checked)"
-                                />
-                                <span class="pipeline-name-text">{{ row.full_name }}</span>
-                            </label>
-                        </td>
-                        <td class="crm-td">{{ row.position }}</td>
-                        <td class="crm-td">{{ row.domain }}</td>
-                        <td class="crm-td">{{ row.years_experience }}</td>
-                        <td class="crm-td">{{ row.region }}</td>
-                        <td class="crm-td">{{ row.phone }}</td>
-                        <td class="crm-td">{{ row.education }}</td>
-                        <td class="crm-td">{{ row.recruiter }}</td>
-                        <td class="crm-td">{{ row.resume_screening }}</td>
-                        <td class="crm-td">{{ row.interviewed }}</td>
-                        <td class="crm-td">{{ displayDateSlash(row.interview_time) }}</td>
-                        <td class="crm-td">{{ row.interviewer }}</td>
-                        <td class="crm-td">{{ row.result }}</td>
-                        <td class="crm-td">{{ row.got_offer }}</td>
-                        <td class="crm-td">{{ displayDateSlash(row.onboarding_time) }}</td>
-                        <td class="crm-td">{{ row.onboarded }}</td>
-                        <td class="crm-td">{{ row.status_note }}</td>
-                        <td class="crm-td whitespace-nowrap crm-sticky-right-op">
-                            <div class="crm-op-actions">
-                                <button type="button" class="crm-op-btn-detail" @click="openPipelineDetail(row)">详情</button>
-                                <button type="button" class="crm-op-btn-edit" @click="openPipelineEdit(row)">修改</button>
-                                <button v-if="canDeletePermission('delivery.pipeline.delete')" type="button" class="crm-op-btn-delete" @click="removePipelineRow(row)">删除</button>
-                            </div>
-                        </td>
-                    </tr>
-                    <tr v-if="!filteredPipelineRows.length">
-                        <td colspan="20" class="crm-td text-center text-gray-400 py-8">暂无数据</td>
-                    </tr>
-                </tbody>
-            </table>
-            </div>
-            <div v-if="showPipelineBatchModal" class="crm-esc-modal delivery-detail-modal-overlay">
-                <div class="delivery-detail-modal-panel max-w-xl">
-                    <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                        <h3 class="font-bold text-lg">批量操作</h3>
-                        <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="closePipelineBatchModal">&times;</button>
-                    </div>
-                    <div class="delivery-detail-modal-body">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                            <label class="flex flex-col gap-1">
-                                <span class="delivery-detail-modal-label">操作类型</span>
-                                <select v-model="pipelineBatchOperationType" class="crm-form-control" @change="pipelineBatchOperationValue = ''">
-                                    <option value="">请选择</option>
-                                    <option v-for="opt in PIPELINE_BATCH_OPERATION_TYPES" :key="opt.key" :value="opt.key">{{ opt.label }}</option>
-                                </select>
-                            </label>
-                            <label class="flex flex-col gap-1">
-                                <span class="delivery-detail-modal-label">目标状态</span>
-                                <select v-model="pipelineBatchOperationValue" class="crm-form-control" :disabled="!pipelineBatchValueOptions.length">
-                                    <option value="">{{ pipelineBatchValueOptions.length ? '请选择' : '请先选择操作类型' }}</option>
-                                    <option v-for="opt in pipelineBatchValueOptions" :key="`${pipelineBatchOperationType}-${opt}`" :value="opt">{{ opt }}</option>
-                                </select>
-                            </label>
-                        </div>
-                        <p class="mt-3 text-xs text-gray-500">已勾选 {{ checkedPipelineCount }} 条，执行后将批量覆盖对应字段。</p>
-                    </div>
-                    <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
-                        <button type="button" class="delivery-detail-modal-btn border border-gray-300" @click="closePipelineBatchModal">取消</button>
-                        <button type="button" class="delivery-detail-modal-btn bg-amber-600 text-white hover:bg-amber-700" @click="applyPipelineBatchOperation">执行</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div v-else-if="moduleKey === 'interviews'" class="crm-skin flex flex-col flex-1 min-h-0 gap-2">
+        <div v-if="moduleKey === 'interviews'" class="crm-skin flex flex-col flex-1 min-h-0 gap-2">
             <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)] shrink-0">
                 <div class="flex flex-wrap items-center gap-2">
                     <span class="group relative inline-flex shrink-0">
@@ -2164,129 +1820,6 @@
         </div>
     </div>
 
-    <div v-if="showPipelineForm && moduleKey === 'pipeline'" class="crm-esc-modal delivery-detail-modal-overlay">
-        <div class="delivery-detail-modal-panel max-w-7xl">
-            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">{{ pipelineFormReadonly ? '管道数据详情' : (pipelineEditingId ? '修改管道数据' : '新增管道数据') }}</h3>
-                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showPipelineForm=false; pipelineFormReadonly=false">&times;</button>
-            </div>
-            <div class="delivery-detail-modal-body">
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-x-3 gap-y-2 text-[13px]">
-                    <label v-for="f in pipelineCompactFields" :key="f.key" class="flex flex-col gap-1 min-w-0">
-                        <span class="delivery-detail-modal-label">
-                            {{ f.label }}
-                            <span v-if="pipelineFieldRequired(f.key)" class="text-red-500" aria-hidden="true">*</span>
-                        </span>
-                        <div v-if="f.type === 'date'" class="relative">
-                            <input v-model="pipelineForm[f.key]" type="date" class="crm-form-control crm-form-control--date" :disabled="pipelineFormReadonly" />
-                            <button v-if="!pipelineFormReadonly && pipelineForm[f.key]" type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700" @click="clearPipelineDateField(f.key)">清空</button>
-                        </div>
-                        <div v-else-if="f.type === 'period'" ref="pipelinePeriodPickerRef" class="relative">
-                            <button
-                                type="button"
-                                class="crm-form-control flex items-center justify-between text-left"
-                                :disabled="pipelineFormReadonly"
-                                @click="togglePipelinePeriodDropdown"
-                            >
-                                <span :class="pipelineForm[f.key] ? 'text-gray-900' : 'text-gray-400'">
-                                    {{ pipelineForm[f.key] ? pipelinePeriodDisplay(pipelineForm[f.key]) : '请选择月份周次' }}
-                                </span>
-                                <span class="ml-2 shrink-0 text-xs text-gray-500">{{ pipelinePeriodDropdownOpen ? '▲' : '▼' }}</span>
-                            </button>
-                            <button
-                                v-if="!pipelineFormReadonly && pipelineForm[f.key]"
-                                type="button"
-                                class="absolute right-7 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700"
-                                @click.stop="clearPipelinePeriodField"
-                            >
-                                清空
-                            </button>
-                            <div
-                                v-if="pipelinePeriodDropdownOpen && !pipelineFormReadonly"
-                                class="absolute left-0 top-[calc(100%+0.35rem)] z-30"
-                            >
-                                <div class="relative w-20 overflow-visible rounded-lg border border-gray-200 bg-white shadow-xl">
-                                    <button
-                                        v-for="month in PIPELINE_PERIOD_MONTHS"
-                                        :key="`period-month-${month}`"
-                                        type="button"
-                                        class="flex h-9 w-full items-center justify-between px-3 text-sm hover:bg-gray-50"
-                                        :class="pipelinePeriodHoverMonth === month ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700'"
-                                        @mouseenter="setPipelinePeriodHoverMonth(month)"
-                                    >
-                                        <span>{{ month }}</span>
-                                        <span class="text-[10px] text-gray-400">&gt;</span>
-                                    </button>
-                                    <div
-                                        class="absolute left-[calc(100%+0.25rem)] w-24 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl"
-                                        :style="pipelinePeriodPanelStyle(pipelinePeriodHoverMonth)"
-                                    >
-                                        <button
-                                            v-for="week in PIPELINE_PERIOD_WEEKS"
-                                            :key="`period-week-${week}`"
-                                            type="button"
-                                            class="block h-9 w-full px-3 text-left text-sm hover:bg-blue-50"
-                                            :class="pipelinePeriodValue(pipelinePeriodHoverMonth, week) === pipelineForm[f.key] ? 'bg-blue-50 font-semibold text-blue-700' : 'text-gray-700'"
-                                            @click="selectPipelinePeriod(pipelinePeriodHoverMonth, week)"
-                                        >
-                                            {{ week }}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <select v-else-if="f.type === 'select'" v-model="pipelineForm[f.key]" class="crm-form-control" :disabled="pipelineFormReadonly">
-                            <option value="">请选择</option>
-                            <option v-for="opt in pipelineFieldOptions(f)" :key="`${f.key}-${opt}`" :value="opt">{{ opt }}</option>
-                        </select>
-                        <input v-else v-model="pipelineForm[f.key]" :type="f.type || 'text'" class="crm-form-control" :disabled="pipelineFormReadonly" />
-                    </label>
-                </div>
-                <div v-if="pipelineTextareaFields.length" class="mt-3 space-y-2.5">
-                    <label v-for="f in pipelineTextareaFields" :key="f.key" class="flex flex-col gap-1 text-sm">
-                        <span class="delivery-detail-modal-label">
-                            {{ f.label }}
-                            <span v-if="pipelineFieldRequired(f.key)" class="text-red-500" aria-hidden="true">*</span>
-                        </span>
-                        <textarea
-                            v-model="pipelineForm[f.key]"
-                            class="delivery-modal-textarea"
-                            rows="2"
-                            :disabled="pipelineFormReadonly"
-                        ></textarea>
-                    </label>
-                </div>
-            </div>
-            <div class="px-5 py-4 border-t border-gray-200 flex gap-2 justify-end shrink-0">
-                <button type="button" class="delivery-detail-modal-btn border border-gray-300" @click="showPipelineForm=false; pipelineFormReadonly=false">{{ pipelineFormReadonly ? '关闭' : '取消' }}</button>
-                <button v-if="!pipelineFormReadonly && returnToInsight" type="button" class="delivery-detail-modal-btn border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100" @click="savePipelineForm(true)">保存并返回透析</button>
-                <button v-if="!pipelineFormReadonly" type="button" class="delivery-detail-modal-btn bg-blue-600 text-white hover:bg-[#3D5176]" @click="savePipelineForm(false)">保存</button>
-            </div>
-        </div>
-    </div>
-
-    <div v-if="showPipelineLogs && moduleKey === 'pipeline'" class="crm-esc-modal fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-            <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
-                <h3 class="text-lg font-bold text-gray-900">管道数据日志</h3>
-                <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none" @click="showPipelineLogs=false">&times;</button>
-            </div>
-            <div class="overflow-y-auto p-5">
-                <div v-if="pipelineLogsLoading" class="text-sm text-gray-500 py-8 text-center">日志加载中...</div>
-                <div v-else-if="!pipelineLogs.length" class="text-sm text-gray-400 py-8 text-center">暂无日志记录</div>
-                <div v-else class="text-sm space-y-4">
-                    <div v-for="log in pipelineLogs" :key="log.id" class="flex items-start">
-                        <div class="w-2.5 h-2.5 bg-gray-300 rounded-full mt-1.5 mr-3 shrink-0"></div>
-                        <div class="min-w-0">
-                            <p class="text-gray-400">{{ formatDate(log.created_at) }} - {{ log.operator || '-' }}</p>
-                            <p class="text-gray-700 break-words whitespace-pre-line">{{ log.action }}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div v-if="showInterviewForm && moduleKey === 'interviews'" class="crm-esc-modal delivery-detail-modal-overlay">
         <div class="delivery-detail-modal-panel max-w-7xl">
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
@@ -2705,7 +2238,6 @@ window.__CRM_DELIVERY_DETAIL__ = {
 <script src="/static/js/core/crm-download.js"></script>
 <script src="/static/js/pages/delivery-detail.js"></script>
 <script src="/static/js/pages/delivery-detail-settlement.js?v=delete-perm-20260617"></script>
-<script src="/static/js/pages/delivery-detail-pipeline.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-interviews.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-handbook.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-employee-files.js?v=20260622"></script>
@@ -2883,96 +2415,6 @@ createApp({
             removeRow,
             clearSettlementDateField,
         } = settlement;
-        const pipeline = window.CrmDeliveryDetailPipeline.createPipelineState({
-            ref,
-            reactive,
-            computed,
-            clientId,
-            moduleKey,
-            normalizeDateForInput,
-            readApiErrorMessage,
-            authHeader: window.crmAuthHeader,
-            fuzzyMatch,
-            uniqueSorted,
-        });
-        const {
-            loadPipelineRows,
-            pipelineRows,
-            pipelineFilter,
-            pipelineDateOptions,
-            pipelineSelectOptions,
-            filteredPipelineRows,
-            pipelineFilterPanelExpanded,
-            togglePipelineFilterPanel,
-            resetPipelineFilter,
-            resumeScreeningDropdownOpen,
-            resumeScreeningFilterRef,
-            resumeScreeningSummary,
-            pipelineFilterPeriodPickerRef,
-            pipelineFilterPeriodDropdownOpen,
-            pipelineFilterPeriodHoverMonth,
-            togglePipelineFilterPeriodDropdown,
-            setPipelineFilterPeriodHoverMonth,
-            selectPipelineFilterPeriod,
-            clearPipelineFilterPeriod,
-            toggleResumeScreeningDropdown,
-            toggleResumeScreeningOption,
-            clearResumeScreeningOption,
-            PIPELINE_BATCH_OPERATION_TYPES,
-            showPipelineBatchModal,
-            pipelineBatchOperationType,
-            pipelineBatchOperationValue,
-            pipelineBatchValueOptions,
-            checkedPipelineCount,
-            openPipelineBatchModal,
-            closePipelineBatchModal,
-            applyPipelineBatchOperation,
-            showOnlyCheckedPipeline,
-            toggleShowOnlyCheckedPipeline,
-            isPipelineRowChecked,
-            setPipelineRowChecked,
-            pipelineFields,
-            pipelineCompactFields,
-            pipelineTextareaFields,
-            pipelineFieldRequired,
-            pipelineFieldOptions,
-            pipelineFileInput,
-            pipelineScrollWrap,
-            PIPELINE_PERIOD_MONTHS,
-            PIPELINE_PERIOD_WEEKS,
-            pipelinePeriodPickerRef,
-            pipelinePeriodDropdownOpen,
-            pipelinePeriodHoverMonth,
-            pipelinePeriodValue,
-            pipelinePeriodDisplay,
-            pipelinePeriodPanelStyle,
-            togglePipelinePeriodDropdown,
-            setPipelinePeriodHoverMonth,
-            selectPipelinePeriod,
-            clearPipelinePeriodField,
-            showPipelineForm,
-            pipelineEditingId,
-            pipelineFormReadonly,
-            pipelineForm,
-            returnToInsight,
-            openPipelineDetail,
-            showPipelineLogs,
-            pipelineLogsLoading,
-            pipelineLogs,
-            openPipelineAdd,
-            openPipelineEdit,
-            savePipelineForm,
-            removePipelineRow,
-            triggerPipelineImport,
-            onPipelineImportFile,
-            exportPipelineCsv,
-            openPipelineLogs,
-            restorePipelineLatestBackup,
-            clearPipelineDateField,
-            closeDropdownsForTarget: closePipelineDropdownsForTarget,
-            openPipelineEditByQuery,
-            scrollToTopPipeline,
-        } = pipeline;
         const interviews = window.CrmDeliveryDetailInterviews.createInterviewState({
             ref,
             reactive,
@@ -3210,7 +2652,6 @@ createApp({
             mountEmployeeFiles,
         } = employeeFiles;
         const scrollToTop = () => {
-            if (scrollToTopPipeline()) return;
             if (scrollToTopInterviews()) return;
             if (moduleKey === 'interviews' && interviewScrollWrap.value && typeof interviewScrollWrap.value.scrollTo === 'function') {
                 interviewScrollWrap.value.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3219,11 +2660,9 @@ createApp({
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
         const handleDocumentClick = (event) => {
-            closePipelineDropdownsForTarget(event.target);
             closeInterviewDropdownsForTarget(event.target);
         };
         const handleDocumentFocusIn = (event) => {
-            closePipelineDropdownsForTarget(event.target);
             closeInterviewDropdownsForTarget(event.target);
         };
         const handleRequirementJobDetailEscape = (event) => {
@@ -3239,11 +2678,7 @@ createApp({
             document.addEventListener('keydown', handleRequirementJobDetailEscape);
             if (!isInterviewAggregate) await loadBrief();
             await loadSettlementRows();
-            await loadPipelineRows();
             await loadInterviewRows();
-            if (moduleKey === 'pipeline') {
-                openPipelineEditByQuery();
-            }
             if (moduleKey === 'interviews') {
                 openInterviewEditByQuery();
             }
@@ -3273,16 +2708,6 @@ createApp({
             requirementJobDetailOpen, requirementJobDetailRow, requirementJobDetailLoading, requirementJobDetailError,
             openRequirementJobDetail, closeRequirementJobDetail,
             jobPriorityLabel, jobStatusLabel, displayRequirementSalaryCap, normalizeOwnerLabel,
-            pipelineRows, pipelineFilter, pipelineDateOptions, pipelineSelectOptions, filteredPipelineRows, pipelineFilterPanelExpanded, togglePipelineFilterPanel, resetPipelineFilter,
-            resumeScreeningDropdownOpen, resumeScreeningFilterRef, resumeScreeningSummary,
-            pipelineFilterPeriodPickerRef, pipelineFilterPeriodDropdownOpen, pipelineFilterPeriodHoverMonth,
-            togglePipelineFilterPeriodDropdown, setPipelineFilterPeriodHoverMonth, selectPipelineFilterPeriod, clearPipelineFilterPeriod,
-            toggleResumeScreeningDropdown, toggleResumeScreeningOption, clearResumeScreeningOption,
-            PIPELINE_BATCH_OPERATION_TYPES, showPipelineBatchModal, pipelineBatchOperationType, pipelineBatchOperationValue, pipelineBatchValueOptions,
-            checkedPipelineCount, openPipelineBatchModal, closePipelineBatchModal, applyPipelineBatchOperation,
-            showOnlyCheckedPipeline, toggleShowOnlyCheckedPipeline,
-            isPipelineRowChecked, setPipelineRowChecked,
-            pipelineFields, pipelineCompactFields, pipelineTextareaFields, pipelineFieldRequired, pipelineFieldOptions, pipelineFileInput, interviewFileInput,
             handbookFilter, handbookStatusFilter, handbookFilterPanelExpanded, toggleHandbookFilterPanel, filteredHandbookFiles, pagedHandbookFiles, handbookCurrentPage, handbookTotalPages, handbookPageNumbers, handbookGoPage, resetHandbookFilter, handbookPdfOutlineFlat, handbookPdfIframeSrc,
             handbookPdfSearchQuery, handbookPdfSearchResults, handbookPdfSearchCount, handbookPdfSearchActive,
             handbookPdfRenderedPageSrc, handbookPdfRenderedPageUrl, handbookPdfRenderBusy,
@@ -3312,16 +2737,9 @@ createApp({
             openEmployeeFilePreview, openEmployeeFilePreviewFromDetail, closeEmployeeFilePreview,
             employeeFileStatusLabel, employeeFileStatusClass, employeeFileMediaLabel, employeeFileCanPreview, employeeFileDisplayDate,
             downloadEmployeeFile, removeEmployeeFile,
-            pipelineScrollWrap,
-            PIPELINE_PERIOD_MONTHS, PIPELINE_PERIOD_WEEKS, pipelinePeriodPickerRef, pipelinePeriodDropdownOpen, pipelinePeriodHoverMonth,
-            pipelinePeriodValue, pipelinePeriodDisplay, pipelinePeriodPanelStyle, togglePipelinePeriodDropdown, setPipelinePeriodHoverMonth, selectPipelinePeriod, clearPipelinePeriodField,
-            showPipelineForm, pipelineEditingId, pipelineFormReadonly, pipelineForm, returnToInsight,
-            openPipelineDetail,
-            showPipelineLogs, pipelineLogsLoading, pipelineLogs,
             settlementRows, settlementFields, settlementCompactFields, settlementTextareaFields,
             showSettlementReminders,
             showForm, editingId, settlementFormReadonly, form,
-            openPipelineAdd, openPipelineEdit, savePipelineForm, removePipelineRow,
             interviewRows, interviewDisplayRows, filteredInterviewRows, interviewFields, interviewCompactFields, interviewTextareaFields,
             isInterviewAggregate,
             pagedInterviewRows, interviewCurrentPage, interviewTotalPages, interviewPageNumbers, interviewGoPage,
@@ -3342,8 +2760,8 @@ createApp({
             openInterviewAdd, openInterviewAddForHintName, onInterviewFormCompactBlur, openInterviewEdit, openInterviewDetail, saveInterviewForm, removeInterviewRow, clearInterviewDateField,
             triggerInterviewImport, onInterviewImportFile,
             exportInterviewCsv, openInterviewLogs, restoreInterviewLatestBackup, copyInterviewHints, exportInterviewHintsCsv,
-            triggerPipelineImport, onPipelineImportFile, exportPipelineCsv, openPipelineLogs, restorePipelineLatestBackup, formatDate, canDeletePermission, canViewDeliveryLogs,
-            scrollToTop, clearPipelineDateField, clearSettlementDateField, displayDateSlash,
+            formatDate, canDeletePermission, canViewDeliveryLogs,
+            scrollToTop, clearSettlementDateField, displayDateSlash,
             openAdd, openEdit, openSettlementDetail, saveForm, removeRow,
         };
     }

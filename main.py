@@ -38,7 +38,6 @@ from auth.data_scope_catalog import (
     RESOURCE_DELIVERY_HANDBOOK,
     RESOURCE_DELIVERY_HANDOFF,
     RESOURCE_DELIVERY_INTERVIEWS,
-    RESOURCE_DELIVERY_PIPELINE,
     RESOURCE_DELIVERY_ROSTER,
 )
 from auth.deps import get_current_context
@@ -477,44 +476,6 @@ class DeliverySettlementEntry(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
-class DeliveryPipelineEntry(Base):
-    __tablename__ = "delivery_pipeline_entries"
-    id = Column(Integer, primary_key=True, index=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
-    resume_time = Column(String, default="")
-    date = Column(String, default="")
-    position = Column(String, default="")
-    full_name = Column(String, default="")
-    domain = Column(String, default="")
-    years_experience = Column(String, default="")
-    region = Column(String, default="")
-    phone = Column(String, default="")
-    education = Column(String, default="")
-    recruiter = Column(String, default="")
-    recruiter_user_id = Column(Integer, nullable=True)
-    resume_screening = Column(String, default="")
-    interviewed = Column(String, default="")
-    interview_time = Column(String, default="")
-    interviewer = Column(String, default="")
-    result = Column(String, default="")
-    got_offer = Column(String, default="")
-    onboarding_time = Column(String, default="")
-    onboarded = Column(String, default="")
-    status_note = Column(String, default="")
-    serial_no = Column(String, default="")
-    created_at = Column(DateTime, default=datetime.now)
-
-
-class DeliveryPipelineInsightDemand(Base):
-    __tablename__ = "delivery_pipeline_insight_demands"
-    id = Column(Integer, primary_key=True, index=True)
-    client_id = Column(Integer, ForeignKey("clients.id"), index=True)
-    period = Column(String, default="")
-    position = Column(String, default="")
-    region = Column(String, default="")
-    demand_qty = Column(String, default="")
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
-
 
 class DeliveryInterviewEntry(Base):
     """员工访谈 — 全客户统一表头/字段（不含入职时间）；旧列仍兼容备份/导入。"""
@@ -835,15 +796,6 @@ def _ensure_opportunities_schema_compat():
                 conn.exec_driver_sql(f"ALTER TABLE opportunities ADD COLUMN {col} {ddl}")
 
 
-def _ensure_pipeline_schema_compat():
-    with engine.begin() as conn:
-        try:
-            existing = {r[1] for r in conn.exec_driver_sql("PRAGMA table_info(delivery_pipeline_entries)").fetchall()}
-        except Exception:
-            return
-        if "recruiter_user_id" not in existing:
-            conn.exec_driver_sql("ALTER TABLE delivery_pipeline_entries ADD COLUMN recruiter_user_id INTEGER")
-
 
 def _ensure_contacts_schema_compat():
     """补齐 contacts 表新增字段，兼容旧库。"""
@@ -955,7 +907,6 @@ _ensure_handbook_schema_compat()
 _ensure_handbook_fts_schema()
 _ensure_handoff_phase2_schema_compat()
 _ensure_opportunities_schema_compat()
-_ensure_pipeline_schema_compat()
 _ensure_clients_schema_compat()
 _ensure_contacts_schema_compat()
 _ensure_visits_schema_compat()
@@ -1481,26 +1432,6 @@ register_delivery_roster_routes(
 # Period/week-label functions: migrated to services/period_utils.py (Phase 5B)
 
 
-# --- Pipeline API routes: migrated to routes/delivery_pipeline.py (Phase 5B) ---
-from routes.delivery_pipeline import register_delivery_pipeline_routes
-
-register_delivery_pipeline_routes(
-    app,
-    get_db=get_db,
-    Client=Client,
-    PipelineEntry=DeliveryPipelineEntry,
-    InsightDemand=DeliveryPipelineInsightDemand,
-    AuditLog=AuditLog,
-    backup_dir=BACKUP_DIR,
-    max_file_size=MAX_FILE_SIZE,
-    strip_excel_sep=_strip_excel_sep_directive,
-    decode_upload_bytes=_decode_roster_upload_bytes,
-    pick_latest_backup=_pick_latest_backup,
-    set_csv_download_headers=_set_csv_download_headers,
-)
-
-
-
 # --- Interviews API routes: migrated to routes/delivery_interviews.py (Phase 5C) ---
 from routes.delivery_interviews import register_delivery_interviews_routes
 
@@ -1546,7 +1477,7 @@ register_handoff_routes(
     HandoffReviewLog=HandoffReviewLog,
     CrmNotification=CrmNotification,
     VisitRecord=VisitRecord,
-    DeliveryPipelineInsightDemand=DeliveryPipelineInsightDemand,
+    RmsJob=RMS_MODELS["RmsJob"],
     Contract=Contract,
     ContractMilestone=ContractMilestone,
     session_factory=SessionLocal,
@@ -1616,7 +1547,6 @@ register_dashboard_routes(
     Opportunity=Opportunity,
     VisitRecord=VisitRecord,
     HandoffRequest=HandoffRequest,
-    DeliveryPipelineEntry=DeliveryPipelineEntry,
     RosterEntry=RosterEntry,
     DeliverySettlementEntry=DeliverySettlementEntry,
     DeliveryInterviewEntry=DeliveryInterviewEntry,
@@ -1672,7 +1602,6 @@ register_rms_dashboard_routes(
     Opportunity=Opportunity,
     VisitRecord=VisitRecord,
     HandoffRequest=HandoffRequest,
-    DeliveryPipelineEntry=DeliveryPipelineEntry,
     RosterEntry=RosterEntry,
     DeliverySettlementEntry=DeliverySettlementEntry,
     DeliveryInterviewEntry=DeliveryInterviewEntry,
@@ -1802,7 +1731,6 @@ async def page_roster_detail(request: Request, client_id: int):
 
 DELIVERY_MODULES = {
     "requirements": "需求清单",
-    "pipeline": "管道数据",
     "interviews": "员工访谈",
     "employee_files": "员工文件",
     "turnover": "离职率分析",
@@ -1820,6 +1748,8 @@ def _delivery_module_title(module_key: str) -> str:
 
 @app.get("/delivery/{module_key}", response_class=HTMLResponse)
 async def page_delivery_module_index(request: Request, module_key: str):
+    if module_key == "pipeline":
+        return RedirectResponse(url="/rms", status_code=302)
     title = _delivery_module_title(module_key)
     if module_key == "settlement":
         return _page(
@@ -1845,6 +1775,8 @@ async def page_delivery_module_index(request: Request, module_key: str):
 
 @app.get("/delivery/{module_key}/{client_id}", response_class=HTMLResponse)
 async def page_delivery_module_detail(request: Request, module_key: str, client_id: int):
+    if module_key == "pipeline":
+        return RedirectResponse(url="/rms", status_code=302)
     title = _delivery_module_title(module_key)
     if module_key == "settlement":
         return RedirectResponse(url="/delivery/settlement", status_code=302)
@@ -1861,8 +1793,8 @@ async def page_delivery_module_detail(request: Request, module_key: str, client_
 
 
 @app.get("/delivery/pipeline/{client_id}/insight", response_class=HTMLResponse)
-async def page_delivery_pipeline_insight(request: Request, client_id: int):
-    return _page("pages/delivery_pipeline_insight.html", request, client_id=client_id)
+async def page_delivery_pipeline_insight_redirect(client_id: int):
+    return RedirectResponse(url="/rms", status_code=302)
 
 
 @app.get("/tools/calc", response_class=HTMLResponse)
