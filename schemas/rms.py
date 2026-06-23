@@ -419,6 +419,8 @@ OFFER_PROBATION_DISCOUNT_MONTHS = frozenset({"0", "1", "2", "3"})
 OFFER_QUOTE_TAX_UNITS = frozenset({"人月", "人天", "人时"})
 
 OFFER_RECORD_TAB_STATUSES = frozenset({"pending", "approved", "offer_dropped", "onboarding_lost"})
+# Offer record only — not in OFFER_RECORD_TAB_STATUSES or APPLICATION_PROGRESS_STATUSES
+OFFER_RECORD_STATUS_SUPERSEDED = "superseded"
 
 
 class OfferApprovalSubmitBody(BaseModel):

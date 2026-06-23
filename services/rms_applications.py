@@ -767,6 +767,7 @@ def transition_application_status(
     *,
     RmsCandidate: Optional[Type[Any]] = None,
     RosterEntry: Optional[Type[Any]] = None,
+    RmsOfferRecord: Optional[Type[Any]] = None,
 ) -> Dict[str, Any]:
     row = _get_writable_application(db, ctx, application_id, RmsApplication, Client)
     raw_from = (row.status or "").strip() or "recommended"
@@ -833,6 +834,20 @@ def transition_application_status(
         changed_at=now,
     )
     db.add(hist)
+    if (
+        mode == "correction"
+        and from_status == "onboarding"
+        and to_status == "pending_offer"
+        and RmsOfferRecord is not None
+    ):
+        from services.rms_offer_records import supersede_approved_offers
+
+        supersede_approved_offers(
+            db,
+            int(row.id),
+            reason="status_correction_reoffer",
+            RmsOfferRecord=RmsOfferRecord,
+        )
     db.commit()
     db.refresh(row)
     result = application_to_dict(row)

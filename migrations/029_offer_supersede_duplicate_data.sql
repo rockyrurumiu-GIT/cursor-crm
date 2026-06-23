@@ -1,0 +1,16 @@
+-- One-time data fix: void older duplicate approved offer records for the same application.
+-- Run manually on production after verifying candidate/application IDs.
+--
+-- Example (朱沿峰): find duplicates, then supersede the older row:
+--
+-- SELECT r.id, r.application_id, r.status, r.full_name, r.created_at
+-- FROM rms_offer_records r
+-- WHERE r.full_name LIKE '%朱沿峰%' AND r.status = 'approved'
+-- ORDER BY r.application_id, r.id;
+--
+-- UPDATE rms_offer_records
+-- SET status = 'superseded',
+--     reason = 'duplicate_approved_voided',
+--     current_approval_node = '',
+--     updated_at = date('now')
+-- WHERE id = :older_offer_id;

@@ -371,6 +371,14 @@ def submit_offer_approval(
         validated["gm_pct"],
         RmsOfferApprovalConfig=RmsOfferApprovalConfig,
     )
+    from services.rms_offer_records import supersede_approved_offers
+
+    supersede_approved_offers(
+        db,
+        application_id,
+        reason="resubmitted",
+        RmsOfferRecord=RmsOfferRecord,
+    )
     now = utc_date_str()
     form = {k: str(body.get(k) or "").strip() for k in body.keys()} if isinstance(body, dict) else {}
     first_step = steps[0]
@@ -946,6 +954,7 @@ def _offer_status_label(status: str) -> str:
         "offer_dropped": "弃offer",
         "onboarding_lost": "在途流失",
         "rejected": "已驳回",
+        "superseded": "已作废",
     }
     return labels.get((status or "").strip(), status or "")
 

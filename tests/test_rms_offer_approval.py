@@ -803,3 +803,169 @@ def test_super_admin_prior_approver_cannot_approve_later_gm_step(
     assert _approve_as(client_rbac, gm_user, offer_id).status_code == 200
     app = client_rbac.get(f"/api/rms/applications/{app_id}", cookies=login.cookies).json()
     assert app["status"] == "onboarding"
+
+
+def test_status_correction_onboarding_to_pending_offer_supersedes_approved(
+    client_rbac, admin_auth, rms_engine, uniq, approvers_config
+):
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"corr_re_{uniq}")
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _advance_to_pending_offer(client_rbac, login, app_id)
+    first_offer_id = _submit_offer(client_rbac, login, app_id).json()["id"]
+    assert _approve_as(client_rbac, f"offer_dept_{uniq}", first_offer_id).status_code == 200
+    assert _approve_as(client_rbac, f"offer_ops_{uniq}", first_offer_id).status_code == 200
+
+    corr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "pending_offer", "mode": "correction", "note": "退回重发offer"},
+    )
+    assert corr.status_code == 200, corr.text
+
+    with rms_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT status, reason FROM rms_offer_records WHERE id = :oid"),
+            {"oid": first_offer_id},
+        ).first()
+    assert row[0] == "superseded"
+    assert row[1] == "status_correction_reoffer"
+
+    second_offer_id = _submit_offer(client_rbac, login, app_id).json()["id"]
+    assert second_offer_id != first_offer_id
+    assert _approve_as(client_rbac, f"offer_dept_{uniq}", second_offer_id).status_code == 200
+    assert _approve_as(client_rbac, f"offer_ops_{uniq}", second_offer_id).status_code == 200
+
+    with rms_engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT id, status FROM rms_offer_records WHERE application_id = :aid ORDER BY id"
+            ),
+            {"aid": app_id},
+        ).fetchall()
+    assert len(rows) == 2
+    assert rows[0][1] == "superseded"
+    assert rows[1][1] == "approved"
+
+    approved = client_rbac.get("/api/rms/offers?status=approved", cookies=login.cookies).json()
+    assert len([o for o in approved if o["application_id"] == app_id]) == 1
+
+
+def test_superseded_offers_hidden_from_offer_tabs(
+    client_rbac, admin_auth, rms_engine, uniq, approvers_config
+):
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"hide_{uniq}")
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _advance_to_pending_offer(client_rbac, login, app_id)
+    offer_id = _submit_offer(client_rbac, login, app_id).json()["id"]
+    assert _approve_as(client_rbac, f"offer_dept_{uniq}", offer_id).status_code == 200
+    assert _approve_as(client_rbac, f"offer_ops_{uniq}", offer_id).status_code == 200
+
+    corr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "pending_offer", "mode": "correction", "note": "退回重发offer"},
+    )
+    assert corr.status_code == 200, corr.text
+
+    for tab in ("pending", "approved", "offer_dropped", "onboarding_lost"):
+        listed = client_rbac.get(f"/api/rms/offers?status={tab}", cookies=login.cookies).json()
+        assert offer_id not in [o["id"] for o in listed]
+    all_listed = client_rbac.get("/api/rms/offers", cookies=login.cookies).json()
+    assert offer_id not in [o["id"] for o in all_listed]
+
+
+def test_resubmit_supersedes_existing_approved_offer(
+    client_rbac, admin_auth, rms_engine, uniq, approvers_config
+):
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"resub_{uniq}")
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _advance_to_pending_offer(client_rbac, login, app_id)
+    first_offer_id = _submit_offer(client_rbac, login, app_id).json()["id"]
+    assert _approve_as(client_rbac, f"offer_dept_{uniq}", first_offer_id).status_code == 200
+    assert _approve_as(client_rbac, f"offer_ops_{uniq}", first_offer_id).status_code == 200
+
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE rms_applications
+                SET status = 'pending_offer', current_stage = 'pending_offer'
+                WHERE id = :id
+                """
+            ),
+            {"id": app_id},
+        )
+
+    second_offer_id = _submit_offer(client_rbac, login, app_id).json()["id"]
+    assert second_offer_id != first_offer_id
+
+    with rms_engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT id, status FROM rms_offer_records WHERE application_id = :aid ORDER BY id"),
+            {"aid": app_id},
+        ).fetchall()
+    assert rows[0][0] == first_offer_id
+    assert rows[0][1] == "superseded"
+    assert rows[1][0] == second_offer_id
+    assert rows[1][1] == "pending"
+
+
+def test_duplicate_pending_submission_does_not_supersede(
+    client_rbac, admin_auth, rms_engine, uniq, approvers_config
+):
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"dup_ns_{uniq}")
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _advance_to_pending_offer(client_rbac, login, app_id)
+
+    offer_id = _submit_offer(client_rbac, login, app_id).json()["id"]
+    dup = _submit_offer(client_rbac, login, app_id)
+    assert dup.status_code in (400, 409)
+
+    with rms_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT status FROM rms_offer_records WHERE id = :oid"),
+            {"oid": offer_id},
+        ).first()
+    assert row[0] == "pending"
+
+
+def test_failed_submit_preserves_approved_offer(
+    client_rbac, admin_auth, rms_engine, uniq, approvers_config
+):
+    from services.rms_offer_approval_config import OFFER_APPROVAL_CONFIG_INCOMPLETE
+
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"fail_{uniq}")
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _advance_to_pending_offer(client_rbac, login, app_id)
+    offer_id = _submit_offer(client_rbac, login, app_id).json()["id"]
+    assert _approve_as(client_rbac, f"offer_dept_{uniq}", offer_id).status_code == 200
+    assert _approve_as(client_rbac, f"offer_ops_{uniq}", offer_id).status_code == 200
+
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE rms_applications
+                SET status = 'pending_offer', current_stage = 'pending_offer'
+                WHERE id = :id
+                """
+            ),
+            {"id": app_id},
+        )
+        conn.execute(text("DELETE FROM rms_offer_approval_configs"))
+
+    r = _submit_offer(client_rbac, login, app_id)
+    assert r.status_code == 409
+    assert r.json()["detail"] == OFFER_APPROVAL_CONFIG_INCOMPLETE
+
+    with rms_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT status FROM rms_offer_records WHERE id = :oid"),
+            {"oid": offer_id},
+        ).first()
+    assert row[0] == "approved"

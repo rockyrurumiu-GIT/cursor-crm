@@ -325,6 +325,7 @@ def register_rms_applications_routes(
             Client,
             RmsCandidate=RmsCandidate,
             RosterEntry=RosterEntry,
+            RmsOfferRecord=RmsOfferRecord,
         )
 
     @app.get("/api/rms/applications/{application_id}/roster-draft")
