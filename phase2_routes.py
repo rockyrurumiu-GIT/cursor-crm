@@ -384,10 +384,12 @@ def register_phase2_routes(
         version = (latest.version + 1) if latest else 1
         if latest and latest.status in ("rejected", "approved"):
             latest.status = "superseded"
-        from handoff_core import empty_requirement, load_delivery_reviewers
+        from handoff_core import empty_requirement
+        from auth import service as auth_svc
 
         req = empty_requirement()
         req["commercial"]["estimated_amount"] = o.amount or ""
+        head = auth_svc.get_operations_dept_head(db)
         h = HandoffRequest(
             client_id=o.client_id,
             opportunity_id=o.id,
@@ -395,7 +397,8 @@ def register_phase2_routes(
             title=f"{o.name} 交接 v{version}",
             status="draft",
             sales_owner=o.owner or user,
-            delivery_owner=(load_delivery_reviewers(user)[0] if load_delivery_reviewers(user) else user),
+            delivery_owner=head["username"] or "",
+            delivery_owner_user_id=head["user_id"],
             requirement_json=json.dumps(req, ensure_ascii=False),
         )
         db.add(h)

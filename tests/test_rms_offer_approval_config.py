@@ -82,7 +82,7 @@ def _create_dept(client, admin_auth, code: str, name: str) -> int:
     r = client.post(
         "/api/system/depts",
         headers=_admin_headers(admin_auth),
-        json={"code": code, "name": name, "parent_id": None, "dept_type": "delivery"},
+        json={"code": code, "name": name, "parent_id": None, "dept_type": "business"},
     )
     assert r.status_code == 200, r.text
     return int(r.json()["id"])

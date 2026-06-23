@@ -978,7 +978,7 @@ def list_delivery_dept_users(
     return _list_org_dept_subtree_users(
         db,
         dept_where_sql=(
-            "name LIKE :pat OR code = 'DELIVERY' OR dept_type = 'delivery'"
+            "name LIKE :pat OR code = 'DELIVERY' OR dept_type IN ('delivery', 'business')"
         ),
         dept_params={"pat": "%交付部%"},
     )

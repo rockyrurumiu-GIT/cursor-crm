@@ -1970,7 +1970,7 @@
         </div>
     </Teleport>
 
-    <div v-if="handbookUploadModalOpen" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeHandbookUploadModal" @dragover.prevent @drop.prevent>
+    <div v-if="handbookUploadModalOpen" class="crm-esc-modal crm-form-modal-overlay z-[200]" @dragover.prevent @drop.prevent>
         <div class="crm-form-modal-panel max-w-2xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg text-gray-900">上传材料</h3>
@@ -2043,7 +2043,7 @@
         </div>
     </div>
 
-    <div v-if="employeeFileUploadModalOpen && moduleKey === 'employee_files'" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeEmployeeFileUploadModal" @dragover.prevent @drop.prevent>
+    <div v-if="employeeFileUploadModalOpen && moduleKey === 'employee_files'" class="crm-esc-modal crm-form-modal-overlay z-[200]" @dragover.prevent @drop.prevent>
         <div class="crm-form-modal-panel max-w-2xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg text-gray-900">上传材料</h3>
@@ -2091,7 +2091,7 @@
         </div>
     </div>
 
-    <div v-if="employeeFilePreviewRow && moduleKey === 'employee_files'" class="crm-esc-modal fixed inset-0 z-[200] flex flex-col bg-black/50 p-3" @click.self="closeEmployeeFilePreview">
+    <div v-if="employeeFilePreviewRow && moduleKey === 'employee_files'" class="crm-esc-modal fixed inset-0 z-[200] flex flex-col bg-black/50 p-3">
         <div class="relative flex flex-col flex-1 min-h-0 w-full max-w-5xl mx-auto overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl" @click.stop>
             <div class="flex shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4 py-3">
                 <p class="text-sm font-semibold text-gray-900 truncate">{{ employeeFilePreviewRow.original_filename }}</p>

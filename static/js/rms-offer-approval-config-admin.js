@@ -74,6 +74,10 @@
     function renderDeptTable() {
         var tbody = document.getElementById('oac-dept-tbody');
         if (!tbody) return;
+        var ic = window.SPC_ICONS || {};
+        var opBtn = window.spcOpBtn || function (cls, label, attrs, icon) {
+            return '<button type="button" class="' + cls + '" ' + (attrs || '') + '>' + label + '</button>';
+        };
         var rows = config.dept_overrides || [];
         if (!rows.length) {
             tbody.innerHTML = '<tr><td class="crm-td text-gray-500" colspan="5">暂无部门覆盖，将使用默认审批链</td></tr>';
@@ -81,15 +85,16 @@
         }
         tbody.innerHTML = rows.map(function (r) {
             var deptLabel = escapeHtml(r.dept_name || ('部门 #' + r.dept_id));
+            var ops = '<div class="crm-op-actions">'
+                + opBtn('crm-op-btn-edit btn-oac-edit', '修改', 'data-dept-id="' + r.dept_id + '"', ic.edit || '')
+                + opBtn('crm-op-btn-delete btn-oac-delete', '删除', 'data-dept-id="' + r.dept_id + '"', ic.delete || '')
+                + '</div>';
             return '<tr data-dept-id="' + r.dept_id + '">'
-                + '<td class="crm-td">' + deptLabel + '</td>'
+                + '<td class="crm-td crm-name-cell"><span class="crm-name-link">' + deptLabel + '</span></td>'
                 + '<td class="crm-td">' + escapeHtml(userLabel(r.dept_superior_user_id)) + '</td>'
                 + '<td class="crm-td">' + escapeHtml(userLabel(r.ops_head_user_id)) + '</td>'
                 + '<td class="crm-td">' + escapeHtml(userLabel(r.gm_user_id)) + '</td>'
-                + '<td class="crm-td">'
-                + '<button type="button" class="text-blue-600 hover:underline mr-2 btn-oac-edit">保存</button>'
-                + '<button type="button" class="text-red-600 hover:underline btn-oac-delete">删除</button>'
-                + '</td></tr>';
+                + '<td class="crm-td crm-sticky-right-op whitespace-nowrap">' + ops + '</td></tr>';
         }).join('');
     }
 

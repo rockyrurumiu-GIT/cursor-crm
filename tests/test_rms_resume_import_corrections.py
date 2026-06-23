@@ -527,7 +527,7 @@ def test_correction_reports_masked(import_engine, tmp_path):
 
 def test_import_help_page_content_and_placeholders():
     html = HELP_PATH.read_text(encoding="utf-8")
-    assert "RMS 批量导入帮助" in html
+    assert "批量导入候选人" in html
     assert "import_rms_resumes_with_ocr_retry.py" in html
     assert "--dry-run" in html
     assert "--commit" in html
@@ -572,6 +572,6 @@ def test_import_help_visible_with_only_candidates_read(
         assert r.status_code == 200, r.text
         nav = NAV_PATH.read_text(encoding="utf-8")
         assert 'data-crm-nav-any="rms.jobs.read,rms.analytics.read,rms.candidates.read"' in nav
-        assert "批量导入帮助" in nav
+        assert 'data-crm-nav-perm="rms.candidates.read">帮助文件-如何批量导入候选人' in nav
     finally:
         _revoke_role_permissions(engine, ROLE_VIEWER, ("rms.candidates.read",))

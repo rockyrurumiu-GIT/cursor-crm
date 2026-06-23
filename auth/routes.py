@@ -87,12 +87,14 @@ class DeptCreateBody(BaseModel):
     code: str = Field(..., min_length=1, max_length=32, pattern=r"^[A-Za-z0-9_]+$")
     parent_id: Optional[int] = None
     dept_type: str = Field(default="general", max_length=32)
+    head_user_id: Optional[int] = None
 
 
 class DeptUpdateBody(BaseModel):
     name: str = Field(..., min_length=1, max_length=64)
     dept_type: str = Field(default="general", max_length=32)
     status: str = Field(default="active", pattern="^(active|disabled)$")
+    head_user_id: Optional[int] = None
 
 
 def _session_payload(ctx: AuthContext) -> dict:
@@ -544,6 +546,7 @@ def build_router(
                 code=body.code.strip(),
                 parent_id=body.parent_id,
                 dept_type=body.dept_type.strip(),
+                head_user_id=body.head_user_id,
                 actor=ctx.username,
             )
             db.commit()
@@ -567,6 +570,7 @@ def build_router(
                 name=body.name.strip(),
                 dept_type=body.dept_type.strip(),
                 status=body.status,
+                head_user_id=body.head_user_id,
                 actor=ctx.username,
             )
             db.commit()
@@ -672,11 +676,19 @@ def build_router(
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
 
+    @router.get("/api/system/audit-logs/filters")
+    async def api_audit_log_filters(
+        _user: str = Depends(require_permission("system.audit.read")),
+        db: Session = Depends(get_db),
+    ):
+        return auth_svc.list_audit_filter_options(db)
+
     @router.get("/api/system/audit-logs")
     async def api_audit_logs(
         actor_username: str = "",
         target_type: str = "",
         action: str = "",
+        level: str = "",
         date_from: str = "",
         date_to: str = "",
         limit: int = 100,
@@ -689,6 +701,7 @@ def build_router(
             actor_username=actor_username,
             target_type=target_type,
             action=action,
+            level=level,
             date_from=date_from,
             date_to=date_to,
             limit=limit,

@@ -303,6 +303,8 @@ class HandoffRequest(Base):
     reviewer = Column(String, default="")
     reviewed_at = Column(DateTime, nullable=True)
     submitted_at = Column(DateTime, nullable=True)
+    review_deadline_at = Column(DateTime, nullable=True)
+    deadline_reminder_sent_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now)
 
@@ -809,6 +811,10 @@ def _ensure_handoff_phase2_schema_compat():
             conn.exec_driver_sql("ALTER TABLE handoff_requests ADD COLUMN opportunity_id INTEGER")
         if existing and "delivery_owner_user_id" not in existing:
             conn.exec_driver_sql("ALTER TABLE handoff_requests ADD COLUMN delivery_owner_user_id INTEGER")
+        if existing and "review_deadline_at" not in existing:
+            conn.exec_driver_sql("ALTER TABLE handoff_requests ADD COLUMN review_deadline_at DATETIME")
+        if existing and "deadline_reminder_sent_at" not in existing:
+            conn.exec_driver_sql("ALTER TABLE handoff_requests ADD COLUMN deadline_reminder_sent_at DATETIME")
 
 
 def _ensure_opportunities_schema_compat():
@@ -1543,6 +1549,7 @@ register_handoff_routes(
     DeliveryPipelineInsightDemand=DeliveryPipelineInsightDemand,
     Contract=Contract,
     ContractMilestone=ContractMilestone,
+    session_factory=SessionLocal,
 )
 
 register_phase2_routes(

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}销售-交付交接 · ITO BMS{% endblock %}
+{% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <style>
@@ -36,21 +37,28 @@
 {% raw %}
 <div id="handoff-app" class="pb-24">
     <div class="container mx-auto p-6 max-w-[1280px] space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <a href="/customers" class="text-sm text-[#0969da] hover:underline">← 客户列表</a>
-                <h1 class="mt-1 text-2xl font-bold text-gray-900">{{ clientName }} · 销售交接</h1>
-                <p v-if="handoff" class="text-sm text-gray-500 mt-1">
+        <div class="mt-2">
+            <h1 class="text-2xl font-bold text-gray-900">{{ clientName }} · 销售交接</h1>
+        </div>
+        <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="group relative inline-flex">
+                    <a :href="backUrl" :aria-label="backLabel" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white text-[#5B5F6E] transition-colors hover:bg-[#F9FAFB] hover:text-[#1A1D1F]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 18 9 12l6-6"/></svg>
+                    </a>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">{{ backLabel }}</span>
+                </span>
+                <p v-if="handoff" class="ml-auto min-w-0 self-center text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">
                     v{{ handoff.version }} ·
-                    <span :class="statusBadge(handoff.status)" class="px-2 py-0.5 rounded text-xs">{{ handoff.status_label }}</span>
+                    <span :class="statusBadge(handoff.status)" class="px-2 py-0.5 rounded text-xs font-medium">{{ handoff.status_label }}</span>
                     · 完整度 {{ handoff.completeness.score }}%
                 </p>
-            </div>
-            <div class="flex gap-2 flex-wrap">
-                <select v-if="handoffs.length" v-model="selectedId" @change="loadHandoff" class="crm-form-control text-sm min-w-[10rem]">
-                    <option v-for="h in handoffs" :key="h.id" :value="h.id">v{{ h.version }} · {{ h.status_label }}</option>
-                </select>
-                <button v-if="canCreate" type="button" @click="createHandoff" class="border border-[#0969da] text-[#0969da] px-3 py-1.5 rounded text-sm hover:bg-blue-50">+ 新版本</button>
+                <span v-if="canCreate" class="group relative inline-flex" :class="handoff ? '' : 'ml-auto'">
+                    <button type="button" @click="createHandoff" aria-label="新版本" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3a567f]">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">新版本</span>
+                </span>
             </div>
         </div>
 
@@ -276,9 +284,9 @@
 
     <!-- 审批底栏 -->
     <div v-if="handoff && canReview" class="handoff-approval-bar">
-        <div class="container mx-auto max-w-[1280px] px-6 py-3 flex justify-end gap-3">
+        <div class="container mx-auto max-w-[1280px] px-6 py-3 flex justify-start gap-3">
             <button type="button" @click="showReject=true" class="px-5 py-2 rounded border border-red-300 text-red-600 hover:bg-red-50">驳回</button>
-            <button type="button" @click="approveHandoff" class="px-5 py-2 rounded bg-[#4C6491] text-white hover:bg-[#3D5176]">一键通过</button>
+            <button type="button" @click="approveHandoff" class="px-5 py-2 rounded bg-[#4C6491] text-white hover:bg-[#3D5176]">通过</button>
         </div>
     </div>
 
@@ -304,5 +312,5 @@ window.__CRM_HANDOFF__ = { clientId: {{ client_id }}, handoffId: {% if handoff_i
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/customer-handoff.js?v=20260617-log-time"></script>
+<script src="/static/js/pages/customer-handoff.js?v=20260623-approve-confirm"></script>
 {% endblock %}

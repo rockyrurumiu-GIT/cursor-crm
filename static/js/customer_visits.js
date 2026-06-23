@@ -40,21 +40,27 @@ const VISIT_COL_DEFAULTS = [
     100, 120, 72, 80, 96, 72, 72, 200, 120, 88, 140, 180, 180, 120,
 ];
 
-const detailFields = [
-    { key: 'client_name', label: '客户名称' },
+const detailBasicFields = [
     { key: 'week_period', label: '日期' },
     { key: 'region', label: '区域' },
     { key: 'city', label: '城市' },
-    { key: 'salesperson', label: '销售' },
-    { key: 'way', label: '拜访方式' },
-    { key: 'visit_purpose', label: '拜访目标' },
-    { key: 'target', label: '拜访对象' },
+    { key: 'client_name', label: '客户' },
     { key: 'accompanying', label: '我方随行人员' },
     { key: 'duration_minutes', label: '拜访时长（分）' },
-    { key: 'result', label: '拜访目标是否达成' },
-    { key: 'visit_summary', label: '拜访纪要' },
-    { key: 'next_plan', label: '下一步行动' },
 ];
+
+function visitResultBadge(result) {
+    const r = (result || '').trim();
+    if (r === '全部达成') return { label: r, cls: 'visit-detail-badge--ok' };
+    if (r === '部分达成') return { label: r, cls: 'visit-detail-badge--partial' };
+    if (r === '未达成') return { label: r, cls: 'visit-detail-badge--fail' };
+    return { label: r || '—', cls: '' };
+}
+
+function detailSubtitle(row) {
+    if (!row) return '—';
+    return [row.week_period, row.region, row.city].filter(Boolean).join(' · ') || '—';
+}
 
 createApp({
     setup() {
@@ -153,6 +159,9 @@ createApp({
         const openDetail = (row) => {
             detailRow.value = { ...row };
         };
+        const closeDetail = () => {
+            detailRow.value = null;
+        };
 
         const validateForm = () => {
             const checks = [
@@ -246,12 +255,15 @@ createApp({
             showForm,
             form,
             detailRow,
-            detailFields,
+            detailBasicFields,
+            visitResultBadge,
+            detailSubtitle,
             load,
             clearFilters,
             openCreate,
             openEdit,
             openDetail,
+            closeDetail,
             save,
             remove,
             canDeletePermission,

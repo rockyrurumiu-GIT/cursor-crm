@@ -38,6 +38,31 @@ from auth.data_scope_catalog import (
 
 DELETE_PERMISSION_BACKFILL_ID = "rbac_delete_permissions_backfill_v1"
 
+DEPT_TYPE_GENERAL = "general"
+DEPT_TYPE_BUSINESS = "business"
+DEPT_TYPE_FUNCTIONAL = "functional"
+
+DEPT_TYPE_LABELS: Dict[str, str] = {
+    DEPT_TYPE_GENERAL: "通用",
+    DEPT_TYPE_BUSINESS: "业务",
+    DEPT_TYPE_FUNCTIONAL: "职能",
+}
+
+LEGACY_DEPT_TYPE_MAP: Dict[str, str] = {
+    "sales": DEPT_TYPE_BUSINESS,
+    "delivery": DEPT_TYPE_BUSINESS,
+    "finance": DEPT_TYPE_FUNCTIONAL,
+}
+
+
+def normalize_dept_type(dept_type: str) -> str:
+    t = (dept_type or DEPT_TYPE_GENERAL).strip() or DEPT_TYPE_GENERAL
+    t = LEGACY_DEPT_TYPE_MAP.get(t, t)
+    if t not in DEPT_TYPE_LABELS:
+        opts = "、".join(DEPT_TYPE_LABELS.values())
+        raise ValueError(f"部门类型无效，可选：{opts}")
+    return t
+
 DELETE_PERMISSION_COMPAT_PAIRS = (
     ("crm.clients.write", "crm.clients.delete"),
     ("crm.opportunities.write", "crm.opportunities.delete"),
@@ -476,11 +501,12 @@ def seed_rbac_data(
 def seed_departments(db: Session) -> None:
     now = _utc_now()
     defs = [
-        ("ROOT", "公司", None, "ROOT", "general"),
-        ("SALES", "销售部", "ROOT", "ROOT/SALES", "sales"),
-        ("DELIVERY", "交付部", "ROOT", "ROOT/DELIVERY", "delivery"),
-        ("FINANCE", "财务部", "ROOT", "ROOT/FINANCE", "finance"),
-        ("ADMIN", "管理部", "ROOT", "ROOT/ADMIN", "general"),
+        ("ROOT", "公司", None, "ROOT", DEPT_TYPE_GENERAL),
+        ("SALES", "销售部", "ROOT", "ROOT/SALES", DEPT_TYPE_BUSINESS),
+        ("DELIVERY", "交付部", "ROOT", "ROOT/DELIVERY", DEPT_TYPE_BUSINESS),
+        ("FINANCE", "财务部", "ROOT", "ROOT/FINANCE", DEPT_TYPE_FUNCTIONAL),
+        ("ADMIN", "管理部", "ROOT", "ROOT/ADMIN", DEPT_TYPE_GENERAL),
+        ("OPERATIONS", "经营部", "ROOT", "ROOT/OPERATIONS", DEPT_TYPE_GENERAL),
     ]
     code_to_id: Dict[str, int] = {}
     for code, name, parent_code, path, dept_type in defs:
@@ -867,31 +893,49 @@ def list_audit_logs(
     actor_username: str = "",
     target_type: str = "",
     action: str = "",
+    level: str = "",
     date_from: str = "",
     date_to: str = "",
     limit: int = 100,
     offset: int = 0,
-) -> List[Dict[str, Any]]:
-    q = "SELECT id, actor_username, action, target_type, target_id, detail, before_json, after_json, created_at FROM sys_audit_log WHERE 1=1"
+) -> Dict[str, Any]:
+    where = "WHERE 1=1"
     params: Dict[str, Any] = {}
     if actor_username:
-        q += " AND actor_username LIKE :actor"
-        params["actor"] = f"%{actor_username}%"
+        where += " AND actor_username = :actor"
+        params["actor"] = actor_username
     if target_type:
-        q += " AND target_type = :tt"
+        where += " AND target_type = :tt"
         params["tt"] = target_type
     if action:
-        q += " AND action = :act"
+        where += " AND action = :act"
         params["act"] = action
+    lvl = (level or "").strip().lower()
+    if lvl == "high":
+        where += " AND (LOWER(action) LIKE '%.delete' OR LOWER(action) LIKE '%.disable')"
+    elif lvl == "low":
+        where += " AND (LOWER(action) LIKE '%.create' OR LOWER(action) LIKE '%.import')"
+    elif lvl == "medium":
+        where += (
+            " AND LOWER(action) NOT LIKE '%.delete' AND LOWER(action) NOT LIKE '%.disable'"
+            " AND LOWER(action) NOT LIKE '%.create' AND LOWER(action) NOT LIKE '%.import'"
+        )
     if date_from:
-        q += " AND created_at >= :df"
+        where += " AND created_at >= :df"
         params["df"] = date_from
     if date_to:
-        q += " AND created_at <= :dt"
+        where += " AND created_at <= :dt"
         params["dt"] = date_to
-    q += " ORDER BY id DESC LIMIT :lim OFFSET :off"
-    params["lim"] = max(1, min(limit, 500))
-    params["off"] = max(0, offset)
+    lim = max(1, min(limit, 500))
+    off = max(0, offset)
+    total = int(db.execute(text(f"SELECT COUNT(*) FROM sys_audit_log {where}"), params).scalar() or 0)
+    q = (
+        "SELECT id, actor_username, action, target_type, target_id, detail, before_json, after_json, created_at "
+        f"FROM sys_audit_log {where} ORDER BY id DESC LIMIT :lim OFFSET :off"
+    )
+    params = dict(params)
+    params["lim"] = lim
+    params["off"] = off
     rows = db.execute(text(q), params).mappings().all()
     out = []
     for row in rows:
@@ -906,7 +950,20 @@ def list_audit_logs(
             else:
                 d[key.replace("_json", "")] = None
         out.append(d)
-    return out
+    return {"items": out, "total": total, "limit": lim, "offset": off}
+
+
+def list_audit_filter_options(db: Session) -> Dict[str, List[str]]:
+    actors = db.execute(
+        text("SELECT DISTINCT actor_username FROM sys_audit_log ORDER BY actor_username")
+    ).scalars().all()
+    actions = db.execute(
+        text("SELECT DISTINCT action FROM sys_audit_log ORDER BY action")
+    ).scalars().all()
+    return {
+        "actors": [str(a) for a in actors if a],
+        "actions": [str(a) for a in actions if a],
+    }
 
 
 def create_user(
@@ -1382,13 +1439,88 @@ def set_role_permissions(
 def list_departments(db: Session) -> List[Dict[str, Any]]:
     rows = db.execute(
         text(
-            "SELECT id, name, code, parent_id, path, dept_type, status FROM sys_dept ORDER BY path"
+            "SELECT id, name, code, parent_id, path, dept_type, status, head_user_id "
+            "FROM sys_dept ORDER BY path"
         )
     ).mappings().all()
-    return [dict(r) for r in rows]
+    depts = [dict(r) for r in rows]
+    head_ids = sorted({int(d["head_user_id"]) for d in depts if d.get("head_user_id")})
+    head_map: Dict[int, Dict[str, Any]] = {}
+    if head_ids:
+        placeholders = ", ".join(f":h{i}" for i in range(len(head_ids)))
+        params = {f"h{i}": hid for i, hid in enumerate(head_ids)}
+        hrows = db.execute(
+            text(
+                f"SELECT id, username, display_name FROM sys_user WHERE id IN ({placeholders})"
+            ),
+            params,
+        ).mappings().all()
+        for row in hrows:
+            head_map[int(row["id"])] = {
+                "id": int(row["id"]),
+                "username": str(row["username"]),
+                "display_name": str(row["display_name"] or row["username"]),
+            }
+    user_rows = db.execute(
+        text(
+            "SELECT ud.dept_id, u.id, u.username, u.display_name "
+            "FROM sys_user_dept ud "
+            "JOIN sys_user u ON u.id = ud.user_id "
+            "ORDER BY ud.dept_id, COALESCE(u.display_name, u.username), u.username"
+        )
+    ).mappings().all()
+    users_by_dept: Dict[int, List[Dict[str, Any]]] = {}
+    for row in user_rows:
+        dept_id = int(row["dept_id"])
+        users_by_dept.setdefault(dept_id, []).append(
+            {
+                "id": int(row["id"]),
+                "username": str(row["username"]),
+                "display_name": str(row["display_name"] or row["username"]),
+            }
+        )
+    for dept in depts:
+        bound = users_by_dept.get(int(dept["id"]), [])
+        dept["user_count"] = len(bound)
+        dept["bound_users"] = bound
+        hid = dept.get("head_user_id")
+        dept["head_user"] = head_map.get(int(hid)) if hid else None
+    return depts
 
 
-BUILTIN_DEPT_CODES = frozenset({"ROOT", "SALES", "DELIVERY", "FINANCE", "ADMIN"})
+BUILTIN_DEPT_CODES = frozenset({"ROOT", "SALES", "DELIVERY", "FINANCE", "ADMIN", "OPERATIONS"})
+
+OPS_DEPT_NAME = "经营部"
+OPS_DEPT_CODES = ("OPERATIONS", "OPS", "OPERATING")
+
+
+def get_operations_dept_head(db: Session) -> Dict[str, Any]:
+    """经营部负责人（交接审批人）。"""
+    row = db.execute(
+        text(
+            "SELECT d.head_user_id, u.username, u.display_name "
+            "FROM sys_dept d "
+            "LEFT JOIN sys_user u ON u.id = d.head_user_id AND u.status = 'active' "
+            "WHERE d.status = 'active' AND (d.name = :name OR d.code IN ('OPERATIONS', 'OPS', 'OPERATING')) "
+            "ORDER BY CASE WHEN d.name = :name THEN 0 ELSE 1 END, d.id "
+            "LIMIT 1"
+        ),
+        {"name": OPS_DEPT_NAME},
+    ).mappings().first()
+    if not row or not row["head_user_id"] or not row["username"]:
+        return {"user_id": None, "username": "", "display_name": ""}
+    return {
+        "user_id": int(row["head_user_id"]),
+        "username": str(row["username"]),
+        "display_name": str(row["display_name"] or row["username"]),
+    }
+
+
+def is_operations_dept_head(db: Session, user_id: Optional[int]) -> bool:
+    if not user_id:
+        return False
+    head = get_operations_dept_head(db)
+    return head["user_id"] is not None and int(head["user_id"]) == int(user_id)
 
 
 def _dept_reference_reason(db: Session, dept_id: int) -> Optional[str]:
@@ -1418,6 +1550,7 @@ def create_department(
     code: str,
     parent_id: Optional[int],
     dept_type: str,
+    head_user_id: Optional[int] = None,
     actor: str,
 ) -> Dict[str, Any]:
     name = (name or "").strip()
@@ -1439,14 +1572,23 @@ def create_department(
         pid = int(prow[0])
         parent_path = str(prow[1] or "")
     path = f"{parent_path}/{code}" if parent_path else code
-    dtype = (dept_type or "general").strip() or "general"
+    dtype = normalize_dept_type(dept_type)
+    hid: Optional[int] = None
+    if head_user_id is not None:
+        urow = db.execute(
+            text("SELECT id FROM sys_user WHERE id = :id AND status = 'active'"),
+            {"id": head_user_id},
+        ).fetchone()
+        if not urow:
+            raise ValueError("部门主管用户不存在或已禁用")
+        hid = int(urow[0])
     now = _utc_now()
     db.execute(
         text(
-            "INSERT INTO sys_dept (name, code, parent_id, path, dept_type, status, created_at, updated_at) "
-            "VALUES (:n, :c, :pid, :p, :t, 'active', :at, :at)"
+            "INSERT INTO sys_dept (name, code, parent_id, path, dept_type, status, head_user_id, created_at, updated_at) "
+            "VALUES (:n, :c, :pid, :p, :t, 'active', :hid, :at, :at)"
         ),
-        {"n": name, "c": code, "pid": pid, "p": path, "t": dtype, "at": now},
+        {"n": name, "c": code, "pid": pid, "p": path, "t": dtype, "hid": hid, "at": now},
     )
     did = int(db.execute(text("SELECT id FROM sys_dept WHERE code = :c"), {"c": code}).fetchone()[0])
     audit_log(
@@ -1456,7 +1598,7 @@ def create_department(
         target_type="dept",
         target_id=str(did),
         detail=code,
-        after={"name": name, "code": code, "parent_id": pid, "path": path, "dept_type": dtype},
+        after={"name": name, "code": code, "parent_id": pid, "path": path, "dept_type": dtype, "head_user_id": hid},
     )
     return {"id": did, "code": code, "name": name, "path": path}
 
@@ -1468,10 +1610,11 @@ def update_department(
     name: str,
     dept_type: str,
     status: str,
+    head_user_id: Optional[int] = None,
     actor: str,
 ) -> None:
     row = db.execute(
-        text("SELECT id, code, name, dept_type, status FROM sys_dept WHERE id = :id"),
+        text("SELECT id, code, name, dept_type, status, head_user_id FROM sys_dept WHERE id = :id"),
         {"id": dept_id},
     ).mappings().first()
     if not row:
@@ -1479,14 +1622,31 @@ def update_department(
     name = (name or "").strip()
     if not name:
         raise ValueError("部门名称不能为空")
-    dtype = (dept_type or row["dept_type"] or "general").strip() or "general"
+    dtype = normalize_dept_type(dept_type or row["dept_type"] or DEPT_TYPE_GENERAL)
     st = (status or row["status"] or "active").strip()
     if st not in ("active", "disabled"):
         raise ValueError("无效状态")
-    before = {"name": row["name"], "dept_type": row["dept_type"], "status": row["status"]}
+    hid: Optional[int] = None
+    if head_user_id is not None:
+        urow = db.execute(
+            text("SELECT id FROM sys_user WHERE id = :id AND status = 'active'"),
+            {"id": head_user_id},
+        ).fetchone()
+        if not urow:
+            raise ValueError("部门主管用户不存在或已禁用")
+        hid = int(urow[0])
+    before = {
+        "name": row["name"],
+        "dept_type": row["dept_type"],
+        "status": row["status"],
+        "head_user_id": row.get("head_user_id"),
+    }
     db.execute(
-        text("UPDATE sys_dept SET name = :n, dept_type = :t, status = :s, updated_at = :at WHERE id = :id"),
-        {"n": name, "t": dtype, "s": st, "at": _utc_now(), "id": dept_id},
+        text(
+            "UPDATE sys_dept SET name = :n, dept_type = :t, status = :s, head_user_id = :hid, updated_at = :at "
+            "WHERE id = :id"
+        ),
+        {"n": name, "t": dtype, "s": st, "hid": hid, "at": _utc_now(), "id": dept_id},
     )
     audit_log(
         db,
@@ -1496,7 +1656,7 @@ def update_department(
         target_id=str(dept_id),
         detail=str(row["code"]),
         before=before,
-        after={"name": name, "dept_type": dtype, "status": st},
+        after={"name": name, "dept_type": dtype, "status": st, "head_user_id": hid},
     )
 
 

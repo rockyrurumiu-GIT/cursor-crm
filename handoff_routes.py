@@ -32,6 +32,7 @@ from handoff_core import (
     validate_for_submit,
 )
 from llm_service import get_llm_service
+from services.handoff_deadline import ensure_handoff_review_deadline, maintain_deadlines_on_session, start_deadline_reminder_thread
 
 
 class HandoffUpdateBody(BaseModel):
@@ -81,6 +82,7 @@ def _handoff_to_dict(h, client_name: str = "") -> Dict[str, Any]:
         "reviewer": h.reviewer or "",
         "reviewed_at": h.reviewed_at.isoformat() if h.reviewed_at else "",
         "submitted_at": h.submitted_at.isoformat() if h.submitted_at else "",
+        "review_deadline_at": h.review_deadline_at.isoformat() if getattr(h, "review_deadline_at", None) else "",
         "created_at": h.created_at.isoformat() if h.created_at else "",
         "updated_at": h.updated_at.isoformat() if h.updated_at else "",
     }
@@ -113,6 +115,7 @@ def register_handoff_routes(
     Contract=None,
     ContractMilestone=None,
     review_dep: Optional[Callable] = None,
+    session_factory: Optional[Callable] = None,
 ):
     if review_dep is not None:
 
@@ -161,6 +164,39 @@ def register_handoff_routes(
             )
         )
 
+    def _deadline_maintenance(db: Session) -> None:
+        try:
+            maintain_deadlines_on_session(
+                db,
+                HandoffRequest=HandoffRequest,
+                Client=Client,
+                CrmNotification=CrmNotification,
+                notify=_notify,
+            )
+        except Exception:
+            db.rollback()
+            raise
+
+    def _assign_handoff_approver(db: Session, h: HandoffRequest, *, required: bool) -> None:
+        head = auth_service.get_operations_dept_head(db)
+        if not head["user_id"] or not head["username"]:
+            if required:
+                raise HTTPException(status_code=400, detail="经营部尚未设置部门主管，无法提交交接审批")
+            return
+        h.delivery_owner_user_id = head["user_id"]
+        h.delivery_owner = head["username"]
+
+    def _is_assigned_handoff_approver(ctx: AuthContext, h: HandoffRequest) -> bool:
+        uid = getattr(h, "delivery_owner_user_id", None)
+        if uid is not None:
+            return ctx.user_id is not None and int(ctx.user_id) == int(uid)
+        owner = (h.delivery_owner or "").strip()
+        return bool(owner and owner == ctx.username)
+
+    def _assert_handoff_approver(ctx: AuthContext, h: HandoffRequest) -> None:
+        if not _is_assigned_handoff_approver(ctx, h):
+            raise HTTPException(status_code=403, detail="仅该交接单指派的经营部负责人可审批")
+
     def _latest_handoff_for_client(db: Session, client_id: int) -> Optional[HandoffRequest]:
         return (
             db.query(HandoffRequest)
@@ -170,31 +206,20 @@ def register_handoff_routes(
         )
 
     def _pending_handoffs_for_user(db: Session, ctx: AuthContext) -> List[Dict[str, Any]]:
-        """待审交接：在数据范围过滤基础上，审核人可见未指派项。"""
-        user = ctx.username
-        admin = effective_admin_username()
-        is_rev = is_delivery_reviewer(user, admin)
+        """待审交接：仅指派经营部负责人可见。"""
         q = (
             db.query(HandoffRequest)
             .filter(HandoffRequest.status == "pending_review")
             .order_by(desc(HandoffRequest.submitted_at))
         )
-        if not ctx.is_super and user != admin:
+        if not ctx.is_super:
             q = ds.filter_query_by_client_scope(
                 q, db, ctx, RESOURCE_DELIVERY_HANDOFF, "read", HandoffRequest.client_id, Client
             )
         rows = q.all()
         out: List[Dict[str, Any]] = []
         for h in rows:
-            owner = (h.delivery_owner or "").strip()
-            if ctx.is_super or user == admin:
-                pass
-            elif owner == user or (getattr(h, "delivery_owner_user_id", None) == ctx.user_id):
-                pass
-            elif is_rev:
-                if owner and owner != user:
-                    continue
-            else:
+            if not _is_assigned_handoff_approver(ctx, h):
                 continue
             client = db.query(Client).filter(Client.id == h.client_id).first()
             out.append(_handoff_to_dict(h, client.name if client else ""))
@@ -225,11 +250,10 @@ def register_handoff_routes(
     @app.get("/api/handoff/config")
     async def handoff_config(
         ctx: AuthContext = Depends(get_current_context),
+        db: Session = Depends(get_db),
         user: str = Depends(require_permission("delivery.handoff.read")),
     ):
-        can_review = is_delivery_reviewer(user, effective_admin_username()) or auth_service.user_has_permission(
-            ctx, "delivery.handoff.review"
-        )
+        is_ops_head = auth_service.is_operations_dept_head(db, ctx.user_id)
         return {
             "reject_codes": [{"code": k, "label": v} for k, v in HANDOFF_REJECT_CODES.items()],
             "statuses": [{"code": s, "label": HANDOFF_STATUS_LABELS.get(s, s)} for s in sorted(HANDOFF_STATUSES)],
@@ -237,7 +261,7 @@ def register_handoff_routes(
             "json_schema_path": "/data/requirement_schema.json",
             "reviewers": load_delivery_reviewers(effective_admin_username()),
             "llm_available": get_llm_service().available,
-            "is_reviewer": can_review,
+            "is_reviewer": is_ops_head,
         }
 
     @app.get("/api/clients/{client_id}/handoff-gate")
@@ -282,22 +306,17 @@ def register_handoff_routes(
             raise HTTPException(status_code=400, detail="存在未完成的交接单，请先提交或等待审批")
         if latest and latest.status == "approved":
             version = latest.version + 1
-        delivery_owner_user_id = getattr(client, "delivery_owner_user_id", None)
-        delivery_owner = _username_for_user_id(db, delivery_owner_user_id)
-        if not delivery_owner:
-            reviewers = load_delivery_reviewers(effective_admin_username())
-            delivery_owner = reviewers[0] if reviewers else user
-            delivery_owner_user_id = None
         h = HandoffRequest(
             client_id=client_id,
             version=version,
             title=f"{client.name} 交接 v{version}",
             status="draft",
             sales_owner=client.owner or user,
-            delivery_owner=delivery_owner,
-            delivery_owner_user_id=delivery_owner_user_id,
+            delivery_owner="",
+            delivery_owner_user_id=None,
             requirement_json=json.dumps(empty_requirement(), ensure_ascii=False),
         )
+        _assign_handoff_approver(db, h, required=False)
         if latest and latest.status in ("rejected", "approved"):
             latest.status = "superseded"
         db.add(h)
@@ -311,8 +330,9 @@ def register_handoff_routes(
     async def pending_handoffs(
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(_require_reviewer),
+        _user: str = Depends(require_permission("delivery.handoff.review")),
     ):
+        _deadline_maintenance(db)
         return _pending_handoffs_for_user(db, ctx)
 
     @app.get("/api/delivery/handoffs/pending")
@@ -321,17 +341,20 @@ def register_handoff_routes(
         ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("delivery.handoff.read")),
     ):
+        _deadline_maintenance(db)
         return _pending_handoffs_for_user(db, ctx)
 
     @app.get("/api/handoffs/{handoff_id}")
     async def get_handoff(
         handoff_id: int,
         db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("delivery.handoff.read")),
     ):
         h = _get_handoff_or_404(db, handoff_id)
         client = db.query(Client).filter(Client.id == h.client_id).first()
         data = _handoff_to_dict(h, client.name if client else "")
+        data["can_review"] = h.status == "pending_review" and _is_assigned_handoff_approver(ctx, h)
         logs = (
             db.query(HandoffReviewLog)
             .filter(HandoffReviewLog.handoff_id == handoff_id)
@@ -373,8 +396,6 @@ def register_handoff_routes(
             raise HTTPException(status_code=400, detail="当前状态不可编辑")
         if body.title is not None:
             h.title = body.title.strip()
-        if body.delivery_owner is not None:
-            h.delivery_owner = body.delivery_owner.strip()
         if body.source_text is not None:
             h.source_text = body.source_text
         if body.requirement is not None:
@@ -400,19 +421,29 @@ def register_handoff_routes(
             raise HTTPException(status_code=400, detail="; ".join(errors))
         h.status = "pending_review"
         h.submitted_at = datetime.now()
+        ensure_handoff_review_deadline(h, h.submitted_at)
         h.updated_at = datetime.now()
         h.reject_reason_code = ""
         h.reject_detail = ""
+        _assign_handoff_approver(db, h, required=True)
         client = db.query(Client).filter(Client.id == h.client_id).first()
         _log_review(db, h.id, h.client_id, user, "submit", "提交审批")
-        target = h.delivery_owner or effective_admin_username()
-        _notify(db, target, "handoff_pending", f"【待审】{client.name if client else ''}：{h.title}", h.id, h.client_id)
+        target = h.delivery_owner or ""
+        if target:
+            _notify(db, target, "handoff_pending", f"【待审】{client.name if client else ''}：{h.title}", h.id, h.client_id)
         db.commit()
         return _handoff_to_dict(h, client.name if client else "")
 
     @app.post("/api/handoffs/{handoff_id}/approve")
-    async def approve_handoff(handoff_id: int, db: Session = Depends(get_db), user: str = Depends(_require_reviewer)):
+    async def approve_handoff(
+        handoff_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("delivery.handoff.review")),
+    ):
         h = _get_handoff_or_404(db, handoff_id)
+        _assert_handoff_approver(ctx, h)
+        user = ctx.username
         if h.status != "pending_review":
             raise HTTPException(status_code=400, detail="仅待审状态可通过")
         client = db.query(Client).filter(Client.id == h.client_id).first()
@@ -445,9 +476,12 @@ def register_handoff_routes(
         handoff_id: int,
         body: HandoffRejectBody,
         db: Session = Depends(get_db),
-        user: str = Depends(_require_reviewer),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("delivery.handoff.review")),
     ):
         h = _get_handoff_or_404(db, handoff_id)
+        _assert_handoff_approver(ctx, h)
+        user = ctx.username
         if h.status != "pending_review":
             raise HTTPException(status_code=400, detail="仅待审状态可驳回")
         if body.code not in HANDOFF_REJECT_CODES:
@@ -502,8 +536,14 @@ def register_handoff_routes(
         return {"ok": True, "handoff": _handoff_to_dict(h, client.name if client else ""), "parsed": data}
 
     @app.post("/api/handoffs/{handoff_id}/ai/review-assist")
-    async def ai_review_assist(handoff_id: int, db: Session = Depends(get_db), user: str = Depends(_require_reviewer)):
+    async def ai_review_assist(
+        handoff_id: int,
+        db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
+        _user: str = Depends(require_permission("delivery.handoff.review")),
+    ):
         h = _get_handoff_or_404(db, handoff_id)
+        _assert_handoff_approver(ctx, h)
         client = db.query(Client).filter(Client.id == h.client_id).first()
         req = parse_requirement_json(h.requirement_json)
         visits = (
@@ -596,6 +636,7 @@ def register_handoff_routes(
         db: Session = Depends(get_db),
         user: str = Depends(_require_notification_user),
     ):
+        _deadline_maintenance(db)
         q = db.query(CrmNotification).filter(CrmNotification.username == user)
         if unread:
             q = q.filter(CrmNotification.read_at.is_(None))
@@ -732,5 +773,17 @@ def register_handoff_routes(
             return base
 
         return wrapped
+
+    if session_factory is not None:
+
+        @app.on_event("startup")
+        def _handoff_deadline_startup():
+            start_deadline_reminder_thread(
+                session_factory,
+                HandoffRequest=HandoffRequest,
+                Client=Client,
+                CrmNotification=CrmNotification,
+                notify=_notify,
+            )
 
     return {"extend_stats": extend_stats, "client_gate_status": _client_gate_status}

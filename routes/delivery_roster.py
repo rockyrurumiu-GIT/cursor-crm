@@ -306,7 +306,8 @@ def register_delivery_roster_routes(
         new_cid = int(entry.client_id) if entry.client_id is not None else 0
         for cid in {old_cid, new_cid}:
             resequence_roster_serial_no(db, cid, RosterEntry)
-        action_msg = f"花名册修改行 id={row_id}"
+        emp = (entry.full_name or "").strip() or f"#{entry.id}"
+        action_msg = f"花名册修改: {emp}"
         if interview_sync_n:
             action_msg += f"，同步员工访谈标离职 {interview_sync_n} 条（免校验）"
         log = AuditLog(client_id=entry.client_id, operator=user, action=action_msg)
@@ -325,11 +326,12 @@ def register_delivery_roster_routes(
         if not entry:
             raise HTTPException(status_code=404, detail="记录不存在")
         cid = int(entry.client_id) if entry.client_id is not None else 0
+        emp = (entry.full_name or "").strip() or f"#{entry.id}"
         db.delete(entry)
         db.flush()
         resequence_roster_serial_no(db, cid, RosterEntry)
         db.commit()
-        log = AuditLog(client_id=0, operator=user, action=f"整体花名册删除行 id={row_id}")
+        log = AuditLog(client_id=0, operator=user, action=f"整体花名册删除: {emp}")
         db.add(log)
         db.commit()
         return {"status": "deleted"}

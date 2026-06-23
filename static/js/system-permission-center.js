@@ -13,11 +13,83 @@
     var CAN_DELETE_ROLES = IS_SUPER || !window.crmHasPermission || window.crmHasPermission('system.roles.delete');
     var BUILTIN_DEPT_CODES = { ROOT: 1, SALES: 1, DELIVERY: 1, FINANCE: 1, ADMIN: 1 };
 
+    var SPC_ICONS = {
+        edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+        delete: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>',
+        key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>',
+        enable: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11l-3 3-2-2"/></svg>',
+        matrix: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+    };
+
+    function spcOpBtn(cls, label, attrs, icon) {
+        return '<span class="group relative inline-flex">'
+            + '<button type="button" class="' + cls + '" aria-label="' + label + '" ' + (attrs || '') + '>' + icon + '</button>'
+            + '<span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">' + label + '</span>'
+            + '</span>';
+    }
+
+    function computePageNumbers(current, total) {
+        var max = 7;
+        var start = Math.max(1, current - 3);
+        var end = Math.min(total, start + max - 1);
+        start = Math.max(1, end - max + 1);
+        var arr = [];
+        for (var i = start; i <= end; i++) arr.push(i);
+        return arr;
+    }
+
+    function toggleFilterPanel(btnId, panelId) {
+        var btn = document.getElementById(btnId);
+        var panel = document.getElementById(panelId);
+        if (!btn || !panel) return;
+        var open = panel.classList.toggle('hidden') === false;
+        btn.classList.toggle('border-[#16A39A]', open);
+        btn.classList.toggle('text-[#16A39A]', open);
+        btn.classList.toggle('border-[#D7DBE0]', !open);
+        btn.classList.toggle('text-[#1A1D1F]', !open);
+    }
+
+    function clearUserFilters() {
+        var search = document.getElementById('user-search');
+        var roleSel = document.getElementById('batch-role-select');
+        var modeSel = document.getElementById('batch-role-mode');
+        if (search) search.value = '';
+        if (roleSel) roleSel.value = '';
+        if (modeSel) modeSel.value = 'replace';
+        state.userPage = 0;
+        loadUsers().catch(function (e) { showMsg(e.message, false); });
+    }
+
+    function clearRoleFilters() {
+        var search = document.getElementById('role-search');
+        if (search) search.value = '';
+        renderRolesTable();
+    }
+
+    function clearDeptFilters() {
+        var search = document.getElementById('dept-search');
+        if (search) search.value = '';
+        renderDeptsList();
+    }
+
+    function clearAuditFilters() {
+        ['audit-keyword', 'audit-from', 'audit-to'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        ['audit-actor', 'audit-action', 'audit-level'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        state.auditPage = 0;
+        loadAudit().catch(function (e) { showMsg(e.message, false); });
+    }
+
     var state = {
         users: [],
         usersTotal: 0,
         userPage: 0,
-        userPageSize: 20,
+        userPageSize: 10,
         userSearchTimer: null,
         selectedUserIds: new Set(),
         roles: [],
@@ -28,6 +100,10 @@
         depts: [],
         drawerMode: null,
         drawerUserId: null,
+        auditLogs: [],
+        auditTotal: 0,
+        auditPage: 0,
+        auditPageSize: 10,
     };
 
     function buildHeaders(withJson) {
@@ -88,6 +164,20 @@
             .replace(/</g, '&lt;');
     }
 
+    function escHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function syncDrawerFooter(readOnly) {
+        var saveBtn = document.getElementById('drawer-save');
+        var cancelBtn = document.getElementById('drawer-cancel');
+        if (saveBtn) saveBtn.classList.toggle('hidden', !!readOnly);
+        if (cancelBtn) cancelBtn.textContent = readOnly ? '关闭' : '取消';
+    }
+
     async function api(path, opts) {
         opts = opts || {};
         var hasBody = opts.body != null && opts.body !== '';
@@ -143,7 +233,12 @@
         if (name === 'offerApproval' && CAN_USERS && typeof window.loadRmsOfferApprovalConfigAdmin === 'function') {
             window.loadRmsOfferApprovalConfigAdmin();
         }
-        if (name === 'audit' && CAN_AUDIT) runTabLoad(function () { return loadAudit(false); });
+        if (name === 'audit' && CAN_AUDIT) runTabLoad(function () {
+            state.auditPage = 0;
+            return loadAuditFilterOptions()
+                .catch(function () { /* 筛选项加载失败不阻断列表 */ })
+                .then(function () { return loadAudit(); });
+        });
         if (name === 'insurance' && CAN_INSURANCE && typeof window.loadGmInsuranceAdmin === 'function') {
             window.loadGmInsuranceAdmin();
         }
@@ -159,7 +254,8 @@
         document.getElementById('drawer-body').innerHTML = html;
         document.getElementById('spc-drawer-backdrop').classList.remove('hidden');
         document.getElementById('spc-drawer').classList.add('open');
-        state._drawerSave = onSave;
+        state._drawerSave = onSave || null;
+        syncDrawerFooter(!onSave);
     }
 
     function closeDrawer() {
@@ -227,16 +323,52 @@
 
     function syncBatchRoleUi() {
         var hasSel = state.selectedUserIds.size > 0;
-        ['batch-role-select', 'batch-role-mode', 'btn-batch-roles'].forEach(function (id) {
-            var el = document.getElementById(id);
-            if (el) el.classList.toggle('hidden', !hasSel || !CAN_USERS);
-        });
+        var batchWrap = document.getElementById('user-batch-wrap');
+        if (batchWrap) batchWrap.classList.toggle('hidden', !hasSel || !CAN_USERS);
         var sel = document.getElementById('batch-role-select');
         if (sel && !sel.options.length && state.roles.length) {
             sel.innerHTML = state.roles.map(function (r) {
                 return '<option value="' + r.code + '">' + (r.name || r.code) + '</option>';
             }).join('');
         }
+    }
+
+    function goUserPage(page) {
+        var totalPages = Math.max(1, Math.ceil(state.usersTotal / state.userPageSize));
+        state.userPage = Math.min(Math.max(0, page), totalPages - 1);
+        loadUsers().catch(function (e) { showMsg(e.message, false); });
+    }
+
+    function renderUserPagination() {
+        var wrap = document.getElementById('user-pagination');
+        var pageInfo = document.getElementById('user-page-info');
+        var countNum = document.getElementById('user-count-num');
+        var pageNumsEl = document.getElementById('user-page-numbers');
+        var total = state.usersTotal;
+        if (countNum) countNum.textContent = String(total);
+        if (!wrap) return;
+        if (!total) {
+            wrap.classList.add('hidden');
+            return;
+        }
+        wrap.classList.remove('hidden');
+        var totalPages = Math.max(1, Math.ceil(total / state.userPageSize));
+        var curPage = state.userPage + 1;
+        if (pageInfo) {
+            pageInfo.innerHTML = '共 <span class="font-semibold text-[#1A1D1F]">' + total + '</span> 条，第 ' + curPage + ' / ' + totalPages + ' 页';
+        }
+        var prev = document.getElementById('btn-user-prev');
+        var next = document.getElementById('btn-user-next');
+        if (prev) prev.disabled = state.userPage <= 0;
+        if (next) next.disabled = (state.userPage + 1) * state.userPageSize >= total;
+        if (!pageNumsEl) return;
+        var pages = computePageNumbers(curPage, totalPages);
+        pageNumsEl.innerHTML = pages.map(function (p) {
+            var active = p === curPage
+                ? 'border-[#456595] bg-[#456595] text-white'
+                : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]';
+            return '<button type="button" class="spc-user-page inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors ' + active + '" data-page="' + p + '">' + p + '</button>';
+        }).join('');
     }
 
     async function loadUsers() {
@@ -258,18 +390,9 @@
     function renderUsers() {
         var tbody = document.getElementById('users-tbody');
         var rows = state.users;
-        var pageInfo = document.getElementById('user-page-info');
-        var totalPages = Math.max(1, Math.ceil(state.usersTotal / state.userPageSize));
-        var curPage = state.userPage + 1;
-        if (pageInfo) {
-            pageInfo.textContent = '共 ' + state.usersTotal + ' 人 · 第 ' + curPage + ' / ' + totalPages + ' 页';
-        }
-        var prev = document.getElementById('btn-user-prev');
-        var next = document.getElementById('btn-user-next');
-        if (prev) prev.disabled = state.userPage <= 0;
-        if (next) next.disabled = (state.userPage + 1) * state.userPageSize >= state.usersTotal;
+        renderUserPagination();
         if (!rows.length) {
-            tbody.innerHTML = '<tr><td colspan="9" class="crm-td text-center text-gray-400 py-8">暂无数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="crm-td text-center text-gray-400 py-8">暂无数据</td></tr>';
             return;
         }
         tbody.innerHTML = rows.map(function (u) {
@@ -281,19 +404,22 @@
             var checked = state.selectedUserIds.has(u.id) ? ' checked' : '';
             var ops = CAN_USERS
                 ? '<div class="crm-op-actions">'
-                + '<button type="button" class="crm-op-btn-edit btn-edit-user" data-id="' + u.id + '">编辑</button>'
-                + '<button type="button" class="crm-op-btn-handoff btn-reset-pwd" data-id="' + u.id + '">重置密码</button>'
+                + spcOpBtn('crm-op-btn-edit btn-edit-user', '修改', 'data-id="' + u.id + '"', SPC_ICONS.edit)
+                + spcOpBtn('crm-op-btn-handoff btn-reset-pwd', '重置密码', 'data-id="' + u.id + '"', SPC_ICONS.key)
                 + (u.status === 'active'
-                    ? '<button type="button" class="crm-op-btn-delete btn-disable-user" data-id="' + u.id + '">禁用</button>'
-                    : '<button type="button" class="crm-op-btn-edit btn-enable-user" data-id="' + u.id + '">启用</button>')
+                    ? spcOpBtn('crm-op-btn-delete btn-disable-user', '禁用', 'data-id="' + u.id + '"', SPC_ICONS.delete)
+                    : spcOpBtn('crm-op-btn-edit btn-enable-user', '启用', 'data-id="' + u.id + '"', SPC_ICONS.enable))
                 + '</div>'
                 : '';
             return '<tr data-user-id="' + u.id + '">'
-                + '<td class="crm-td text-center"><input type="checkbox" class="user-row-check" data-id="' + u.id + '"' + checked + '></td>'
-                + '<td class="crm-td font-medium">' + u.username + mcp + '</td>'
+                + '<td class="crm-td spc-users-sticky-lead crm-name-cell">'
+                + '<div class="spc-users-lead-inner">'
+                + '<input type="checkbox" class="user-row-check shrink-0" data-id="' + u.id + '"' + checked + '>'
+                + '<span class="min-w-0"><button type="button" class="crm-name-link btn-detail-user" data-id="' + u.id + '">' + escHtml(u.username) + '</button>' + mcp + '</span>'
+                + '</div></td>'
                 + '<td class="crm-td">' + (u.display_name || '') + '</td>'
                 + '<td class="crm-td">' + u.status + '</td>'
-                + '<td class="crm-td text-gray-600">' + deptLabel + '</td>'
+                + '<td class="crm-td text-gray-600"><span class="block truncate" title="' + escAttr(deptLabel) + '">' + escHtml(deptLabel) + '</span></td>'
                 + '<td class="crm-td">' + chips + '</td>'
                 + '<td class="crm-td text-gray-500 whitespace-nowrap">' + formatSpcDateTime(u.last_login_at) + '</td>'
                 + '<td class="crm-td text-gray-500 whitespace-nowrap">' + formatSpcDateOnly(u.created_at) + '</td>'
@@ -312,7 +438,14 @@
     }
 
     function deptTypeLabel(t) {
-        return { sales: '销售', delivery: '交付', finance: '财务', general: '通用' }[t] || t || '—';
+        return {
+            general: '通用',
+            business: '业务',
+            functional: '职能',
+            sales: '业务',
+            delivery: '业务',
+            finance: '职能',
+        }[t] || t || '—';
     }
 
     async function loadDeptsTab() {
@@ -321,30 +454,60 @@
         renderDeptsList();
     }
 
+    function filteredDepts() {
+        var q = (document.getElementById('dept-search') && document.getElementById('dept-search').value || '').trim().toLowerCase();
+        return state.depts.filter(function (d) {
+            if (!q) return true;
+            return (d.name || '').toLowerCase().indexOf(q) >= 0
+                || (d.code || '').toLowerCase().indexOf(q) >= 0;
+        });
+    }
+
+    function deptBoundUsersCell(dept) {
+        var users = dept.bound_users || [];
+        var count = dept.user_count != null ? dept.user_count : users.length;
+        if (!count) return '<span class="text-gray-400">0</span>';
+        var labels = users.map(function (u) {
+            return escHtml(u.display_name || u.username);
+        }).join('、');
+        return '<span class="group relative inline-flex cursor-help">'
+            + '<span class="font-medium tabular-nums text-[#1A1D1F]">' + count + '</span>'
+            + '<span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 w-max max-w-[240px] -translate-x-1/2 whitespace-normal rounded-md bg-[#1A1D1F] px-2 py-1 text-left text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">' + labels + '</span>'
+            + '</span>';
+    }
+
     function renderDeptsList() {
         var tbody = document.getElementById('depts-tbody');
         if (!tbody) return;
-        if (!state.depts.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="crm-td text-center text-gray-400 py-8">暂无部门</td></tr>';
+        var rows = filteredDepts();
+        var countNum = document.getElementById('dept-count-num');
+        if (countNum) countNum.textContent = String(rows.length);
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="crm-td text-center text-gray-400 py-8">暂无部门</td></tr>';
             return;
         }
-        tbody.innerHTML = state.depts.map(function (d) {
+        tbody.innerHTML = rows.map(function (d) {
             var builtin = BUILTIN_DEPT_CODES[d.code];
+            var typeCell = deptTypeLabel(d.dept_type)
+                + (builtin ? ' <span class="text-xs text-gray-400">内置</span>' : '');
             var ops = '<div class="crm-op-actions">'
-                + '<button type="button" class="crm-op-btn-edit btn-edit-dept" data-id="' + d.id + '">编辑</button>'
-                + (builtin || !CAN_DELETE_USERS ? '' : '<button type="button" class="crm-op-btn-delete btn-delete-dept" data-id="' + d.id + '"'
+                + spcOpBtn('crm-op-btn-edit btn-edit-dept', '修改', 'data-id="' + d.id + '"', SPC_ICONS.edit)
+                + (builtin || !CAN_DELETE_USERS ? '' : spcOpBtn('crm-op-btn-delete btn-delete-dept', '删除', 'data-id="' + d.id + '"'
                 + ' data-crm-delete-title="确认删除部门"'
                 + ' data-crm-delete-target="将删除部门：' + String(d.name || '').replace(/"/g, '&quot;') + '"'
-                + ' data-crm-delete-hint="若仍有用户或客户归属将无法删除。">删除</button>')
+                + ' data-crm-delete-hint="若仍有用户或客户归属将无法删除。"', SPC_ICONS.delete))
                 + '</div>';
+            var parentLabel = d.parent_id ? deptNameById(d.parent_id) : '—';
+            var headLabel = d.head_user ? (d.head_user.display_name || d.head_user.username) : '—';
             return '<tr data-dept-id="' + d.id + '">'
-                + '<td class="crm-td font-medium">' + d.name + (builtin ? ' <span class="text-xs text-gray-400">内置</span>' : '') + '</td>'
-                + '<td class="crm-td text-gray-600">' + d.code + '</td>'
-                + '<td class="crm-td text-gray-600">' + (d.parent_id ? deptNameById(d.parent_id) : '—') + '</td>'
-                + '<td class="crm-td">' + deptTypeLabel(d.dept_type) + '</td>'
-                + '<td class="crm-td">' + d.status + '</td>'
-                + '<td class="crm-td text-gray-500 text-xs">' + d.path + '</td>'
-                + '<td class="crm-td crm-sticky-right-op crm-op-col-xl whitespace-nowrap">' + ops + '</td></tr>';
+                + '<td class="crm-td crm-name-cell spc-dept-sticky-name"><button type="button" class="crm-name-link btn-detail-dept block w-full truncate text-left" title="' + escAttr(d.name) + '" data-id="' + d.id + '">' + escHtml(d.name) + '</button></td>'
+                + '<td class="crm-td">' + typeCell + '</td>'
+                + '<td class="crm-td text-gray-600"><span class="block truncate" title="' + escAttr(parentLabel) + '">' + escHtml(parentLabel) + '</span></td>'
+                + '<td class="crm-td text-gray-600"><span class="block truncate" title="' + escAttr(headLabel) + '">' + escHtml(headLabel) + '</span></td>'
+                + '<td class="crm-td spc-dept-users-cell">' + deptBoundUsersCell(d) + '</td>'
+                + '<td class="crm-td">' + escHtml(d.status) + '</td>'
+                + '<td class="crm-td text-gray-600 font-mono text-xs">' + escHtml(d.code) + '</td>'
+                + '<td class="crm-td crm-sticky-right-op whitespace-nowrap">' + ops + '</td></tr>';
         }).join('');
     }
 
@@ -357,9 +520,69 @@
             }).join('');
     }
 
-    function openDeptDrawer(mode, dept) {
+    function deptHeadUserOptionsHtml(users, selectedId, selectedUser) {
+        var html = '<option value="">— 未设置 —</option>';
+        var selectedIncluded = false;
+        (users || []).forEach(function (u) {
+            var isSelected = selectedId != null && String(u.id) === String(selectedId);
+            if ((u.status || 'active') !== 'active' && !isSelected) return;
+            if (isSelected) selectedIncluded = true;
+            var on = isSelected ? ' selected' : '';
+            html += '<option value="' + u.id + '"' + on + '>' + escHtml(u.display_name || u.username) + '</option>';
+        });
+        if (selectedId != null && !selectedIncluded) {
+            var label = selectedUser ? (selectedUser.display_name || selectedUser.username) : ('#' + selectedId);
+            html += '<option value="' + selectedId + '" selected>' + escHtml(label) + '</option>';
+        }
+        return html;
+    }
+
+    function openDeptDetailDrawer(dept) {
+        if (!dept) return;
+        var parentLabel = dept.parent_id ? deptNameById(dept.parent_id) : '无（顶级）';
+        var headLabel = dept.head_user ? (dept.head_user.display_name || dept.head_user.username) : '—';
+        var users = dept.bound_users || [];
+        var userCount = dept.user_count != null ? dept.user_count : users.length;
+        var usersHtml = users.length
+            ? users.map(function (u) {
+                return '<span class="spc-chip">' + escHtml(u.display_name || u.username) + '</span>';
+            }).join('')
+            : '<span class="text-sm text-[#9AA0A6]">暂无绑定用户</span>';
+        var builtin = BUILTIN_DEPT_CODES[dept.code];
+        var html = ''
+            + '<div class="spc-user-detail space-y-5">'
+            + '<div class="rounded-lg border border-[#EEF0F2] bg-[#F9FAFB] p-4">'
+            + '<div class="flex items-start justify-between gap-3">'
+            + '<div class="min-w-0">'
+            + '<p class="text-lg font-semibold text-[#1A1D1F]">' + escHtml(dept.name) + '</p>'
+            + '<p class="mt-0.5 text-sm font-mono text-[#6B7280]">' + escHtml(dept.code) + '</p>'
+            + '</div>'
+            + userStatusBadgeHtml(dept.status === 'active' ? 'active' : 'disabled')
+            + '</div>'
+            + (builtin ? '<p class="mt-2 text-xs text-gray-500">内置部门</p>' : '')
+            + '</div>'
+            + '<section>'
+            + '<p class="spc-detail-section-title mb-2">基本信息</p>'
+            + '<dl class="spc-detail-grid mt-2">'
+            + '<div class="spc-detail-field"><dt>类型</dt><dd>' + escHtml(deptTypeLabel(dept.dept_type)) + '</dd></div>'
+            + '<div class="spc-detail-field"><dt>上级部门</dt><dd>' + escHtml(parentLabel) + '</dd></div>'
+            + '<div class="spc-detail-field"><dt>部门主管</dt><dd>' + escHtml(headLabel) + '</dd></div>'
+            + '<div class="spc-detail-field"><dt>路径</dt><dd class="font-mono text-xs">' + escHtml(dept.path || '—') + '</dd></div>'
+            + '</dl>'
+            + '</section>'
+            + '<section class="pt-4 border-t border-[#EEF0F2]">'
+            + '<p class="spc-detail-section-title mb-3">绑定用户'
+            + ' <span class="font-normal text-[#6B7280]">（' + userCount + ' 人）</span></p>'
+            + '<div class="flex flex-wrap gap-1.5">' + usersHtml + '</div>'
+            + '</section>'
+            + '</div>';
+        openDrawer('部门详情 · ' + dept.name, html, null);
+    }
+
+    function openDeptDrawer(mode, dept, users) {
         var isNew = mode === 'create';
         var parentId = dept ? dept.parent_id : null;
+        var headId = dept ? (dept.head_user_id != null ? dept.head_user_id : (dept.head_user ? dept.head_user.id : null)) : null;
         var html = ''
             + (isNew
                 ? '<div><label class="block text-gray-600 mb-1">部门编码</label>'
@@ -372,10 +595,13 @@
                     + '<select id="d-dept-parent" class="w-full border rounded-lg px-3 py-2">'
                     + '<option value="">无（顶级）</option>' + deptParentOptionsHtml(parentId, null) + '</select></div>'
                 : '')
+            + '<div><label class="block text-gray-600 mb-1">部门主管</label>'
+            + '<select id="d-dept-head" class="w-full border rounded-lg px-3 py-2">'
+            + deptHeadUserOptionsHtml(users, headId) + '</select></div>'
             + '<div><label class="block text-gray-600 mb-1">部门类型</label>'
             + '<select id="d-dept-type" class="w-full border rounded-lg px-3 py-2">'
-            + ['general', 'sales', 'delivery', 'finance'].map(function (t) {
-                var cur = dept ? dept.dept_type : 'delivery';
+            + ['general', 'business', 'functional'].map(function (t) {
+                var cur = dept ? dept.dept_type : 'general';
                 return '<option value="' + t + '"' + (cur === t ? ' selected' : '') + '>' + deptTypeLabel(t) + '</option>';
             }).join('')
             + '</select></div>'
@@ -389,6 +615,9 @@
         openDrawer(isNew ? '新建部门' : '编辑部门 · ' + dept.name, html, async function () {
             var name = document.getElementById('d-dept-name').value.trim();
             var dtype = document.getElementById('d-dept-type').value;
+            var headEl = document.getElementById('d-dept-head');
+            var headRaw = headEl ? headEl.value : '';
+            var headUserId = headRaw ? parseInt(headRaw, 10) : null;
             if (!name) throw new Error('请填写部门名称');
             if (isNew) {
                 var code = document.getElementById('d-dept-code').value.trim();
@@ -401,6 +630,7 @@
                         code: code,
                         parent_id: parentRaw ? parseInt(parentRaw, 10) : null,
                         dept_type: dtype,
+                        head_user_id: headUserId,
                     }),
                 });
             } else {
@@ -410,6 +640,7 @@
                         name: name,
                         dept_type: dtype,
                         status: document.getElementById('d-dept-status').value,
+                        head_user_id: headUserId,
                     }),
                 });
             }
@@ -417,6 +648,119 @@
             await loadDeptsTab();
             showMsg(isNew ? '部门已创建' : '部门已更新', true);
         });
+    }
+
+    function userStatusBadgeHtml(status) {
+        if (status === 'active') {
+            return '<span class="spc-status-badge spc-status-active">启用</span>';
+        }
+        return '<span class="spc-status-badge spc-status-disabled">禁用</span>';
+    }
+
+    function scopeTypeLabel(scopeType) {
+        return {
+            all: '全部',
+            dept: '本部门',
+            self: '仅本人',
+            dept_tree: '部门及下级',
+            none: '无',
+        }[scopeType] || scopeType;
+    }
+
+    function dataScopeActionLabel(action) {
+        return { read: '读', write: '写', export: '导出' }[action] || action;
+    }
+
+    function groupPermsByModule(perms) {
+        var groups = {};
+        (perms || []).forEach(function (p) {
+            var mod = String(p).split('.')[0] || 'other';
+            if (!groups[mod]) groups[mod] = [];
+            groups[mod].push(p);
+        });
+        return Object.keys(groups).sort().map(function (mod) {
+            return { module: mod, items: groups[mod] };
+        });
+    }
+
+    function buildPermissionPreviewHtml(data) {
+        var perms = data.permissions || [];
+        var groups = groupPermsByModule(perms);
+        var permHtml = groups.length
+            ? groups.map(function (g) {
+                return '<div class="spc-perm-module">'
+                    + '<p class="spc-perm-module-title">' + escHtml(g.module) + ' · ' + g.items.length + '</p>'
+                    + '<div class="spc-perm-chips">'
+                    + g.items.map(function (p) {
+                        return '<span class="spc-perm-chip">' + escHtml(p) + '</span>';
+                    }).join('')
+                    + '</div></div>';
+            }).join('')
+            : '<p class="text-xs text-[#9AA0A6]">无功能权限</p>';
+        var scopeRows = (data.data_scopes || []).filter(function (x) { return x.scope_type !== 'none'; });
+        var scopeHtml = scopeRows.length
+            ? '<table class="spc-matrix w-full mt-2"><thead><tr>'
+            + '<th>资源</th><th>动作</th><th>范围</th></tr></thead><tbody>'
+            + scopeRows.map(function (x) {
+                return '<tr><td class="font-mono text-xs">' + escHtml(x.resource_code) + '</td>'
+                    + '<td>' + escHtml(dataScopeActionLabel(x.action)) + '</td>'
+                    + '<td><span class="spc-scope-badge">' + escHtml(scopeTypeLabel(x.scope_type)) + '</span></td></tr>';
+            }).join('')
+            + '</tbody></table>'
+            : '<p class="mt-2 text-xs text-[#9AA0A6]">无有效数据范围</p>';
+        return '<div class="space-y-4">'
+            + '<div><p class="spc-detail-section-title mb-2">功能权限'
+            + (perms.length ? ' <span class="font-normal text-[#6B7280]">（共 ' + perms.length + ' 项）</span>' : '')
+            + '</p>' + permHtml + '</div>'
+            + '<div class="pt-3 border-t border-[#EEF0F2]"><p class="spc-detail-section-title">有效数据范围</p>' + scopeHtml + '</div>'
+            + '</div>';
+    }
+
+    async function openUserDetailDrawer(user) {
+        if (!user) return;
+        var deptLabel = (user.depts || []).map(function (d) { return d.name; }).join('、') || '—';
+        var roleLabels = user.role_labels || user.roles || [];
+        var roleChips = roleLabels.length
+            ? roleLabels.map(function (lbl) { return '<span class="spc-chip">' + escHtml(lbl) + '</span>'; }).join('')
+            : '<span class="text-sm text-[#9AA0A6]">—</span>';
+        var mcp = user.must_change_password
+            ? '<p class="mt-2 text-xs text-amber-700">首次登录须修改密码</p>'
+            : '';
+        var displayName = user.display_name || user.username || '—';
+        var html = ''
+            + '<div class="spc-user-detail space-y-5">'
+            + '<div class="rounded-lg border border-[#EEF0F2] bg-[#F9FAFB] p-4">'
+            + '<div class="flex items-start justify-between gap-3">'
+            + '<div class="min-w-0">'
+            + '<p class="text-lg font-semibold text-[#1A1D1F]">' + escHtml(displayName) + '</p>'
+            + '<p class="mt-0.5 text-sm text-[#6B7280]">' + escHtml(user.username) + '</p>'
+            + '</div>'
+            + userStatusBadgeHtml(user.status)
+            + '</div>'
+            + '<div class="mt-3 flex flex-wrap gap-1.5">' + roleChips + '</div>'
+            + mcp
+            + '</div>'
+            + '<section>'
+            + '<p class="spc-detail-section-title mb-2">基本信息</p>'
+            + '<dl class="spc-detail-grid mt-2">'
+            + '<div class="spc-detail-field"><dt>部门</dt><dd>' + escHtml(deptLabel) + '</dd></div>'
+            + '<div class="spc-detail-field"><dt>最后登录</dt><dd class="whitespace-nowrap">' + escHtml(formatSpcDateTime(user.last_login_at)) + '</dd></div>'
+            + '<div class="spc-detail-field"><dt>创建时间</dt><dd class="whitespace-nowrap">' + escHtml(formatSpcDateOnly(user.created_at)) + '</dd></div>'
+            + '</dl>'
+            + '</section>'
+            + '<section class="pt-4 border-t border-[#EEF0F2]">'
+            + '<p class="spc-detail-section-title mb-3">权限概览</p>'
+            + '<div id="user-detail-perms" class="text-sm text-[#6B7280]">加载中…</div>'
+            + '</section>'
+            + '</div>';
+        openDrawer('用户详情 · ' + user.username, html, null);
+        var box = document.getElementById('user-detail-perms');
+        try {
+            var data = await api('/api/system/users/' + user.id + '/permission-preview');
+            if (box) box.innerHTML = buildPermissionPreviewHtml(data);
+        } catch (e) {
+            if (box) box.textContent = '权限加载失败';
+        }
     }
 
     function openUserDrawer(mode, user) {
@@ -519,6 +863,8 @@
         var tbody = document.getElementById('roles-tbody');
         if (!tbody) return;
         var rows = filteredRoles();
+        var countNum = document.getElementById('role-count-num');
+        if (countNum) countNum.textContent = String(rows.length);
         if (!rows.length) {
             tbody.innerHTML = '<tr><td colspan="6" class="crm-td text-center text-gray-400 py-8">暂无角色</td></tr>';
             return;
@@ -528,23 +874,23 @@
             var typeLabel = builtin ? '内置' : '自定义';
             var desc = (r.description || '').trim() || '—';
             var canDelete = !builtin && CAN_DELETE_ROLES;
-            var ops = '<div class="crm-op-actions spc-op-actions">'
-                + '<button type="button" class="crm-op-btn-edit btn-role-matrix" data-id="' + r.id + '">编辑权限矩阵</button>'
-                + '<button type="button" class="crm-op-btn-detail btn-role-edit" data-id="' + r.id + '">修改</button>'
+            var ops = '<div class="crm-op-actions">'
+                + spcOpBtn('crm-op-btn-detail btn-role-matrix', '编辑权限矩阵', 'data-id="' + r.id + '"', SPC_ICONS.matrix)
+                + spcOpBtn('crm-op-btn-edit btn-role-edit', '修改', 'data-id="' + r.id + '"', SPC_ICONS.edit)
                 + (canDelete
-                    ? '<button type="button" class="crm-op-btn-delete btn-role-delete" data-id="' + r.id + '"'
+                    ? spcOpBtn('crm-op-btn-delete btn-role-delete', '删除', 'data-id="' + r.id + '"'
                     + ' data-crm-delete-title="确认删除角色"'
                     + ' data-crm-delete-target="将删除角色：' + String(r.name || r.code).replace(/"/g, '&quot;') + '"'
-                    + ' data-crm-delete-hint="若仍有用户绑定将无法删除。">删除</button>'
+                    + ' data-crm-delete-hint="若仍有用户绑定将无法删除。"', SPC_ICONS.delete)
                     : '')
                 + '</div>';
             return '<tr data-role-id="' + r.id + '">'
-                + '<td class="crm-td font-medium">' + (r.name || r.code) + '</td>'
+                + '<td class="crm-td crm-name-cell"><span class="crm-name-link">' + (r.name || r.code) + '</span></td>'
                 + '<td class="crm-td text-gray-600 font-mono text-xs">' + r.code + '</td>'
                 + '<td class="crm-td">' + typeLabel + '</td>'
                 + '<td class="crm-td">' + (r.user_count || 0) + '</td>'
-                + '<td class="crm-td text-gray-600 max-w-xs truncate" title="' + desc.replace(/"/g, '&quot;') + '">' + desc + '</td>'
-                + '<td class="crm-td crm-sticky-right-op crm-op-col-xl whitespace-nowrap">' + ops + '</td></tr>';
+                + '<td class="crm-td text-gray-600 max-w-xs truncate">' + desc + '</td>'
+                + '<td class="crm-td crm-sticky-right-op whitespace-nowrap">' + ops + '</td></tr>';
         }).join('');
     }
 
@@ -760,58 +1106,229 @@
             + (scopeHtml || '<tr><td colspan="3" class="px-2 py-2 text-gray-500">无</td></tr>') + '</tbody></table>';
     }
 
-    var auditOffset = 0;
+    function goAuditPage(page) {
+        var totalPages = Math.max(1, Math.ceil(state.auditTotal / state.auditPageSize));
+        state.auditPage = Math.min(Math.max(0, page), totalPages - 1);
+        loadAudit().catch(function (e) { showMsg(e.message, false); });
+    }
 
-    async function loadAudit(append) {
+    function renderAuditPagination() {
+        var wrap = document.getElementById('audit-pagination');
+        var pageInfo = document.getElementById('audit-page-info');
+        var pageNumsEl = document.getElementById('audit-page-numbers');
+        var total = state.auditTotal;
+        if (!wrap) return;
+        if (!total) {
+            wrap.classList.add('hidden');
+            return;
+        }
+        wrap.classList.remove('hidden');
+        var totalPages = Math.max(1, Math.ceil(total / state.auditPageSize));
+        var curPage = state.auditPage + 1;
+        if (pageInfo) {
+            pageInfo.innerHTML = '共 <span class="font-semibold text-[#1A1D1F]">' + total + '</span> 条，第 ' + curPage + ' / ' + totalPages + ' 页';
+        }
+        var prev = document.getElementById('btn-audit-prev');
+        var next = document.getElementById('btn-audit-next');
+        if (prev) prev.disabled = state.auditPage <= 0;
+        if (next) next.disabled = (state.auditPage + 1) * state.auditPageSize >= total;
+        if (!pageNumsEl) return;
+        var pages = computePageNumbers(curPage, totalPages);
+        pageNumsEl.innerHTML = pages.map(function (p) {
+            var active = p === curPage
+                ? 'border-[#456595] bg-[#456595] text-white'
+                : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]';
+            return '<button type="button" class="spc-audit-page inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors ' + active + '" data-page="' + p + '">' + p + '</button>';
+        }).join('');
+    }
+
+    function renderAuditTable() {
+        var tbody = document.getElementById('audit-tbody');
+        if (!tbody) return;
+        renderAuditPagination();
+        var rows = state.auditLogs;
+        if (!rows.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="crm-td text-center text-gray-400 py-8">无记录</td></tr>';
+            return;
+        }
+        tbody.innerHTML = rows.map(function (log) {
+            return '<tr><td class="crm-td whitespace-nowrap">' + escHtml(formatSpcDateTime(log.created_at)) + '</td>'
+                + '<td class="crm-td">' + escHtml(log.actor_username) + '</td>'
+                + '<td class="crm-td font-mono text-xs">' + escHtml(log.action) + '</td>'
+                + '<td class="crm-td">' + escHtml(auditSummaryText(log)) + '</td>'
+                + '<td class="crm-td text-center">' + auditLevelCell(log.action) + '</td></tr>';
+        }).join('');
+    }
+
+    function auditActionLevel(action) {
+        var a = String(action || '').toLowerCase();
+        if (a.indexOf('.delete') >= 0 || a.indexOf('.disable') >= 0) return 'high';
+        if (a.indexOf('.create') >= 0 || a.indexOf('.import') >= 0) return 'low';
+        return 'medium';
+    }
+
+    function auditLevelLabel(level) {
+        return { high: '高', medium: '中', low: '低' }[level] || '中';
+    }
+
+    function auditLevelCell(action) {
+        var level = auditActionLevel(action);
+        var label = auditLevelLabel(level);
+        return '<span class="spc-audit-level spc-audit-level-' + level + '">' + label + '</span>';
+    }
+
+    function auditTargetTypeLabel(targetType) {
+        return { user: '用户', role: '角色', dept: '部门' }[targetType] || targetType || '对象';
+    }
+
+    function auditActionLabel(action) {
+        var labels = {
+            'user.create': '新增用户',
+            'user.update': '更新用户',
+            'user.disable': '禁用用户',
+            'user.enable': '启用用户',
+            'user.roles': '调整用户角色',
+            'user.depts': '调整用户部门',
+            'user.password_reset': '重置用户密码',
+            'user.roles.batch': '批量调整角色',
+            'user.import': '导入用户',
+            'role.create': '新增角色',
+            'role.update': '更新角色',
+            'role.delete': '删除角色',
+            'role.permissions': '更新功能权限',
+            'role.data_scopes': '更新数据权限',
+            'dept.create': '新增部门',
+            'dept.update': '更新部门',
+            'dept.delete': '删除部门',
+        };
+        return labels[action] || action;
+    }
+
+    function auditSummaryText(log) {
+        var action = String(log.action || '');
+        var detail = String(log.detail || '').trim();
+        var after = log.after || {};
+        var before = log.before || {};
+        var subject = detail || String(log.target_id || '').trim();
+        switch (action) {
+            case 'user.create':
+                return '新增了用户 ' + subject;
+            case 'user.update':
+                return '更新了用户 ' + subject + (after.display_name != null ? ' 的显示名' : '');
+            case 'user.disable':
+                return '禁用了用户 ' + subject;
+            case 'user.enable':
+                return '启用了用户 ' + subject;
+            case 'user.roles':
+                return '调整了用户 ' + subject + ' 的角色';
+            case 'user.depts':
+                return '调整了用户 ' + subject + ' 的部门';
+            case 'user.password_reset':
+                return '重置了用户 ' + subject + ' 的密码';
+            case 'user.roles.batch':
+                return '批量调整了 ' + (after.count != null ? after.count : '多名') + ' 个用户的角色';
+            case 'user.import':
+                return '导入了用户（新增 ' + (after.created != null ? after.created : subject) + ' 个）';
+            case 'role.create':
+                return '新增了角色 ' + (after.name || subject) + (after.code && after.code !== subject ? '（' + after.code + '）' : '');
+            case 'role.update':
+                return '更新了角色 ' + subject;
+            case 'role.delete':
+                return '删除了角色 ' + (before.name || subject);
+            case 'role.permissions':
+                return '更新了角色 ' + subject + ' 的功能权限';
+            case 'role.data_scopes':
+                return '更新了角色 ' + subject + ' 的数据权限';
+            case 'dept.create':
+                return '新增了部门 ' + (after.name || subject);
+            case 'dept.update':
+                return '更新了部门 ' + subject;
+            case 'dept.delete':
+                return '删除了部门 ' + (before.name || subject);
+            default:
+                return auditTargetTypeLabel(log.target_type) + ' · ' + action + (subject ? ' · ' + subject : '');
+        }
+    }
+
+    var KNOWN_AUDIT_ACTIONS = [
+        'user.create', 'user.update', 'user.disable', 'user.enable', 'user.roles',
+        'user.depts', 'user.password_reset', 'user.roles.batch', 'user.import',
+        'role.create', 'role.update', 'role.delete', 'role.permissions', 'role.data_scopes',
+        'dept.create', 'dept.update', 'dept.delete',
+    ];
+
+    function renderAuditFilterSelects(actors, actions) {
+        var actorSel = document.getElementById('audit-actor');
+        var actionSel = document.getElementById('audit-action');
+        if (!actorSel || !actionSel) return;
+        var actorVal = actorSel.value;
+        var actionVal = actionSel.value;
+        actorSel.innerHTML = '<option value="">全部操作人</option>'
+            + (actors || []).map(function (a) {
+                return '<option value="' + escAttr(a) + '">' + escHtml(a) + '</option>';
+            }).join('');
+        actionSel.innerHTML = '<option value="">全部操作类型</option>'
+            + (actions || []).map(function (a) {
+                return '<option value="' + escAttr(a) + '">' + escHtml(auditActionLabel(a)) + '</option>';
+            }).join('');
+        if (actorVal) actorSel.value = actorVal;
+        if (actionVal) actionSel.value = actionVal;
+    }
+
+    async function loadAuditFilterOptions() {
+        var actors = [];
+        var actions = KNOWN_AUDIT_ACTIONS.slice();
+        try {
+            var data = await api('/api/system/audit-logs/filters');
+            actors = data.actors || [];
+            if (data.actions && data.actions.length) actions = data.actions;
+        } catch (e) {
+            if (CAN_USERS) {
+                try {
+                    var users = await api('/api/system/users?limit=0');
+                    actors = (users.items || []).map(function (u) { return u.username; }).filter(Boolean);
+                } catch (_) { /* ignore */ }
+            }
+        }
+        renderAuditFilterSelects(actors, actions);
+    }
+
+    async function resolveAuditTotal(params, data) {
+        if (data && !Array.isArray(data) && data.total != null) {
+            return data.total;
+        }
+        var rows = Array.isArray(data) ? data : (data.items || []);
+        if (rows.length < state.auditPageSize) {
+            return state.auditPage * state.auditPageSize + rows.length;
+        }
+        var countParams = new URLSearchParams(params);
+        countParams.set('limit', '500');
+        countParams.set('offset', '0');
+        var all = await api('/api/system/audit-logs?' + countParams.toString());
+        if (Array.isArray(all)) return all.length;
+        return all.total || rows.length;
+    }
+
+    async function loadAudit() {
         if (!CAN_AUDIT) return;
-        if (!append) auditOffset = 0;
         var params = new URLSearchParams();
         var actor = document.getElementById('audit-actor').value.trim();
         var action = document.getElementById('audit-action').value.trim();
+        var levelEl = document.getElementById('audit-level');
+        var level = levelEl ? levelEl.value.trim() : '';
         var from = document.getElementById('audit-from').value;
         var to = document.getElementById('audit-to').value;
         if (actor) params.set('actor_username', actor);
         if (action) params.set('action', action);
+        if (level) params.set('level', level);
         if (from) params.set('date_from', from);
         if (to) params.set('date_to', to + 'T23:59:59Z');
-        params.set('limit', '50');
-        params.set('offset', String(auditOffset));
-        var rows = await api('/api/system/audit-logs?' + params.toString());
-        var tbody = document.getElementById('audit-tbody');
-        if (!append) tbody.innerHTML = '';
-        if (!rows.length && !append) {
-            tbody.innerHTML = '<tr><td colspan="6" class="crm-td text-center text-gray-400 py-8">无记录</td></tr>';
-            return;
-        }
-        auditOffset += rows.length;
-        var html = rows.map(function (log, i) {
-            var idx = auditOffset - rows.length + i;
-            var detailId = 'audit-detail-' + idx;
-            var beforeAfter = '';
-            if (log.before || log.after) {
-                beforeAfter = '<button type="button" class="text-blue-600 text-xs btn-audit-toggle" data-target="' + detailId + '">展开</button>'
-                    + '<pre id="' + detailId + '" class="hidden mt-1 text-xs bg-gray-50 p-2 rounded max-h-40 overflow-auto">'
-                    + JSON.stringify({ before: log.before, after: log.after }, null, 2) + '</pre>';
-            }
-            return '<tr><td class="crm-td whitespace-nowrap">' + formatSpcDateTime(log.created_at) + '</td>'
-                + '<td class="crm-td">' + log.actor_username + '</td>'
-                + '<td class="crm-td">' + log.action + '</td>'
-                + '<td class="crm-td">' + log.target_type + '#' + log.target_id + '</td>'
-                + '<td class="crm-td">' + (log.detail || '') + '</td>'
-                + '<td class="crm-td">' + beforeAfter + '</td></tr>';
-        }).join('');
-        tbody.insertAdjacentHTML('beforeend', html);
-        var moreBtn = document.getElementById('btn-audit-more');
-        if (!moreBtn) {
-            var wrap = document.createElement('div');
-            wrap.className = 'mt-3 text-center';
-            wrap.innerHTML = '<button type="button" id="btn-audit-more" class="text-sm text-blue-600 hover:underline">加载更多</button>';
-            document.getElementById('panel-audit').appendChild(wrap);
-            document.getElementById('btn-audit-more').addEventListener('click', function () {
-                loadAudit(true).catch(function (e) { showMsg(e.message, false); });
-            });
-        }
-        if (moreBtn) moreBtn.style.display = rows.length < 50 ? 'none' : '';
+        params.set('limit', String(state.auditPageSize));
+        params.set('offset', String(state.auditPage * state.auditPageSize));
+        var data = await api('/api/system/audit-logs?' + params.toString());
+        state.auditLogs = Array.isArray(data) ? data : (data.items || []);
+        state.auditTotal = await resolveAuditTotal(params, data);
+        renderAuditTable();
     }
 
     document.querySelectorAll('.spc-tab').forEach(function (btn) {
@@ -838,14 +1355,62 @@
 
     document.getElementById('btn-user-prev').addEventListener('click', function () {
         if (state.userPage <= 0) return;
-        state.userPage -= 1;
-        loadUsers().catch(function (e) { showMsg(e.message, false); });
+        goUserPage(state.userPage - 1);
     });
     document.getElementById('btn-user-next').addEventListener('click', function () {
         if ((state.userPage + 1) * state.userPageSize >= state.usersTotal) return;
-        state.userPage += 1;
-        loadUsers().catch(function (e) { showMsg(e.message, false); });
+        goUserPage(state.userPage + 1);
     });
+    document.getElementById('user-pagination').addEventListener('click', function (ev) {
+        var btn = ev.target.closest('.spc-user-page');
+        if (!btn) return;
+        goUserPage(parseInt(btn.getAttribute('data-page'), 10) - 1);
+    });
+
+    document.getElementById('btn-audit-prev').addEventListener('click', function () {
+        if (state.auditPage <= 0) return;
+        goAuditPage(state.auditPage - 1);
+    });
+    document.getElementById('btn-audit-next').addEventListener('click', function () {
+        if ((state.auditPage + 1) * state.auditPageSize >= state.auditTotal) return;
+        goAuditPage(state.auditPage + 1);
+    });
+    document.getElementById('audit-pagination').addEventListener('click', function (ev) {
+        var btn = ev.target.closest('.spc-audit-page');
+        if (!btn) return;
+        goAuditPage(parseInt(btn.getAttribute('data-page'), 10) - 1);
+    });
+
+    var btnUserFilter = document.getElementById('btn-user-filter');
+    if (btnUserFilter) {
+        btnUserFilter.addEventListener('click', function () {
+            toggleFilterPanel('btn-user-filter', 'user-filter-panel');
+        });
+    }
+
+    var btnAuditFilter = document.getElementById('btn-audit-filter');
+    if (btnAuditFilter) {
+        btnAuditFilter.addEventListener('click', function () {
+            toggleFilterPanel('btn-audit-filter', 'audit-filter-panel');
+        });
+    }
+
+    var btnUserClearFilter = document.getElementById('btn-user-clear-filter');
+    if (btnUserClearFilter) btnUserClearFilter.addEventListener('click', clearUserFilters);
+
+    var btnRoleClearFilter = document.getElementById('btn-role-clear-filter');
+    if (btnRoleClearFilter) btnRoleClearFilter.addEventListener('click', clearRoleFilters);
+
+    var btnDeptClearFilter = document.getElementById('btn-dept-clear-filter');
+    if (btnDeptClearFilter) btnDeptClearFilter.addEventListener('click', clearDeptFilters);
+
+    var btnAuditClearFilter = document.getElementById('btn-audit-clear-filter');
+    if (btnAuditClearFilter) btnAuditClearFilter.addEventListener('click', clearAuditFilters);
+
+    var deptSearchEl = document.getElementById('dept-search');
+    if (deptSearchEl) {
+        deptSearchEl.addEventListener('input', renderDeptsList);
+    }
 
     document.getElementById('user-select-all').addEventListener('change', function (ev) {
         var on = ev.target.checked;
@@ -907,15 +1472,31 @@
     });
 
     document.getElementById('users-tbody').addEventListener('click', async function (ev) {
-        var id = ev.target.getAttribute('data-id');
+        var detailBtn = ev.target.closest('.btn-detail-user');
+        if (detailBtn) {
+            var detailId = detailBtn.getAttribute('data-id');
+            var detailUser = state.users.find(function (u) { return String(u.id) === String(detailId); });
+            if (!detailUser) return;
+            try {
+                await openUserDetailDrawer(detailUser);
+            } catch (e) { showMsg(e.message, false); }
+            return;
+        }
+        var editBtn = ev.target.closest('.btn-edit-user');
+        var resetBtn = ev.target.closest('.btn-reset-pwd');
+        var disableBtn = ev.target.closest('.btn-disable-user');
+        var enableBtn = ev.target.closest('.btn-enable-user');
+        var btn = editBtn || resetBtn || disableBtn || enableBtn;
+        if (!btn) return;
+        var id = btn.getAttribute('data-id');
         if (!id) return;
         var user = state.users.find(function (u) { return String(u.id) === String(id); });
-        if (ev.target.classList.contains('btn-edit-user')) {
+        if (editBtn) {
             var prep = state.roles.length ? Promise.resolve() : loadRoles();
             prep.then(function () { return ensureDepts(true); })
                 .then(function () { openUserDrawer('edit', user); })
                 .catch(function (e) { showMsg(e.message, false); });
-        } else if (ev.target.classList.contains('btn-reset-pwd')) {
+        } else if (resetBtn) {
             var pw = prompt('输入新密码（至少6位）');
             if (!pw) return;
             var _forceResult = await (window.crmConfirmActionDialog
@@ -930,7 +1511,7 @@
                 showMsg('密码已重置', true);
                 await loadUsers();
             } catch (e) { showMsg(e.message, false); }
-        } else if (ev.target.classList.contains('btn-disable-user')) {
+        } else if (disableBtn) {
             if (!user) return;
             var username = user.display_name || user.username || ('#' + id);
             var ok = false;
@@ -950,7 +1531,7 @@
                 await loadUsers();
                 showMsg('已禁用', true);
             } catch (e) { showMsg(e.message, false); }
-        } else if (ev.target.classList.contains('btn-enable-user')) {
+        } else if (enableBtn) {
             try {
                 await api('/api/system/users/' + id + '/status', { method: 'POST', body: JSON.stringify({ status: 'active' }) });
                 await loadUsers();
@@ -964,15 +1545,20 @@
     });
 
     document.getElementById('roles-tbody').addEventListener('click', async function (ev) {
-        var id = ev.target.getAttribute('data-id');
+        var matrixBtn = ev.target.closest('.btn-role-matrix');
+        var editBtn = ev.target.closest('.btn-role-edit');
+        var deleteBtn = ev.target.closest('.btn-role-delete');
+        var btn = matrixBtn || editBtn || deleteBtn;
+        if (!btn) return;
+        var id = btn.getAttribute('data-id');
         if (!id) return;
         var role = state.roles.find(function (r) { return String(r.id) === String(id); });
         if (!role) return;
-        if (ev.target.classList.contains('btn-role-matrix')) {
+        if (matrixBtn) {
             openRoleMatrix(role.id);
-        } else if (ev.target.classList.contains('btn-role-edit')) {
+        } else if (editBtn) {
             openRoleDrawer('edit', role);
-        } else if (ev.target.classList.contains('btn-role-delete')) {
+        } else if (deleteBtn) {
             try {
                 await apiDelete('/api/system/roles/' + role.id);
                 await loadRoles();
@@ -997,17 +1583,18 @@
         renderPreview().catch(function (e) { showMsg(e.message, false); });
     });
 
-    function refreshDeptParentSelect() {
-        var sel = document.getElementById('d-dept-parent');
-        if (!sel) return;
-        sel.innerHTML = '<option value="">无（顶级）</option>' + deptParentOptionsHtml(null, null);
+    function openDeptDrawerWithLookups(mode, dept) {
+        Promise.all([
+            ensureDepts(true),
+            api('/api/system/users?limit=0'),
+        ]).then(function (results) {
+            var userData = results[1] || {};
+            openDeptDrawer(mode, dept, userData.items || []);
+        }).catch(function (e) { showMsg(e.message, false); });
     }
 
     function handleNewDeptClick() {
-        openDeptDrawer('create', null);
-        ensureDepts(true).then(function () {
-            refreshDeptParentSelect();
-        }).catch(function (e) { showMsg(e.message, false); });
+        openDeptDrawerWithLookups('create', null);
     }
 
     var panelDepts = document.getElementById('panel-depts');
@@ -1018,13 +1605,25 @@
                 handleNewDeptClick();
                 return;
             }
-            var id = ev.target.getAttribute('data-id');
+            var editBtn = ev.target.closest('.btn-edit-dept');
+            var deleteBtn = ev.target.closest('.btn-delete-dept');
+            var detailBtn = ev.target.closest('.btn-detail-dept');
+            if (detailBtn) {
+                var detailId = detailBtn.getAttribute('data-id');
+                if (!detailId) return;
+                var detailDept = state.depts.find(function (d) { return String(d.id) === String(detailId); });
+                if (detailDept) openDeptDetailDrawer(detailDept);
+                return;
+            }
+            var btn = editBtn || deleteBtn;
+            if (!btn) return;
+            var id = btn.getAttribute('data-id');
             if (!id) return;
             var dept = state.depts.find(function (d) { return String(d.id) === String(id); });
-            if (ev.target.classList.contains('btn-edit-dept')) {
+            if (editBtn) {
                 if (!dept) return;
-                openDeptDrawer('edit', dept);
-            } else if (ev.target.classList.contains('btn-delete-dept')) {
+                openDeptDrawerWithLookups('edit', dept);
+            } else if (deleteBtn) {
                 if (!dept) return;
                 try {
                     await apiDelete('/api/system/depts/' + dept.id);
@@ -1037,15 +1636,21 @@
     }
 
     document.getElementById('btn-audit-search').addEventListener('click', function () {
-        var oldMore = document.getElementById('btn-audit-more');
-        if (oldMore && oldMore.parentElement) oldMore.parentElement.remove();
-        loadAudit(false).catch(function (e) { showMsg(e.message, false); });
-    });
-
-    document.getElementById('audit-tbody').addEventListener('click', function (ev) {
-        if (!ev.target.classList.contains('btn-audit-toggle')) return;
-        var pre = document.getElementById(ev.target.getAttribute('data-target'));
-        if (pre) pre.classList.toggle('hidden');
+        var kwEl = document.getElementById('audit-keyword');
+        var actorEl = document.getElementById('audit-actor');
+        if (kwEl && actorEl && kwEl.value.trim() && !actorEl.value) {
+            var kw = kwEl.value.trim().toLowerCase();
+            for (var i = 0; i < actorEl.options.length; i++) {
+                var opt = actorEl.options[i];
+                if (!opt.value) continue;
+                if (opt.value.toLowerCase() === kw || opt.text.toLowerCase().indexOf(kw) >= 0) {
+                    actorEl.value = opt.value;
+                    break;
+                }
+            }
+        }
+        state.auditPage = 0;
+        loadAudit().catch(function (e) { showMsg(e.message, false); });
     });
 
     document.getElementById('drawer-close').addEventListener('click', closeDrawer);
@@ -1081,6 +1686,8 @@
 
     window.spcOpenDrawer = openDrawer;
     window.spcShowMsg = showMsg;
+    window.spcOpBtn = spcOpBtn;
+    window.SPC_ICONS = SPC_ICONS;
 
     var first = CAN_USERS ? 'users' : (CAN_ROLES ? 'roles' : (CAN_INSURANCE ? 'insurance' : (CAN_AUDIT ? 'audit' : 'users')));
     switchTab(first);

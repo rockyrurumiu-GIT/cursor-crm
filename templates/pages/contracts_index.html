@@ -166,6 +166,74 @@
     #contracts-app .crm-table tbody td.crm-sticky-right-op { overflow: visible !important; }
     #contracts-app .crm-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
     #contracts-app .crm-sticky-right-op .crm-op-actions { overflow: visible; }
+    /* 冻结前两列（序号 / 资料名称） */
+    #contracts-app .crm-table[data-table-id="contracts"] {
+        table-layout: fixed;
+        border-collapse: separate;
+        border-spacing: 0;
+        min-width: 80rem;
+        --contracts-sticky-serial-width: 4.5rem;
+        --contracts-sticky-name-width: 14rem;
+        --contracts-sticky-name-left: var(--contracts-sticky-serial-width);
+    }
+    #contracts-app .crm-table[data-table-id="contracts"] col.contracts-col-serial {
+        width: var(--contracts-sticky-serial-width) !important;
+        min-width: var(--contracts-sticky-serial-width) !important;
+        max-width: var(--contracts-sticky-serial-width) !important;
+    }
+    #contracts-app .crm-table[data-table-id="contracts"] col.contracts-col-name {
+        width: var(--contracts-sticky-name-width) !important;
+        min-width: var(--contracts-sticky-name-width) !important;
+        max-width: var(--contracts-sticky-name-width) !important;
+    }
+    #contracts-app .crm-table[data-table-id="contracts"] .contracts-sticky-serial,
+    #contracts-app .crm-table[data-table-id="contracts"] .contracts-sticky-name {
+        position: sticky;
+        box-sizing: border-box;
+        background: #fff;
+        background-clip: padding-box;
+    }
+    #contracts-app .crm-table[data-table-id="contracts"] .contracts-sticky-serial {
+        left: 0;
+        z-index: 12;
+        border-right: 1px solid #EEF0F2;
+    }
+    #contracts-app .crm-table[data-table-id="contracts"] .contracts-sticky-name {
+        left: var(--contracts-sticky-name-left);
+        z-index: 11;
+        border-right: 1px solid #EEF0F2;
+        box-shadow: 2px 0 6px -4px rgba(15, 23, 42, 0.12);
+        text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #contracts-app .crm-table[data-table-id="contracts"] thead .contracts-sticky-serial,
+    #contracts-app .crm-table[data-table-id="contracts"] thead .contracts-sticky-name {
+        background: #F9FAFB;
+        z-index: 32;
+    }
+    #contracts-app .crm-table[data-table-id="contracts"] thead .contracts-sticky-serial {
+        z-index: 33;
+    }
+    #main-shell.bms-sidebar-dark #contracts-app .crm-table[data-table-id="contracts"] thead .contracts-sticky-serial,
+    #main-shell.bms-sidebar-dark #contracts-app .crm-table[data-table-id="contracts"] thead .contracts-sticky-name {
+        background: var(--ct-th-dark-bg);
+        color: var(--ct-th-dark-text);
+        border-color: var(--ct-th-dark-border);
+    }
+    #contracts-app .crm-table[data-table-id="contracts"] tbody tr:hover .contracts-sticky-serial,
+    #contracts-app .crm-table[data-table-id="contracts"] tbody tr:hover .contracts-sticky-name {
+        background: #F9FAFB;
+    }
+    #contracts-app .crm-table[data-table-id="contracts"] td.contracts-sticky-name .crm-name-link {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: left;
+    }
     #contracts-app .contracts-preview-body {
         white-space: pre-wrap;
         word-break: break-word;
@@ -279,10 +347,14 @@
     <div class="bg-white rounded-lg overflow-hidden border border-[#E5E7EB] shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)]">
         <div class="crm-table-scroll crm-h-scroll">
         <table class="crm-table w-full" data-table-id="contracts">
+            <colgroup>
+                <col class="contracts-col-serial">
+                <col class="contracts-col-name">
+            </colgroup>
             <thead>
                 <tr>
-                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 9h14M5 15h14M9 4 7 20M17 4l-2 16"/></svg>序号</th>
-                    <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5M9 13h6M9 16.5h4"/></svg>资料名称</th>
+                    <th class="crm-th contracts-sticky-serial"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 9h14M5 15h14M9 4 7 20M17 4l-2 16"/></svg>序号</th>
+                    <th class="crm-th contracts-sticky-name"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5M9 13h6M9 16.5h4"/></svg>资料名称</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>客户</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 3.5h6l4.5 4.5V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5ZM13 3.5V9h5"/></svg>合同编号</th>
                     <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10"/></svg>合同类型</th>
@@ -303,8 +375,8 @@
                     <td class="crm-td text-center text-gray-500" colspan="12">暂无合同，可上传附件或等待交接审批自动生成</td>
                 </tr>
                 <tr v-for="(row, idx) in pagedItems" :key="row.id">
-                    <td class="crm-td tabular-nums">{{ (currentPage - 1) * pageSize + idx + 1 }}</td>
-                    <td class="crm-td crm-name-cell"><button type="button" class="crm-name-link" @click="openDetail(row)">{{ row.material_name || row.title || '—' }}</button></td>
+                    <td class="crm-td tabular-nums contracts-sticky-serial">{{ (currentPage - 1) * pageSize + idx + 1 }}</td>
+                    <td class="crm-td crm-name-cell contracts-sticky-name"><button type="button" class="crm-name-link" :title="row.material_name || row.title || ''" @click="openDetail(row)">{{ row.material_name || row.title || '—' }}</button></td>
                     <td class="crm-td">{{ row.client_name || '—' }}</td>
                     <td class="crm-td">{{ row.contract_no || '—' }}</td>
                     <td class="crm-td">{{ row.contract_type_label || '—' }}</td>
@@ -446,7 +518,7 @@
         </div>
     </aside>
 
-    <div v-if="showPreview" class="crm-esc-modal crm-form-modal-overlay z-[210]" @click.self="closePreview">
+    <div v-if="showPreview" class="crm-esc-modal crm-form-modal-overlay z-[210]">
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg truncate">{{ previewTitle || '合同预览' }}</h3>
@@ -466,7 +538,7 @@
     </div>
 
     <!-- 上传弹窗 -->
-    <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeForm" @dragover.prevent @drop.prevent>
+    <div v-if="showForm" class="crm-esc-modal crm-form-modal-overlay z-[200]" @dragover.prevent @drop.prevent>
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">{{ isEditMode ? '修改合同' : '上传合同' }}</h3>

@@ -50,8 +50,11 @@
 
             const spec = computed(() => config.value.spec || { enums: {} });
             const editable = computed(() => handoff.value && ['draft', 'rejected'].includes(handoff.value.status));
-            const canReview = computed(() => config.value.is_reviewer && handoff.value && handoff.value.status === 'pending_review');
+            const canReview = computed(() => handoff.value && handoff.value.can_review === true);
             const canCreate = computed(() => !handoff.value || handoff.value.status === 'approved');
+            const fromReviews = new URLSearchParams(window.location.search).get('from') === 'reviews';
+            const backUrl = computed(() => (fromReviews ? '/customers/reviews' : '/customers'));
+            const backLabel = computed(() => (fromReviews ? '返回待审交接' : '返回客户列表'));
 
             const langsStr = computed(() => (form.value.requirement.tech_stack.languages || []).join(', '));
             const mwStr = computed(() => (form.value.requirement.tech_stack.middleware || []).join(', '));
@@ -204,7 +207,26 @@
             };
 
             const approveHandoff = async () => {
-                if (!confirm('确认通过该交接单？')) return;
+                let ok = false;
+                if (typeof window.crmConfirmActionDialog === 'function') {
+                    const h = handoff.value || {};
+                    const result = await window.crmConfirmActionDialog({
+                        title: '确认通过交接单',
+                        lines: [
+                            { label: '客户', value: clientName.value || '—' },
+                            { label: '交接标题', value: h.title || form.value.title || '—' },
+                            { label: '交付负责人', value: h.delivery_owner || form.value.delivery_owner || '—' },
+                        ],
+                        hint: '通过后该交接单将进入交付流程。',
+                        confirmText: '确认通过',
+                        cancelText: '取消',
+                        zIndex: 200,
+                    });
+                    ok = !!(result && result.ok);
+                } else {
+                    ok = confirm('确认通过该交接单？');
+                }
+                if (!ok) return;
                 const r = await fetch('/api/handoffs/' + selectedId.value + '/approve', { method: 'POST', headers: auth() });
                 const d = await r.json();
                 if (r.ok) { await loadHandoff(); await loadHandoffList(); alert('已通过'); }
@@ -280,7 +302,7 @@
 
             return {
                 loading, clientId, clientName, handoffs, handoff, selectedId, config, step, steps, form, logs,
-                spec, editable, canReview, canCreate, langsStr, mwStr, setLangs, setMw, statusBadge, formatLogTime,
+                spec, editable, canReview, canCreate, backUrl, backLabel, langsStr, mwStr, setLangs, setMw, statusBadge, formatLogTime,
                 aiLoading, aiBrief, aiGaps, showReject, rejectForm,
                 loadHandoff, createHandoff, saveDraft, submitHandoff, approveHandoff, confirmReject,
                 aiParse, aiReviewAssist, adoptReject, addPosition, requestRemovePosition, syncPipeline, onEstimatedAmountInput, onEstimatedAvgQuoteInput, onEstimatedGmPctInput, onPositionEstimatedQuoteInput,

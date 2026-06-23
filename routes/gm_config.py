@@ -44,15 +44,27 @@ def register_gm_config_routes(app, *, get_db: Callable, SocialInsuranceLocation)
 
     @app.get("/api/system/insurance-locations")
     async def api_system_insurance_locations_list(
+        limit: int = 100,
+        offset: int = 0,
         db: Session = Depends(get_db),
         _user: str = Depends(require_permission("system.users.manage")),
     ):
+        base = db.query(SocialInsuranceLocation)
+        total = base.count()
+        lim = max(1, min(limit, 500))
+        off = max(0, offset)
         rows = (
-            db.query(SocialInsuranceLocation)
-            .order_by(SocialInsuranceLocation.sort_order, SocialInsuranceLocation.id)
+            base.order_by(SocialInsuranceLocation.sort_order, SocialInsuranceLocation.id)
+            .offset(off)
+            .limit(lim)
             .all()
         )
-        return [row_to_dict(r) for r in rows]
+        return {
+            "items": [row_to_dict(r) for r in rows],
+            "total": total,
+            "limit": lim,
+            "offset": off,
+        }
 
     @app.post("/api/system/insurance-locations")
     async def api_system_insurance_locations_create(

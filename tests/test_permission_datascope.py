@@ -355,12 +355,45 @@ def test_delivery_employee_files_scoped_by_delivery_owner(client_rbac, admin_aut
     )
 
 
-def test_handoff_inherits_client_delivery_owner_for_pending_list(client_rbac, admin_auth):
+def _ensure_ops_dept_head(engine, head_user_id: int) -> None:
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                "SELECT id FROM sys_dept "
+                "WHERE name = '经营部' OR code IN ('OPERATIONS', 'OPS', 'OPERATING') "
+                "ORDER BY CASE WHEN name = '经营部' THEN 0 ELSE 1 END, id LIMIT 1"
+            )
+        ).fetchone()
+        if row:
+            conn.execute(
+                text("UPDATE sys_dept SET head_user_id = :hid, updated_at = :at WHERE id = :id"),
+                {"hid": head_user_id, "at": now, "id": int(row[0])},
+            )
+            return
+        conn.execute(
+            text(
+                "INSERT INTO sys_dept (name, code, parent_id, path, dept_type, status, head_user_id, created_at, updated_at) "
+                "VALUES ('经营部', 'OPERATIONS', NULL, 'OPERATIONS', 'general', 'active', :hid, :at, :at)"
+            ),
+            {"hid": head_user_id, "at": now},
+        )
+
+
+def test_handoff_assigned_to_ops_dept_head_only(client_rbac, admin_auth):
     suffix = os.getpid()
-    delivery_user = f"handoff_delivery_{suffix}"
-    delivery_uid = _create_user(client_rbac, admin_auth, delivery_user, ["DELIVERY"])
+    ops_head_user = f"handoff_ops_head_{suffix}"
+    other_user = f"handoff_other_{suffix}"
+    ops_uid = _create_user(client_rbac, admin_auth, ops_head_user, ["DELIVERY"])
+    _create_user(client_rbac, admin_auth, other_user, ["DELIVERY"])
     admin_user, admin_pwd = admin_auth
     headers = auth_header(admin_user, admin_pwd)
+
+    import main as crm_main
+
+    _ensure_ops_dept_head(crm_main.engine, ops_uid)
 
     c = client_rbac.post(
         "/api/clients",
@@ -372,7 +405,7 @@ def test_handoff_inherits_client_delivery_owner_for_pending_list(client_rbac, ad
             "scale": "100",
             "phase": "成交",
             "description": "d",
-            "delivery_owner_user_id": str(delivery_uid),
+            "delivery_owner_user_id": str(ops_uid),
         },
     )
     assert c.status_code == 200, c.text
@@ -381,10 +414,8 @@ def test_handoff_inherits_client_delivery_owner_for_pending_list(client_rbac, ad
     h = client_rbac.post(f"/api/clients/{cid}/handoffs", headers=headers)
     assert h.status_code == 200, h.text
     body = h.json()
-    assert body["delivery_owner"] == delivery_user
-    assert body["delivery_owner_user_id"] == delivery_uid
-
-    import main as crm_main
+    assert body["delivery_owner"] == ops_head_user
+    assert body["delivery_owner_user_id"] == ops_uid
 
     with crm_main.engine.begin() as conn:
         conn.execute(
@@ -396,15 +427,23 @@ def test_handoff_inherits_client_delivery_owner_for_pending_list(client_rbac, ad
             {"hid": body["id"]},
         )
 
-    login = _login(client_rbac, delivery_user, "pass1234")
-    cfg = client_rbac.get("/api/handoff/config", cookies=login.cookies)
+    ops_login = _login(client_rbac, ops_head_user, "pass1234")
+    cfg = client_rbac.get("/api/handoff/config", cookies=ops_login.cookies)
     assert cfg.status_code == 200, cfg.text
     assert cfg.json()["is_reviewer"] is True
 
-    rows = client_rbac.get("/api/delivery/handoffs/pending", cookies=login.cookies)
+    rows = client_rbac.get("/api/delivery/handoffs/pending", cookies=ops_login.cookies)
     assert rows.status_code == 200, rows.text
     ids = {r["id"] for r in rows.json()}
     assert body["id"] in ids
+
+    admin_login = _login(client_rbac, admin_user, admin_pwd)
+    admin_rows = client_rbac.get("/api/delivery/handoffs/pending", cookies=admin_login.cookies)
+    assert admin_rows.status_code == 200, admin_rows.text
+    assert body["id"] not in {r["id"] for r in admin_rows.json()}
+
+    approve = client_rbac.post(f"/api/handoffs/{body['id']}/approve", cookies=admin_login.cookies)
+    assert approve.status_code == 403, approve.text
 
 
 def test_permission_preview_api(client_rbac, admin_auth):

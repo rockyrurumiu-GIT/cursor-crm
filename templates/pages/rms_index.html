@@ -1860,7 +1860,7 @@
     </section>
     <!-- Delivery review resume modal -->
     <div v-if="reviewModal" class="fixed inset-0 flex items-center justify-center bg-black/40 p-4"
-        :class="reviewFailPromptOpen ? 'z-40 pointer-events-none' : 'z-50'" @click.self="closeDeliveryReviewModal">
+        :class="reviewFailPromptOpen ? 'z-40 pointer-events-none' : 'z-50'">
         <div class="bg-white rounded-lg border border-[#d0d7de] shadow-lg w-full max-w-4xl max-h-[90vh] flex flex-col p-5" @click.stop>
             <h3 class="text-lg font-medium mb-2">内审 — {{ appCandidateName(reviewModal) }}</h3>
             <p v-if="reviewModalError" class="mb-2 text-sm text-red-700">{{ reviewModalError }}</p>
@@ -1957,7 +1957,7 @@
     </aside>
 
     <!-- Status history modal -->
-    <div v-if="statusHistoryModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" @click.self="closeStatusHistoryModal">
+    <div v-if="statusHistoryModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
         <div class="bg-white rounded-lg border border-[#d0d7de] shadow-lg w-full max-w-3xl max-h-[90vh] flex flex-col p-5" @click.stop>
             <h3 class="text-lg font-medium mb-2">状态历史 — {{ appCandidateName(statusHistoryModal) }}</h3>
             <p v-if="statusHistoryError" class="mb-2 text-sm text-red-700">{{ statusHistoryError }}</p>
@@ -1991,7 +1991,7 @@
 
 
     <!-- RMS existing candidate picker modal -->
-    <div v-if="existingCandidatePickerOpen" class="crm-esc-modal crm-form-modal-overlay z-[210]" @click.self="closeExistingCandidatePicker">
+    <div v-if="existingCandidatePickerOpen" class="crm-esc-modal crm-form-modal-overlay z-[210]">
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">选择库内候选人</h3>
@@ -2092,7 +2092,7 @@
     </div>
 
     <!-- RMS Offer approval modal -->
-    <div v-if="offerApprovalModal" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeOfferApprovalModal">
+    <div v-if="offerApprovalModal" class="crm-esc-modal crm-form-modal-overlay z-[200]">
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">发起 Offer 审批</h3>
@@ -2153,7 +2153,7 @@
     </div>
 
     <!-- RMS Offer approval detail / decision modal -->
-    <div v-if="offerDetailModal" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeOfferDetailModal">
+    <div v-if="offerDetailModal" class="crm-esc-modal crm-form-modal-overlay z-[200]">
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">Offer 审批详情</h3>
@@ -2202,7 +2202,7 @@
     </div>
 
     <!-- RMS roster convert modal -->
-    <div v-if="rosterConvertModal" class="crm-esc-modal crm-form-modal-overlay z-[200]" @click.self="closeRosterConvertModal">
+    <div v-if="rosterConvertModal" class="crm-esc-modal crm-form-modal-overlay z-[200]">
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
                 <h3 class="font-bold text-lg">转入花名册</h3>
@@ -2261,7 +2261,7 @@
     </div>
 
     <!-- Modals -->
-    <div v-if="modal" class="crm-esc-modal crm-form-modal-overlay z-[200] flex items-center justify-center bg-black/40 p-4" @click.self="closeModal">
+    <div v-if="modal" class="crm-esc-modal crm-form-modal-overlay z-[200] flex items-center justify-center bg-black/40 p-4">
         <div class="bg-white rounded-lg border border-[#d0d7de] shadow-lg w-full max-w-6xl max-h-[90vh] flex flex-col p-5" @click.stop
             @click="jobPickerOpen = false; clientPickerOpen = false">
             <h3 class="text-lg font-medium mb-4 shrink-0">{{ modalTitle }}</h3>

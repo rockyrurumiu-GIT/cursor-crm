@@ -262,7 +262,9 @@ def test_role_change_writes_audit(client_rbac, admin_auth):
         params={"action": "user.roles", "limit": 20},
     )
     assert logs.status_code == 200
-    found = [x for x in logs.json() if x.get("target_id") == str(target["id"])]
+    payload = logs.json()
+    items = payload["items"] if isinstance(payload, dict) else payload
+    found = [x for x in items if x.get("target_id") == str(target["id"])]
     assert found
     assert found[0].get("before") is not None
     assert found[0].get("after") is not None

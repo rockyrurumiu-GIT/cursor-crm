@@ -45,5 +45,7 @@ data/rms_offer_approvers.json
 # Pytest / Playwright 本地测试产物（勿提交）
 test-results/
 playwright-report/
+.playwright-cli/
+output/
 tests/_pytest_*.db
 tests/_pytest_*.json

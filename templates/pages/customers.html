@@ -50,6 +50,15 @@
         font-size: 13px;
         word-break: break-word;
     }
+    #page-app .client-edit-drawer {
+        max-width: 36rem;
+    }
+    #page-app .client-edit-drawer-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0.75rem 1rem 1rem;
+    }
     #page-app .customers-multi-filter {
         position: relative;
     }
@@ -184,6 +193,10 @@
         font-size: 0.8125rem;
         font-weight: 500;
         color: var(--cp-accent);
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
     }
     #page-app .cp-card-action:hover {
         text-decoration: underline;
@@ -250,7 +263,36 @@
     #page-app .cp-visit-meta {
         font-size: 0.6875rem;
         color: #94a3b8;
-        margin-bottom: 0.4rem;
+        margin-bottom: 0.45rem;
+    }
+    #page-app .cp-visit-facts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem 0.85rem;
+        font-size: 0.75rem;
+        color: #64748b;
+        margin-bottom: 0.55rem;
+    }
+    #page-app .cp-visit-facts-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    #page-app .cp-visit-facts-label {
+        color: #94a3b8;
+        font-size: 0.6875rem;
+    }
+    #page-app .cp-visit-facts-value {
+        color: #475569;
+        font-weight: 500;
+    }
+    #page-app .cp-visit-section + .cp-visit-section {
+        margin-top: 0.55rem;
+    }
+    #page-app .cp-visit-section-label {
+        font-size: 0.6875rem;
+        color: #94a3b8;
+        margin-bottom: 0.25rem;
     }
     #page-app .cp-visit-content {
         font-size: 0.875rem;
@@ -640,9 +682,9 @@
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div class="crm-op-actions">
                                 <span v-if="canWriteClients" class="group relative inline-flex">
-                                    <a :href="`/customers/${c.id}/edit`" class="crm-op-btn-edit" aria-label="修改">
+                                    <button type="button" @click="openEditClient(c)" class="crm-op-btn-edit" aria-label="修改">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-                                    </a>
+                                    </button>
                                     <span class="pointer-events-none absolute left-1/2 top-full z-30 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">修改</span>
                                 </span>
                                 <span v-if="canDeleteClients" class="group relative inline-flex">
@@ -695,8 +737,20 @@
                     </div>
                     <div v-if="details.visits.length===0" class="cp-empty">暂无拜访记录</div>
                     <div v-for="v in details.visits" :key="v.id" class="cp-visit">
-                        <div class="cp-visit-meta">{{ v.date }} · {{ v.location }}</div>
-                        <p class="cp-visit-content">{{ v.content }}</p>
+                        <div class="cp-visit-meta">{{ visitDisplayDate(v) }}<template v-if="visitDisplayRegion(v) !== '—'"> · {{ visitDisplayRegion(v) }}</template></div>
+                        <div class="cp-visit-facts">
+                            <span class="cp-visit-facts-item"><span class="cp-visit-facts-label">拜访对象</span><span class="cp-visit-facts-value">{{ visitDisplayTarget(v) }}</span></span>
+                            <span class="cp-visit-facts-item"><span class="cp-visit-facts-label">销售</span><span class="cp-visit-facts-value">{{ visitDisplaySales(v) }}</span></span>
+                            <span class="cp-visit-facts-item"><span class="cp-visit-facts-label">方式</span><span class="cp-visit-facts-value">{{ visitDisplayWay(v) }}</span></span>
+                        </div>
+                        <div class="cp-visit-section">
+                            <div class="cp-visit-section-label">拜访目标</div>
+                            <p class="cp-visit-content">{{ visitDisplayPurpose(v) }}</p>
+                        </div>
+                        <div class="cp-visit-section">
+                            <div class="cp-visit-section-label">拜访纪要</div>
+                            <p class="cp-visit-content">{{ visitDisplaySummary(v) }}</p>
+                        </div>
                         <div v-if="v.attachment" class="mt-3 pt-3 border-t border-[#f0f1f3]">
                             <div v-if="isImage(v.attachment)">
                                 <img :src="visitAttachmentUrls[v.attachment] || ''" class="w-16 h-16 object-cover rounded-lg border border-[#eaecef] cursor-zoom-in" @click="viewFull(v.attachment)">
@@ -719,7 +773,7 @@
                         <div class="cp-card-head">
                             <span class="cp-card-dot" aria-hidden="true"></span>
                             <span class="cp-card-title">线索信息</span>
-                            <a v-if="canWriteClients" :href="`/customers/${selectedClient.id}/edit`" class="cp-card-action">修改</a>
+                            <button v-if="canWriteClients" type="button" @click="openEditClient(selectedClient)" class="cp-card-action">修改</button>
                         </div>
                         <div class="cp-hero">
                             <div class="cp-hero-label">预估当年合作金额</div>
@@ -759,7 +813,7 @@
                         <div class="cp-card-head">
                             <span class="cp-card-dot" aria-hidden="true"></span>
                             <span class="cp-card-title">客户描述</span>
-                            <a v-if="canWriteClients" :href="`/customers/${selectedClient.id}/edit`" class="cp-card-action">修改</a>
+                            <button v-if="canWriteClients" type="button" @click="openEditClient(selectedClient)" class="cp-card-action">修改</button>
                         </div>
                         <div v-if="selectedClient.description" class="cp-visit-content">{{ selectedClient.description }}</div>
                         <div v-else class="cp-empty">暂无描述，可在「修改」中填写。</div>
@@ -780,7 +834,7 @@
         </div>
     </div>
 
-    <div v-if="showAddVisit" class="crm-esc-modal crm-form-modal-overlay z-[210]" @click.self="showAddVisit=false">
+    <div v-if="showAddVisit" class="crm-esc-modal crm-form-modal-overlay z-[210]">
         <div class="crm-form-modal-panel max-w-md" @click.stop>
             <div class="crm-form-modal-header">
                 <h3 class="font-bold">新增拜访记录</h3>
@@ -798,7 +852,7 @@
         </div>
     </div>
 
-    <div v-if="showCreateClient" class="crm-esc-modal crm-form-modal-overlay z-[210]" @click.self="showCreateClient=false">
+    <div v-if="showCreateClient" class="crm-esc-modal crm-form-modal-overlay z-[210]">
         <div class="crm-form-modal-panel max-w-2xl" @click.stop>
             <div class="crm-form-modal-header">
                 <h3 class="font-bold text-lg">新增客户</h3>
@@ -885,6 +939,107 @@
             </div>
         </div>
     </div>
+
+    <div v-if="showEditClient" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeEditClient"></div>
+    <aside v-if="showEditClient" class="crm-esc-modal crm-right-drawer client-edit-drawer open">
+        <div class="flex items-start justify-between border-b px-4 py-4 shrink-0">
+            <div class="min-w-0 pr-3">
+                <h3 class="text-lg font-semibold text-gray-900">修改客户</h3>
+                <p v-if="editForm.name" class="text-xs text-gray-500 mt-1 truncate">{{ editForm.name }}</p>
+            </div>
+            <button type="button" @click="closeEditClient" class="text-2xl leading-none text-gray-400 hover:text-gray-700 shrink-0" aria-label="关闭">&times;</button>
+        </div>
+        <div class="client-edit-drawer-body">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div><label class="text-xs text-gray-500">客户名称 <span class="text-red-500">*</span></label><input v-model="editForm.name" class="crm-form-control"></div>
+                <div><label class="text-xs text-gray-500">行业 <span class="text-red-500">*</span></label><input v-model="editForm.industry" class="crm-form-control"></div>
+                <div class="sm:col-span-2"><p class="text-xs font-bold text-gray-700 mb-2">销售归属</p></div>
+                <div><label class="text-xs text-gray-500">销售部门 <span class="text-red-500">*</span></label>
+                    <select v-model="editForm.owner_dept_id" class="crm-form-control">
+                        <option value="">未指定</option>
+                        <option v-for="d in assignDepts" :key="'esd-'+d.id" :value="String(d.id)">{{ d.name || d.code }}</option>
+                    </select>
+                </div>
+                <div><label class="text-xs text-gray-500">销售主责 <span class="text-red-500">*</span></label>
+                    <select v-model="editForm.owner_user_id" class="crm-form-control">
+                        <option value="">未指定</option>
+                        <option v-for="u in assignUsers" :key="'esu-'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2"><p class="text-xs font-bold text-gray-700 mb-2">交付归属</p></div>
+                <div><label class="text-xs text-gray-500">交付部门 <span class="text-red-500">*</span></label>
+                    <select v-model="editForm.delivery_dept_id" class="crm-form-control">
+                        <option value="">未指定</option>
+                        <option v-for="d in assignDepts" :key="'edd-'+d.id" :value="String(d.id)">{{ d.name || d.code }}</option>
+                    </select>
+                </div>
+                <div><label class="text-xs text-gray-500">交付主责 <span class="text-red-500">*</span></label>
+                    <select v-model="editForm.delivery_owner_user_id" class="crm-form-control">
+                        <option value="">未指定</option>
+                        <option v-for="u in assignUsers" :key="'edu-'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2"><p class="text-xs font-bold text-gray-700 mb-2">招聘归属</p></div>
+                <div><label class="text-xs text-gray-500">招聘部门 <span class="text-red-500">*</span></label>
+                    <select v-model="editForm.recruitment_dept_id" class="crm-form-control">
+                        <option value="">未指定</option>
+                        <option v-for="d in assignDepts" :key="'erd-'+d.id" :value="String(d.id)">{{ d.name || d.code }}</option>
+                    </select>
+                </div>
+                <div><label class="text-xs text-gray-500">招聘主责 <span class="text-red-500">*</span></label>
+                    <select v-model="editForm.recruitment_owner_user_id" class="crm-form-control">
+                        <option value="">未指定</option>
+                        <option v-for="u in assignUsers" :key="'eru-'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
+                    </select>
+                </div>
+                <div><label class="text-xs text-gray-500">外包规模 <span class="text-red-500">*</span></label><input v-model="editForm.scale" class="crm-form-control" placeholder="例如：10人月"></div>
+                <div><label class="text-xs text-gray-500">开拓阶段 <span class="text-red-500">*</span></label>
+                    <select v-model="editForm.phase" class="crm-form-control">
+                        <option value="初步接触">初步接触</option>
+                        <option value="方案/报价">方案/报价</option>
+                        <option value="合同签订">合同签订</option>
+                        <option value="成交">成交</option>
+                    </select>
+                </div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">预估当年合作金额</label>
+                    <div class="relative">
+                        <input :value="editEstimatedAmountDisplay" readonly tabindex="-1" class="crm-form-control pr-14 bg-gray-50 text-gray-700 cursor-default" placeholder="由名下商机自动汇总">
+                        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm pointer-events-none">万元</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">= 各商机「预估当年金额 × 赢单率」之和（不含输单商机）</p>
+                </div>
+                <div><label class="text-xs text-gray-500">客户所在城市 <span class="text-red-500">*</span></label><input v-model="editForm.city" class="crm-form-control" placeholder="例如：深圳"></div>
+                <div><label class="text-xs text-gray-500">获客渠道 <span class="text-red-500">*</span></label>
+                    <select v-model="editForm.contact_acquisition_channel" class="crm-form-control">
+                        <option value="">请选择</option>
+                        <option value="个人">个人</option>
+                        <option value="公司">公司</option>
+                        <option value="其他">其他</option>
+                    </select>
+                </div>
+                <div><label class="text-xs text-gray-500">联系人姓名 <span class="text-red-500">*</span></label><input v-model="editForm.contact_name" class="crm-form-control"></div>
+                <div><label class="text-xs text-gray-500">联系人职位 <span class="text-red-500">*</span></label><input v-model="editForm.contact_title" class="crm-form-control"></div>
+                <div><label class="text-xs text-gray-500">联系方式 <span class="text-red-500">*</span></label><input v-model="editForm.contact_info" class="crm-form-control" placeholder="电话、微信等"></div>
+                <div><label class="text-xs text-gray-500">联系人关系 <span class="text-red-500">*</span></label>
+                    <select v-model="editForm.contact_relationship" class="crm-form-control">
+                        <option value="">请选择</option>
+                        <option value="普通">普通</option>
+                        <option value="良好">良好</option>
+                        <option value="密切">密切</option>
+                    </select>
+                </div>
+                <div><label class="text-xs text-gray-500">联系人+1</label><input v-model="editForm.contact_superior_contact" class="crm-form-control" placeholder="联系人的上级"></div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">联系人说明 <span class="text-red-500">*</span></label><textarea v-model="editForm.contact_description" rows="2" class="w-full border border-gray-300 rounded-md p-2 text-sm" placeholder="联系人的具体情况"></textarea></div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">描述 <span class="text-red-500">*</span></label><textarea v-model="editForm.description" rows="3" class="w-full border border-gray-300 rounded-md p-2 text-sm"></textarea></div>
+                <div class="sm:col-span-2"><label class="text-xs text-gray-500">备注</label><textarea v-model="editForm.remarks" rows="2" class="w-full border border-gray-300 rounded-md p-2 text-sm" placeholder="可选"></textarea></div>
+                <p v-if="editError" class="sm:col-span-2 text-sm text-red-600">{{ editError }}</p>
+            </div>
+        </div>
+        <div class="border-t px-4 py-3 flex justify-end gap-2 shrink-0">
+            <button type="button" @click="closeEditClient" class="rounded-lg border px-4 py-2 text-sm">取消</button>
+            <button type="button" @click="saveEditClient" :disabled="editSaving" class="rounded-lg bg-[#4C6491] px-4 py-2 text-sm text-white hover:bg-[#3D5176] disabled:opacity-50">{{ editSaving ? '保存中…' : '保存修改' }}</button>
+        </div>
+    </aside>
 
     <div v-if="showOppDrawer" class="crm-right-drawer-backdrop bg-black/40" @click.self="closeOppDrawer"></div>
     <aside v-if="showOppDrawer && selectedOpp" class="crm-esc-modal crm-right-drawer open">
@@ -1057,6 +1212,32 @@ createApp({
             const f = e.target.files;
             visitFile.value = f && f[0] ? f[0] : null;
         };
+
+        const visitDash = (val) => {
+            const s = (val == null ? '' : String(val)).trim();
+            return s || '—';
+        };
+        const visitDisplayDate = (v) => visitDash(v && v.date);
+        const visitDisplayRegion = (v) => visitDash((v && (v.region || v.location)) || '');
+        const visitDisplayTarget = (v) => visitDash(v && v.target);
+        const visitDisplaySales = (v) => visitDash((v && v.salesperson) || selectedClient.value.owner);
+        const visitDisplayWay = (v) => visitDash(v && v.way);
+        const visitDisplayPurpose = (v) => visitDash(v && v.visit_purpose);
+        const visitDisplaySummary = (v) => {
+            if (!v) return '—';
+            const summary = (v.visit_summary || '').trim();
+            if (summary) return summary;
+            const purpose = (v.visit_purpose || '').trim();
+            const content = (v.content || '').trim();
+            if (content && (!purpose || content !== purpose)) return content;
+            return '—';
+        };
+        const sortVisitsDesc = (visits) => (visits || []).slice().sort((a, b) => {
+            const da = (a.date || '').trim();
+            const db = (b.date || '').trim();
+            if (da !== db) return db.localeCompare(da);
+            return (b.id || 0) - (a.id || 0);
+        });
 
         const authHeader = () => window.crmAuthHeader();
         const hasPermission = (code) => (me.value.permissions || []).includes(code);
@@ -1521,6 +1702,7 @@ createApp({
                     return;
                 }
                 const d = await r.json();
+                d.visits = sortVisitsDesc(d.visits);
                 details.value = d;
                 showDetail.value = true;
                 await preloadVisitAttachments(d.visits);
@@ -1656,13 +1838,7 @@ createApp({
             return '';
         };
 
-        const saveCreateClient = async () => {
-            if (!requireClientWrite()) return;
-            const f = createForm.value;
-            const err = validateCreateForm(f);
-            if (err) { createError.value = err; return; }
-            const owner = ownerNameFromUserId(f.owner_user_id);
-            createError.value = '';
+        const buildClientFormData = (f, owner) => {
             const fd = new FormData();
             fd.append('name', f.name.trim());
             fd.append('industry', f.industry.trim());
@@ -1685,6 +1861,17 @@ createApp({
             fd.append('contact_description', f.contact_description || '');
             fd.append('description', f.description.trim());
             fd.append('remarks', f.remarks || '');
+            return fd;
+        };
+
+        const saveCreateClient = async () => {
+            if (!requireClientWrite()) return;
+            const f = createForm.value;
+            const err = validateCreateForm(f);
+            if (err) { createError.value = err; return; }
+            const owner = ownerNameFromUserId(f.owner_user_id);
+            createError.value = '';
+            const fd = buildClientFormData(f, owner);
             createSaving.value = true;
             try {
                 const r = await fetch('/api/clients', { method: 'POST', headers: authHeader(), body: fd });
@@ -1699,6 +1886,103 @@ createApp({
                 createError.value = '网络错误';
             } finally {
                 createSaving.value = false;
+            }
+        };
+
+        const showEditClient = ref(false);
+        const editClientId = ref(null);
+        const editSaving = ref(false);
+        const editError = ref('');
+        const editEstimatedAmount = ref('');
+        const editForm = ref(emptyCreateForm());
+
+        const editEstimatedAmountDisplay = computed(() => {
+            const v = String(editEstimatedAmount.value || '').trim();
+            if (!v) return '';
+            const digits = v.replace(/[^\d.-]/g, '');
+            if (!digits) return v;
+            const n = Number(digits);
+            return Number.isFinite(n) ? n.toLocaleString('zh-CN') : v;
+        });
+
+        const clientDataToForm = (data) => ({
+            name: data.name || '',
+            industry: data.industry || '',
+            owner_dept_id: data.owner_dept_id != null && data.owner_dept_id !== '' ? String(data.owner_dept_id) : '',
+            owner_user_id: data.owner_user_id != null && data.owner_user_id !== '' ? String(data.owner_user_id) : '',
+            delivery_dept_id: data.delivery_dept_id != null && data.delivery_dept_id !== '' ? String(data.delivery_dept_id) : '',
+            delivery_owner_user_id: data.delivery_owner_user_id != null && data.delivery_owner_user_id !== '' ? String(data.delivery_owner_user_id) : '',
+            recruitment_dept_id: data.recruitment_dept_id != null && data.recruitment_dept_id !== '' ? String(data.recruitment_dept_id) : '',
+            recruitment_owner_user_id: data.recruitment_owner_user_id != null && data.recruitment_owner_user_id !== '' ? String(data.recruitment_owner_user_id) : '',
+            scale: data.scale || '',
+            phase: data.phase || '初步接触',
+            city: data.city || '',
+            contact_name: data.contact_name || '',
+            contact_info: data.contact_info || '',
+            contact_title: data.contact_title || '',
+            contact_relationship: data.contact_relationship || '',
+            contact_acquisition_channel: data.contact_acquisition_channel || '',
+            contact_superior_contact: data.contact_superior_contact || '',
+            contact_description: data.contact_description || '',
+            description: data.description || '',
+            remarks: data.remarks || '',
+        });
+
+        const openEditClient = async (c) => {
+            if (!requireClientWrite() || !c || !c.id) return;
+            editError.value = '';
+            editSaving.value = false;
+            editClientId.value = c.id;
+            showEditClient.value = true;
+            showDetail.value = false;
+            try {
+                const r = await fetch(`/api/clients/${c.id}`, { headers: authHeader() });
+                if (!r.ok) {
+                    const t = await r.text();
+                    editError.value = '加载失败：' + t;
+                    return;
+                }
+                const data = await r.json();
+                editForm.value = clientDataToForm(data);
+                editEstimatedAmount.value = data.estimated_annual_amount || '';
+            } catch (e) {
+                editError.value = '加载失败';
+            }
+        };
+
+        const closeEditClient = () => {
+            showEditClient.value = false;
+            editClientId.value = null;
+            editError.value = '';
+            editEstimatedAmount.value = '';
+            editForm.value = emptyCreateForm();
+        };
+
+        const saveEditClient = async () => {
+            if (!requireClientWrite() || !editClientId.value) return;
+            const f = editForm.value;
+            const err = validateCreateForm(f);
+            if (err) { editError.value = err; return; }
+            const owner = ownerNameFromUserId(f.owner_user_id);
+            editError.value = '';
+            const fd = buildClientFormData(f, owner);
+            editSaving.value = true;
+            try {
+                const r = await fetch(`/api/clients/${editClientId.value}`, { method: 'PUT', headers: authHeader(), body: fd });
+                if (!r.ok) {
+                    const t = await r.text();
+                    editError.value = '保存失败：' + t;
+                    return;
+                }
+                closeEditClient();
+                await loadClients();
+                if (window.crmToast && window.crmToast.success) {
+                    window.crmToast.success('保存成功', { placement: 'bottom-right', icon: true });
+                }
+            } catch (e) {
+                editError.value = '网络错误';
+            } finally {
+                editSaving.value = false;
             }
         };
 
@@ -1763,6 +2047,8 @@ createApp({
             loadClients, phaseColor,
             showCreateClient, createSaving, createError, createForm,
             assignDepts, assignUsers, openCreateClient, saveCreateClient,
+            showEditClient, editForm, editSaving, editError, editEstimatedAmountDisplay,
+            openEditClient, closeEditClient, saveEditClient,
             handoffEntry, handoffStatusLabel, resolveHandoffStatus, handoffBadge,
             clientOpportunities, openOppDrawer, closeOppDrawer,
             fmtDash, fmtAmount, fmtPrimaryContact, formatDateOnly, displayAmount, displayWinRate, oppStageBadgeClass, hasPrimaryContact,
@@ -1770,7 +2056,9 @@ createApp({
             deliveryDeptDisplay, deliveryOwnerDisplay, recruitmentDeptDisplay, recruitmentOwnerDisplay,
             openDetail, updateClient, confirmDelete, executeDelete, openAddVisit,
             requireClientWrite, requireVisitWrite, requireClientExport, requireHandoffAccess,
-            submitVisit, exportCSV, isImage, viewFull, visitAttachmentUrls
+            submitVisit, exportCSV, isImage, viewFull, visitAttachmentUrls,
+            visitDisplayDate, visitDisplayRegion, visitDisplayTarget, visitDisplaySales, visitDisplayWay,
+            visitDisplayPurpose, visitDisplaySummary
         };
     }
 }).mount('#page-app');

@@ -1,7 +1,7 @@
 {% set path = request.url.path %}
 <nav class="flex items-stretch gap-0 flex-wrap md:flex-nowrap">
     <!-- 首页 -->
-    <div class="gh-nav-item{% if (path == '/home' or path.startswith('/home/trash')) or path.startswith('/materials') or path.startswith('/contracts') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,materials.read,materials.public.read,materials.internal.read">
+    <div class="gh-nav-item{% if path.startswith('/materials') or path.startswith('/contracts') or path.startswith('/dashboards') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,materials.read,materials.public.read,materials.internal.read,dashboard.read">
         <span class="nav-trigger cursor-default">公司
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
@@ -10,20 +10,16 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                         <div class="gh-mega-col-h">数字资产</div>
-                        <a class="gh-mega-link" href="/home/trash" data-crm-nav-perm="crm.clients.read">回收站与空间占用</a>
                         <a class="gh-mega-link" href="/materials" data-crm-nav-any="materials.read,materials.public.read,materials.internal.read">公司资料库</a>
                         <a class="gh-mega-link" href="/contracts">合同管理</a>
-                    </div>
-                    <div>
-                        <div class="gh-mega-col-h">快捷入口</div>
-                        <a class="gh-mega-link" href="/home" data-crm-nav-perm="crm.clients.read">首页总览</a>
+                        <a class="gh-mega-link" href="/dashboards" data-crm-nav-perm="dashboard.read">仪表盘</a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     <!-- 客户（含费用折算器子项） -->
-    <div class="gh-nav-item{% if (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/tools/calc') or path.startswith('/dashboards') or path.startswith('/customers/visits') or path.startswith('/contacts') or path.startswith('/home/funnel') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,crm.contacts.read,crm.visits.read,dashboard.read,tools.gm_calc.read">
+    <div class="gh-nav-item{% if (path.startswith('/customers') and not path.startswith('/customers/roster')) or path.startswith('/customers/visits') or path.startswith('/contacts') or path.startswith('/home/funnel') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,crm.contacts.read,crm.visits.read">
         <span class="nav-trigger cursor-default">客户
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
@@ -37,9 +33,7 @@
                         <a class="gh-mega-link" href="/customers/visits" data-crm-nav-perm="crm.visits.read">客户拜访</a>
                     </div>
                     <div>
-                        <div class="gh-mega-col-h">工具/仪表盘</div>
-                        <a class="gh-mega-link" href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">毛利测算器</a>
-                        <a class="gh-mega-link" href="/dashboards" data-crm-nav-perm="dashboard.read">仪表盘</a>
+                        <div class="gh-mega-col-h">销售看板</div>
                         <a class="gh-mega-link" href="/home/funnel" data-crm-nav-perm="crm.clients.read">销售漏斗看板</a>
                     </div>
                 </div>
@@ -117,7 +111,7 @@
             </div>
         </div>
     </div>
-    <div class="gh-nav-item{% if path.startswith('/rms') %} nav-active{% endif %}" data-crm-nav-any="rms.jobs.read,rms.analytics.read,rms.candidates.read">
+    <div class="gh-nav-item{% if path.startswith('/rms') and not path.startswith('/rms/import-help') and not path.startswith('/rms/recommend-help') %} nav-active{% endif %}" data-crm-nav-any="rms.jobs.read,rms.analytics.read,rms.candidates.read">
         <span class="nav-trigger cursor-default">招聘
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
@@ -128,11 +122,6 @@
                         <div class="gh-mega-col-h">招聘模块</div>
                         <a class="gh-mega-link" href="/rms/dashboard" data-crm-nav-perm="rms.analytics.read">招聘Dashboard</a>
                         <a class="gh-mega-link" href="/rms" data-crm-nav-perm="rms.jobs.read">需求&amp;人才库</a>
-                    </div>
-                    <div>
-                        <div class="gh-mega-col-h">帮助文件</div>
-                        <a class="gh-mega-link" href="/rms/import-help" data-crm-nav-perm="rms.candidates.read">批量导入帮助</a>
-                        <a class="gh-mega-link" href="/rms/recommend-help" data-crm-nav-perm="rms.applications.write">推荐非本人需求</a>
                     </div>
                 </div>
             </div>
@@ -145,7 +134,21 @@
         <div class="gh-mega">
             <div class="gh-mega-panel p-4">
                 <div class="gh-mega-col-h">权限管理</div>
-                <a class="gh-mega-link" href="/system/users">权限中心</a>
+                <a class="gh-mega-link" href="/system/users" data-crm-nav-any="system.users.manage,system.roles.manage,system.audit.read">权限中心</a>
+            </div>
+        </div>
+    </div>
+    <div class="gh-nav-item{% if path == '/home/trash' or path.startswith('/rms/import-help') or path.startswith('/rms/recommend-help') or path.startswith('/tools/calc') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,rms.candidates.read,rms.applications.write,tools.gm_calc.read">
+        <span class="nav-trigger cursor-default">帮助中心
+            <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </span>
+        <div class="gh-mega">
+            <div class="gh-mega-panel p-4">
+                <div class="gh-mega-col-h">帮助文档</div>
+                <a class="gh-mega-link" href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">GM测算器</a>
+                <a class="gh-mega-link" href="/home/trash" data-crm-nav-perm="crm.clients.read">回收站与空间</a>
+                <a class="gh-mega-link" href="/rms/import-help" data-crm-nav-perm="rms.candidates.read">帮助文件-如何批量导入候选人</a>
+                <a class="gh-mega-link" href="/rms/recommend-help" data-crm-nav-perm="rms.applications.write">帮助文件-如何分配非本人需求</a>
             </div>
         </div>
     </div>
