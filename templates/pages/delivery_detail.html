@@ -596,6 +596,98 @@
     }
     #delivery-detail-app .employee-files-table tbody td.crm-sticky-right-op { overflow: visible !important; }
     #delivery-detail-app .employee-files-table tbody tr:hover td.crm-sticky-right-op { z-index: 40 !important; }
+    /* 员工材料：冻结前两列（员工姓名 / 文件名） */
+    #delivery-detail-app .crm-table.employee-files-table {
+        border-collapse: separate;
+        border-spacing: 0;
+        --employee-files-sticky-name-width: 6.5rem;
+        --employee-files-sticky-filename-left: var(--employee-files-sticky-name-width);
+    }
+    .employee-files-sticky-name,
+    .employee-files-sticky-filename {
+        position: sticky;
+        box-sizing: border-box;
+        background: #fff;
+        background-clip: padding-box;
+    }
+    .employee-files-sticky-name {
+        left: 0;
+        border-right: 1px solid #e5e7eb;
+    }
+    .employee-files-sticky-filename {
+        left: var(--employee-files-sticky-filename-left);
+        border-right: 1px solid #e5e7eb;
+        box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
+    }
+    .crm-table tbody .employee-files-sticky-name {
+        z-index: 3;
+    }
+    .crm-table tbody .employee-files-sticky-filename {
+        z-index: 2;
+    }
+    .crm-table-scroll .crm-table.employee-files-table thead th.employee-files-sticky-name,
+    .crm-table-scroll .crm-table.employee-files-table thead th.employee-files-sticky-filename {
+        top: 0;
+        z-index: 32;
+    }
+    .crm-table-scroll .crm-table.employee-files-table thead th.employee-files-sticky-name {
+        z-index: 33;
+    }
+    #delivery-detail-app .employee-files-table .employee-files-col-name {
+        min-width: var(--employee-files-sticky-name-width);
+        max-width: 10rem;
+    }
+    #delivery-detail-app .employee-files-table .employee-files-col-filename {
+        min-width: 12rem;
+        max-width: 18rem;
+    }
+    #delivery-detail-app .employee-files-table td.employee-files-sticky-filename .crm-name-link {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: left;
+    }
+    #delivery-detail-app .employee-files-table .employee-files-col-filename.handbook-col-text {
+        max-width: 18rem;
+    }
+    #delivery-detail-app .employee-files-table td.employee-files-sticky-name {
+        max-width: 10rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #delivery-detail-app .employee-files-table col.employee-files-col-name {
+        width: var(--employee-files-sticky-name-width) !important;
+        min-width: var(--employee-files-sticky-name-width) !important;
+    }
+    #delivery-detail-app .employee-files-table col.employee-files-col-filename {
+        width: 14rem !important;
+        min-width: 12rem !important;
+        max-width: 18rem !important;
+    }
+    /* crm-skin 浅色表头：覆盖 base 中冻结列默认蓝底 */
+    #delivery-detail-app .crm-skin .employee-files-table thead .employee-files-sticky-name,
+    #delivery-detail-app .crm-skin .employee-files-table thead .employee-files-sticky-filename {
+        background: #F9FAFB;
+        color: #6B7280;
+        border-color: #E5E7EB;
+    }
+    #delivery-detail-app .crm-skin .employee-files-table tbody .employee-files-sticky-name,
+    #delivery-detail-app .crm-skin .employee-files-table tbody .employee-files-sticky-filename {
+        background: #fff;
+    }
+    #delivery-detail-app .crm-skin .employee-files-table tbody tr:hover .employee-files-sticky-name,
+    #delivery-detail-app .crm-skin .employee-files-table tbody tr:hover .employee-files-sticky-filename {
+        background: #F9FAFB;
+    }
+    #main-shell.bms-sidebar-dark #delivery-detail-app .crm-skin .employee-files-table thead .employee-files-sticky-name,
+    #main-shell.bms-sidebar-dark #delivery-detail-app .crm-skin .employee-files-table thead .employee-files-sticky-filename {
+        background: var(--ct-th-dark-bg, #3B6699);
+        color: var(--ct-th-dark-text, #fff);
+        border-color: var(--ct-th-dark-border, rgba(255, 255, 255, 0.12));
+    }
     #delivery-detail-app .handbook-upload-dropzone {
         border: 2px dashed #d0d7de;
         border-radius: 0.5rem;
@@ -1265,7 +1357,7 @@
                     <p class="ml-auto min-w-0 self-center leading-none text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">合计（符合筛选条件）：<span>{{ filteredEmployeeFiles.length }}</span> 条</p>
                     <div class="flex items-center gap-1.5">
                         <span class="group relative inline-flex">
-                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3D5176] disabled:opacity-50" :disabled="employeeFileUploading" aria-label="上传材料" @click="openEmployeeFileUploadModal">
+                            <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-transparent bg-[#456595] text-white transition-colors hover:bg-[#3D5176]" aria-label="上传材料" @click="openEmployeeFileUploadModal">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15V3m0 0L8 7m4-4 4 4M4 15v2.5A2.5 2.5 0 0 0 6.5 20h11a2.5 2.5 0 0 0 2.5-2.5V15"/></svg>
                             </button>
                             <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">上传材料</span>
@@ -1285,23 +1377,39 @@
                 </div>
             </div>
             <div class="border border-gray-200 rounded-lg crm-table-scroll delivery-table-wrap delivery-table-scroll-fill flex-1 min-h-0">
-                <table class="crm-table employee-files-table handbook-table min-w-full text-sm" data-table-id="employee-files">
+                <table class="crm-table employee-files-table handbook-table min-w-full text-sm" data-table-id="employee-files" data-table-min-width="1280">
+                    <colgroup>
+                        <col class="employee-files-col-name">
+                        <col class="employee-files-col-filename">
+                        <col>
+                        <col>
+                        <col>
+                        <col>
+                        <col>
+                        <col>
+                    </colgroup>
                     <thead>
                         <tr>
-                            <th class="crm-th text-left"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3.5h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1ZM14 3.5V9h5"/></svg>文件</th>
+                            <th class="crm-th text-left employee-files-col-name employee-files-sticky-name"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7Z"/></svg>员工姓名</th>
+                            <th class="crm-th text-left employee-files-col-filename employee-files-sticky-filename"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M7 3.5h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-16a1 1 0 0 1 1-1ZM14 3.5V9h5"/></svg>文件名</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h10"/></svg>文件类型</th>
                             <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18ZM8.5 12l2.5 2.5 4.5-4.5"/></svg>状态</th>
-                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 7h16M4 12h16M4 17h10"/></svg>类型</th>
-                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0-8.5-12M12 7.5V12l3 1.8"/></svg>时间</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6M9 16h6M9 8h6M5 4h14a2 2 0 0 1 2 2v14l-4-2-4 2-4-2-4 2V6a2 2 0 0 1 2-2Z"/></svg>劳动合同编号</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M4 11h16M6 5h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"/></svg>有效期至</th>
+                            <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0-8.5-12M12 7.5V12l3 1.8"/></svg>上传时间</th>
                             <th class="crm-th crm-sticky-right-op employee-files-op-col"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 3.5h2l.5 2.2a6.5 6.5 0 0 1 1.7 1l2.1-.8 1 1.7-1.6 1.6a6.5 6.5 0 0 1 0 2l1.6 1.6-1 1.7-2.1-.8a6.5 6.5 0 0 1-1.7 1l-.5 2.2h-2l-.5-2.2a6.5 6.5 0 0 1-1.7-1l-2.1.8-1-1.7 1.6-1.6a6.5 6.5 0 0 1 0-2L4.6 8.6l1-1.7 2.1.8a6.5 6.5 0 0 1 1.7-1L11 3.5ZM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>操作</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="f in pagedEmployeeFiles" :key="f.id">
-                            <td class="crm-td crm-name-cell handbook-col-text">
+                            <td class="crm-td employee-files-col-name employee-files-sticky-name">{{ f.employee_full_name || '—' }}</td>
+                            <td class="crm-td crm-name-cell handbook-col-text employee-files-col-filename employee-files-sticky-filename">
                                 <button type="button" class="crm-name-link" @click="openEmployeeFileDetailDrawer(f)"><span class="crm-cell-clip">{{ f.original_filename }}</span></button>
                             </td>
+                            <td class="crm-td">{{ employeeFileDocumentTypeLabel(f) }}</td>
                             <td class="crm-td"><span class="rounded-full px-2 py-0.5 text-xs" :class="employeeFileStatusClass(f.status)">{{ employeeFileStatusLabel(f.status) }}</span></td>
-                            <td class="crm-td">{{ employeeFileMediaLabel(f) }}</td>
+                            <td class="crm-td text-xs whitespace-nowrap">{{ employeeFileLaborContractNoLabel(f) }}</td>
+                            <td class="crm-td text-xs whitespace-nowrap">{{ employeeFileValidUntilLabel(f) }}</td>
                             <td class="crm-td text-xs whitespace-nowrap">{{ employeeFileDisplayDate(f.created_at) }}</td>
                             <td class="crm-td whitespace-nowrap crm-sticky-right-op employee-files-op-col">
                                 <div class="crm-op-actions">
@@ -1317,8 +1425,14 @@
                                         </button>
                                         <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">下载</span>
                                     </span>
+                                    <span v-if="employeeFileCanPublish(f) && canDeletePermission('delivery.employee_files.write')" class="group relative inline-flex">
+                                        <button type="button" class="crm-op-btn-edit" aria-label="发布" data-crm-delete-skip="1" @click="publishEmployeeFile(f)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7"/></svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">发布</span>
+                                    </span>
                                     <span v-if="canDeletePermission('delivery.employee_files.delete')" class="group relative inline-flex">
-                                        <button type="button" class="crm-op-btn-delete" aria-label="删除" @click="removeEmployeeFile(f)">
+                                        <button type="button" class="crm-op-btn-delete" aria-label="删除" data-crm-delete-skip="1" @click="removeEmployeeFile(f)">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                                         </button>
                                         <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">删除</span>
@@ -1327,7 +1441,7 @@
                             </td>
                         </tr>
                         <tr v-if="!pagedEmployeeFiles.length">
-                            <td colspan="5" class="crm-td text-center text-gray-400 py-8">暂无员工文件，请上传。</td>
+                            <td colspan="8" class="crm-td text-center text-gray-400 py-8">暂无员工文件，请上传。</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1708,13 +1822,35 @@
             <form class="flex flex-col flex-1 min-h-0" novalidate @submit.prevent="submitEmployeeFileUpload">
                 <div class="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 text-sm">
                     <label class="flex flex-col gap-1 max-w-xs">
-                        <span class="text-[#57606a]">状态</span>
-                        <select v-model="employeeFileUploadForm.status" class="crm-form-control">
-                            <option value="draft">草稿</option>
-                            <option value="published">已发布</option>
-                            <option value="deprecated">已作废</option>
+                        <span class="text-[#57606a]">文件类型</span>
+                        <select v-model="employeeFileUploadForm.document_type" class="crm-form-control">
+                            <option value="劳动合同">劳动合同</option>
+                            <option value="入职材料">入职材料</option>
+                            <option value="离职材料">离职材料</option>
+                            <option value="员工证件">员工证件</option>
+                            <option value="其他">其他</option>
                         </select>
                     </label>
+                    <template v-if="isLaborContractUpload">
+                        <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+                            <label class="flex flex-col gap-1 min-w-0">
+                                <span class="text-[#57606a]">员工姓名<span class="text-red-500">*</span></span>
+                                <input v-model.trim="employeeFileUploadForm.employee_full_name" type="text" class="crm-form-control" placeholder="与花名册一致" />
+                            </label>
+                            <label class="flex flex-col gap-1 min-w-0">
+                                <span class="text-[#57606a]">手机号<span class="text-red-500">*</span></span>
+                                <input v-model.trim="employeeFileUploadForm.employee_contact_info" type="text" class="crm-form-control" placeholder="与花名册一致" />
+                            </label>
+                            <label class="flex flex-col gap-1 min-w-0">
+                                <span class="text-[#57606a]">合同签署日期</span>
+                                <input v-model="employeeFileUploadForm.contract_sign_date" type="date" class="crm-form-control" />
+                            </label>
+                            <label class="flex flex-col gap-1 min-w-0">
+                                <span class="text-[#57606a]">合同有效期至</span>
+                                <input v-model="employeeFileUploadForm.contract_valid_until" type="date" class="crm-form-control" />
+                            </label>
+                        </div>
+                    </template>
                     <div>
                         <span class="block text-[#57606a] mb-2">文件<span class="text-red-500">*</span></span>
                         <div
@@ -1734,7 +1870,7 @@
                                 <span class="min-w-0 truncate text-sm text-[#0969da]">{{ employeeFileUploadSelectedSummary }}</span>
                                 <button type="button" class="handbook-upload-file-remove shrink-0" aria-label="移除文件" @click.stop="clearEmployeeFileUploadFiles">&times;</button>
                             </div>
-                            <input ref="employeeFileUploadFileInput" type="file" class="hidden" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar" @change="onEmployeeFileUploadFileChange" />
+                            <input ref="employeeFileUploadFileInput" type="file" class="hidden" :multiple="!isLaborContractUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.zip,.rar" @change="onEmployeeFileUploadFileChange" />
                         </div>
                     </div>
                     <p v-if="employeeFileUploadError" class="text-sm text-red-600">{{ employeeFileUploadError }}</p>
@@ -2015,7 +2151,35 @@
                     <dd><span class="rounded-full px-2 py-0.5 text-xs" :class="employeeFileStatusClass(employeeFileDetailRow.status)">{{ employeeFileStatusLabel(employeeFileDetailRow.status) }}</span></dd>
                 </div>
                 <div>
-                    <dt class="text-xs text-gray-400 mb-0.5">类型</dt>
+                    <dt class="text-xs text-gray-400 mb-0.5">文件类型</dt>
+                    <dd class="font-medium text-gray-800">{{ employeeFileDocumentTypeLabel(employeeFileDetailRow) }}</dd>
+                </div>
+                <div v-if="employeeFileDetailRow.employee_full_name">
+                    <dt class="text-xs text-gray-400 mb-0.5">员工姓名</dt>
+                    <dd class="font-medium text-gray-800">{{ employeeFileDetailRow.employee_full_name }}</dd>
+                </div>
+                <div v-if="employeeFileDetailRow.employee_contact_info">
+                    <dt class="text-xs text-gray-400 mb-0.5">手机号</dt>
+                    <dd class="font-medium text-gray-800">{{ employeeFileDetailRow.employee_contact_info }}</dd>
+                </div>
+                <div v-if="employeeFileDetailRow.throme_staff_no">
+                    <dt class="text-xs text-gray-400 mb-0.5">索摩工号</dt>
+                    <dd class="font-medium text-gray-800">{{ employeeFileDetailRow.throme_staff_no }}</dd>
+                </div>
+                <div v-if="employeeFileDetailRow.labor_contract_no">
+                    <dt class="text-xs text-gray-400 mb-0.5">劳动合同编号</dt>
+                    <dd class="font-medium text-gray-800">{{ employeeFileDetailRow.labor_contract_no }}</dd>
+                </div>
+                <div v-if="employeeFileDetailRow.contract_sign_date">
+                    <dt class="text-xs text-gray-400 mb-0.5">合同签署日期</dt>
+                    <dd class="font-medium text-gray-800">{{ employeeFileDisplayDate(employeeFileDetailRow.contract_sign_date) }}</dd>
+                </div>
+                <div v-if="employeeFileDetailRow.contract_valid_until">
+                    <dt class="text-xs text-gray-400 mb-0.5">合同有效期至</dt>
+                    <dd class="font-medium text-gray-800">{{ employeeFileDisplayDate(employeeFileDetailRow.contract_valid_until) }}</dd>
+                </div>
+                <div>
+                    <dt class="text-xs text-gray-400 mb-0.5">格式</dt>
                     <dd class="font-medium text-gray-800">{{ employeeFileMediaLabel(employeeFileDetailRow) }}</dd>
                 </div>
                 <div>
@@ -2026,6 +2190,7 @@
         </div>
         <div class="px-5 py-4 border-t border-gray-200 flex flex-wrap justify-end gap-2 shrink-0">
             <button type="button" class="px-4 py-2 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50" @click="closeEmployeeFileDetailDrawer">关闭</button>
+            <button v-if="employeeFileCanPublish(employeeFileDetailRow) && canDeletePermission('delivery.employee_files.write')" type="button" class="px-4 py-2 rounded-lg border border-emerald-600 text-sm text-emerald-700 hover:bg-emerald-50" data-crm-delete-skip="1" @click="publishEmployeeFile(employeeFileDetailRow)">发布</button>
             <button v-if="employeeFileCanPreview(employeeFileDetailRow)" type="button" class="px-4 py-2 rounded-lg border border-[#456595] text-sm text-[#456595] hover:bg-blue-50" @click="openEmployeeFilePreviewFromDetail">预览</button>
             <button type="button" class="px-4 py-2 rounded-lg bg-[#456595] text-sm text-white hover:bg-[#3a567f]" @click="downloadEmployeeFile(employeeFileDetailRow)">下载</button>
         </div>
@@ -2240,7 +2405,7 @@ window.__CRM_DELIVERY_DETAIL__ = {
 <script src="/static/js/pages/delivery-detail-settlement.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-interviews.js?v=delete-perm-20260617"></script>
 <script src="/static/js/pages/delivery-detail-handbook.js?v=delete-perm-20260617"></script>
-<script src="/static/js/pages/delivery-detail-employee-files.js?v=20260622"></script>
+<script src="/static/js/pages/delivery-detail-employee-files.js?v=20260625c"></script>
 <script>
 const { createApp, ref, reactive, computed, watch, onMounted, onBeforeUnmount, nextTick } = Vue;
 const {
@@ -2381,7 +2546,18 @@ createApp({
         const resetReqFilter = () => { reqFilter.keyword = ''; reqFilter.priority = ''; reqFilter.status = ''; reqFilter.city = ''; };
         watch(reqFilter, () => { reqCurrentPage.value = 1; }, { deep: true });
         watch(filteredRequirementJobs, () => { if (reqCurrentPage.value > reqTotalPages.value) reqCurrentPage.value = reqTotalPages.value; });
-        const canDeletePermission = (code) => !window.crmHasPermission || window.crmHasPermission(code);
+        const canDeletePermission = (code) => {
+            if (!window.crmHasPermission) return true;
+            if (window.crmHasPermission(code)) return true;
+            const writeCompat = {
+                'delivery.interviews.delete': 'delivery.interviews.write',
+                'delivery.settlement.delete': 'delivery.settlement.write',
+                'delivery.handbook.delete': 'delivery.handbook.write',
+                'delivery.employee_files.delete': 'delivery.employee_files.write',
+            };
+            const writeCode = writeCompat[code];
+            return !!(writeCode && window.crmHasPermission(writeCode));
+        };
         const canViewDeliveryLogs = computed(() => !!window.crmIsSuper);
         const loadBrief = () => loadClientBrief(clientId, clientName, clientOwner);
         const settlement = window.CrmDeliveryDetailSettlement.createSettlementState({
@@ -2633,7 +2809,12 @@ createApp({
             employeeFileStatusLabel,
             employeeFileStatusClass,
             employeeFileMediaLabel,
+            employeeFileDocumentTypeLabel,
+            employeeFileLaborContractNoLabel,
+            employeeFileValidUntilLabel,
             employeeFileCanPreview,
+            isLaborContractUpload,
+            employeeFileCanPublish,
             employeeFileDisplayDate,
             openEmployeeFileUploadModal,
             closeEmployeeFileUploadModal,
@@ -2649,6 +2830,7 @@ createApp({
             closeEmployeeFilePreview,
             downloadEmployeeFile,
             removeEmployeeFile,
+            publishEmployeeFile,
             mountEmployeeFiles,
         } = employeeFiles;
         const scrollToTop = () => {
@@ -2684,6 +2866,15 @@ createApp({
             }
             await mountHandbook();
             await mountEmployeeFiles();
+            if (moduleKey === 'employee_files') {
+                await nextTick();
+                document.querySelectorAll('table[data-table-id="employee-files"]').forEach((table) => {
+                    const nameTh = table.querySelector('thead th.employee-files-sticky-name');
+                    if (nameTh && nameTh.offsetWidth > 0) {
+                        table.style.setProperty('--employee-files-sticky-name-width', `${nameTh.offsetWidth}px`);
+                    }
+                });
+            }
             if (moduleKey === 'requirements') {
                 await loadRequirementJobs();
                 await nextTick();
@@ -2735,8 +2926,11 @@ createApp({
             openEmployeeFileUploadModal, closeEmployeeFileUploadModal, triggerEmployeeFileUploadPick,
             onEmployeeFileUploadFileChange, onEmployeeFileUploadDrop, clearEmployeeFileUploadFiles, submitEmployeeFileUpload,
             openEmployeeFilePreview, openEmployeeFilePreviewFromDetail, closeEmployeeFilePreview,
-            employeeFileStatusLabel, employeeFileStatusClass, employeeFileMediaLabel, employeeFileCanPreview, employeeFileDisplayDate,
-            downloadEmployeeFile, removeEmployeeFile,
+            employeeFileStatusLabel, employeeFileStatusClass, employeeFileMediaLabel, employeeFileDocumentTypeLabel,
+            employeeFileLaborContractNoLabel, employeeFileValidUntilLabel,
+            employeeFileCanPreview, employeeFileCanPublish, employeeFileDisplayDate,
+            isLaborContractUpload,
+            downloadEmployeeFile, removeEmployeeFile, publishEmployeeFile,
             settlementRows, settlementFields, settlementCompactFields, settlementTextareaFields,
             showSettlementReminders,
             showForm, editingId, settlementFormReadonly, form,

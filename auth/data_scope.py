@@ -24,7 +24,12 @@ from auth.service import AuthContext
 def get_effective_data_scope(ctx: AuthContext, resource_code: str, action: str) -> str:
     if ctx.is_super:
         return SCOPE_ALL
-    return ctx.role_data_scopes.get((resource_code, action), SCOPE_NONE)
+    scope = ctx.role_data_scopes.get((resource_code, action), SCOPE_NONE)
+    if action == "delete" and scope == SCOPE_NONE:
+        write_scope = ctx.role_data_scopes.get((resource_code, "write"), SCOPE_NONE)
+        if write_scope != SCOPE_NONE:
+            return write_scope
+    return scope
 
 
 def assert_data_scope(ctx: AuthContext, resource_code: str, action: str) -> str:

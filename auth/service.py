@@ -335,7 +335,12 @@ def verify_sys_user_password(db: Session, username: str, password: str) -> Optio
 def user_has_permission(ctx: AuthContext, code: str) -> bool:
     if ctx.is_super:
         return True
-    return code in ctx.permissions
+    if code in ctx.permissions:
+        return True
+    for source_code, delete_code in DELETE_PERMISSION_COMPAT_PAIRS:
+        if code == delete_code and source_code in ctx.permissions:
+            return True
+    return False
 
 
 def audit_log(

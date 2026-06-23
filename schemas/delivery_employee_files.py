@@ -15,3 +15,13 @@ EMPLOYEE_FILE_ALLOWED_SUFFIXES = {
 }
 
 EMPLOYEE_FILE_STATUS_SET = frozenset({"draft", "published", "deprecated"})
+
+EMPLOYEE_FILE_DOCUMENT_TYPES = frozenset({
+    "劳动合同",
+    "入职材料",
+    "离职材料",
+    "员工证件",
+    "其他",
+})
+
+LABOR_CONTRACT_DOCUMENT_TYPE = "劳动合同"

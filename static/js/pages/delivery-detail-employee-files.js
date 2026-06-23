@@ -5,6 +5,7 @@
     'use strict';
 
     const EMPLOYEE_FILE_PAGE_SIZE = 10;
+    const LABOR_CONTRACT_TYPE = '劳动合同';
 
     function createEmployeeFilesState(deps) {
         const {
@@ -29,7 +30,14 @@
         const employeeFileUploading = ref(false);
         const employeeFileUploadError = ref('');
         const employeeFileUploadModalOpen = ref(false);
-        const employeeFileUploadForm = reactive({ status: 'draft' });
+        const employeeFileUploadForm = reactive({
+            status: 'draft',
+            document_type: '其他',
+            employee_full_name: '',
+            employee_contact_info: '',
+            contract_sign_date: '',
+            contract_valid_until: '',
+        });
         const employeeFileUploadFiles = ref([]);
         const employeeFileUploadFileInput = ref(null);
         const employeeFileUploadDragging = ref(false);
@@ -41,6 +49,10 @@
         let employeeFilePreviewBlobUrl = '';
 
         const employeeFileCurrentPage = ref(1);
+
+        const isLaborContractUpload = computed(() =>
+            String(employeeFileUploadForm.document_type || '').trim() === LABOR_CONTRACT_TYPE
+        );
 
         const employeeFileStatusLabel = (s) => ({ draft: '草稿', published: '已发布', deprecated: '已作废' }[s] || s || '—');
         const employeeFileStatusClass = (s) => {
@@ -56,10 +68,27 @@
             if (mk === 'audio') return '音频';
             return mk || '文件';
         };
+        const employeeFileDocumentTypeLabel = (row) => {
+            const dt = String((row && row.document_type) || '').trim();
+            return dt || '—';
+        };
+        const employeeFileIsLaborContract = (row) =>
+            String((row && row.document_type) || '').trim() === LABOR_CONTRACT_TYPE;
+        const employeeFileLaborContractNoLabel = (row) => {
+            if (!employeeFileIsLaborContract(row)) return 'NA';
+            const no = String((row && row.labor_contract_no) || '').trim();
+            return no || '—';
+        };
+        const employeeFileValidUntilLabel = (row) => {
+            if (!employeeFileIsLaborContract(row)) return 'NA';
+            return employeeFileDisplayDate(row && row.contract_valid_until);
+        };
         const employeeFileCanPreview = (row) => {
             const mk = String((row && row.media_kind) || '').toLowerCase();
             return mk === 'pdf' || mk === 'video' || mk === 'audio';
         };
+        const employeeFileCanPublish = (row) =>
+            String((row && row.status) || '').trim() === 'draft';
         const employeeFileDisplayDate = (raw) => {
             if (typeof displayDateSlash === 'function') return displayDateSlash(raw) || '—';
             const s = String(raw || '').trim();
@@ -76,6 +105,10 @@
                 rows = rows.filter((row) => {
                     const hay = [
                         row.original_filename,
+                        row.document_type,
+                        row.employee_full_name,
+                        row.labor_contract_no,
+                        row.contract_valid_until,
                         employeeFileStatusLabel(row.status),
                         employeeFileMediaLabel(row),
                     ].join(' ').toLowerCase();
@@ -129,17 +162,24 @@
 
         const resetEmployeeFileUploadForm = () => {
             employeeFileUploadForm.status = 'draft';
+            employeeFileUploadForm.document_type = '其他';
+            employeeFileUploadForm.employee_full_name = '';
+            employeeFileUploadForm.employee_contact_info = '';
+            employeeFileUploadForm.contract_sign_date = '';
+            employeeFileUploadForm.contract_valid_until = '';
             employeeFileUploadFiles.value = [];
             employeeFileUploadDragging.value = false;
             employeeFileUploadError.value = '';
             if (employeeFileUploadFileInput.value) employeeFileUploadFileInput.value.value = '';
         };
         const openEmployeeFileUploadModal = () => {
+            employeeFileUploading.value = false;
             resetEmployeeFileUploadForm();
             employeeFileUploadModalOpen.value = true;
         };
         const closeEmployeeFileUploadModal = () => {
             employeeFileUploadModalOpen.value = false;
+            employeeFileUploading.value = false;
             resetEmployeeFileUploadForm();
         };
         const triggerEmployeeFileUploadPick = () => {
@@ -148,6 +188,11 @@
         const applyEmployeeFileUploadFiles = (fileList) => {
             const list = Array.from(fileList || []).filter(Boolean);
             if (!list.length) return;
+            if (isLaborContractUpload.value && list.length > 1) {
+                employeeFileUploadError.value = '劳动合同每次只能上传 1 个文件';
+                employeeFileUploadFiles.value = [list[0]];
+                return;
+            }
             employeeFileUploadFiles.value = list;
             employeeFileUploadError.value = '';
         };
@@ -172,29 +217,99 @@
             employeeFiles.value = r.ok ? await r.json() : [];
         };
 
+        const parseUploadError = async (r) => {
+            let msg = '上传失败';
+            try {
+                const j = await r.json();
+                const d = j.detail;
+                if (typeof d === 'string') msg = d;
+                else if (d && typeof d === 'object' && d.message) msg = d.message;
+                else if (Array.isArray(d) && d.length) msg = d.map((x) => x.msg || JSON.stringify(x)).join('；');
+                else if (d) msg = JSON.stringify(d);
+            } catch (err) { /* ignore */ }
+            return msg;
+        };
+
+        const buildUploadFormData = (confirmSameYearRenewal) => {
+            const fd = new FormData();
+            const list = Array.isArray(employeeFileUploadFiles.value) ? employeeFileUploadFiles.value : [];
+            list.forEach((file) => fd.append('files', file));
+            fd.append('status', employeeFileUploadForm.status || 'draft');
+            fd.append('document_type', employeeFileUploadForm.document_type || '其他');
+            if (isLaborContractUpload.value) {
+                fd.append('employee_full_name', employeeFileUploadForm.employee_full_name || '');
+                fd.append('employee_contact_info', employeeFileUploadForm.employee_contact_info || '');
+                fd.append('contract_sign_date', employeeFileUploadForm.contract_sign_date || '');
+                fd.append('contract_valid_until', employeeFileUploadForm.contract_valid_until || '');
+                fd.append('confirm_same_year_renewal', String(confirmSameYearRenewal ? 1 : 0));
+            }
+            return fd;
+        };
+
+        const postEmployeeFileUpload = async (confirmSameYearRenewal) => {
+            const r = await fetch(apiBase, {
+                method: 'POST',
+                headers: hdr(),
+                body: buildUploadFormData(confirmSameYearRenewal),
+            });
+            return r;
+        };
+
         const submitEmployeeFileUpload = async () => {
             const list = Array.isArray(employeeFileUploadFiles.value) ? employeeFileUploadFiles.value : [];
             if (!list.length) {
                 employeeFileUploadError.value = '请选择文件';
                 return;
             }
+            if (isLaborContractUpload.value) {
+                if (list.length > 1) {
+                    employeeFileUploadError.value = '劳动合同每次只能上传 1 个文件';
+                    return;
+                }
+                if (!String(employeeFileUploadForm.employee_full_name || '').trim()) {
+                    employeeFileUploadError.value = '请填写员工姓名';
+                    return;
+                }
+                if (!String(employeeFileUploadForm.employee_contact_info || '').trim()) {
+                    employeeFileUploadError.value = '请填写手机号';
+                    return;
+                }
+            }
             employeeFileUploadError.value = '';
             employeeFileUploading.value = true;
             try {
-                const fd = new FormData();
-                list.forEach((file) => fd.append('files', file));
-                fd.append('status', employeeFileUploadForm.status || 'draft');
-                const r = await fetch(apiBase, { method: 'POST', headers: hdr(), body: fd });
-                if (!r.ok) {
-                    let msg = '上传失败';
+                let r = await postEmployeeFileUpload(0);
+                if (r.status === 409) {
+                    let detail = null;
                     try {
                         const j = await r.json();
-                        const d = j.detail;
-                        if (typeof d === 'string') msg = d;
-                        else if (Array.isArray(d) && d.length) msg = d.map((x) => x.msg || JSON.stringify(x)).join('；');
-                        else if (d) msg = JSON.stringify(d);
+                        detail = j.detail;
                     } catch (err) { /* ignore */ }
-                    employeeFileUploadError.value = msg;
+                    if (detail && detail.code === 'same_year_labor_contract_exists') {
+                        let confirmed = false;
+                        if (typeof window.crmConfirmActionDialog === 'function') {
+                            const result = await window.crmConfirmActionDialog({
+                                title: '同年续约确认',
+                                lines: [{ label: '提示', value: detail.message || '该员工已在本年上传过合同，是否为同年续约？' }],
+                                confirmText: '是',
+                                cancelText: '否',
+                                zIndex: 200,
+                            });
+                            confirmed = !!(result && result.ok);
+                        } else {
+                            confirmed = window.confirm(detail.message || '该员工已在本年上传过合同，是否为同年续约？');
+                        }
+                        if (!confirmed) return;
+                        r = await postEmployeeFileUpload(1);
+                    } else {
+                        if (typeof detail === 'string') employeeFileUploadError.value = detail;
+                        else if (detail && detail.message) employeeFileUploadError.value = detail.message;
+                        else employeeFileUploadError.value = '上传失败';
+                        return;
+                    }
+                }
+                if (!r.ok) {
+                    employeeFileUploadError.value = await parseUploadError(r);
                     return;
                 }
                 closeEmployeeFileUploadModal();
@@ -279,20 +394,36 @@
         };
 
         const removeEmployeeFile = async (row) => {
+            const isLabor = String((row && row.document_type) || '').trim() === LABOR_CONTRACT_TYPE;
+            const isLaborDraft = isLabor && String((row && row.status) || '').trim() === 'draft';
+            const isLaborVoid = isLabor && !isLaborDraft;
             if (typeof window.crmConfirmDeleteDialog === 'function') {
                 const ok = await window.crmConfirmDeleteDialog({
-                    title: '确认删除文件',
-                    target: row.original_filename || '该文件',
-                    hint: '删除后将从当前员工文件列表移除。',
+                    title: isLaborVoid ? '确认作废文件' : '确认删除文件',
+                    targetText: isLaborVoid
+                        ? `将作废：${row.original_filename || '该文件'}`
+                        : `将删除：${row.original_filename || '该文件'}`,
+                    hint: isLaborVoid
+                        ? '作废后记录与劳动合同编号将保留。'
+                        : (isLaborDraft
+                            ? '草稿劳动合同删除后编号可重新使用。'
+                            : '删除后将从当前员工文件列表移除。'),
+                    confirmText: isLaborVoid ? '确认作废' : '确认删除',
                 });
                 if (!ok) return;
-            } else if (!window.confirm(`确认删除文件「${row.original_filename || ''}」？`)) {
+            } else if (!window.confirm(`确认${isLaborVoid ? '作废' : '删除'}文件「${row.original_filename || ''}」？`)) {
                 return;
             }
             const r = await fetch(`${apiBase}/${row.id}`, { method: 'DELETE', headers: hdr() });
             if (!r.ok) {
-                if (window.crmToast) window.crmToast.error('删除失败');
-                else alert('删除失败');
+                let msg = isLaborVoid ? '作废失败' : '删除失败';
+                try {
+                    const body = await r.json();
+                    const detail = body && body.detail;
+                    if (typeof detail === 'string' && detail.trim()) msg = detail.trim();
+                } catch (_) {}
+                if (window.crmToast) window.crmToast.error(msg);
+                else alert(msg);
                 return;
             }
             if (employeeFileDetailRow.value && employeeFileDetailRow.value.id === row.id) {
@@ -304,9 +435,55 @@
             await loadEmployeeFiles();
         };
 
+        const publishEmployeeFile = async (row) => {
+            if (!employeeFileCanPublish(row)) return;
+            const isLabor = String((row && row.document_type) || '').trim() === LABOR_CONTRACT_TYPE;
+            const hint = isLabor
+                ? '发布后劳动合同编号将锁定；若需移除，删除时将作废并保留记录。'
+                : '发布后若需移除，删除时将作废并保留记录。';
+            if (typeof window.crmConfirmDeleteDialog === 'function') {
+                const ok = await window.crmConfirmDeleteDialog({
+                    title: '确认发布',
+                    targetText: `将发布：${row.original_filename || '该文件'}`,
+                    hint,
+                    confirmText: '确认发布',
+                });
+                if (!ok) return;
+            } else if (!window.confirm(`确认发布文件「${row.original_filename || ''}」？`)) {
+                return;
+            }
+            const r = await fetch(`${apiBase}/${row.id}`, {
+                method: 'PATCH',
+                headers: { ...hdr(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'published' }),
+            });
+            if (!r.ok) {
+                let msg = '发布失败';
+                try {
+                    const body = await r.json();
+                    const detail = body && body.detail;
+                    if (typeof detail === 'string' && detail.trim()) msg = detail.trim();
+                } catch (_) {}
+                if (window.crmToast) window.crmToast.error(msg);
+                else alert(msg);
+                return;
+            }
+            const updated = await r.json().catch(() => null);
+            if (employeeFileDetailRow.value && employeeFileDetailRow.value.id === row.id && updated) {
+                employeeFileDetailRow.value = updated;
+            }
+            await loadEmployeeFiles();
+            if (window.crmToast) window.crmToast.success('已发布');
+        };
+
         const mountEmployeeFiles = async () => {
             if (moduleKey !== 'employee_files') return;
             await loadEmployeeFiles();
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => {
+                    window.crmScheduleTableColumnResize?.(document.getElementById('delivery-detail-app'));
+                });
+            }
         };
 
         return {
@@ -330,6 +507,7 @@
             employeeFileUploadSelectedSummary,
             employeeFileUploading,
             employeeFileUploadError,
+            isLaborContractUpload,
             employeeFileDetailRow,
             employeeFilePreviewRow,
             employeeFilePreviewUrl,
@@ -338,7 +516,11 @@
             employeeFileStatusLabel,
             employeeFileStatusClass,
             employeeFileMediaLabel,
+            employeeFileDocumentTypeLabel,
+            employeeFileLaborContractNoLabel,
+            employeeFileValidUntilLabel,
             employeeFileCanPreview,
+            employeeFileCanPublish,
             employeeFileDisplayDate,
             loadEmployeeFiles,
             openEmployeeFileUploadModal,
@@ -355,6 +537,7 @@
             closeEmployeeFilePreview,
             downloadEmployeeFile,
             removeEmployeeFile,
+            publishEmployeeFile,
             mountEmployeeFiles,
         };
     }

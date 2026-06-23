@@ -98,6 +98,7 @@ ROLE_DEFAULT_PERMISSIONS: dict[str, FrozenSet[str]] = {
         "delivery.handbook.write",
         "delivery.employee_files.read",
         "delivery.employee_files.write",
+        "delivery.employee_files.delete",
         "delivery.handoff.read",
         "delivery.handoff.write",
         "delivery.handoff.review",

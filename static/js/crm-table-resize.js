@@ -431,6 +431,10 @@
             table.style.setProperty('--req-sticky-title-width', px(0));
             return;
         }
+        if (table.dataset.tableId === 'employee-files') {
+            table.style.setProperty('--employee-files-sticky-name-width', px(0));
+            return;
+        }
         if (table.dataset.tableId === 'customer-visits') {
             // 冻结前三列（拜访对象/客户/销售）：left = 之前各列宽度累加
             let acc = 0;

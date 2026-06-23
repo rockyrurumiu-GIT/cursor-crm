@@ -596,6 +596,14 @@ class DeliveryEmployeeFile(Base):
     stored_path = Column(String, default="")
     status = Column(String, default="draft")
     media_kind = Column(String, default="")
+    document_type = Column(String, default="")
+    employee_full_name = Column(String, default="")
+    employee_contact_info = Column(String, default="")
+    roster_entry_id = Column(Integer, nullable=True)
+    throme_staff_no = Column(String, default="")
+    labor_contract_no = Column(String, default="")
+    contract_sign_date = Column(String, default="")
+    contract_valid_until = Column(String, default="")
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -924,6 +932,39 @@ def _ensure_rms_jobs_schema_compat():
 _ensure_roster_schema_compat()
 _ensure_interview_schema_compat()
 _ensure_handbook_schema_compat()
+
+
+def _ensure_employee_files_schema_compat():
+    """旧库 delivery_employee_files 补齐劳动合同相关列。"""
+    with engine.begin() as conn:
+        try:
+            existing = {
+                r[1] for r in conn.exec_driver_sql("PRAGMA table_info(delivery_employee_files)").fetchall()
+            }
+        except Exception:
+            return
+        add_cols = {
+            "document_type": "TEXT DEFAULT ''",
+            "employee_full_name": "TEXT DEFAULT ''",
+            "employee_contact_info": "TEXT DEFAULT ''",
+            "roster_entry_id": "INTEGER",
+            "throme_staff_no": "TEXT DEFAULT ''",
+            "labor_contract_no": "TEXT DEFAULT ''",
+            "contract_sign_date": "TEXT DEFAULT ''",
+            "contract_valid_until": "TEXT DEFAULT ''",
+        }
+        for col, ddl in add_cols.items():
+            if col not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE delivery_employee_files ADD COLUMN {col} {ddl}")
+        conn.exec_driver_sql(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_delivery_employee_files_labor_contract_no
+            ON delivery_employee_files(labor_contract_no)
+            WHERE labor_contract_no IS NOT NULL AND labor_contract_no != ''
+            """
+        )
+
+
 _ensure_handbook_fts_schema()
 _ensure_handoff_phase2_schema_compat()
 _ensure_opportunities_schema_compat()
@@ -933,6 +974,7 @@ _ensure_visits_schema_compat()
 _ensure_contracts_schema_compat()
 
 run_schema_migrations(engine)
+_ensure_employee_files_schema_compat()
 _ensure_rms_jobs_schema_compat()
 
 
@@ -1407,6 +1449,7 @@ register_delivery_employee_file_routes(
     get_db=get_db,
     Client=Client,
     DeliveryEmployeeFile=DeliveryEmployeeFile,
+    RosterEntry=RosterEntry,
     AuditLog=AuditLog,
     upload_dir=UPLOAD_DIR,
     max_file_size=MAX_FILE_SIZE,
