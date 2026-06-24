@@ -3,7 +3,12 @@
 {% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
 <style>
-    .rms-tab-active { background: #eef2ff; color: #1f2328; font-weight: 600; border-color: #d0d7de; }
+    .rms-tab-active {
+        color: #0f766e;
+        font-weight: 600;
+        background: linear-gradient(180deg, rgba(34, 211, 166, 0.16) 0%, rgba(34, 211, 166, 0.06) 100%);
+        border-color: rgba(34, 211, 166, 0.28);
+    }
     .rms-job-form-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.75rem 1rem; }
     .rms-job-form-grid > label { grid-column: span 1; }
     .rms-job-form-grid > .rms-field-full { grid-column: 1 / -1; }
@@ -1052,9 +1057,6 @@
 
     <!-- Jobs -->
     <section v-show="activeTab === 'jobs' && viewMode !== 'candidateReport'" class="space-y-4">
-        <div>
-            <h2 class="text-lg font-semibold text-[#1A1D1F]">岗位</h2>
-        </div>
         <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <div class="flex flex-wrap items-center gap-2">
                 <div class="relative w-full sm:w-[280px]">
@@ -1183,9 +1185,6 @@
 
     <!-- Candidates -->
     <section v-show="activeTab === 'candidates' && viewMode !== 'candidateReport'" class="space-y-4" data-rms-region="candidates">
-        <div>
-            <h2 class="text-lg font-semibold text-[#1A1D1F]">候选人</h2>
-        </div>
         <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <div class="flex flex-wrap items-center gap-2">
                 <div class="relative w-full sm:w-[280px]">
@@ -1321,9 +1320,6 @@
     </section>
     <!-- Applications -->
     <section v-show="activeTab === 'applications' && viewMode !== 'candidateReport'" class="space-y-4" data-rms-region="applications">
-        <div>
-            <h2 class="text-lg font-semibold text-[#1A1D1F]">推荐记录</h2>
-        </div>
         <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <div class="flex flex-wrap items-center gap-2">
                 <div class="relative w-full sm:w-[280px]">
@@ -1468,9 +1464,6 @@
     </section>
     <!-- Delivery review -->
     <section v-if="canUseRmsDeliveryOpsTabs" v-show="activeTab === 'deliveryReview' && viewMode !== 'candidateReport'" class="space-y-4">
-        <div>
-            <h2 class="text-lg font-semibold text-[#1A1D1F]">交付内审</h2>
-        </div>
         <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <div class="flex flex-wrap items-center gap-2">
                 <div class="relative w-full sm:w-[280px]">
@@ -1558,9 +1551,6 @@
     </section>
     <!-- Pipeline (delivery progress) -->
     <section v-if="canUseRmsDeliveryOpsTabs" v-show="activeTab === 'pipeline' && viewMode !== 'candidateReport'" class="space-y-4" data-rms-region="pipeline">
-        <div>
-            <h2 class="text-lg font-semibold text-[#1A1D1F]">招聘pipeline-候选人状态（交付）</h2>
-        </div>
         <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <div class="flex flex-wrap items-center gap-2">
                 <div class="relative w-full sm:w-[280px]">
@@ -1715,9 +1705,6 @@
     </section>
     <!-- Offer management -->
     <section v-show="activeTab === 'offerManagement' && viewMode !== 'candidateReport'" class="space-y-4">
-        <div>
-            <h2 class="text-lg font-semibold text-[#1A1D1F]">Offer 管理</h2>
-        </div>
         <div class="rounded-lg border border-[#E5E7EB] bg-white p-2.5 shadow-[0_1px_2px_rgba(16,24,40,0.04)]">
             <div class="flex flex-wrap items-center gap-2">
                 <div class="relative w-full sm:w-[280px]">

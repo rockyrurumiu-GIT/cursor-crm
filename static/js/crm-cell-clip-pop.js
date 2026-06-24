@@ -106,15 +106,34 @@
         return out;
     }
 
-    function popWidthPx(clip, rect) {
+    function tableStickyHeadBottom(cell) {
+        const table = cell && cell.closest('table');
+        if (!table || !table.closest('.crm-table-scroll')) return 0;
+        const thead = table.querySelector('thead');
+        if (!thead) return 0;
+        return thead.getBoundingClientRect().bottom;
+    }
+
+    function popWidthPx(clip, cellRect, pop) {
         const vw = window.innerWidth;
         const pad = VIEWPORT_PAD;
         const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-        // 适当放宽（默认约 26em），列更宽时取列宽，但都不溢出视口
         const maxW = vw - pad * 2;
         const preferred = Math.min(26 * rootPx, maxW);
-        const width = Math.max(rect.width, preferred);
-        return Math.min(width, maxW);
+        let contentW = 0;
+        if (pop) {
+            const prevWidth = pop.style.width;
+            const prevMaxWidth = pop.style.maxWidth;
+            pop.style.width = 'max-content';
+            pop.style.maxWidth = `${maxW}px`;
+            contentW = pop.scrollWidth;
+            pop.style.width = prevWidth;
+            pop.style.maxWidth = prevMaxWidth;
+        }
+        const target = contentW
+            ? Math.max(cellRect.width, Math.min(preferred, contentW))
+            : Math.max(cellRect.width, preferred);
+        return Math.min(target, maxW);
     }
 
     function popLeftPx(clip, rect, width) {
@@ -131,22 +150,26 @@
         const cell = clip.closest('td, .visit-td');
         if (!pop || !cell) return;
 
-        const rect = cell.getBoundingClientRect();
+        const anchor = clip.getBoundingClientRect();
+        const cellRect = cell.getBoundingClientRect();
         const vh = window.innerHeight;
         const pad = VIEWPORT_PAD;
-        const spaceBelow = vh - rect.top - pad;
-        const spaceAbove = rect.bottom - pad;
+        const headBottom = tableStickyHeadBottom(cell);
+        const minTop = headBottom > 0 ? headBottom + 2 : pad;
+        const anchorTop = Math.max(anchor.top, minTop);
+        const spaceBelow = vh - anchorTop - pad;
+        const spaceAbove = anchor.bottom - minTop;
         const viewportMax = vh - pad * 2;
-        const width = popWidthPx(clip, rect);
+        const width = popWidthPx(clip, cellRect, pop);
 
-        pop.style.left = `${popLeftPx(clip, rect, width)}px`;
+        pop.style.left = `${popLeftPx(clip, anchor, width)}px`;
         pop.style.width = `${width}px`;
         pop.style.overflowY = 'auto';
         pop.style.pointerEvents = 'auto';
 
         // 用最终宽度测量全文所需高度（含 +2px 缓冲，避免最后一行被裁）
         pop.style.visibility = 'hidden';
-        pop.style.top = `${rect.top}px`;
+        pop.style.top = `${anchorTop}px`;
         pop.style.maxHeight = `${viewportMax}px`;
         const needH = pop.scrollHeight + 2;
         pop.style.visibility = '';
@@ -154,26 +177,26 @@
         let top;
         let maxH;
         if (needH <= spaceBelow) {
-            top = rect.top;
+            top = anchorTop;
             maxH = needH;
         } else if (needH <= spaceAbove) {
-            top = rect.bottom - needH;
+            top = Math.max(minTop, anchor.bottom - needH);
             maxH = needH;
         } else if (spaceAbove >= spaceBelow) {
-            top = pad;
+            top = minTop;
             maxH = Math.max(80, spaceAbove);
         } else {
-            top = rect.top;
+            top = anchorTop;
             maxH = Math.max(80, spaceBelow);
         }
 
         maxH = Math.min(Math.max(80, maxH), viewportMax);
-        top = Math.max(pad, Math.min(top, vh - maxH - pad));
+        top = Math.max(minTop, Math.min(top, vh - maxH - pad));
 
         pop.style.top = `${top}px`;
         pop.style.maxHeight = `${maxH}px`;
 
-        showCopyBtn(parseFloat(pop.style.left) || rect.left, top, width);
+        showCopyBtn(parseFloat(pop.style.left) || anchor.left, top, width);
     }
 
     function resetPortalPop(pop) {

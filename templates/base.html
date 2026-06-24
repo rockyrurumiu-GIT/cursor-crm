@@ -684,12 +684,8 @@
             left: auto;
             right: 0;
         }
-        .crm-cell-clip.is-pop-open > .crm-cell-clip-text {
-            visibility: hidden;
-        }
-        .crm-cell-clip.is-pop-open > .crm-cell-clip-pop {
-            display: block;
-        }
+        /* 浮层 portal 到 body 固定定位显示（见 .crm-cell-clip-pop--fixed），
+           单元格内原文继续保留（截断+省略号），不再隐藏，否则悬停时单元格会变空白。 */
         /* JD 等列内展开：JS 用 fixed 定位，避免被表格滚动区 overflow 裁切 */
         .crm-cell-clip-pop.crm-cell-clip-pop--fixed {
             position: fixed !important;
@@ -704,7 +700,8 @@
             -webkit-overflow-scrolling: touch;
             font-size: 0.8125rem;
             line-height: 1.5;
-            padding: 0.5rem 0.7rem;
+            /* 右侧留空给复制按钮（26px 按钮 + 10px 内边距 + 间距） */
+            padding: 0.5rem 2.75rem 0.5rem 0.7rem;
         }
         /* 悬停框右上角的复制按钮（JS fixed 定位，见 crm-cell-clip-pop.js） */
         .crm-clip-copy-btn {
@@ -2999,6 +2996,6 @@
     </script>
     {% block page_scripts %}{% endblock %}
     <script src="/static/js/crm-table-resize.js?v=33"></script>
-    <script src="/static/js/crm-cell-clip-pop.js?v=12"></script>
+    <script src="/static/js/crm-cell-clip-pop.js?v=14"></script>
 </body>
 </html>

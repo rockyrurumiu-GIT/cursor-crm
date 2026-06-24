@@ -1053,10 +1053,6 @@
             <div class="px-5 py-4 border-b border-gray-200 flex justify-between items-start gap-3 shrink-0">
                 <div class="min-w-0">
                     <h3 id="roster-validation-title" class="text-lg font-bold text-gray-900">{{ validationScope }} · 花名册校验</h3>
-                    <p class="text-sm text-gray-500 mt-1">
-                        <template v-if="validationFindings.length">当前筛选范围内发现 {{ validationFindings.length }} 条矛盾或疑点</template>
-                        <template v-else>当前筛选范围内未发现矛盾或疑点</template>
-                    </p>
                 </div>
                 <button type="button" class="text-2xl text-gray-400 hover:text-gray-700 leading-none shrink-0" @click="closeValidation">&times;</button>
             </div>
