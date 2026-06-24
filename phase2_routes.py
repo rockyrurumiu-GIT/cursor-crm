@@ -409,7 +409,7 @@ def register_phase2_routes(
     @app.get("/api/contracts/form-options")
     async def contract_form_options(
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("crm.opportunities.read")),
+        user: str = Depends(require_permission("crm.contracts.read")),
     ):
         return contract_file_svc.list_form_options(db, Client)
 
@@ -420,7 +420,7 @@ def register_phase2_routes(
         expires_before: Optional[str] = None,
         q: Optional[str] = None,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("crm.opportunities.read")),
+        user: str = Depends(require_permission("crm.contracts.read")),
     ):
         return contract_file_svc.list_contract_rows(
             db,
@@ -446,7 +446,7 @@ def register_phase2_routes(
         file: UploadFile = File(...),
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(require_permission("crm.opportunities.write")),
+        user: str = Depends(require_permission("crm.contracts.write")),
     ):
         effective_end_date = (expires_at or end_date).strip()
         return await contract_file_svc.create_contract_with_file(
@@ -477,7 +477,7 @@ def register_phase2_routes(
         end_date: str = Form(default=""),
         remarks: str = Form(default=""),
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("crm.opportunities.write")),
+        user: str = Depends(require_permission("crm.contracts.write")),
     ):
         effective_end_date = (expires_at or end_date).strip()
         return contract_file_svc.update_contract_metadata(
@@ -497,7 +497,7 @@ def register_phase2_routes(
     async def delete_contract_upload(
         contract_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("crm.opportunities.write")),
+        user: str = Depends(require_permission("crm.contracts.delete")),
     ):
         return contract_file_svc.delete_contract(
             db,
@@ -514,7 +514,7 @@ def register_phase2_routes(
         file: UploadFile = File(...),
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
-        user: str = Depends(require_permission("crm.opportunities.write")),
+        user: str = Depends(require_permission("crm.contracts.write")),
     ):
         return await contract_file_svc.replace_contract_file(
             db,
@@ -531,7 +531,7 @@ def register_phase2_routes(
     async def download_contract_upload(
         contract_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("crm.opportunities.read")),
+        user: str = Depends(require_permission("crm.contracts.download")),
     ):
         return contract_file_svc.download_contract_file(
             db,
@@ -544,7 +544,7 @@ def register_phase2_routes(
     async def preview_contract_upload(
         contract_id: int,
         db: Session = Depends(get_db),
-        user: str = Depends(require_permission("crm.opportunities.read")),
+        user: str = Depends(require_permission("crm.contracts.read")),
     ):
         return contract_file_svc.preview_contract_file(
             db,

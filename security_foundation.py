@@ -44,6 +44,10 @@ def allow_default_admin() -> bool:
     return os.environ.get("CRM_ALLOW_DEFAULT_ADMIN", "").strip().lower() in _TRUTHY
 
 
+def cookie_secure() -> bool:
+    return os.environ.get("CRM_COOKIE_SECURE", "").strip().lower() in _TRUTHY
+
+
 def default_admin_password_allowed(
     *,
     credentials_store_path: str,

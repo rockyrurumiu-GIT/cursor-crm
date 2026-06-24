@@ -1,7 +1,7 @@
 {% set path = request.url.path %}
 <nav class="flex items-stretch gap-0 flex-wrap md:flex-nowrap">
     <!-- 首页 -->
-    <div class="gh-nav-item{% if path.startswith('/materials') or path.startswith('/contracts') or path.startswith('/dashboards') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,materials.read,materials.public.read,materials.internal.read,dashboard.read">
+    <div class="gh-nav-item{% if path.startswith('/materials') or path.startswith('/contracts') or path.startswith('/dashboards') %} nav-active{% endif %}" data-crm-nav-any="crm.clients.read,crm.contracts.read,materials.read,materials.public.read,materials.internal.read,dashboard.read">
         <span class="nav-trigger cursor-default">公司
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
@@ -11,7 +11,7 @@
                     <div>
                         <div class="gh-mega-col-h">数字资产</div>
                         <a class="gh-mega-link" href="/materials" data-crm-nav-any="materials.read,materials.public.read,materials.internal.read">公司资料库</a>
-                        <a class="gh-mega-link" href="/contracts">合同管理</a>
+                        <a class="gh-mega-link" href="/contracts" data-crm-nav-perm="crm.contracts.read">合同管理</a>
                         <a class="gh-mega-link" href="/dashboards" data-crm-nav-perm="dashboard.read">仪表盘</a>
                     </div>
                 </div>

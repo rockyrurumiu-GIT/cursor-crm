@@ -120,6 +120,10 @@ DELIVERY_RESOURCE_CODES: FrozenSet[str] = frozenset(
 )
 
 SYSTEM_PERMISSIONS: FrozenSet[str] = frozenset({
+    "crm.contracts.read",
+    "crm.contracts.write",
+    "crm.contracts.delete",
+    "crm.contracts.download",
     "system.users.manage",
     "system.users.delete",
     "system.roles.manage",

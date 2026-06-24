@@ -1,0 +1,16 @@
+[Unit]
+Description=BMS (Throme CRM)
+After=network.target
+
+[Service]
+Type=simple
+User=rocky
+Group=rocky
+WorkingDirectory=/home/rocky/BMS
+EnvironmentFile=/etc/bms/bms.env
+ExecStart=/home/rocky/BMS/venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8001
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -49,3 +49,5 @@ playwright-report/
 output/
 tests/_pytest_*.db
 tests/_pytest_*.json
+
+.cursor/

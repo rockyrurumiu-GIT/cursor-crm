@@ -118,6 +118,7 @@ def _set_session_cookie(resp: JSONResponse, ctx: AuthContext, db: Session) -> No
         token,
         httponly=True,
         samesite="lax",
+        secure=sec.cookie_secure(),
         max_age=SESSION_MAX_AGE,
         path="/",
     )

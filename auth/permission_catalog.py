@@ -27,6 +27,16 @@ _MATRIX_ROWS: List[Dict[str, Any]] = [
         "approve": [],
     },
     {
+        "module": "contracts",
+        "module_label": "合同",
+        "label": "合同管理",
+        "read": ["crm.contracts.read"],
+        "write": ["crm.contracts.write"],
+        "delete": ["crm.contracts.delete"],
+        "import_export": ["crm.contracts.download"],
+        "approve": [],
+    },
+    {
         "module": "customers",
         "module_label": "客户",
         "label": "联系人",

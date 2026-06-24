@@ -1132,6 +1132,7 @@ async def api_auth_legacy_bootstrap(
         token,
         httponly=True,
         samesite="lax",
+        secure=sec.cookie_secure(),
         max_age=7 * 86400,
         path="/",
     )
@@ -1143,6 +1144,7 @@ async def api_auth_legacy_bootstrap(
             session_token,
             httponly=True,
             samesite="lax",
+            secure=sec.cookie_secure(),
             max_age=auth_service.SESSION_MAX_AGE,
             path="/",
         )
@@ -1152,8 +1154,8 @@ async def api_auth_legacy_bootstrap(
 @app.post("/api/auth/logout")
 async def api_auth_logout():
     resp = JSONResponse({"ok": True})
-    resp.delete_cookie(sec.LEGACY_COOKIE_NAME, path="/")
-    resp.delete_cookie(auth_service.SESSION_COOKIE_NAME, path="/")
+    resp.delete_cookie(sec.LEGACY_COOKIE_NAME, path="/", secure=sec.cookie_secure())
+    resp.delete_cookie(auth_service.SESSION_COOKIE_NAME, path="/", secure=sec.cookie_secure())
     return resp
 
 

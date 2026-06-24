@@ -1,0 +1,8 @@
+[Unit]
+Description=BMS daily backup (SQLite + uploads)
+
+[Service]
+Type=oneshot
+User=rocky
+Group=rocky
+ExecStart=/usr/local/bin/bms_backup.sh

@@ -139,6 +139,8 @@ createApp({
         const previewLoading = ref(false);
         let previewBlobUrl = '';
         const canWriteContracts = ref(false);
+        const canDeleteContracts = ref(false);
+        const canDownloadContracts = ref(false);
 
         const filteredItems = computed(() => items.value);
         const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / pageSize)));
@@ -202,8 +204,11 @@ createApp({
         });
 
         function refreshContractPermissions() {
-            canWriteContracts.value = !!window.crmIsSuper
-                || !!(window.crmHasPermission && window.crmHasPermission('crm.opportunities.write'));
+            const isSuper = !!window.crmIsSuper;
+            const has = (code) => isSuper || !!(window.crmHasPermission && window.crmHasPermission(code));
+            canWriteContracts.value = has('crm.contracts.write');
+            canDeleteContracts.value = has('crm.contracts.delete');
+            canDownloadContracts.value = has('crm.contracts.download');
         }
 
         async function loadFormOptions() {
@@ -481,8 +486,17 @@ createApp({
             revokePreviewBlob();
         };
 
+        function downloadContract(row) {
+            if (!canDownloadContracts.value) {
+                alert('无权限下载合同');
+                return;
+            }
+            if (!row || !row.id || !row.has_attachment) return;
+            window.location.href = '/api/contracts/' + row.id + '/download';
+        }
+
         const deleteContract = async (row) => {
-            if (!canWriteContracts.value) {
+            if (!canDeleteContracts.value) {
                 alert('无权限删除合同');
                 return;
             }
@@ -583,6 +597,8 @@ createApp({
             previewErrorMessage,
             previewLoading,
             canWriteContracts,
+            canDeleteContracts,
+            canDownloadContracts,
             loadContracts,
             resetFilters,
             openCreate,
@@ -599,6 +615,7 @@ createApp({
             closeDetail,
             openPreview,
             closePreview,
+            downloadContract,
             deleteContract,
             seed,
             displayAmount,
