@@ -161,8 +161,12 @@ def visible_client_ids(
     client_model: Type[Any],
     action: str = "read",
 ) -> Optional[Set[int]]:
-    """Union of client ids visible via any mapped resource the user may access."""
-    from auth.data_scope_catalog import PERMISSION_TO_RESOURCE, RESOURCE_FILE
+    """Union of client ids visible for CRM/delivery lists (crm.* + delivery.* scopes only)."""
+    from auth.data_scope_catalog import (
+        CLIENT_LIST_VISIBILITY_RESOURCES,
+        PERMISSION_TO_RESOURCE,
+        RESOURCE_FILE,
+    )
 
     if ctx.is_super:
         return None
@@ -172,6 +176,8 @@ def visible_client_ids(
         if perm not in ctx.permissions:
             continue
         if resource == RESOURCE_FILE:
+            continue
+        if resource not in CLIENT_LIST_VISIBILITY_RESOURCES:
             continue
         if action == "export":
             if not (perm.endswith(".read") or perm.endswith(".write")):

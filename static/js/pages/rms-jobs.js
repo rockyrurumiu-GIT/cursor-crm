@@ -274,8 +274,6 @@
         { label: "城市", value: (jobForm.location || "").trim() },
         { label: "学历", value: (jobForm.education || "").trim() },
         { label: "加班/差旅", value: (jobForm.overtime_travel || "").trim() },
-        { label: "客户部门", value: (jobForm.department || "").trim() },
-        { label: "面试官", value: (jobForm.interviewer || "").trim() },
         {
           label: "招聘",
           value: jobForm.owner_user_id,

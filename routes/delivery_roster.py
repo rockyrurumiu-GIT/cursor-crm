@@ -12,6 +12,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from auth import data_scope as ds
+from auth.data_scope_catalog import RESOURCE_DELIVERY_ROSTER
 from auth.deps import _require_super_admin, get_current_context, require_permission
 from auth.service import AuthContext
 from schemas.delivery_roster import (
@@ -158,8 +160,12 @@ def register_delivery_roster_routes(
     async def roster_list(
         client_id: int,
         db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("delivery.roster.read")),
     ):
+        ds.assert_client_in_scope(
+            db, ctx, client_id, Client, RESOURCE_DELIVERY_ROSTER, "read"
+        )
         c = db.query(Client).filter(Client.id == client_id).first()
         if not c:
             raise HTTPException(status_code=404, detail="客户不存在")
@@ -175,8 +181,12 @@ def register_delivery_roster_routes(
     async def roster_export_csv(
         client_id: int,
         db: Session = Depends(get_db),
+        ctx: AuthContext = Depends(get_current_context),
         user: str = Depends(require_permission("delivery.roster.read")),
     ):
+        ds.assert_client_in_scope(
+            db, ctx, client_id, Client, RESOURCE_DELIVERY_ROSTER, "read"
+        )
         c = db.query(Client).filter(Client.id == client_id).first()
         if not c:
             raise HTTPException(status_code=404, detail="客户不存在")

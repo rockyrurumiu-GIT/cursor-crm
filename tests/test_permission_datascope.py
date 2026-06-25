@@ -8,13 +8,17 @@ import pytest
 from sqlalchemy import text
 from starlette.testclient import TestClient
 
-from auth.data_scope import apply_client_scope, get_effective_data_scope, merge_scope_types
+from auth.data_scope import apply_client_scope, get_effective_data_scope, merge_scope_types, visible_client_ids
 from auth.data_scope_catalog import (
     RESOURCE_CRM_CLIENT,
     RESOURCE_DELIVERY_EMPLOYEE_FILES,
+    RESOURCE_DELIVERY_ROSTER,
+    RESOURCE_RMS_JOB,
+    RESOURCE_RMS_RESUME,
     SCOPE_ALL,
     SCOPE_ASSIGNED,
     SCOPE_DEPT,
+    SCOPE_DEPT_AND_CHILD,
     SCOPE_NONE,
 )
 from auth.permissions import ROLE_DELIVERY
@@ -620,3 +624,131 @@ def test_migration_006_idempotent_second_run(client):
             {"id": "006_client_recruitment_owner.sql"},
         ).scalar()
     assert int(count or 0) == 1
+
+
+def test_visible_client_ids_ignores_rms_scopes(client_rbac):
+    """CRM/delivery client lists must not widen from rms.resume=all or rms.job dept scopes."""
+    import main as crm_main
+    from sqlalchemy.orm import sessionmaker
+
+    suffix = os.getpid()
+    delivery_uid = 981000 + (suffix % 1000)
+    other_uid = delivery_uid + 1
+    dept_id = 981100 + (suffix % 1000)
+
+    engine = crm_main.engine
+    now = "2026-06-25T00:00:00Z"
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT OR IGNORE INTO sys_dept "
+                "(id, name, code, parent_id, path, dept_type, status, created_at, updated_at) "
+                "VALUES (:id, :name, :code, NULL, :path, 'business', 'active', :at, :at)"
+            ),
+            {
+                "id": dept_id,
+                "name": f"交付部_{suffix}",
+                "code": f"DEL_{suffix}",
+                "path": f"ROOT/DELIVERY_{suffix}",
+                "at": now,
+            },
+        )
+
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    Client = crm_main.Client
+    try:
+        owned = Client(
+            name=f"交付负责_{suffix}",
+            industry="IT",
+            owner="admin",
+            scale="100",
+            phase="成交",
+            description="d",
+            delivery_owner_user_id=delivery_uid,
+            delivery_dept_id=dept_id,
+        )
+        shared_dept = Client(
+            name=f"同部门他人负责_{suffix}",
+            industry="IT",
+            owner="admin",
+            scale="100",
+            phase="成交",
+            description="d",
+            delivery_owner_user_id=other_uid,
+            delivery_dept_id=dept_id,
+        )
+        db.add_all([owned, shared_dept])
+        db.commit()
+
+        ctx = AuthContext(
+            username=f"scope_mix_{suffix}",
+            user_id=delivery_uid,
+            permissions={
+                "crm.clients.read",
+                "delivery.roster.read",
+                "rms.resumes.read",
+                "rms.jobs.read",
+            },
+            dept_ids=[dept_id],
+            primary_dept_id=dept_id,
+            role_data_scopes={
+                (RESOURCE_CRM_CLIENT, "read"): SCOPE_ASSIGNED,
+                (RESOURCE_DELIVERY_ROSTER, "read"): SCOPE_ASSIGNED,
+                (RESOURCE_RMS_RESUME, "read"): SCOPE_ALL,
+                (RESOURCE_RMS_JOB, "read"): SCOPE_DEPT_AND_CHILD,
+            },
+        )
+        ids = visible_client_ids(db, ctx, Client, action="read")
+        assert ids is not None
+        assert owned.id in ids
+        assert shared_dept.id not in ids
+    finally:
+        db.close()
+
+
+def test_roster_list_requires_delivery_roster_scope(client_rbac, admin_auth):
+    suffix = os.getpid()
+    delivery_a = f"roster_scope_a_{suffix}"
+    delivery_b = f"roster_scope_b_{suffix}"
+    uid_a = _create_user(client_rbac, admin_auth, delivery_a, ["DELIVERY"])
+    uid_b = _create_user(client_rbac, admin_auth, delivery_b, ["DELIVERY"])
+    admin_user, admin_pwd = admin_auth
+    headers = auth_header(admin_user, admin_pwd)
+
+    c1 = client_rbac.post(
+        "/api/clients",
+        headers=headers,
+        data={
+            "name": f"花名册A_{suffix}",
+            "industry": "IT",
+            "owner": "admin",
+            "scale": "100",
+            "phase": "成交",
+            "description": "d",
+        },
+    )
+    c2 = client_rbac.post(
+        "/api/clients",
+        headers=headers,
+        data={
+            "name": f"花名册B_{suffix}",
+            "industry": "IT",
+            "owner": "admin",
+            "scale": "100",
+            "phase": "成交",
+            "description": "d",
+        },
+    )
+    assert c1.status_code == 200 and c2.status_code == 200
+    cid_a, cid_b = c1.json()["id"], c2.json()["id"]
+    import main as crm_main
+
+    _set_client_owner(crm_main.engine, cid_a, uid_a, delivery_owner_user_id=uid_a)
+    _set_client_owner(crm_main.engine, cid_b, uid_b, delivery_owner_user_id=uid_b)
+
+    login_a = _login(client_rbac, delivery_a, "pass1234")
+    ok = client_rbac.get(f"/api/clients/{cid_a}/roster", cookies=login_a.cookies)
+    assert ok.status_code == 200, ok.text
+    blocked = client_rbac.get(f"/api/clients/{cid_b}/roster", cookies=login_a.cookies)
+    assert blocked.status_code == 404

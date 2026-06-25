@@ -118,6 +118,15 @@ def test_delivery_resources_use_client_anchor():
         assert assigned_col is None
 
 
+def test_client_list_visibility_resources_excludes_rms():
+    assert catalog.RESOURCE_RMS_RESUME not in catalog.CLIENT_LIST_VISIBILITY_RESOURCES
+    assert catalog.RESOURCE_RMS_JOB not in catalog.CLIENT_LIST_VISIBILITY_RESOURCES
+    assert catalog.RESOURCE_RMS_CANDIDATE not in catalog.CLIENT_LIST_VISIBILITY_RESOURCES
+    assert catalog.RESOURCE_CRM_CLIENT in catalog.CLIENT_LIST_VISIBILITY_RESOURCES
+    assert catalog.RESOURCE_DELIVERY_ROSTER in catalog.CLIENT_LIST_VISIBILITY_RESOURCES
+    assert catalog.CLIENT_LIST_VISIBILITY_RESOURCES == catalog.CRM_RESOURCE_CODES | catalog.DELIVERY_RESOURCE_CODES
+
+
 def test_crm_client_anchor_is_direct_on_clients_table():
     anchor = catalog.RESOURCE_SCOPE_ANCHOR[catalog.RESOURCE_CRM_CLIENT]
     assert anchor.primary_table == catalog.CLIENT_TABLE

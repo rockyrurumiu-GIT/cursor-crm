@@ -119,6 +119,17 @@ DELIVERY_RESOURCE_CODES: FrozenSet[str] = frozenset(
     code for code in RESOURCE_CODES if code.startswith("delivery.")
 )
 
+CRM_RESOURCE_CODES: FrozenSet[str] = frozenset(
+    code for code in RESOURCE_CODES if code.startswith("crm.")
+)
+
+# /api/clients and CRM/delivery client pickers: union CRM + delivery scopes only.
+# RMS candidate/resume are not client-anchored; rms.job read uses recruitment rules
+# in services/rms_scope and must not widen delivery customer lists via delivery_dept.
+CLIENT_LIST_VISIBILITY_RESOURCES: FrozenSet[str] = frozenset(
+    CRM_RESOURCE_CODES | DELIVERY_RESOURCE_CODES
+)
+
 SYSTEM_PERMISSIONS: FrozenSet[str] = frozenset({
     "crm.contracts.read",
     "crm.contracts.write",
