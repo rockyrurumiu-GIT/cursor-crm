@@ -456,11 +456,6 @@ def register_handoff_routes(
         h.updated_at = datetime.now()
         h.ai_brief_md = brief
         _log_review(db, h.id, h.client_id, user, "approve", "审批通过")
-        if Contract and ContractMilestone and client:
-            from phase2_routes import create_contract_from_handoff
-
-            create_contract_from_handoff(db, h, client, Contract=Contract, ContractMilestone=ContractMilestone)
-            _log_review(db, h.id, h.client_id, user, "contract_draft", "生成合同草稿与里程碑")
         _notify(
             db,
             h.sales_owner or user,
