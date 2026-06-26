@@ -306,6 +306,7 @@ const rosterDetailApp = createApp({
         const fileInput = ref(null);
         const filters = reactive({
             keyword: '',
+            customerName: '',
             workLocation: '',
             regularizationStatus: '',
             entryDateBefore: '',
@@ -399,6 +400,7 @@ const rosterDetailApp = createApp({
             return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'));
         };
         const workLocationOptions = computed(() => uniqueOptions('work_location'));
+        const customerNameOptions = computed(() => uniqueOptions('customer_name'));
         const positionTitleOptions = computed(() => uniqueOptions('position_title'));
         const tableFieldKeys = computed(() => {
             let fields;
@@ -408,6 +410,7 @@ const rosterDetailApp = createApp({
             return new Set(fields.map((f) => f.key));
         });
         const FILTER_FIELD_MAP = {
+            customerName: 'customer_name',
             workLocation: 'work_location',
             regularizationStatus: 'regularization_status',
             entryDateBefore: 'entry_date',
@@ -420,6 +423,7 @@ const rosterDetailApp = createApp({
         };
         const hasFilterField = (filterKey) => {
             if (filterKey === 'keyword') return true;
+            if (filterKey === 'customerName') return IS_GLOBAL_ROSTER;
             const fieldKey = FILTER_FIELD_MAP[filterKey];
             if (!fieldKey) return false;
             return tableFieldKeys.value.has(fieldKey);
@@ -499,6 +503,9 @@ const rosterDetailApp = createApp({
                 }
                 if (filters.positionTitle && hasFieldData('position_title')) {
                     if (ci(row.position_title) !== ci(filters.positionTitle)) return false;
+                }
+                if (filters.customerName && IS_GLOBAL_ROSTER) {
+                    if (ci(row.customer_name) !== ci(filters.customerName)) return false;
                 }
                 if (showOnlyChecked.value && !isRowChecked(row.id)) return false;
                 return true;
@@ -1097,6 +1104,7 @@ const rosterDetailApp = createApp({
         };
         const clearFilters = () => {
             filters.keyword = '';
+            filters.customerName = '';
             filters.workLocation = '';
             filters.regularizationStatus = '';
             filters.entryDateBefore = '';
@@ -1370,7 +1378,7 @@ const rosterDetailApp = createApp({
             });
         });
         return {
-            rows, filteredRows, pagedRows, currentPage, pageSize, totalPages, pageNumbers, goPage, filters, workLocationOptions, positionTitleOptions,
+            rows, filteredRows, pagedRows, currentPage, pageSize, totalPages, pageNumbers, goPage, filters, workLocationOptions, customerNameOptions, positionTitleOptions,
             brief, loading, showForm, editingId, form, formFields: activeFormFields, formCompactFields, formTextareaFields, detailCompactFields, detailTextareaFields,
             fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
             showLogs, logsLoading, logs, showValidation, validationScope, validationFindings, validationCopied,

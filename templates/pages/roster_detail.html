@@ -546,6 +546,10 @@
                 </span>
             </div>
             <div v-if="filterPanelExpanded" class="crm-filter-row roster-filter-row text-sm mt-2.5 border-t border-[#EEF0F2] pt-2.5">
+            <select v-if="hasFilterField('customerName')" v-model="filters.customerName" class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control">
+                <option value="">客户（全部）</option>
+                <option v-for="v in customerNameOptions" :key="`cn-${v}`" :value="v">{{ v }}</option>
+            </select>
             <select v-if="hasFilterField('workLocation')" v-model="filters.workLocation" class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control">
                 <option value="">工作地（全部）</option>
                 <option v-for="v in workLocationOptions" :key="`wl-${v}`" :value="v">{{ v }}</option>
@@ -1123,5 +1127,5 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/roster-detail.js?v=29"></script>
+<script src="/static/js/pages/roster-detail.js?v=30"></script>
 {% endblock %}
