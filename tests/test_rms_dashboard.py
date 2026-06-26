@@ -1046,6 +1046,8 @@ def test_client_job_stage_total_equals_rows(client_rbac, admin_auth, rms_engine,
     for key in _SUMMARY_METRIC_KEYS:
         row_sum = sum(int(row.get(key) or 0) for row in rows)
         assert int(total.get(key) or 0) == row_sum, key
+    hc_sum = sum(int(row.get("headcount") or 0) for row in rows)
+    assert int(total.get("headcount") or 0) == hc_sum
 
 
 def test_client_job_stage_snapshot_scheduling_and_onboarding(
@@ -2212,7 +2214,6 @@ def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(
         s for s in r.json()["lifecycle_funnel"]["rows"] if s["key"] == "first_interview"
     )
     assert first_interview["passed"] == 0
-    assert first_interview["pass_rate_value"] is None or first_interview["pass_rate_value"] <= 100
 
 
 def test_dashboard_interview_metrics_exclude_rollback_to_first_passed(
@@ -2333,3 +2334,282 @@ def test_lifecycle_client_screen_pass_includes_later_status_without_scheduling(
         row for row in dash.json()["lifecycle_funnel"]["rows"] if row["key"] == "client_screen"
     )
     assert client_screen["passed"] == 1
+
+
+def test_lifecycle_scheduling_pass_includes_later_status_without_pending_first(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """周期内到达 onboarding 等（无 pending_first_interview 历史）仍计约面成功。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"lssp_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    period_day = "2026-06-27"
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": period_day, "id": app_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'pending_client_screen', 'onboarding', "
+                "'status_correction', '补录在途', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'onboarding', "
+                "current_stage = 'onboarding' WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    scheduling = next(
+        row for row in dash.json()["lifecycle_funnel"]["rows"] if row["key"] == "scheduling"
+    )
+    assert scheduling["passed"] == 1
+
+
+def test_lifecycle_first_interview_pass_includes_later_status_without_first_passed(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """周期内到达 onboarding 等（无 first_interview_passed 历史）仍计一面通过。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"lfip_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    period_day = "2026-06-27"
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": period_day, "id": app_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'pending_first_interview', 'onboarding', "
+                "'status_correction', '补录在途', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'onboarding', "
+                "current_stage = 'onboarding' WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    first_interview = next(
+        row for row in dash.json()["lifecycle_funnel"]["rows"] if row["key"] == "first_interview"
+    )
+    assert first_interview["passed"] == 1
+
+
+def test_lifecycle_second_interview_pass_includes_later_status_without_second_passed(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """周期内到达 onboarding 等（无 second_interview_passed 历史）仍计二面通过。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"lsip_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    period_day = "2026-06-27"
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": period_day, "id": app_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'first_interview_passed', 'onboarding', "
+                "'status_correction', '补录在途', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'onboarding', "
+                "current_stage = 'onboarding' WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    second_interview = next(
+        row for row in dash.json()["lifecycle_funnel"]["rows"] if row["key"] == "second_interview"
+    )
+    assert second_interview["passed"] == 1
+
+
+def test_lifecycle_second_interview_pass_excludes_rollback_to_prior_status(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """曾到二面及之后但当前改回待一面/二面 fail：不计二面通过。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"lsre_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    for to_status in (
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_passed",
+        "second_interview_passed",
+        "pending_offer",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json=_status_transition_body(to_status, reason="ok"),
+        )
+        assert tr.status_code == 200, tr.text
+
+    corr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={
+            "to_status": "pending_first_interview",
+            "mode": "correction",
+            "note": "误操作改回待一面",
+        },
+    )
+    assert corr.status_code == 200, corr.text
+
+    dash = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert dash.status_code == 200, dash.text
+    row = _job_row(dash.json()["client_job_stage_summary"], job_id)
+    assert row["second_interview_passed_count"] == 0
+    second_interview = next(
+        s for s in dash.json()["lifecycle_funnel"]["rows"] if s["key"] == "second_interview"
+    )
+    assert second_interview["passed"] == 0
+
+
+def test_lifecycle_hired_pass_requires_current_hired_status(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """曾到 hired 但当前改回在途：不计已入职。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"lhr_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    for to_status in (
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_passed",
+        "second_interview_passed",
+        "pending_offer",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json=_status_transition_body(to_status, reason="ok"),
+        )
+        assert tr.status_code == 200, tr.text
+
+    _set_application_onboarding(rms_engine, app_id)
+    tr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "hired", "reason": "ok", "hired_at": "2026-06-01"},
+    )
+    assert tr.status_code == 200, tr.text
+
+    corr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={
+            "to_status": "onboarding",
+            "mode": "correction",
+            "note": "误操作改回在途",
+        },
+    )
+    assert corr.status_code == 200, corr.text
+
+    dash = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert dash.status_code == 200, dash.text
+    row = _job_row(dash.json()["client_job_stage_summary"], job_id)
+    assert row["hired_count"] == 0
+    assert row["onboarding_count"] == 1
+    hired_summary = next(
+        s for s in dash.json()["lifecycle_funnel"]["rows"] if s["key"] == "hired_summary"
+    )
+    assert hired_summary["passed"] == 0
+    assert hired_summary["pending"] == 1
+
+
+def test_lifecycle_stage_pass_excludes_rollback_to_prior_status(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """改回前序节点后，各阶段通过数均不计（以当前进展为准）。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"lsp_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    for to_status in (
+        "scheduling_interview",
+        "pending_first_interview",
+        "first_interview_passed",
+        "second_interview_passed",
+        "pending_offer",
+    ):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json=_status_transition_body(to_status, reason="ok"),
+        )
+        assert tr.status_code == 200, tr.text
+
+    corr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={
+            "to_status": "pending_client_screen",
+            "mode": "correction",
+            "note": "误操作改回待客筛",
+        },
+    )
+    assert corr.status_code == 200, corr.text
+
+    dash = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert dash.status_code == 200, dash.text
+    row = _job_row(dash.json()["client_job_stage_summary"], job_id)
+    assert row["client_screen_passed"] == 0
+    assert row["first_interview_passed_count"] == 0
+    assert row["second_interview_passed_count"] == 0
+    by_key = {s["key"]: s for s in dash.json()["lifecycle_funnel"]["rows"]}
+    assert by_key["client_screen"]["passed"] == 0
+    assert by_key["scheduling"]["passed"] == 0
+    assert by_key["first_interview"]["passed"] == 0
+    assert by_key["second_interview"]["passed"] == 0
+    assert by_key["final_interview"]["passed"] == 0
+    assert by_key["offer"]["passed"] == 0

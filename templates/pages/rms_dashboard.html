@@ -103,11 +103,27 @@
   padding: 0.4rem 0.5rem; color: #374151; border-bottom: 1px solid #f2f3f5;
 }
 .rms-stage-table tbody tr:last-child td { border-bottom: none; }
-.rms-job-stage-scroll { overflow-x: auto; width: 100%; }
+.rms-job-stage-scroll {
+  overflow: auto;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .rms-job-stage-table { width: 100%; min-width: 56rem; border-collapse: collapse; font-size: 0.78rem; }
 .rms-job-stage-table thead th {
-  text-align: left; font-weight: 500; color: #98a2b3; padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid #f2f3f5; background: transparent; white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  text-align: left;
+  font-weight: 500;
+  color: #98a2b3;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #f2f3f5;
+  background: #fff;
+  white-space: nowrap;
+  box-shadow: 0 1px 0 #eceef1;
 }
 .rms-job-stage-table tbody td {
   padding: 0.4rem 0.5rem; color: #374151; border-bottom: 1px solid #f2f3f5; white-space: nowrap;
@@ -640,7 +656,7 @@
                                         <td>{{ clientJobStagePeriodLabel }}</td>
                                         <td>合计</td>
                                         <td>—</td>
-                                        <td class="col-compact">—</td>
+                                        <td class="col-compact">{{ clientJobStageTotal.headcount }}</td>
                                         <td>—</td>
                                         <td class="col-compact">{{ clientJobStageTotal.pushed_resume_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'internal_screen_passed', 'pushed_resume_count', '内筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>

@@ -261,6 +261,188 @@
     return parseDateOnly(str) || "—";
   }
 
+  function formatInterviewScheduleDisplay(note, kind) {
+    var raw = String(note || "").trim();
+    if (!raw) return "";
+    var prefix = kind === "first" ? "一面时间" : kind === "second" ? "二面时间" : "";
+    if (!prefix) return "";
+    var requirePrefix = kind === "second";
+    var re = new RegExp(prefix + "[:：]?\\s*(.+)");
+    var m = raw.match(re);
+    if (m) {
+      var rest = String(m[1] || "").trim();
+      return rest || raw;
+    }
+    if (requirePrefix) return "";
+    return raw;
+  }
+
+  function sortStatusHistoryAsc(items) {
+    var list = Array.isArray(items) ? items.slice() : [];
+    list.sort(function (a, b) {
+      var da = parseDateOnly(a && a.changed_at) || "";
+      var db = parseDateOnly(b && b.changed_at) || "";
+      if (da !== db) return da < db ? -1 : 1;
+      var ia = Number(a && a.id) || 0;
+      var ib = Number(b && b.id) || 0;
+      return ia - ib;
+    });
+    return list;
+  }
+
+  function timelineLabelForHistoryItem(h) {
+    if (!h) return "—";
+    var reason = String(h.reason || "").trim();
+    if (reason === "delivery_review_passed") return "内审通过";
+    if (reason === "delivery_review_failed") return "内审失败";
+    if (reason === "status_correction") {
+      return "状态修正 · " + progressLabel(h.to_status);
+    }
+    return progressLabel(h.to_status);
+  }
+
+  function timelineToneForHistoryItem(h) {
+    if (!h) return "default";
+    var to = String(h.to_status || "").trim();
+    var reason = String(h.reason || "").trim();
+    if (reason === "delivery_review_failed") return "danger";
+    if (/_failed$/.test(to) || to === "offer_dropped" || to === "onboarding_lost") return "danger";
+    if (/_abandoned$/.test(to)) return "muted";
+    if (to === "hired") return "success";
+    if (reason === "status_correction") return "muted";
+    return "default";
+  }
+
+  function timelineDetailsForHistoryItem(h, app) {
+    if (!h) return [];
+    var to = String(h.to_status || "").trim();
+    var reason = String(h.reason || "").trim();
+    var note = String(h.note || "").trim();
+    var details = [];
+
+    if (reason === "delivery_review_failed" || to === "internal_screen_failed") {
+      if (note) details.push({ label: "原因", value: note, tone: "danger" });
+      return details;
+    }
+
+    if (/_failed$/.test(to) || to === "offer_dropped" || to === "onboarding_lost" || /_abandoned$/.test(to)) {
+      if (note) details.push({ label: "原因", value: note, tone: "danger" });
+      return details;
+    }
+
+    if (to === "pending_first_interview") {
+      var first = formatInterviewScheduleDisplay(note, "first");
+      if (first) details.push({ label: "一面时间", value: first });
+    }
+    if (to === "first_interview_passed") {
+      var second = formatInterviewScheduleDisplay(note, "second");
+      if (second) details.push({ label: "二面时间", value: second });
+    }
+    if (to === "onboarding" || to === "offer_approval_pending") {
+      var onboard = String(app && app.planned_onboard_date || "").trim();
+      if (onboard) details.push({ label: "计划入职", value: formatRmsDate(onboard) });
+    }
+    if (to === "hired") {
+      var hired = String(app && app.hired_at || "").trim();
+      if (hired) details.push({ label: "入职时间", value: formatRmsDate(hired) });
+    }
+
+    if (reason === "status_correction" && note) {
+      details.push({ label: "修正说明", value: note, tone: "muted" });
+      return details;
+    }
+    if (note && !details.length && to !== "pending_first_interview" && to !== "first_interview_passed") {
+      details.push({ label: "备注", value: note });
+    }
+    return details;
+  }
+
+  function buildApplicationDetailTimeline(app, historyItems) {
+    var steps = [];
+    var recommendedAt = String(app && app.recommended_at || "").trim();
+    if (recommendedAt) {
+      steps.push({
+        key: "recommended",
+        label: "推荐",
+        date: formatRmsDate(recommendedAt),
+        tone: "default",
+        details: [],
+      });
+    }
+
+    var sorted = sortStatusHistoryAsc(historyItems);
+    for (var i = 0; i < sorted.length; i++) {
+      var h = sorted[i];
+      steps.push({
+        key: "hist-" + (h.id != null ? h.id : i),
+        label: timelineLabelForHistoryItem(h),
+        date: formatRmsDate(h.changed_at),
+        tone: timelineToneForHistoryItem(h),
+        details: timelineDetailsForHistoryItem(h, app),
+      });
+    }
+
+    if (!steps.length && app && app.status) {
+      steps.push({
+        key: "current",
+        label: progressLabel(app.status),
+        date: formatRmsDate(app.last_activity_at || app.updated_at),
+        tone: timelineToneForHistoryItem({ to_status: app.status, reason: "" }),
+        details: [],
+      });
+    }
+    return steps;
+  }
+
+  function interviewSchedulesFromHistory(historyItems) {
+    var first = "";
+    var second = "";
+    var list = Array.isArray(historyItems) ? historyItems.slice() : [];
+    list.sort(function (a, b) {
+      var ia = Number(a && a.id) || 0;
+      var ib = Number(b && b.id) || 0;
+      return ib - ia;
+    });
+    for (var i = 0; i < list.length; i++) {
+      var h = list[i];
+      if (!h) continue;
+      var to = String(h.to_status || "").trim();
+      var note = String(h.note || "").trim();
+      if (to === "pending_first_interview" && !first) {
+        first = formatInterviewScheduleDisplay(note, "first");
+      } else if (to === "first_interview_passed" && !second) {
+        second = formatInterviewScheduleDisplay(note, "second");
+      }
+      if (first && second) break;
+    }
+    return { first_interview_schedule: first, second_interview_schedule: second };
+  }
+
+  function applicationDetailSummaryFields(app, historyItems) {
+    if (!app) return [];
+    var fromHistory = interviewSchedulesFromHistory(historyItems);
+    var first = String(app.first_interview_schedule || "").trim() || fromHistory.first_interview_schedule || "—";
+    var second = String(app.second_interview_schedule || "").trim() || fromHistory.second_interview_schedule || "—";
+    return [
+      { label: "当前进展", value: progressLabel(app.status) },
+      { label: "一面时间", value: first },
+      { label: "二面时间", value: second },
+      { label: "计划入职", value: formatRmsDate(app.planned_onboard_date) },
+      { label: "入职时间", value: formatRmsDate(app.hired_at) },
+    ];
+  }
+
+  function deliveryReviewFailNoteFromHistory(items) {
+    if (!Array.isArray(items)) return "";
+    for (var i = 0; i < items.length; i++) {
+      var h = items[i];
+      if (h && h.reason === "delivery_review_failed") {
+        return String(h.note || "").trim();
+      }
+    }
+    return "";
+  }
+
   /** Pipeline 进展列：Offer 审批/在途时展示计划入职时间 */
   function pipelineOnboardDateLabel(app) {
     if (!app) return "";
@@ -486,6 +668,11 @@
     offerApprovalPendingHint: offerApprovalPendingHint,
     pipelineOnboardDateLabel: pipelineOnboardDateLabel,
     pipelineInterviewScheduleLabel: pipelineInterviewScheduleLabel,
+    formatInterviewScheduleDisplay: formatInterviewScheduleDisplay,
+    interviewSchedulesFromHistory: interviewSchedulesFromHistory,
+    buildApplicationDetailTimeline: buildApplicationDetailTimeline,
+    applicationDetailSummaryFields: applicationDetailSummaryFields,
+    deliveryReviewFailNoteFromHistory: deliveryReviewFailNoteFromHistory,
     deriveProtectionStatus: deriveProtectionStatus,
     progressTransitionsFor: progressTransitionsFor,
     progressActionBtnClass: progressActionBtnClass,

@@ -926,6 +926,113 @@
         color: #1f2328;
         word-break: break-word;
     }
+    #rms-app .rms-app-progress-summary {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+    #rms-app .rms-app-progress-summary-card {
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        padding: 0.5rem 0.625rem;
+        background: #f6f8fa;
+        min-width: 0;
+    }
+    #rms-app .rms-app-progress-summary-label {
+        display: block;
+        font-size: 0.6875rem;
+        color: #57606a;
+        margin-bottom: 0.125rem;
+    }
+    #rms-app .rms-app-progress-summary-value {
+        display: block;
+        font-size: 0.8125rem;
+        color: #1f2328;
+        word-break: break-word;
+    }
+    #rms-app .rms-app-progress-timeline {
+        display: flex;
+        flex-direction: column;
+    }
+    #rms-app .rms-app-progress-step {
+        display: flex;
+        gap: 0.75rem;
+        position: relative;
+        padding-bottom: 0.75rem;
+    }
+    #rms-app .rms-app-progress-step:last-child {
+        padding-bottom: 0;
+    }
+    #rms-app .rms-app-progress-step:not(:last-child)::before {
+        content: "";
+        position: absolute;
+        left: 0.4375rem;
+        top: 1.125rem;
+        bottom: 0;
+        width: 2px;
+        background: #d0d7de;
+    }
+    #rms-app .rms-app-progress-dot {
+        flex: 0 0 auto;
+        width: 0.875rem;
+        height: 0.875rem;
+        border-radius: 9999px;
+        border: 2px solid #0969da;
+        background: #fff;
+        margin-top: 0.125rem;
+        position: relative;
+        z-index: 1;
+    }
+    #rms-app .rms-app-progress-step--danger .rms-app-progress-dot {
+        border-color: #cf222e;
+        background: #ffebe9;
+    }
+    #rms-app .rms-app-progress-step--success .rms-app-progress-dot {
+        border-color: #1a7f37;
+        background: #dafbe1;
+    }
+    #rms-app .rms-app-progress-step--muted .rms-app-progress-dot {
+        border-color: #8c959f;
+        background: #f6f8fa;
+    }
+    #rms-app .rms-app-progress-step-body {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding-bottom: 0.125rem;
+    }
+    #rms-app .rms-app-progress-step-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5rem;
+        align-items: baseline;
+    }
+    #rms-app .rms-app-progress-step-label {
+        font-weight: 600;
+        color: #1f2328;
+    }
+    #rms-app .rms-app-progress-step-date {
+        color: #57606a;
+        font-size: 0.8125rem;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    #rms-app .rms-app-progress-step-details {
+        margin-top: 0.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+    }
+    #rms-app .rms-app-progress-step-detail {
+        font-size: 0.8125rem;
+        color: #57606a;
+    }
+    #rms-app .rms-app-progress-step-detail--danger {
+        color: #cf222e;
+    }
+    #rms-app .rms-app-progress-step-detail--muted {
+        color: #57606a;
+    }
     /* crm-skin：冻结列表头与浅色/深色主题对齐 */
     #rms-app.crm-skin .crm-table.rms-jobs-table thead .rms-sticky-serial,
     #rms-app.crm-skin .crm-table.rms-jobs-table thead .rms-sticky-title,
@@ -2060,27 +2167,57 @@
                     <div class="rms-candidate-drawer-field-label">内审状态</div>
                     <div class="rms-candidate-drawer-field-value">{{ deliveryReviewLabel(applicationDetailModal.delivery_review_status) }}</div>
                 </div>
-                <div v-if="applicationDetailModal.delivery_review_status === 'failed' || applicationDetailModal.status === 'internal_screen_failed'" class="rms-candidate-drawer-field">
-                    <div class="rms-candidate-drawer-field-label">内审失败原因</div>
-                    <div class="rms-candidate-drawer-field-value whitespace-pre-wrap break-words">
-                        <span v-if="applicationDetailLoading" class="text-[#57606a]">加载中…</span>
-                        <span v-else class="text-red-700">{{ applicationDetailFailNote || '—' }}</span>
-                    </div>
-                </div>
-                <div class="rms-candidate-drawer-field">
-                    <div class="rms-candidate-drawer-field-label">招聘进展</div>
-                    <div class="rms-candidate-drawer-field-value">
-                        <span class="inline-flex items-center flex-wrap gap-x-1 gap-y-0.5">
-                            <span>{{ progressLabel(applicationDetailModal.status) }}</span>
-                            <span v-if="applicationDetailModal.status === 'hired' && !applicationDetailModal.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
-                            <span v-else-if="applicationDetailModal.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
-                        </span>
-                    </div>
-                </div>
                 <div class="rms-candidate-drawer-field">
                     <div class="rms-candidate-drawer-field-label">保护期</div>
                     <div class="rms-candidate-drawer-field-value">{{ protectionLabel(applicationDetailModal.status) }}</div>
                 </div>
+            </section>
+            <section>
+                <div class="rms-candidate-drawer-section-title">招聘推进</div>
+                <p v-if="applicationDetailHistoryError" class="mb-2 text-sm text-red-700">{{ applicationDetailHistoryError }}</p>
+                <p v-else-if="applicationDetailLoading" class="mb-2 text-sm text-[#57606a]">加载推进记录…</p>
+                <div v-if="applicationDetailSummary.length" class="rms-app-progress-summary">
+                    <div v-for="item in applicationDetailSummary" :key="item.label" class="rms-app-progress-summary-card">
+                        <span class="rms-app-progress-summary-label">{{ item.label }}</span>
+                        <span class="rms-app-progress-summary-value">
+                            <template v-if="item.label === '当前进展'">
+                                <span class="inline-flex items-center flex-wrap gap-x-1 gap-y-0.5">
+                                    <span>{{ item.value }}</span>
+                                    <span v-if="applicationDetailModal.status === 'hired' && !applicationDetailModal.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
+                                    <span v-else-if="applicationDetailModal.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
+                                </span>
+                            </template>
+                            <template v-else>{{ item.value }}</template>
+                        </span>
+                    </div>
+                </div>
+                <div v-if="applicationDetailTimeline.length" class="rms-app-progress-timeline">
+                    <div
+                        v-for="step in applicationDetailTimeline"
+                        :key="step.key"
+                        class="rms-app-progress-step"
+                        :class="'rms-app-progress-step--' + (step.tone || 'default')"
+                    >
+                        <div class="rms-app-progress-dot" aria-hidden="true"></div>
+                        <div class="rms-app-progress-step-body">
+                            <div class="rms-app-progress-step-head">
+                                <div class="rms-app-progress-step-label">{{ step.label }}</div>
+                                <div class="rms-app-progress-step-date">{{ step.date }}</div>
+                            </div>
+                            <div v-if="step.details && step.details.length" class="rms-app-progress-step-details">
+                                <div
+                                    v-for="(detail, detailIdx) in step.details"
+                                    :key="step.key + '-detail-' + detailIdx"
+                                    class="rms-app-progress-step-detail"
+                                    :class="detail.tone ? 'rms-app-progress-step-detail--' + detail.tone : ''"
+                                >
+                                    <span v-if="detail.label">{{ detail.label }}：</span>{{ detail.value }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p v-else-if="!applicationDetailLoading" class="text-sm text-[#57606a]">暂无推进记录</p>
             </section>
         </div>
     </aside>

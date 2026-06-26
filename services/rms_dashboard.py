@@ -135,6 +135,29 @@ def _statuses_from(anchor: str) -> Set[str]:
 
 
 _CLIENT_SCREEN_PASSED_STATUSES = _statuses_from("scheduling_interview")
+_SCHEDULING_PASSED_STATUSES = _statuses_from("pending_first_interview")
+_INTERNAL_SCREEN_PASSED_STATUSES = _statuses_from("pending_client_screen")
+_FIRST_INTERVIEW_PASSED_STATUSES = _statuses_from("first_interview_passed") - frozenset({
+    "first_interview_failed",
+})
+_SECOND_INTERVIEW_PASSED_STATUSES = _statuses_from("second_interview_passed") - frozenset({
+    "second_interview_failed",
+    "second_interview_abandoned",
+})
+_FINAL_INTERVIEW_PASSED_STATUSES = _statuses_from("pending_offer")
+_OFFER_PASSED_STATUSES = _statuses_from("onboarding") - frozenset({"onboarding_lost"})
+
+# 各阶段「通过」：周期内曾到达对应节点及之后（双保险），且当前仍在该集合内；
+# 改回前序节点或该阶段 fail/弃面等结果态时不计入。
+_STAGE_PASSED_STATUS_SETS: Dict[str, frozenset] = {
+    "internal_screen": frozenset(_INTERNAL_SCREEN_PASSED_STATUSES),
+    "client_screen": frozenset(_CLIENT_SCREEN_PASSED_STATUSES),
+    "scheduling": frozenset(_SCHEDULING_PASSED_STATUSES),
+    "first_interview": frozenset(_FIRST_INTERVIEW_PASSED_STATUSES),
+    "second_interview": frozenset(_SECOND_INTERVIEW_PASSED_STATUSES),
+    "final_interview": frozenset(_FINAL_INTERVIEW_PASSED_STATUSES),
+    "offer": frozenset(_OFFER_PASSED_STATUSES),
+}
 # 已面试/面试通过：周期内曾到达对应节点，且当前（或 date_to 快照）仍在一面结果之后；
 # 误操作改回「待一面」等前置状态时不计入。
 _INTERVIEWED_CURRENT_STATUSES = _statuses_from("first_interview_passed") | frozenset({
@@ -144,12 +167,19 @@ _SECOND_INTERVIEWED_CURRENT_STATUSES = _statuses_from("second_interview_passed")
     "second_interview_failed",
     "second_interview_abandoned",
 })
-# 生命周期/历史各面试阶段「通过」：周期内曾到达该阶段 pass 节点，且当前仍在该 pass 节点之后。
-_STAGE_PASS_CURRENT_GUARD = {
-    "first_interview": _statuses_from("first_interview_passed"),
-    "second_interview": _statuses_from("second_interview_passed"),
-    "final_interview": _statuses_from("pending_offer"),
-}
+
+
+def _app_reached_and_still_in_pass_set(
+    app: Any,
+    histories: List[Any],
+    passed_statuses: Set[str],
+    date_from: str,
+    date_to: str,
+    snapshot_as_of: Optional[str],
+) -> bool:
+    if not _app_had_transition_in_period(histories, passed_statuses, date_from, date_to):
+        return False
+    return _status_at(app, histories, snapshot_as_of) in passed_statuses
 
 
 def _utc_today() -> date:
@@ -298,6 +328,18 @@ def _app_counts_as_interview_passed(
     return _status_at(app, histories, snapshot_as_of) in _INTERVIEW_PASSED_STATUSES
 
 
+def _app_counts_as_hired(
+    app: Any,
+    histories: List[Any],
+    date_from: str,
+    date_to: str,
+    snapshot_as_of: Optional[str],
+) -> bool:
+    if not _app_had_transition_in_period(histories, _HIRED_STATUSES, date_from, date_to):
+        return False
+    return _status_at(app, histories, snapshot_as_of) in _HIRED_STATUSES
+
+
 def _app_counts_as_stage_passed(
     app: Any,
     histories: List[Any],
@@ -307,17 +349,12 @@ def _app_counts_as_stage_passed(
     date_to: str,
     snapshot_as_of: Optional[str],
 ) -> bool:
-    if stage_key == "client_screen":
-        if not _app_had_transition_in_period(
-            histories, _CLIENT_SCREEN_PASSED_STATUSES, date_from, date_to
-        ):
-            return False
-    elif not _app_had_transition_to_in_period(histories, pass_status, date_from, date_to):
-        return False
-    guard = _STAGE_PASS_CURRENT_GUARD.get(stage_key)
-    if guard is None:
-        return True
-    return _status_at(app, histories, snapshot_as_of) in guard
+    passed_statuses = _STAGE_PASSED_STATUS_SETS.get(stage_key)
+    if passed_statuses is not None:
+        return _app_reached_and_still_in_pass_set(
+            app, histories, passed_statuses, date_from, date_to, snapshot_as_of
+        )
+    return _app_had_transition_to_in_period(histories, pass_status, date_from, date_to)
 
 
 def _filter_applications_query(
@@ -524,7 +561,7 @@ def _historical_overview(
         histories = hist_map.get(app.id, [])
         if _app_had_transition_to_in_period(histories, "onboarding", date_from, date_to):
             onboarding_entered += 1
-        if _app_had_transition_to_in_period(histories, "hired", date_from, date_to):
+        if _app_counts_as_hired(app, histories, date_from, date_to, snapshot_as_of):
             hired += 1
         if _app_had_transition_to_in_period(histories, "onboarding_lost", date_from, date_to):
             onboarding_lost += 1
@@ -652,8 +689,14 @@ def _metrics_for_apps(
         status_snapshot = _status_at(app, histories, snapshot_as_of)
         if _recommended_in_period(app, date_from, date_to):
             metrics["pushed_resume_count"] += 1
-        if _app_had_transition_to_in_period(
-            histories, "pending_client_screen", date_from, date_to
+        if _app_counts_as_stage_passed(
+            app,
+            histories,
+            "internal_screen",
+            "pending_client_screen",
+            date_from,
+            date_to,
+            snapshot_as_of,
         ):
             metrics["internal_screen_passed"] += 1
         if _app_had_transition_to_in_period(
@@ -666,8 +709,14 @@ def _metrics_for_apps(
             metrics["pending_client_screen"] += 1
         if status_snapshot in _SCHEDULING_INTERVIEW_SNAPSHOT_STATUSES:
             metrics["scheduling_interview_count"] += 1
-        if _app_had_transition_in_period(
-            histories, _CLIENT_SCREEN_PASSED_STATUSES, date_from, date_to
+        if _app_counts_as_stage_passed(
+            app,
+            histories,
+            "client_screen",
+            "scheduling_interview",
+            date_from,
+            date_to,
+            snapshot_as_of,
         ):
             metrics["client_screen_passed"] += 1
         if _app_had_transition_in_period(histories, _ABANDONED_STATUSES, date_from, date_to):
@@ -723,7 +772,7 @@ def _metrics_for_apps(
             histories, _ONBOARDING_LOST_STATUSES, date_from, date_to
         ):
             metrics["onboarding_lost_count"] += 1
-        if _app_had_transition_in_period(histories, _HIRED_STATUSES, date_from, date_to):
+        if _app_counts_as_hired(app, histories, date_from, date_to, snapshot_as_of):
             metrics["hired_count"] += 1
         if status_snapshot == "hired" and not getattr(app, "converted_to_roster_entry_id", None):
             metrics["pending_roster_conversion_count"] += 1
@@ -862,15 +911,18 @@ def _client_job_stage_summary(
 
     rows: List[Dict[str, Any]] = []
     total = _empty_job_metrics()
+    total_headcount = 0
     for job in sorted(jobs, key=lambda j: int(j.id)):
         metrics = _metrics_for_apps(apps_by_job.get(int(job.id), []), hist_map, filters)
         cid = int(job.client_id) if job.client_id is not None else None
+        headcount = int(job.headcount or 0) if (job.status or "").strip() == "open" else 0
+        total_headcount += headcount
         row = {
             "job_id": int(job.id),
             "job_title": (job.title or "").strip() or f"岗位#{job.id}",
             "client_id": cid,
             "client_name": client_names.get(cid, "") if cid is not None else "",
-            "headcount": int(job.headcount or 0) if (job.status or "").strip() == "open" else 0,
+            "headcount": headcount,
             "location": (job.location or "").strip(),
             **_attach_job_stage_rates(metrics),
         }
@@ -881,7 +933,7 @@ def _client_job_stage_summary(
     return {
         "period_label": _period_label(filters),
         "rows": rows,
-        "total": _attach_job_stage_rates(total),
+        "total": {**_attach_job_stage_rates(total), "headcount": total_headcount},
     }
 
 

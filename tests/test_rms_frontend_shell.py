@@ -862,8 +862,12 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "openApplicationDetailModal" in apps_region
     assert "application-detail" in html or 'data-rms-region="application-detail"' in html
     assert "rms-candidate-drawer-section-title" in html
-    assert "内审失败原因" in html
-    assert "applicationDetailFailNote" in html
+    assert "招聘推进" in html
+    assert "applicationDetailTimeline" in applications_js
+    assert "buildApplicationDetailTimeline" in labels_src
+    assert "interviewSchedulesFromHistory" in labels_src
+    assert "applicationDetailSummary" in applications_js
+    assert "rms-app-progress-timeline" in html
     assert "deliveryReviewFailNoteFromHistory" in applications_js
     assert "openStatusHistoryModal" in apps_region
     assert "function openStatusHistoryModal" in applications_js

@@ -70,6 +70,9 @@
 
     var applicationDetailModal = ref(null);
     var applicationDetailFailNote = ref("");
+    var applicationDetailTimeline = ref([]);
+    var applicationDetailSummary = ref([]);
+    var applicationDetailHistoryError = ref("");
     var applicationDetailLoading = ref(false);
 
     function resolveApplicationClientId(app) {
@@ -261,6 +264,9 @@
     }
 
     function deliveryReviewFailNoteFromHistory(items) {
+      if (Labels.deliveryReviewFailNoteFromHistory) {
+        return Labels.deliveryReviewFailNoteFromHistory(items);
+      }
       if (!Array.isArray(items)) return "";
       for (var i = 0; i < items.length; i++) {
         var h = items[i];
@@ -271,25 +277,54 @@
       return "";
     }
 
+    function buildApplicationDetailTimeline(app, items) {
+      if (Labels.buildApplicationDetailTimeline) {
+        return Labels.buildApplicationDetailTimeline(app, items);
+      }
+      return [];
+    }
+
+    function applicationDetailSummaryFields(app, historyItems) {
+      if (Labels.applicationDetailSummaryFields) {
+        return Labels.applicationDetailSummaryFields(app, historyItems);
+      }
+      return [];
+    }
+
     async function openApplicationDetailModal(app) {
       if (!app) return;
       applicationDetailModal.value = app;
       applicationDetailFailNote.value = "";
+      applicationDetailTimeline.value = [];
+      applicationDetailSummary.value = applicationDetailSummaryFields(app, []);
+      applicationDetailHistoryError.value = "";
       applicationDetailLoading.value = false;
-      var dr = String(app.delivery_review_status == null ? "" : app.delivery_review_status).trim();
-      var needsFailNote = dr === "failed" || app.status === "internal_screen_failed";
-      if (!needsFailNote || app.id == null) return;
+      if (app.id == null) {
+        applicationDetailTimeline.value = buildApplicationDetailTimeline(app, []);
+        applicationDetailSummary.value = applicationDetailSummaryFields(app, []);
+        return;
+      }
       applicationDetailLoading.value = true;
       var r = await rmsRequest("GET", "/api/rms/applications/" + app.id + "/status-history");
       applicationDetailLoading.value = false;
-      if (r.ok) {
-        applicationDetailFailNote.value = deliveryReviewFailNoteFromHistory(r.data);
+      if (!r.ok) {
+        applicationDetailHistoryError.value = r.message || "加载推进记录失败";
+        applicationDetailTimeline.value = buildApplicationDetailTimeline(app, []);
+        applicationDetailSummary.value = applicationDetailSummaryFields(app, []);
+        return;
       }
+      var items = Array.isArray(r.data) ? r.data : [];
+      applicationDetailFailNote.value = deliveryReviewFailNoteFromHistory(items);
+      applicationDetailTimeline.value = buildApplicationDetailTimeline(app, items);
+      applicationDetailSummary.value = applicationDetailSummaryFields(app, items);
     }
 
     function closeApplicationDetailModal() {
       applicationDetailModal.value = null;
       applicationDetailFailNote.value = "";
+      applicationDetailTimeline.value = [];
+      applicationDetailSummary.value = [];
+      applicationDetailHistoryError.value = "";
       applicationDetailLoading.value = false;
     }
 
@@ -358,6 +393,9 @@
       resetApplicationFilter: resetApplicationFilter,
       applicationDetailModal: applicationDetailModal,
       applicationDetailFailNote: applicationDetailFailNote,
+      applicationDetailTimeline: applicationDetailTimeline,
+      applicationDetailSummary: applicationDetailSummary,
+      applicationDetailHistoryError: applicationDetailHistoryError,
       applicationDetailLoading: applicationDetailLoading,
       statusHistoryModal: statusHistoryModal,
       statusHistoryLoading: statusHistoryLoading,
