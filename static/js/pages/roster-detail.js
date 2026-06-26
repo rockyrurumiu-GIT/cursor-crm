@@ -371,8 +371,22 @@ const rosterDetailApp = createApp({
         });
         const showStdReleaseLeaveCols = computed(() => !isZNTX.value && !hideReleaseLeaveCols.value);
         const emptyRowColspan = computed(() => {
-            if (isZNTX.value) return 24;
-            return hideReleaseLeaveCols.value ? 22 : 25;
+            if (isZNTX.value) return 25;
+            return hideReleaseLeaveCols.value ? 23 : 26;
+        });
+        /** 表尾「合计/均值」：在职情况～转正时间（不含序号、姓名与五项金额列） */
+        const rosterFootMiddleColspan = computed(() => {
+            let n = 3;
+            if (isZNTX.value) n += 1;
+            n += 7;
+            return n;
+        });
+        /** 表尾：员工+1～接口（不含备注、操作） */
+        const rosterFootAfterMetricsColspan = computed(() => {
+            let n = 2;
+            if (isZNTX.value) n += 1;
+            n += 2;
+            return n;
         });
         const isRowChecked = (rowId) => !!checkedRowIds[String(rowId)];
         const setRowChecked = (rowId, checked) => {
@@ -1380,7 +1394,7 @@ const rosterDetailApp = createApp({
         return {
             rows, filteredRows, pagedRows, currentPage, pageSize, totalPages, pageNumbers, goPage, filters, workLocationOptions, customerNameOptions, positionTitleOptions,
             brief, loading, showForm, editingId, form, formFields: activeFormFields, formCompactFields, formTextareaFields, detailCompactFields, detailTextareaFields,
-            fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFooterRemarkColspan,
+            fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFootMiddleColspan, rosterFootAfterMetricsColspan, rosterFooterRemarkColspan,
             showLogs, logsLoading, logs, showValidation, validationScope, validationFindings, validationCopied,
             showRegReminder, regReminderFindings, regReminderCopied,
             regDetailRow, regDetailFields, isWideDetailField, rosterDetailValue, openRegDetail, closeRegDetail,

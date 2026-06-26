@@ -125,6 +125,10 @@
         box-shadow: 8px 0 16px -10px rgba(15, 23, 42, 0.18);
         background-clip: padding-box;
     }
+    .crm-table tfoot .roster-sticky-op.crm-sticky-right-op {
+        background: #f8fafc;
+        box-shadow: -8px 0 24px -12px rgba(15, 23, 42, 0.08);
+    }
     /* 与交付详情一致：表格占满主区域剩余高度，仅表格内滚动，避免整页与表格双滚动、底栏遮挡感 */
     .roster-table-scroll-fill.crm-table-scroll {
         flex: 1 1 0;
@@ -696,7 +700,7 @@
                                 <td colspan="2" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle roster-foot-sticky-left">
                                     <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
                                 </td>
-                                <td colspan="9" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle text-right">
+                                <td :colspan="rosterFootMiddleColspan" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle text-right">
                                     <span class="text-xs font-medium text-slate-500">共 {{ filteredRows.length }} 条</span>
                                 </td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.quote }}</td>
@@ -704,23 +708,23 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.salaryRatio }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
-                                <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td :colspan="rosterFootAfterMetricsColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td :colspan="rosterFooterRemarkColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
+                                <td class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                             <tr class="text-sm font-medium">
                                 <td colspan="2" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle roster-foot-sticky-left">
                                     <span class="text-lg font-bold tracking-wide text-slate-900">均值</span>
                                 </td>
-                                <td colspan="9" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td :colspan="rosterFootMiddleColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgQuote }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgPre }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgSalaryRatio }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgGms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgGmPct }}</td>
-                                <td colspan="4" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td :colspan="rosterFootAfterMetricsColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td :colspan="rosterFooterRemarkColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
+                                <td class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                         </template>
                         <template v-else>
@@ -728,7 +732,7 @@
                                 <td colspan="2" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle roster-foot-sticky-left">
                                     <span class="text-lg font-bold tracking-wide text-slate-900">合计</span>
                                 </td>
-                                <td colspan="10" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle text-right">
+                                <td :colspan="rosterFootMiddleColspan" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle text-right">
                                     <span class="text-xs font-medium text-slate-500">共 {{ filteredRows.length }} 条</span>
                                 </td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.quote }}</td>
@@ -736,23 +740,23 @@
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.salaryRatio }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.gms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.gmPct }}</td>
-                                <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td colspan="1" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
+                                <td :colspan="rosterFootAfterMetricsColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td class="crm-td roster-col-remarks bg-slate-50 border-t border-slate-200"></td>
+                                <td class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                             <tr class="text-sm font-medium">
                                 <td colspan="2" class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 align-middle roster-foot-sticky-left">
                                     <span class="text-lg font-bold tracking-wide text-slate-900">均值</span>
                                 </td>
-                                <td colspan="10" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td :colspan="rosterFootMiddleColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgQuote }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgPre }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgSalaryRatio }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-currency-cell">{{ rosterFooter.avgGms }}</td>
                                 <td class="crm-td px-3 py-3 whitespace-nowrap tabular-nums text-slate-800 bg-slate-50 border-t border-slate-200 crm-percent-cell">{{ rosterFooter.avgGmPct }}</td>
-                                <td colspan="5" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td colspan="1" class="crm-td bg-slate-50 border-t border-slate-200"></td>
-                                <td class="crm-td roster-sticky-op crm-sticky-right-op"></td>
+                                <td :colspan="rosterFootAfterMetricsColspan" class="crm-td bg-slate-50 border-t border-slate-200"></td>
+                                <td class="crm-td roster-col-remarks bg-slate-50 border-t border-slate-200"></td>
+                                <td class="crm-td px-3 py-3 bg-slate-50 border-t border-slate-200 roster-sticky-op crm-sticky-right-op"></td>
                             </tr>
                         </template>
                     </tfoot>
@@ -1127,5 +1131,5 @@ window.__ROSTER_CLIENT_ID__ = {{ client_id }};
 </script>
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/roster-detail.js?v=30"></script>
+<script src="/static/js/pages/roster-detail.js?v=31"></script>
 {% endblock %}
