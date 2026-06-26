@@ -240,6 +240,28 @@
     return parseDateOnly(str) || "—";
   }
 
+  /** Pipeline 进展列：Offer 审批/在途时展示计划入职时间 */
+  function pipelineOnboardDateLabel(app) {
+    if (!app) return "";
+    var st = String(app.status || "").trim();
+    if (st !== "onboarding" && st !== "offer_approval_pending") return "";
+    var d = String(app.planned_onboard_date == null ? "" : app.planned_onboard_date).trim();
+    return d ? formatRmsDate(d) : "";
+  }
+
+  /** Pipeline 进展列：待一面/一面通过时展示一面/二面时间（来自状态流转备注） */
+  function pipelineInterviewScheduleLabel(app) {
+    if (!app) return "";
+    var st = String(app.status || "").trim();
+    if (st === "pending_first_interview") {
+      return String(app.first_interview_schedule == null ? "" : app.first_interview_schedule).trim();
+    }
+    if (st === "first_interview_passed") {
+      return String(app.second_interview_schedule == null ? "" : app.second_interview_schedule).trim();
+    }
+    return "";
+  }
+
   function resolveApplicationClientId(app, getJobs) {
     if (app && app.client_id != null && app.client_id !== "") return Number(app.client_id);
     var job = app && app.job_id != null && app.job_id !== "" ? jobById(getJobs(), app.job_id) : null;
@@ -439,6 +461,8 @@
     receiveLabel: receiveLabel,
     deliveryReviewLabel: deliveryReviewLabel,
     offerApprovalPendingHint: offerApprovalPendingHint,
+    pipelineOnboardDateLabel: pipelineOnboardDateLabel,
+    pipelineInterviewScheduleLabel: pipelineInterviewScheduleLabel,
     deriveProtectionStatus: deriveProtectionStatus,
     progressTransitionsFor: progressTransitionsFor,
     progressActionBtnClass: progressActionBtnClass,

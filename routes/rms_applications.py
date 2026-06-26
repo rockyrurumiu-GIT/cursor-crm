@@ -64,6 +64,7 @@ def register_rms_applications_routes(
             status=status,
             RmsOfferRecord=RmsOfferRecord,
             RmsOfferApprovalStep=RmsOfferApprovalStep,
+            RmsApplicationStatusHistory=RmsApplicationStatusHistory,
         )
 
     @app.post("/api/rms/applications/candidate-report/parse-draft")
@@ -224,6 +225,7 @@ def register_rms_applications_routes(
             Client,
             RmsOfferRecord=RmsOfferRecord,
             RmsOfferApprovalStep=RmsOfferApprovalStep,
+            RmsApplicationStatusHistory=RmsApplicationStatusHistory,
         )
 
     @app.post("/api/rms/applications")

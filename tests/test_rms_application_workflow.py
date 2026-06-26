@@ -1471,3 +1471,11 @@ def test_delete_application_post_fallback(client_rbac, admin_auth, rms_engine, u
     assert missing.status_code == 404
 
 
+def test_format_interview_schedule_display():
+    from schemas.rms import format_interview_schedule_display
+
+    assert format_interview_schedule_display("一面时间7/1下午3点", kind="first") == "7/1下午3点"
+    assert format_interview_schedule_display("7/1下午3点", kind="first") == "7/1下午3点"
+    assert format_interview_schedule_display("二面时间8/2上午10点", kind="second") == "8/2上午10点"
+    assert format_interview_schedule_display("8/2上午10点", kind="second") == ""
+

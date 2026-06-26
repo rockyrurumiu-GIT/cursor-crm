@@ -118,6 +118,12 @@
 
   try {
   createApp({
+    errorHandler: function (err, _instance, info) {
+      console.error("RMS render error:", err, info);
+      showRmsBootError(
+        "招聘页面渲染失败：" + (err && err.message ? err.message : String(err))
+      );
+    },
     setup() {
       const activeTab = ref("jobs");
       const viewMode = ref(null);
@@ -272,6 +278,28 @@
         if (node && approver) return node + " · " + approver;
         if (node || approver) return node || approver;
         return "暂无审批信息";
+      }
+
+      function pipelineOnboardDateLabel(app) {
+        if (Labels.pipelineOnboardDateLabel) return Labels.pipelineOnboardDateLabel(app);
+        if (!app) return "";
+        var st = String(app.status || "").trim();
+        if (st !== "onboarding" && st !== "offer_approval_pending") return "";
+        var d = String(app.planned_onboard_date == null ? "" : app.planned_onboard_date).trim();
+        return d ? formatRmsDate(d) : "";
+      }
+
+      function pipelineInterviewScheduleLabel(app) {
+        if (Labels.pipelineInterviewScheduleLabel) return Labels.pipelineInterviewScheduleLabel(app);
+        if (!app) return "";
+        var st = String(app.status || "").trim();
+        if (st === "pending_first_interview") {
+          return String(app.first_interview_schedule == null ? "" : app.first_interview_schedule).trim();
+        }
+        if (st === "first_interview_passed") {
+          return String(app.second_interview_schedule == null ? "" : app.second_interview_schedule).trim();
+        }
+        return "";
       }
 
       const appDisplay = Labels.createAppDisplayHelpers
@@ -718,6 +746,8 @@
         formatRmsDate,
         progressActionBtnClass,
         offerApprovalPendingHint,
+        pipelineOnboardDateLabel,
+        pipelineInterviewScheduleLabel,
         appCandidateName,
         appClientName,
         appJobTitle,

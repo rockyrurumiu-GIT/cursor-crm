@@ -908,6 +908,37 @@ def offer_record_to_dict(
     }
 
 
+def offer_planned_onboard_by_application_ids(
+    db: Session,
+    application_ids: List[int],
+    *,
+    RmsOfferRecord: Type[Any],
+) -> Dict[int, str]:
+    """Latest pending/approved offer record's planned onboard date per application."""
+    ids = sorted({int(i) for i in application_ids if i is not None})
+    if not ids:
+        return {}
+
+    records = (
+        db.query(RmsOfferRecord)
+        .filter(
+            RmsOfferRecord.application_id.in_(ids),
+            RmsOfferRecord.status.in_(("pending", "approved")),
+        )
+        .order_by(RmsOfferRecord.id.desc())
+        .all()
+    )
+    out: Dict[int, str] = {}
+    for record in records:
+        app_id = int(record.application_id)
+        if app_id in out:
+            continue
+        raw = str(getattr(record, "planned_onboard_date", None) or "").strip()
+        if raw:
+            out[app_id] = raw
+    return out
+
+
 def pending_approval_info_by_application_ids(
     db: Session,
     application_ids: List[int],

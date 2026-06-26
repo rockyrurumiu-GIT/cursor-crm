@@ -214,6 +214,14 @@
     }
     .crm-table.rms-candidates-table .crm-th,
     .crm-table.rms-candidates-table .crm-td { white-space: nowrap; }
+    .crm-table.rms-jobs-table .crm-name-link,
+    .crm-table.rms-candidates-table .crm-name-link,
+    .crm-table[data-table-id="rms-offer-management"] .crm-name-link {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-align: inherit;
+    }
     .crm-table.rms-candidates-table .crm-th.rms-col-major,
     .crm-table.rms-candidates-table .crm-td.rms-col-major {
         width: 5.5rem;
@@ -630,6 +638,13 @@
         white-space: nowrap;
         gap: 0.15rem;
         max-width: 100%;
+    }
+    .rms-pipeline-onboard-date {
+        margin-left: 0.25rem;
+        font-size: 0.72rem;
+        color: #57606a;
+        flex-shrink: 0;
+        white-space: nowrap;
     }
     .rms-offer-approval-hint {
         display: inline-flex;
@@ -1128,25 +1143,25 @@
                 <tbody>
                     <tr v-for="(j, idx) in pagedJobs" :key="j.id">
                         <td class="crm-td rms-sticky-serial tabular-nums">{{ (jobsCurrentPage - 1) * jobsPageSize + idx + 1 }}</td>
-                        <td class="crm-td crm-name-cell rms-sticky-title"><button type="button" class="crm-name-link" @click="openJobView(j)">{{ j.title || '—' }}</button></td>
-                        <td class="crm-td">{{ j.client_name || clientNameById(j.client_id) || '—' }}</td>
+                        <td class="crm-td crm-name-cell rms-sticky-title"><button type="button" class="crm-name-link" @click="openJobView(j)"><span class="crm-cell-clip">{{ j.title || '—' }}</span></button></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.client_name || clientNameById(j.client_id) || '—' }}</div></td>
                         <td class="crm-td">{{ priorityLabel(j.priority) }}</td>
                         <td class="crm-td">{{ statusLabel(j.status) }}</td>
                         <td class="crm-td tabular-nums">{{ j.active_recommendation_count ?? 0 }}</td>
                         <td class="crm-td tabular-nums">{{ j.historical_recommendation_count ?? 0 }}</td>
-                        <td class="crm-td rms-col-jd"><div class="crm-cell-clip">{{ j.job_description || '—' }}</div></td>
+                        <td class="crm-td rms-col-jd"><div class="crm-cell-clip crm-cell-clip--wrap">{{ j.job_description || '—' }}</div></td>
                         <td class="crm-td">{{ j.headcount }}</td>
-                        <td class="crm-td tabular-nums">{{ displayJobSalaryCap(j.salary_cap) }}</td>
-                        <td class="crm-td">{{ j.years_required || '—' }}</td>
-                        <td class="crm-td">{{ j.location || '—' }}</td>
-                        <td class="crm-td">{{ j.education || '—' }}</td>
-                        <td class="crm-td">{{ j.overtime_travel || '—' }}</td>
-                        <td class="crm-td">{{ j.department || '—' }}</td>
-                        <td class="crm-td">{{ j.interviewer || '—' }}</td>
-                        <td class="crm-td">{{ j.sales_owner_label || '—' }}</td>
-                        <td class="crm-td">{{ j.delivery_owner_label || '—' }}</td>
-                        <td class="crm-td">{{ j.recruitment_owner_label || '—' }}</td>
-                        <td class="crm-td rms-col-note"><div class="crm-cell-clip">{{ j.note || '—' }}</div></td>
+                        <td class="crm-td tabular-nums"><div class="crm-cell-clip">{{ displayJobSalaryCap(j.salary_cap) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.years_required || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.location || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.education || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.overtime_travel || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.department || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.interviewer || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.sales_owner_label || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.delivery_owner_label || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ j.recruitment_owner_label || '—' }}</div></td>
+                        <td class="crm-td rms-col-note"><div class="crm-cell-clip crm-cell-clip--wrap">{{ j.note || '—' }}</div></td>
                         <td class="crm-td whitespace-nowrap rms-col-manage crm-sticky-right-op crm-op-col-xl">
                             <div class="crm-op-actions">
                                 <span v-if="j.can_write" class="group relative inline-flex">
@@ -1261,23 +1276,23 @@
                 </thead>
                 <tbody>
                     <tr v-for="c in pagedCandidates" :key="c.id">
-                        <td class="crm-td crm-name-cell rms-candidate-sticky-name"><button type="button" class="crm-name-link" @click="openCandidateDetail(c)">{{ c.name || '—' }}</button></td>
+                        <td class="crm-td crm-name-cell rms-candidate-sticky-name"><button type="button" class="crm-name-link" @click="openCandidateDetail(c)"><span class="crm-cell-clip">{{ c.name || '—' }}</span></button></td>
                         <td class="crm-td">{{ c.age || '—' }}</td>
                         <td class="crm-td">{{ c.work_years || '—' }}</td>
-                        <td class="crm-td">{{ c.phone || '—' }}</td>
-                        <td class="crm-td">{{ displayCandidateContact(c) }}</td>
-                        <td class="crm-td">{{ displayTargetJob(c) }}</td>
-                        <td class="crm-td">{{ displayTargetClient(c) }}</td>
-                        <td class="crm-td">{{ c.city || '—' }}</td>
-                        <td class="crm-td tabular-nums">{{ displaySalary(c.current_salary) }}</td>
-                        <td class="crm-td tabular-nums">{{ displaySalary(c.expected_salary) }}</td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ c.phone || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ displayCandidateContact(c) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ displayTargetJob(c) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ displayTargetClient(c) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ c.city || '—' }}</div></td>
+                        <td class="crm-td tabular-nums"><div class="crm-cell-clip">{{ displaySalary(c.current_salary) }}</div></td>
+                        <td class="crm-td tabular-nums"><div class="crm-cell-clip">{{ displaySalary(c.expected_salary) }}</div></td>
                         <td class="crm-td">{{ formatRmsDate(c.available_date) }}</td>
-                        <td class="crm-td">{{ c.education_level || '—' }}</td>
-                        <td class="crm-td">{{ c.school || '—' }}</td>
-                        <td class="crm-td rms-col-major">{{ c.major || '—' }}</td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ c.education_level || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ c.school || '—' }}</div></td>
+                        <td class="crm-td rms-col-major"><div class="crm-cell-clip">{{ c.major || '—' }}</div></td>
                         <td class="crm-td">{{ c.gender || '—' }}</td>
                         <td class="crm-td">{{ c.marital_status || '—' }}</td>
-                        <td class="crm-td">{{ c.source || '—' }}</td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ c.source || '—' }}</div></td>
                         <td class="crm-td">{{ formatRmsDate(c.recommended_at) }}</td>
                         <td class="crm-td crm-sticky-right-op crm-op-col-wide whitespace-nowrap">
                             <div class="crm-op-actions">
@@ -1402,11 +1417,11 @@
                 <tbody>
                     <tr v-for="a in pagedApplications" :key="a.id">
                         <td class="crm-td crm-name-cell rms-candidate-sticky-name">
-                            <button type="button" class="crm-name-link" @click="openApplicationDetailModal(a)">{{ appCandidateName(a) }}</button>
+                            <button type="button" class="crm-name-link" @click="openApplicationDetailModal(a)"><span class="crm-cell-clip">{{ appCandidateName(a) }}</span></button>
                         </td>
-                        <td class="crm-td">{{ appClientName(a) }}</td>
-                        <td class="crm-td">{{ appJobTitle(a) }}</td>
-                        <td class="crm-td">{{ appJobLocation(a) }}</td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appClientName(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appJobTitle(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appJobLocation(a) }}</div></td>
                         <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
                         <td class="crm-td">{{ receiveLabel(a.receive_status) }}</td>
                         <td class="crm-td">{{ deliveryReviewLabel(a.delivery_review_status) }}</td>
@@ -1421,8 +1436,8 @@
                             </span>
                         </td>
                         <td class="crm-td">{{ protectionLabel(a.status) }}</td>
-                        <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
-                        <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appDeliveryLabel(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appRecommenderLabel(a) }}</div></td>
                         <td class="crm-td crm-sticky-right-op crm-op-col-wide whitespace-nowrap">
                             <div class="crm-op-actions">
                                 <span v-if="a.resume_id" class="group relative inline-flex">
@@ -1501,17 +1516,17 @@
                 </thead>
                 <tbody>
                     <tr v-for="a in pagedDeliveryReviewItems" :key="'dr'+a.id">
-                        <td class="crm-td crm-name-cell rms-candidate-sticky-name"><button type="button" class="crm-name-link" @click="openApplicationDetailModal(a)">{{ appCandidateName(a) }}</button></td>
-                        <td class="crm-td">{{ appClientName(a) }}</td>
-                        <td class="crm-td">{{ appJobTitle(a) }}</td>
-                        <td class="crm-td">{{ appJobLocation(a) }}</td>
+                        <td class="crm-td crm-name-cell rms-candidate-sticky-name"><button type="button" class="crm-name-link" @click="openApplicationDetailModal(a)"><span class="crm-cell-clip">{{ appCandidateName(a) }}</span></button></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appClientName(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appJobTitle(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appJobLocation(a) }}</div></td>
                         <td class="crm-td">{{ appCandidateAge(a) }}</td>
                         <td class="crm-td">{{ appCandidateWorkYears(a) }}</td>
-                        <td class="crm-td tabular-nums">{{ appCandidateCurrentSalary(a) }}</td>
-                        <td class="crm-td tabular-nums">{{ appCandidateExpectedSalary(a) }}</td>
+                        <td class="crm-td tabular-nums"><div class="crm-cell-clip">{{ appCandidateCurrentSalary(a) }}</div></td>
+                        <td class="crm-td tabular-nums"><div class="crm-cell-clip">{{ appCandidateExpectedSalary(a) }}</div></td>
                         <td class="crm-td">{{ appCandidateAvailableDate(a) }}</td>
-                        <td class="crm-td">{{ appCandidateEducation(a) }}</td>
-                        <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appCandidateEducation(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appRecommenderLabel(a) }}</div></td>
                         <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
                         <td class="crm-td crm-sticky-right-op rms-delivery-review-op whitespace-nowrap">
                             <div class="crm-op-actions">
@@ -1631,16 +1646,18 @@
                 </thead>
                 <tbody>
                     <tr v-for="a in pagedPipelineApplications" :key="'pl'+a.id" :class="{ 'rms-pipeline-row--terminal': pipelineRowIsTerminal(a.status) }">
-                        <td class="crm-td crm-name-cell rms-candidate-sticky-name"><button type="button" class="crm-name-link" @click="openApplicationDetailModal(a)">{{ appCandidateName(a) }}</button></td>
-                        <td class="crm-td">{{ appClientName(a) }}</td>
-                        <td class="crm-td">{{ appJobTitle(a) }}</td>
-                        <td class="crm-td">{{ appJobLocation(a) }}</td>
-                        <td class="crm-td">{{ appRecommenderLabel(a) }}</td>
-                        <td class="crm-td">{{ appDeliveryLabel(a) }}</td>
+                        <td class="crm-td crm-name-cell rms-candidate-sticky-name"><button type="button" class="crm-name-link" @click="openApplicationDetailModal(a)"><span class="crm-cell-clip">{{ appCandidateName(a) }}</span></button></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appClientName(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appJobTitle(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appJobLocation(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appRecommenderLabel(a) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ appDeliveryLabel(a) }}</div></td>
                         <td class="crm-td rms-pipeline-progress">
                             <span class="inline-flex items-center flex-nowrap gap-x-1">
                                 <span class="rms-offer-progress-label">
                                     <span>{{ progressLabel(a.status) }}</span>
+                                    <span v-if="pipelineInterviewScheduleLabel(a)" class="rms-pipeline-onboard-date">{{ pipelineInterviewScheduleLabel(a) }}</span>
+                                    <span v-if="pipelineOnboardDateLabel(a)" class="rms-pipeline-onboard-date">{{ pipelineOnboardDateLabel(a) }}</span>
                                     <span v-if="a.status === 'offer_approval_pending'" class="rms-offer-approval-hint-wrap" :data-hint="offerApprovalPendingHint(a)" tabindex="0" :aria-label="offerApprovalPendingHint(a)"><span class="rms-offer-approval-hint">?</span></span>
                                 </span>
                                 <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
@@ -1797,25 +1814,25 @@
                 </thead>
                 <tbody>
                     <tr v-for="row in pagedOfferRecords" :key="'offer'+row.id">
-                        <td class="crm-td rms-offer-sticky-status">{{ row.status_label }}</td>
+                        <td class="crm-td rms-offer-sticky-status"><div class="crm-cell-clip">{{ row.status_label }}</div></td>
                         <td class="crm-td crm-name-cell rms-offer-sticky-candidate">
-                            <button v-if="row.status === 'pending' && canApproveOfferRow(row)" type="button" class="crm-name-link" @click="openOfferDetailModal(row)">{{ row.candidate_name || '—' }}</button>
-                            <span v-else>{{ row.candidate_name || '—' }}</span>
+                            <button v-if="row.status === 'pending' && canApproveOfferRow(row)" type="button" class="crm-name-link" @click="openOfferDetailModal(row)"><span class="crm-cell-clip">{{ row.candidate_name || '—' }}</span></button>
+                            <span v-else class="crm-cell-clip">{{ row.candidate_name || '—' }}</span>
                         </td>
-                        <td class="crm-td">{{ row.current_approval_node_label || '—' }}</td>
-                        <td class="crm-td">{{ row.pending_approver_label || '—' }}</td>
-                        <td class="crm-td">{{ row.client_name || '—' }}</td>
-                        <td class="crm-td">{{ row.job_title || '—' }}</td>
-                        <td class="crm-td">{{ formatOfferRowQuote(row) }}</td>
-                        <td class="crm-td">{{ formatOfferListMoney(row.pre_tax_salary) }}</td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ row.current_approval_node_label || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ row.pending_approver_label || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ row.client_name || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ row.job_title || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ formatOfferRowQuote(row) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ formatOfferListMoney(row.pre_tax_salary) }}</div></td>
                         <td class="crm-td">{{ row.probation_days || '—' }}</td>
                         <td class="crm-td">{{ row.probation_discount_months === '0' ? '不打折' : (row.probation_discount_months || '—') }}</td>
-                        <td class="crm-td">{{ formatOfferListMoney(row.gm_amount) }}</td>
-                        <td class="crm-td">{{ formatOfferListGmPct(row.gm_pct) }}</td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ formatOfferListMoney(row.gm_amount) }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ formatOfferListGmPct(row.gm_pct) }}</div></td>
                         <td class="crm-td">{{ row.planned_onboard_date || '—' }}</td>
-                        <td class="crm-td">{{ row.recommended_by_label || '—' }}</td>
-                        <td class="crm-td">{{ row.created_by_label || '—' }}</td>
-                        <td class="crm-td" :class="{ 'rms-offer-reason-loss': row.status === 'offer_dropped' || row.status === 'onboarding_lost' }">{{ row.reason || '—' }}</td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ row.recommended_by_label || '—' }}</div></td>
+                        <td class="crm-td"><div class="crm-cell-clip">{{ row.created_by_label || '—' }}</div></td>
+                        <td class="crm-td" :class="{ 'rms-offer-reason-loss': row.status === 'offer_dropped' || row.status === 'onboarding_lost' }"><div class="crm-cell-clip crm-cell-clip--wrap">{{ row.reason || '—' }}</div></td>
                         <td class="crm-td">{{ formatRmsDate(row.created_at) }}</td>
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div v-if="row.status === 'pending' && canApproveOfferRow(row)" class="crm-op-actions">
@@ -1964,7 +1981,7 @@
                             <td class="crm-td">{{ progressLabel(h.from_status) }}</td>
                             <td class="crm-td">{{ progressLabel(h.to_status) }}</td>
                             <td class="crm-td">{{ formatRmsDate(h.changed_at) }}</td>
-                            <td class="crm-td">{{ h.note || h.reason || '—' }}</td>
+                            <td class="crm-td"><div class="crm-cell-clip crm-cell-clip--wrap">{{ h.note || h.reason || '—' }}</div></td>
                         </tr>
                     </tbody>
                 </table>
@@ -2019,13 +2036,13 @@
                                         @mousemove="moveExistingCandidatePopover($event)"
                                         @mouseleave="scheduleHideExistingCandidatePopover"
                                     >{{ c.name || ('#' + c.id) }}</td>
-                                    <td class="crm-td">{{ c.phone || '—' }}</td>
-                                    <td class="crm-td">{{ c.current_title || '—' }}</td>
-                                    <td class="crm-td">{{ c.current_company || '—' }}</td>
-                                    <td class="crm-td">{{ c.school || '—' }}</td>
-                                    <td class="crm-td">{{ c.major || '—' }}</td>
-                                    <td class="crm-td">{{ c.city || '—' }}</td>
-                                    <td class="crm-td">{{ c.source || '—' }}</td>
+                                    <td class="crm-td"><div class="crm-cell-clip">{{ c.phone || '—' }}</div></td>
+                                    <td class="crm-td"><div class="crm-cell-clip">{{ c.current_title || '—' }}</div></td>
+                                    <td class="crm-td"><div class="crm-cell-clip">{{ c.current_company || '—' }}</div></td>
+                                    <td class="crm-td"><div class="crm-cell-clip">{{ c.school || '—' }}</div></td>
+                                    <td class="crm-td"><div class="crm-cell-clip">{{ c.major || '—' }}</div></td>
+                                    <td class="crm-td"><div class="crm-cell-clip">{{ c.city || '—' }}</div></td>
+                                    <td class="crm-td"><div class="crm-cell-clip">{{ c.source || '—' }}</div></td>
                                     <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                                         <a
                                             v-if="c.resume_id && resumeCanView(c)"
@@ -2691,15 +2708,15 @@
 <script src="/static/js/vendor/vue.global.prod.js"></script>
 <script src="/static/js/core/crm-api.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
-<script src="/static/js/pages/rms-application-labels.js?v=rms-ui-20260636"></script>
-<script src="/static/js/pages/rms-core.js?v=rms-ui-20260636"></script>
-<script src="/static/js/pages/rms-candidate-report.js?v=rms-ui-20260636"></script>
-<script src="/static/js/pages/rms-jobs.js?v=rms-ui-20260636"></script>
-<script src="/static/js/pages/rms-candidates.js?v=rms-ui-20260636"></script>
-<script src="/static/js/pages/rms-applications.js?v=rms-ui-20260636"></script>
-<script src="/static/js/pages/rms-pipeline.js?v=rms-ui-20260624a"></script>
-<script src="/static/js/pages/rms-delivery-review.js?v=rms-ui-20260636"></script>
-<script src="/static/js/pages/rms-roster-conversion.js?v=rms-ui-20260636"></script>
-<script src="/static/js/pages/rms-offer-management.js?v=rms-ui-20260636"></script>
-<script src="/static/js/pages/rms.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-application-labels.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-core.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-candidate-report.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-jobs.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-candidates.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-applications.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-pipeline.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-delivery-review.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-roster-conversion.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-offer-management.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms.js?v=rms-ui-20260626c"></script>
 {% endblock %}

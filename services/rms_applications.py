@@ -23,6 +23,7 @@ from schemas.rms import (
     normalize_application_status,
     normalize_rms_date,
     utc_date_str,
+    format_interview_schedule_display,
     validate_delivery_review_failed_note,
     validate_hired_at,
     validate_status_correction_note,
@@ -431,8 +432,50 @@ def application_to_dict(row: Any) -> Dict[str, Any]:
         "converted_to_roster_at": normalize_rms_date(getattr(row, "converted_to_roster_at", None)),
         "converted_to_roster_by": getattr(row, "converted_to_roster_by", None),
         "can_submit_offer_approval": False,
+        "planned_onboard_date": "",
+        "first_interview_schedule": "",
+        "second_interview_schedule": "",
     }
     return d
+
+
+def interview_schedule_by_application_ids(
+    db: Session,
+    application_ids: List[int],
+    *,
+    RmsApplicationStatusHistory: Type[Any],
+) -> Dict[int, Dict[str, str]]:
+    """Latest 一面/二面时间备注（来自进入待一面/一面通过时的状态历史）。"""
+    ids = sorted({int(i) for i in application_ids if i is not None})
+    if not ids:
+        return {}
+
+    rows = (
+        db.query(RmsApplicationStatusHistory)
+        .filter(
+            RmsApplicationStatusHistory.application_id.in_(ids),
+            RmsApplicationStatusHistory.to_status.in_(
+                ("pending_first_interview", "first_interview_passed")
+            ),
+        )
+        .order_by(RmsApplicationStatusHistory.id.desc())
+        .all()
+    )
+    out: Dict[int, Dict[str, str]] = {}
+    for row in rows:
+        app_id = int(row.application_id)
+        bucket = out.setdefault(app_id, {})
+        to_status = (row.to_status or "").strip()
+        note = str(getattr(row, "note", None) or "")
+        if to_status == "pending_first_interview" and "first_interview_schedule" not in bucket:
+            val = format_interview_schedule_display(note, kind="first")
+            if val:
+                bucket["first_interview_schedule"] = val
+        elif to_status == "first_interview_passed" and "second_interview_schedule" not in bucket:
+            val = format_interview_schedule_display(note, kind="second")
+            if val:
+                bucket["second_interview_schedule"] = val
+    return out
 
 
 def _clients_by_id(db: Session, Client: Type[Any], client_ids: set[int]) -> Dict[int, Any]:
@@ -449,6 +492,8 @@ def _application_to_dict_with_capabilities(
     *,
     Client: Type[Any],
     offer_approval_info: Optional[Dict[int, Dict[str, str]]] = None,
+    offer_onboard_dates: Optional[Dict[int, str]] = None,
+    interview_schedules: Optional[Dict[int, Dict[str, str]]] = None,
 ) -> Dict[str, Any]:
     items = _applications_to_dicts_with_capabilities(
         db,
@@ -456,6 +501,8 @@ def _application_to_dict_with_capabilities(
         [row],
         Client=Client,
         offer_approval_info=offer_approval_info,
+        offer_onboard_dates=offer_onboard_dates,
+        interview_schedules=interview_schedules,
     )
     return items[0]
 
@@ -467,10 +514,14 @@ def _applications_to_dicts_with_capabilities(
     *,
     Client: Type[Any],
     offer_approval_info: Optional[Dict[int, Dict[str, str]]] = None,
+    offer_onboard_dates: Optional[Dict[int, str]] = None,
+    interview_schedules: Optional[Dict[int, Dict[str, str]]] = None,
 ) -> List[Dict[str, Any]]:
     client_ids = {int(r.client_id) for r in rows if getattr(r, "client_id", None) is not None}
     clients_by_id = _clients_by_id(db, Client, client_ids)
     offer_approval_info = offer_approval_info or {}
+    offer_onboard_dates = offer_onboard_dates or {}
+    interview_schedules = interview_schedules or {}
     result: List[Dict[str, Any]] = []
     for row in rows:
         d = application_to_dict(row)
@@ -487,6 +538,14 @@ def _applications_to_dicts_with_capabilities(
         if extra:
             d["offer_current_approval_node_label"] = extra.get("offer_current_approval_node_label") or ""
             d["offer_pending_approver_label"] = extra.get("offer_pending_approver_label") or ""
+        onboard = offer_onboard_dates.get(int(row.id))
+        if onboard:
+            d["planned_onboard_date"] = normalize_rms_date(onboard) or onboard
+        sched = interview_schedules.get(int(row.id)) or {}
+        if sched.get("first_interview_schedule"):
+            d["first_interview_schedule"] = sched["first_interview_schedule"]
+        if sched.get("second_interview_schedule"):
+            d["second_interview_schedule"] = sched["second_interview_schedule"]
         result.append(d)
     return result
 
@@ -516,6 +575,7 @@ def list_applications(
     status: Optional[str] = None,
     RmsOfferRecord: Optional[Type[Any]] = None,
     RmsOfferApprovalStep: Optional[Type[Any]] = None,
+    RmsApplicationStatusHistory: Optional[Type[Any]] = None,
 ) -> List[Dict[str, Any]]:
     q = rms_ds.scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
     if job_id is not None:
@@ -528,20 +588,46 @@ def list_applications(
         q = q.filter(RmsApplication.status == status)
     rows = q.order_by(RmsApplication.id.desc()).all()
     offer_approval_info: Dict[int, Dict[str, str]] = {}
+    offer_onboard_dates: Dict[int, str] = {}
     if RmsOfferRecord is not None and RmsOfferApprovalStep is not None:
+        from services import rms_offer_approval as offer_svc
+
         pending_app_ids = [
             int(r.id)
             for r in rows
             if (getattr(r, "status", None) or "").strip() == "offer_approval_pending"
         ]
         if pending_app_ids:
-            from services import rms_offer_approval as offer_svc
-
             offer_approval_info = offer_svc.pending_approval_info_by_application_ids(
                 db,
                 pending_app_ids,
                 RmsOfferRecord=RmsOfferRecord,
                 RmsOfferApprovalStep=RmsOfferApprovalStep,
+            )
+        onboard_app_ids = [
+            int(r.id)
+            for r in rows
+            if (getattr(r, "status", None) or "").strip() in ("offer_approval_pending", "onboarding")
+        ]
+        if onboard_app_ids:
+            offer_onboard_dates = offer_svc.offer_planned_onboard_by_application_ids(
+                db,
+                onboard_app_ids,
+                RmsOfferRecord=RmsOfferRecord,
+            )
+    interview_schedules: Dict[int, Dict[str, str]] = {}
+    if RmsApplicationStatusHistory is not None:
+        interview_app_ids = [
+            int(r.id)
+            for r in rows
+            if (getattr(r, "status", None) or "").strip()
+            in ("pending_first_interview", "first_interview_passed")
+        ]
+        if interview_app_ids:
+            interview_schedules = interview_schedule_by_application_ids(
+                db,
+                interview_app_ids,
+                RmsApplicationStatusHistory=RmsApplicationStatusHistory,
             )
     return _applications_to_dicts_with_capabilities(
         db,
@@ -549,6 +635,8 @@ def list_applications(
         rows,
         Client=Client,
         offer_approval_info=offer_approval_info,
+        offer_onboard_dates=offer_onboard_dates,
+        interview_schedules=interview_schedules,
     )
 
 
@@ -561,6 +649,7 @@ def get_application(
     *,
     RmsOfferRecord: Optional[Type[Any]] = None,
     RmsOfferApprovalStep: Optional[Type[Any]] = None,
+    RmsApplicationStatusHistory: Optional[Type[Any]] = None,
 ) -> Dict[str, Any]:
     row = (
         rms_ds.scoped_applications_query(db, ctx, RmsApplication, Client, action="read")
@@ -570,18 +659,34 @@ def get_application(
     if not row:
         raise HTTPException(status_code=404, detail="推荐记录不存在")
     offer_approval_info: Dict[int, Dict[str, str]] = {}
-    if (
-        RmsOfferRecord is not None
-        and RmsOfferApprovalStep is not None
-        and (row.status or "").strip() == "offer_approval_pending"
-    ):
+    offer_onboard_dates: Dict[int, str] = {}
+    interview_schedules: Dict[int, Dict[str, str]] = {}
+    if RmsOfferRecord is not None and RmsOfferApprovalStep is not None:
         from services import rms_offer_approval as offer_svc
 
-        offer_approval_info = offer_svc.pending_approval_info_by_application_ids(
+        status = (row.status or "").strip()
+        if status == "offer_approval_pending":
+            offer_approval_info = offer_svc.pending_approval_info_by_application_ids(
+                db,
+                [int(row.id)],
+                RmsOfferRecord=RmsOfferRecord,
+                RmsOfferApprovalStep=RmsOfferApprovalStep,
+            )
+        if status in ("offer_approval_pending", "onboarding"):
+            offer_onboard_dates = offer_svc.offer_planned_onboard_by_application_ids(
+                db,
+                [int(row.id)],
+                RmsOfferRecord=RmsOfferRecord,
+            )
+    status = (row.status or "").strip()
+    if (
+        RmsApplicationStatusHistory is not None
+        and status in ("pending_first_interview", "first_interview_passed")
+    ):
+        interview_schedules = interview_schedule_by_application_ids(
             db,
             [int(row.id)],
-            RmsOfferRecord=RmsOfferRecord,
-            RmsOfferApprovalStep=RmsOfferApprovalStep,
+            RmsApplicationStatusHistory=RmsApplicationStatusHistory,
         )
     return _application_to_dict_with_capabilities(
         db,
@@ -589,6 +694,8 @@ def get_application(
         row,
         Client=Client,
         offer_approval_info=offer_approval_info,
+        offer_onboard_dates=offer_onboard_dates,
+        interview_schedules=interview_schedules,
     )
 
 

@@ -331,6 +331,28 @@ def validate_delivery_review_failed_note(note: str) -> str:
     return v
 
 
+def format_interview_schedule_display(note: str, *, kind: str) -> str:
+    """Extract interview time text from status-history note (pipeline display)."""
+    raw = (note or "").strip()
+    if not raw:
+        return ""
+    if kind == "first":
+        prefix = "一面时间"
+        require_prefix = False
+    elif kind == "second":
+        prefix = "二面时间"
+        require_prefix = True
+    else:
+        return ""
+    m = re.search(rf"{re.escape(prefix)}[:：]?\s*(.+)", raw)
+    if m:
+        rest = (m.group(1) or "").strip()
+        return rest or raw
+    if require_prefix:
+        return ""
+    return raw
+
+
 def reject_forbidden_application_keys(body: dict) -> None:
     from fastapi import HTTPException
 

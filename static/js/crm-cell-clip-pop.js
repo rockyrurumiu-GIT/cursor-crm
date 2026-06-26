@@ -114,7 +114,7 @@
         return thead.getBoundingClientRect().bottom;
     }
 
-    function popWidthPx(clip, cellRect, pop) {
+    function popWidthPx(clip, cellRect, pop, options) {
         const vw = window.innerWidth;
         const pad = VIEWPORT_PAD;
         const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
@@ -124,11 +124,22 @@
         if (pop) {
             const prevWidth = pop.style.width;
             const prevMaxWidth = pop.style.maxWidth;
+            const prevWs = pop.style.whiteSpace;
+            const prevWb = pop.style.wordBreak;
+            if (options && options.wrap) {
+                pop.style.whiteSpace = 'normal';
+                pop.style.wordBreak = 'break-word';
+            } else {
+                pop.style.whiteSpace = 'nowrap';
+                pop.style.wordBreak = 'normal';
+            }
             pop.style.width = 'max-content';
             pop.style.maxWidth = `${maxW}px`;
             contentW = pop.scrollWidth;
             pop.style.width = prevWidth;
             pop.style.maxWidth = prevMaxWidth;
+            pop.style.whiteSpace = prevWs;
+            pop.style.wordBreak = prevWb;
         }
         const target = contentW
             ? Math.max(cellRect.width, Math.min(preferred, contentW))
@@ -160,7 +171,33 @@
         const spaceBelow = vh - anchorTop - pad;
         const spaceAbove = anchor.bottom - minTop;
         const viewportMax = vh - pad * 2;
-        const width = popWidthPx(clip, cellRect, pop);
+        const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+        const preferred = Math.min(26 * rootPx, window.innerWidth - pad * 2);
+        const useWrap = clip.classList.contains('crm-cell-clip--wrap');
+
+        pop.style.visibility = 'hidden';
+        pop.style.top = `${anchorTop}px`;
+        pop.style.maxHeight = `${viewportMax}px`;
+
+        let width;
+        if (useWrap) {
+            pop.style.whiteSpace = 'normal';
+            pop.style.wordBreak = 'break-word';
+            width = popWidthPx(clip, cellRect, pop, { wrap: true });
+        } else {
+            pop.style.whiteSpace = 'nowrap';
+            pop.style.wordBreak = 'normal';
+            pop.style.width = 'max-content';
+            pop.style.maxWidth = `${window.innerWidth - pad * 2}px`;
+            const nowrapW = pop.scrollWidth;
+            if (nowrapW > preferred) {
+                pop.style.whiteSpace = 'normal';
+                pop.style.wordBreak = 'break-word';
+                width = popWidthPx(clip, cellRect, pop, { wrap: true });
+            } else {
+                width = Math.min(Math.max(cellRect.width, nowrapW), window.innerWidth - pad * 2);
+            }
+        }
 
         pop.style.left = `${popLeftPx(clip, anchor, width)}px`;
         pop.style.width = `${width}px`;
@@ -168,9 +205,6 @@
         pop.style.pointerEvents = 'auto';
 
         // 用最终宽度测量全文所需高度（含 +2px 缓冲，避免最后一行被裁）
-        pop.style.visibility = 'hidden';
-        pop.style.top = `${anchorTop}px`;
-        pop.style.maxHeight = `${viewportMax}px`;
         const needH = pop.scrollHeight + 2;
         pop.style.visibility = '';
 
@@ -209,6 +243,8 @@
         pop.style.overflowY = '';
         pop.style.pointerEvents = '';
         pop.style.visibility = '';
+        pop.style.whiteSpace = '';
+        pop.style.wordBreak = '';
     }
 
     function isPortalPopTarget(node) {
