@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, date
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -167,21 +167,14 @@ def validate_for_submit(requirement: Dict[str, Any]) -> Tuple[bool, List[str]]:
     for i, row in enumerate(positions):
         if not str(row.get("role") or "").strip():
             errors.append(f"需求概述第 {i + 1} 个岗位：岗位名称必填")
-        if not str(row.get("start_date") or "").strip():
-            errors.append(f"需求概述第 {i + 1} 个岗位：到岗时间必填")
-
-    urgent_threshold = int(rules.get("urgent_days_threshold") or 90)
-    today = date.today()
-    for row in positions:
         sd = str(row.get("start_date") or "").strip()
         if not sd:
+            errors.append(f"需求概述第 {i + 1} 个岗位：需求释放时间必填")
             continue
         try:
-            d = datetime.strptime(sd[:10], "%Y-%m-%d").date()
-            if (d - today).days <= urgent_threshold and not requirement.get("urgent"):
-                errors.append(f"到岗时间 {sd} 在 {urgent_threshold} 天内，请勾选「加急」并说明")
+            datetime.strptime(sd[:10], "%Y-%m-%d").date()
         except ValueError:
-            errors.append(f"到岗时间格式无效：{sd}")
+            errors.append(f"需求概述第 {i + 1} 个岗位：需求释放时间格式无效：{sd}")
 
     return (len(errors) == 0, errors)
 

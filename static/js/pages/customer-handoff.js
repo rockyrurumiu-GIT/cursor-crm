@@ -4,6 +4,27 @@
     const clientId = cfg.clientId;
     let initialHandoffId = cfg.handoffId;
 
+    async function showAckDialog(opts) {
+        const title = String((opts && opts.title) || '提示');
+        const targetText = String((opts && opts.targetText) || '');
+        const hint = String((opts && opts.hint) || '');
+        const confirmText = String((opts && opts.confirmText) || '知道了');
+        const zIndex = Number((opts && opts.zIndex) || 200);
+        if (typeof window.crmConfirmDeleteDialog === 'function') {
+            await window.crmConfirmDeleteDialog({
+                title,
+                targetText,
+                hint,
+                confirmText,
+                singleButton: true,
+                zIndex,
+                confirmClass: 'flex-1 py-2 rounded-md bg-[#4C6491] text-white text-sm font-medium hover:bg-[#3D5176]',
+            });
+            return;
+        }
+        alert(targetText || title);
+    }
+
     createApp({
         setup() {
             const auth = () => window.crmAuthHeader();
@@ -188,18 +209,30 @@
                 delivery_owner: form.value.delivery_owner,
             });
 
-            const saveDraft = async () => {
+            const saveDraft = async (opts) => {
+                const notify = !opts || opts.notify !== false;
                 const r = await fetch('/api/handoffs/' + selectedId.value, {
                     method: 'PUT', headers: { ...auth(), 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload()),
                 });
                 const d = await r.json();
-                if (r.ok) { syncFormFromHandoff({ ...d, logs: logs.value }); alert('已保存'); }
-                else alert(d.detail || '保存失败');
+                if (r.ok) {
+                    syncFormFromHandoff({ ...d, logs: logs.value });
+                    if (notify) {
+                        await showAckDialog({
+                            title: '草稿已保存',
+                            targetText: '当前交接单内容已保存为草稿。',
+                            hint: '可继续编辑，或提交交付负责人审批。',
+                        });
+                    }
+                    return true;
+                }
+                alert(d.detail || '保存失败');
+                return false;
             };
 
             const submitHandoff = async () => {
-                await saveDraft();
+                if (!(await saveDraft({ notify: false }))) return;
                 const r = await fetch('/api/handoffs/' + selectedId.value + '/submit', { method: 'POST', headers: auth() });
                 const d = await r.json();
                 if (r.ok) { syncFormFromHandoff({ ...d, logs: logs.value }); alert('已提交审批'); await loadHandoffList(); }
@@ -229,8 +262,18 @@
                 if (!ok) return;
                 const r = await fetch('/api/handoffs/' + selectedId.value + '/approve', { method: 'POST', headers: auth() });
                 const d = await r.json();
-                if (r.ok) { await loadHandoff(); await loadHandoffList(); alert('已通过'); }
-                else alert(d.detail || '操作失败');
+                if (r.ok) {
+                    await loadHandoff();
+                    await loadHandoffList();
+                    const h = handoff.value || {};
+                    await showAckDialog({
+                        title: '审批已通过',
+                        targetText: (clientName.value || '该客户') + ' 的交接单「' + (h.title || form.value.title || '—') + '」已通过审批。',
+                        hint: '可继续开展交付准备。',
+                    });
+                } else {
+                    alert(d.detail || '操作失败');
+                }
             };
 
             const confirmReject = async () => {

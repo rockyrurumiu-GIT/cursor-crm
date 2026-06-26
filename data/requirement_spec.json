@@ -42,7 +42,6 @@
   },
   "submit_rules": {
     "min_positions": 1,
-    "require_language": true,
-    "urgent_days_threshold": 30
+    "require_language": true
   }
 }
