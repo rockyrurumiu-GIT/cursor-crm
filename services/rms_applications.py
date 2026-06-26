@@ -27,6 +27,8 @@ from schemas.rms import (
     validate_delivery_review_failed_note,
     validate_hired_at,
     validate_status_correction_note,
+    validate_correction_backward,
+    resolve_transition_history_note,
 )
 from services import rms_scope as rms_ds
 from services.rms_resumes import MAX_RESUME_BYTES
@@ -905,7 +907,7 @@ def transition_application_status(
                 detail=f"不允许从 {from_status} 变更为 {to_status}",
             )
         hist_reason = str(data.get("reason") or "").strip()
-        hist_note = str(data.get("note") or "").strip()
+        hist_note = resolve_transition_history_note(from_status, to_status, data)
     elif mode == "correction":
         if not is_pipeline_eligible_application(row):
             raise HTTPException(
@@ -917,6 +919,7 @@ def transition_application_status(
                 status_code=400,
                 detail="Offer审批中不可通过状态修正变更，须通过审批 API 或等待驳回",
             )
+        validate_correction_backward(from_status, to_status)
         hist_note = validate_status_correction_note(str(data.get("note") or ""))
         hist_reason = "status_correction"
     else:
@@ -957,7 +960,16 @@ def transition_application_status(
         )
     db.commit()
     db.refresh(row)
-    result = application_to_dict(row)
+    sched = interview_schedule_by_application_ids(
+        db, [int(row.id)], RmsApplicationStatusHistory=RmsApplicationStatusHistory
+    )
+    result = _application_to_dict_with_capabilities(
+        db,
+        ctx,
+        row,
+        Client=Client,
+        interview_schedules=sched,
+    )
     if to_status == "hired" and RmsCandidate is not None and RosterEntry is not None:
         from services import rms_roster_check as roster_chk
 

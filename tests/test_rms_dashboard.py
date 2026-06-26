@@ -19,6 +19,7 @@ from tests.test_rms_phase2_mvp import (
     _enable_sales_rms_jobs_write,
     _login,
     _set_client_owner,
+    _status_transition_body,
 )
 
 
@@ -741,7 +742,7 @@ def test_dashboard_period_event_pass_without_push_in_range(
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
     with rms_engine.begin() as conn:
@@ -786,7 +787,7 @@ def test_dashboard_period_push_and_pass_same_range(
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
     with rms_engine.begin() as conn:
@@ -828,7 +829,7 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
 
@@ -851,7 +852,7 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
 
@@ -907,7 +908,7 @@ def test_client_job_stage_interview_first_fail(client_rbac, admin_auth, rms_engi
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
     r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
@@ -933,7 +934,7 @@ def test_client_job_stage_interview_first_pass_pending_second(
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
     r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
@@ -962,7 +963,7 @@ def test_client_job_stage_interview_second_fail(client_rbac, admin_auth, rms_eng
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
     r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
@@ -992,7 +993,7 @@ def test_client_job_stage_interview_second_pass(client_rbac, admin_auth, rms_eng
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
     r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
@@ -1079,7 +1080,7 @@ def test_client_job_stage_snapshot_scheduling_and_onboarding(
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
     _set_application_onboarding(rms_engine, app_id)
@@ -2169,7 +2170,7 @@ def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
 
@@ -2233,7 +2234,7 @@ def test_dashboard_interview_metrics_exclude_rollback_to_first_passed(
         tr = client_rbac.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": to_status, "reason": "ok"},
+            json=_status_transition_body(to_status, reason="ok"),
         )
         assert tr.status_code == 200, tr.text
 
@@ -2289,3 +2290,46 @@ def test_rms_dashboard_metrics_6a2b(client_rbac, admin_auth, rms_engine, uniq):
     assert page.status_code == 200, page.text
     assert "pending_roster_conversion_count" not in page.text
     assert "待转花名册" not in page.text
+
+
+def test_lifecycle_client_screen_pass_includes_later_status_without_scheduling(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """周期内到达 pending_first_interview 及之后（无 scheduling_interview 历史）仍计客筛通过。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"lcsp_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    period_day = "2026-06-27"
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": period_day, "id": app_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'pending_client_screen', 'pending_first_interview', "
+                "'status_correction', '补录待一面', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'pending_first_interview', "
+                "current_stage = 'pending_first_interview' WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    client_screen = next(
+        row for row in dash.json()["lifecycle_funnel"]["rows"] if row["key"] == "client_screen"
+    )
+    assert client_screen["passed"] == 1

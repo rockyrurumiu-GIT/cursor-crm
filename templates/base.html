@@ -2280,6 +2280,13 @@
                         inp.setAttribute('data-crm-field', field.name);
                         if (field.value) { inp.value = String(field.value); }
                         wrap.appendChild(inp);
+                    } else if (field.type === 'time') {
+                        var timeInp = document.createElement('input');
+                        timeInp.type = 'time';
+                        timeInp.className = 'w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm';
+                        timeInp.setAttribute('data-crm-field', field.name);
+                        if (field.value) { timeInp.value = String(field.value); }
+                        wrap.appendChild(timeInp);
                     } else if (field.type === 'select') {
                         var sel = document.createElement('select');
                         sel.className = 'w-full border border-gray-300 rounded-md px-2 py-1.5 text-sm';

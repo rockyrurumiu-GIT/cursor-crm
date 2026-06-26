@@ -193,11 +193,32 @@
     return "rms-progress-btn rms-progress-btn--blue";
   }
 
+  function progressOrderIndex(status) {
+    var s = normalizeProgressStatus(status);
+    var idx = APPLICATION_PROGRESS_STATUSES.indexOf(s);
+    return idx;
+  }
+
   function progressOptionsForCorrection(currentStatus) {
     var cur = normalizeProgressStatus(currentStatus);
-    return APPLICATION_PROGRESS_STATUSES.filter(function (s) { return s !== cur; }).map(function (s) {
+    var curIdx = progressOrderIndex(cur);
+    if (curIdx < 0) return [];
+    return APPLICATION_PROGRESS_STATUSES.filter(function (s) {
+      if (s === cur) return false;
+      var idx = APPLICATION_PROGRESS_STATUSES.indexOf(s);
+      return idx >= 0 && idx < curIdx;
+    }).map(function (s) {
       return { value: s, label: progressLabel(s) };
     });
+  }
+
+  /** 正常推进：约面中→待一面、待一面→一面通过 须填面试日期时间 */
+  function interviewScheduleKindForTransition(fromStatus, toStatus) {
+    var from = normalizeProgressStatus(fromStatus);
+    var to = normalizeProgressStatus(toStatus);
+    if (from === "scheduling_interview" && to === "pending_first_interview") return "first";
+    if (from === "pending_first_interview" && to === "first_interview_passed") return "second";
+    return "";
   }
 
   function isPipelineEligible(app) {
@@ -254,10 +275,12 @@
     if (!app) return "";
     var st = String(app.status || "").trim();
     if (st === "pending_first_interview") {
-      return String(app.first_interview_schedule == null ? "" : app.first_interview_schedule).trim();
+      var first = String(app.first_interview_schedule == null ? "" : app.first_interview_schedule).trim();
+      return first ? first + "（一面）" : "";
     }
     if (st === "first_interview_passed") {
-      return String(app.second_interview_schedule == null ? "" : app.second_interview_schedule).trim();
+      var second = String(app.second_interview_schedule == null ? "" : app.second_interview_schedule).trim();
+      return second ? second + "（二面）" : "";
     }
     return "";
   }
@@ -467,6 +490,8 @@
     progressTransitionsFor: progressTransitionsFor,
     progressActionBtnClass: progressActionBtnClass,
     progressOptionsForCorrection: progressOptionsForCorrection,
+    progressOrderIndex: progressOrderIndex,
+    interviewScheduleKindForTransition: interviewScheduleKindForTransition,
     normalizeProgressStatus: normalizeProgressStatus,
     parseDateOnly: parseDateOnly,
     formatRmsDate: formatRmsDate,

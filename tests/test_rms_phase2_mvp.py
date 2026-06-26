@@ -49,6 +49,22 @@ def _login(client, username: str, password: str = "pass1234"):
     return client.post("/api/auth/login", json={"username": username, "password": password})
 
 
+def _status_transition_body(to_status: str, **extra) -> dict:
+    """Build POST /status JSON; auto-fill interview date/time for required transitions."""
+    body = {"to_status": to_status}
+    body.update(extra)
+    mode = body.get("mode", "transition")
+    if mode == "correction":
+        return body
+    if to_status == "pending_first_interview":
+        body.setdefault("interview_date", "2026-06-01")
+        body.setdefault("interview_time", "10:00")
+    elif to_status == "first_interview_passed":
+        body.setdefault("interview_date", "2026-06-02")
+        body.setdefault("interview_time", "14:00")
+    return body
+
+
 def _create_user(client, admin_auth, username: str, role_codes: list[str], password: str = "pass1234"):
     client.cookies.clear()
     user, pwd = admin_auth
@@ -1872,7 +1888,7 @@ def _advance_to_onboarding(client, login, app_id, *, engine=None):
         r = client.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": st},
+            json=_status_transition_body(st),
         )
         assert r.status_code == 200, r.text
     if engine is not None:
@@ -1916,12 +1932,12 @@ def test_status_correction_allows_backward(client_rbac, admin_auth, rms_engine, 
     client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,
-        json={"to_status": "pending_first_interview"},
+        json=_status_transition_body("pending_first_interview"),
     )
     client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
         cookies=login.cookies,
-        json={"to_status": "first_interview_passed"},
+        json=_status_transition_body("first_interview_passed"),
     )
     r = client_rbac.post(
         f"/api/rms/applications/{app_id}/status",
@@ -2000,6 +2016,98 @@ def test_status_correction_from_hired_clears_hired_at(client_rbac, admin_auth, r
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "onboarding"
     assert r.json()["hired_at"] == ""
+
+
+def test_status_correction_rejects_forward_jump(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={
+            "to_status": "onboarding",
+            "mode": "correction",
+            "note": "不应允许往前跳",
+        },
+    )
+    assert r.status_code == 400, r.text
+    assert "前序" in r.json()["detail"]
+
+
+def test_transition_scheduling_to_pending_first_requires_interview_schedule(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "scheduling_interview"},
+    )
+    missing = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "pending_first_interview"},
+    )
+    assert missing.status_code == 400, missing.text
+    assert "面试" in missing.json()["detail"]
+
+    ok = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={
+            "to_status": "pending_first_interview",
+            "interview_date": "2026-06-27",
+            "interview_time": "15:00",
+        },
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["status"] == "pending_first_interview"
+    assert ok.json()["first_interview_schedule"] == "2026-06-27 15:00"
+    hist = client_rbac.get(
+        f"/api/rms/applications/{app_id}/status-history",
+        cookies=login.cookies,
+    )
+    assert hist.status_code == 200
+    assert hist.json()[0]["note"] == "一面时间2026-06-27 15:00"
+
+
+def test_transition_pending_first_to_passed_requires_second_schedule(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, uniq)
+    for to_status in ("scheduling_interview", "pending_first_interview"):
+        client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json={
+                "to_status": to_status,
+                "interview_date": "2026-06-27",
+                "interview_time": "10:00",
+            },
+        )
+    missing = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "first_interview_passed"},
+    )
+    assert missing.status_code == 400, missing.text
+    assert "面试" in missing.json()["detail"]
+
+    ok = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={
+            "to_status": "first_interview_passed",
+            "interview_date": "2026-06-28",
+            "interview_time": "14:30",
+        },
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["second_interview_schedule"] == "2026-06-28 14:30"
+    hist = client_rbac.get(
+        f"/api/rms/applications/{app_id}/status-history",
+        cookies=login.cookies,
+    )
+    assert hist.json()[0]["note"] == "二面时间2026-06-28 14:30"
 
 
 def test_status_invalid_mode(client_rbac, admin_auth, rms_engine, uniq):

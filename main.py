@@ -426,6 +426,10 @@ class RosterEntry(Base):
     regularization_status = Column(String, default="未转正")
     regularization_date = Column(String, default="")
     monthly_quote_tax = Column(String, default="")
+    quote_unit = Column(String, default="monthly")
+    quote_amount_tax = Column(String, default="")
+    monthly_billable_days = Column(String, default="20.67")
+    daily_billable_hours = Column(String, default="8")
     pre_tax_salary = Column(String, default="")
     salary_quote_ratio = Column(String, default="")
     gms = Column(String, default="")
@@ -727,6 +731,10 @@ def _ensure_roster_schema_compat():
             "delivery_communication": "TEXT DEFAULT ''",
             "business_action": "TEXT DEFAULT ''",
             "bp_involved": "TEXT DEFAULT ''",
+            "quote_unit": "TEXT DEFAULT 'monthly'",
+            "quote_amount_tax": "TEXT DEFAULT ''",
+            "monthly_billable_days": "TEXT DEFAULT '20.67'",
+            "daily_billable_hours": "TEXT DEFAULT '8'",
         }
         for col, ddl in add_cols.items():
             if col not in existing:

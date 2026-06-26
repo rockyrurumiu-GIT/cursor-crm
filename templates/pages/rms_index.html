@@ -2423,9 +2423,9 @@
                         </select>
                     </label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">转正时间</span><input v-model="rosterConvertForm.regularization_date" type="date" class="crm-form-control" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">月报价(含税)<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterMoneyDisplay(rosterConvertForm.monthly_quote_tax)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">报价(含税)<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="rosterQuoteTaxDisplay || formatRosterMoneyDisplay(rosterConvertForm.quote_amount_tax)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">税前工资<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterMoneyDisplay(rosterConvertForm.pre_tax_salary)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
-                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">薪资报价比</span><input v-model="rosterConvertForm.salary_quote_ratio" disabled class="crm-form-control bg-[#f6f8fa] text-[#57606a]" /></label>
+                    <label class="flex flex-col gap-1"><span class="text-[#57606a]">报价系数</span><input v-model="rosterConvertForm.salary_quote_ratio" disabled class="crm-form-control bg-[#f6f8fa] text-[#57606a] tabular-nums" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM$<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterMoneyDisplay(rosterConvertForm.gms)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">GM%<span class="text-red-500" data-rms-roster-required="1">*</span></span><input :value="formatRosterGmPctDisplay(rosterConvertForm.gm_pct)" class="crm-form-control bg-[#f6f8fa] text-[#57606a]" readonly tabindex="-1" /></label>
                     <label class="flex flex-col gap-1"><span class="text-[#57606a]">员工+1</span><input v-model.trim="rosterConvertForm.employee_plus1" class="crm-form-control" /></label>
@@ -2893,17 +2893,18 @@
 {% endblock %}
 {% block page_scripts %}
 <script src="/static/js/vendor/vue.global.prod.js"></script>
+<script src="/static/js/core/crm-finance.js?v=1"></script>
 <script src="/static/js/core/crm-api.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
-<script src="/static/js/pages/rms-application-labels.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms-core.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms-candidate-report.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms-jobs.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms-candidates.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms-applications.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms-pipeline.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms-delivery-review.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms-roster-conversion.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms-offer-management.js?v=rms-ui-20260626f"></script>
-<script src="/static/js/pages/rms.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-application-labels.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-core.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-candidate-report.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-jobs.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-candidates.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-applications.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-pipeline.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-delivery-review.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-roster-conversion.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms-offer-management.js?v=rms-ui-20260636"></script>
+<script src="/static/js/pages/rms.js?v=rms-ui-20260636"></script>
 {% endblock %}

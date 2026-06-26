@@ -24,10 +24,20 @@ from services.delivery_roster import (
     roster_entry_to_dict,
     validate_roster_business_fields,
 )
+from services.quote_finance import (
+    DEFAULT_DAILY_BILLABLE_HOURS,
+    DEFAULT_MONTHLY_BILLABLE_DAYS,
+    compute_monthly_quote_tax,
+    offer_tax_unit_to_quote_unit,
+)
 
 ScopeAction = Literal["read", "write"]
 
 OFFER_FINANCIAL_ROSTER_KEYS = (
+    "quote_unit",
+    "quote_amount_tax",
+    "monthly_billable_days",
+    "daily_billable_hours",
     "monthly_quote_tax",
     "pre_tax_salary",
     "gms",
@@ -53,40 +63,40 @@ def _format_amount_display(amount: Any) -> str:
 
 
 def _format_quote_tax_display(amount: Any, unit: Any) -> str:
-    _ = unit
-    return _format_amount_display(amount)
-
-
-def _parse_offer_amount(raw: Any) -> float:
-    text = str(raw or "").strip().replace(",", "")
-    if not text:
-        return 0.0
-    try:
-        return float(text)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Offer 报价格式无效")
-
-
-def _format_roster_amount_storage(amount: float) -> str:
-    if amount <= 0:
-        return ""
-    if abs(amount - round(amount)) < 1e-9:
-        return str(int(round(amount)))
-    return f"{amount:.2f}".rstrip("0").rstrip(".")
-
-
-def offer_quote_to_roster_monthly_amount(amount: Any, unit: Any) -> str:
-    raw = _parse_offer_amount(amount)
-    if raw <= 0:
-        return ""
+    amt = _format_amount_display(amount)
     u = str(unit or "").strip()
-    if u == "人天":
-        monthly = raw * ROSTER_MONTHLY_WORK_DAYS
-    elif u == "人时":
-        monthly = raw * ROSTER_MONTHLY_HOURS
-    else:
-        monthly = raw
-    return _format_roster_amount_storage(monthly)
+    if amt and u:
+        return f"{amt} ({u})"
+    return amt
+
+
+def _offer_raw_quote_amount(offer_record: Any) -> str:
+    raw = str(getattr(offer_record, "quote_amount_tax", None) or "").strip()
+    if raw:
+        return raw
+    return str(getattr(offer_record, "monthly_quote_tax", None) or "").strip()
+
+
+def _apply_offer_financials_to_roster_payload(payload: Dict[str, str], offer_record: Any) -> Dict[str, str]:
+    out = dict(payload)
+    quote_tax_unit = str(getattr(offer_record, "quote_tax_unit", None) or "").strip() or "人月"
+    quote_amount = _offer_raw_quote_amount(offer_record)
+    days = str(getattr(offer_record, "monthly_billable_days", None) or DEFAULT_MONTHLY_BILLABLE_DAYS)
+    hours = str(getattr(offer_record, "daily_billable_hours", None) or int(DEFAULT_DAILY_BILLABLE_HOURS))
+    out["quote_unit"] = offer_tax_unit_to_quote_unit(quote_tax_unit)
+    out["quote_amount_tax"] = quote_amount
+    out["monthly_billable_days"] = days
+    out["daily_billable_hours"] = hours
+    out["monthly_quote_tax"] = compute_monthly_quote_tax(
+        quote_amount,
+        quote_tax_unit,
+        days,
+        hours,
+    )
+    out["pre_tax_salary"] = str(getattr(offer_record, "pre_tax_salary", None) or "").strip()
+    out["gms"] = str(getattr(offer_record, "gm_amount", None) or "").strip()
+    out["gm_pct"] = _format_gm_pct_for_roster(getattr(offer_record, "gm_pct", None))
+    return out
 
 
 def _format_gm_pct_for_roster(val: Any) -> str:
@@ -112,18 +122,6 @@ def _approved_offer_for_application(
         .order_by(RmsOfferRecord.id.desc())
         .first()
     )
-
-
-def _apply_offer_financials_to_roster_payload(payload: Dict[str, str], offer_record: Any) -> Dict[str, str]:
-    out = dict(payload)
-    out["monthly_quote_tax"] = offer_quote_to_roster_monthly_amount(
-        getattr(offer_record, "monthly_quote_tax", None),
-        getattr(offer_record, "quote_tax_unit", None),
-    )
-    out["pre_tax_salary"] = str(getattr(offer_record, "pre_tax_salary", None) or "").strip()
-    out["gms"] = str(getattr(offer_record, "gm_amount", None) or "").strip()
-    out["gm_pct"] = _format_gm_pct_for_roster(getattr(offer_record, "gm_pct", None))
-    return out
 
 
 def _load_convertible_application(
@@ -235,13 +233,16 @@ def get_roster_draft(
         client,
         offer_record=offer,
     )
+    apply_roster_salary_quote_ratio(payload)
+    quote_tax_unit = str(getattr(offer, "quote_tax_unit", None) or "").strip() or "人月"
     return {
         "application_id": app.id,
         "converted_to_roster_entry_id": getattr(app, "converted_to_roster_entry_id", None),
         "client_id": int(app.client_id),
         "offer_financial_locked": True,
-        "quote_tax_unit": str(getattr(offer, "quote_tax_unit", None) or "").strip(),
-        "quote_tax_display": _format_amount_display(payload["monthly_quote_tax"]),
+        "quote_tax_unit": quote_tax_unit,
+        "quote_tax_display": _format_quote_tax_display(payload.get("quote_amount_tax", ""), quote_tax_unit),
+        "quote_coefficient": payload.get("salary_quote_ratio", ""),
         "roster_payload": payload,
     }
 

@@ -23,9 +23,12 @@ const STANDARD_FORM_FIELDS = [
     { key: 'business_line', label: '业务线' },
     { key: 'entry_date', label: '入职日期' },
     { key: 'regularization_date', label: '转正时间' },
-    { key: 'monthly_quote_tax', label: '月报价(含税)' },
+    { key: 'quote_unit', label: '报价单位' },
+    { key: 'quote_amount_tax', label: '报价(含税)' },
+    { key: 'monthly_billable_days', label: '月计费天数' },
+    { key: 'daily_billable_hours', label: '每日计费小时数' },
     { key: 'pre_tax_salary', label: '税前工资' },
-    { key: 'salary_quote_ratio', label: '薪资报价比' },
+    { key: 'salary_quote_ratio', label: '报价系数' },
     { key: 'gms', label: 'GM$' },
     { key: 'gm_pct', label: 'GM%' },
     { key: 'employee_plus1', label: '员工+1' },
@@ -59,9 +62,12 @@ const ZNTX_FORM_FIELDS = [
     { key: 'business_line', label: '业务线' },
     { key: 'entry_date', label: '入职时间' },
     { key: 'regularization_date', label: '转正时间' },
-    { key: 'monthly_quote_tax', label: '月报价(含税)' },
+    { key: 'quote_unit', label: '报价单位' },
+    { key: 'quote_amount_tax', label: '报价(含税)' },
+    { key: 'monthly_billable_days', label: '月计费天数' },
+    { key: 'daily_billable_hours', label: '每日计费小时数' },
     { key: 'pre_tax_salary', label: '税前工资' },
-    { key: 'salary_quote_ratio', label: '薪资报价比' },
+    { key: 'salary_quote_ratio', label: '报价系数' },
     { key: 'gms', label: 'GM$' },
     { key: 'gm_pct', label: 'GM%' },
     { key: 'employee_plus1', label: '员工+1' },
@@ -90,7 +96,7 @@ const REQUIRED_FIELD_KEYS = new Set([
     'business_line',
     'entry_date',
     'regularization_status',
-    'monthly_quote_tax',
+    'quote_amount_tax',
     'pre_tax_salary',
     'gms',
     'gm_pct',
@@ -106,6 +112,9 @@ function emptyForm() {
     FORM_FIELDS.forEach((f) => { o[f.key] = ''; });
     o.zntx_onboarding_channel_other = '';
     o.regularization_status = '未转正';
+    o.quote_unit = 'monthly';
+    o.monthly_billable_days = '20.67';
+    o.daily_billable_hours = '8';
     return o;
 }
 /** 从单元格文本解析金额（¥、千分位、空格等） */
@@ -119,7 +128,8 @@ function parseAmountCell(str) {
 function normalizeAmountText(str) {
     return String(str || '').replace(/[¥￥,\s\u00a0]/g, '').trim();
 }
-const ROSTER_AMOUNT_FIELD_KEYS = new Set(['monthly_quote_tax', 'pre_tax_salary', 'gms']);
+const ROSTER_AMOUNT_FIELD_KEYS = new Set(['quote_amount_tax', 'pre_tax_salary', 'gms']);
+const ROSTER_QUOTE_BILLING_KEYS = new Set(['monthly_billable_days', 'daily_billable_hours']);
 const GM_CALC_OUTPUT_FIELD_KEYS = new Set(['gms', 'gm_pct']);
 function formatAmountThousandsInput(raw) {
     const digits = normalizeAmountText(raw);
@@ -291,18 +301,34 @@ const rosterDetailApp = createApp({
         const calcFieldsLocked = ref(false);
         const form = reactive(emptyForm());
         watch(
-            () => [form.monthly_quote_tax, form.pre_tax_salary],
+            () => [
+                form.quote_unit,
+                form.quote_amount_tax,
+                form.monthly_billable_days,
+                form.daily_billable_hours,
+                form.pre_tax_salary,
+            ],
             () => {
                 if (formReadonly.value) return;
-                const q = parseAmountCell(form.monthly_quote_tax);
-                const p = parseAmountCell(form.pre_tax_salary);
-                if (!Number.isFinite(q) || !Number.isFinite(p) || q <= 0) {
-                    form.salary_quote_ratio = '';
-                } else {
-                    form.salary_quote_ratio = formatRatioAsPercent(p / q);
-                }
+                const Fin = window.CrmFinance;
+                if (!Fin) return;
+                form.salary_quote_ratio = Fin.quoteCoefficient(
+                    form.quote_unit,
+                    form.quote_amount_tax,
+                    form.pre_tax_salary,
+                    form.monthly_billable_days,
+                    form.daily_billable_hours,
+                );
             },
         );
+        const showQuoteBillingDays = computed(() => {
+            const u = window.CrmFinance ? window.CrmFinance.normalizeQuoteUnit(form.quote_unit) : String(form.quote_unit || '');
+            return u === 'daily' || u === 'hourly';
+        });
+        const showDailyBillableHours = computed(() => {
+            const u = window.CrmFinance ? window.CrmFinance.normalizeQuoteUnit(form.quote_unit) : String(form.quote_unit || '');
+            return u === 'hourly';
+        });
         const fileInput = ref(null);
         const filters = reactive({
             keyword: '',
@@ -580,24 +606,25 @@ const rosterDetailApp = createApp({
             const rq = Math.round(sumQuote);
             const rp = Math.round(sumPre);
             const rg = Math.round(sumGm);
-            const salaryRatio = rq > 0 ? rp / rq : NaN;
+            const salaryRatio = rq > 0 ? rq / rp : NaN;
             const netQuoteTotal = rq / TAX_DIVISOR;
             const gmRatio = netQuoteTotal > 0 ? rg / netQuoteTotal : NaN;
             const avgQuote = countQuote > 0 ? sumQuote / countQuote : NaN;
             const avgPre = countPre > 0 ? sumPre / countPre : NaN;
             const avgGm = countGm > 0 ? sumGm / countGm : NaN;
-            const avgSalaryRatio = Number.isFinite(avgQuote) && avgQuote > 0 ? avgPre / avgQuote : NaN;
+            const avgSalaryRatio = Number.isFinite(avgQuote) && avgPre > 0 ? avgQuote / avgPre : NaN;
             const netQuoteAvg = Number.isFinite(avgQuote) ? avgQuote / TAX_DIVISOR : NaN;
             const avgGmRatio = netQuoteAvg > 0 ? avgGm / netQuoteAvg : NaN;
+            const fmtCoef = (v) => (window.CrmFinance ? window.CrmFinance.formatQuoteCoefficient(v) : formatRatioAsPercent(v));
             return {
                 quote: formatYuanInteger(sumQuote),
                 pre: formatYuanInteger(sumPre),
-                salaryRatio: formatRatioAsPercent(salaryRatio),
+                salaryRatio: fmtCoef(salaryRatio),
                 gms: formatYuanInteger(sumGm),
                 gmPct: formatRatioAsPercent(gmRatio),
                 avgQuote: formatYuanInteger(avgQuote),
                 avgPre: formatYuanInteger(avgPre),
-                avgSalaryRatio: formatRatioAsPercent(avgSalaryRatio),
+                avgSalaryRatio: fmtCoef(avgSalaryRatio),
                 avgGms: formatYuanInteger(avgGm),
                 avgGmPct: formatRatioAsPercent(avgGmRatio),
             };
@@ -619,7 +646,12 @@ const rosterDetailApp = createApp({
         const onboardingChannelSelectOptions = computed(() =>
             buildOnboardingChannelSelectOptions(form.zntx_onboarding_channel)
         );
-        const formCompactFields = computed(() => formInputFields.value.filter((f) => !DETAIL_TEXTAREA_KEYS.has(f.key)));
+        const formCompactFields = computed(() => formInputFields.value.filter((f) => {
+            if (DETAIL_TEXTAREA_KEYS.has(f.key)) return false;
+            if (f.key === 'monthly_billable_days' && !showQuoteBillingDays.value) return false;
+            if (f.key === 'daily_billable_hours' && !showDailyBillableHours.value) return false;
+            return true;
+        }));
         const formTextareaFields = computed(() => formInputFields.value.filter((f) => DETAIL_TEXTAREA_KEYS.has(f.key)));
         const requiredFieldLabelMap = computed(() => {
             const map = {};
@@ -639,7 +671,7 @@ const rosterDetailApp = createApp({
         const hasFormatErrors = computed(() => {
             const contact = String(form.contact_info || '').trim();
             if (contact && !/^\d{11}$/.test(contact)) return true;
-            const quote = String(form.monthly_quote_tax || '').trim();
+            const quote = String(form.quote_amount_tax || '').trim();
             if (quote && !isValidSalaryAmountInput(quote)) return true;
             const preSalary = String(form.pre_tax_salary || '').trim();
             if (preSalary && !isValidSalaryAmountInput(preSalary)) return true;
@@ -667,8 +699,8 @@ const rosterDetailApp = createApp({
             if (key === 'contact_info' && v && !/^\d{11}$/.test(v)) {
                 return '联系方式必须为11位数字';
             }
-            if (key === 'monthly_quote_tax' && v && !isValidSalaryAmountInput(v)) {
-                return '月报价(含税)必须为4-6位数字（可带逗号）';
+            if (key === 'quote_amount_tax' && v && !isValidSalaryAmountInput(v)) {
+                return '报价(含税)格式无效';
             }
             if (key === 'pre_tax_salary' && v && !isValidSalaryAmountInput(v)) {
                 return '税前工资必须为4-6位数字（可带逗号）';
@@ -688,7 +720,7 @@ const rosterDetailApp = createApp({
         const isGmPctField = (key) => key === 'gm_pct';
         const isGmCalcOutputField = (key) => GM_CALC_OUTPUT_FIELD_KEYS.has(key);
         const isCalcInputLockedField = (key) =>
-            calcFieldsLocked.value && (key === 'monthly_quote_tax' || key === 'pre_tax_salary');
+            calcFieldsLocked.value && (key === 'quote_amount_tax' || key === 'pre_tax_salary');
         const onAmountFieldInput = (key, e) => {
             form[key] = formatAmountThousandsInput(e && e.target ? e.target.value : '');
             markTouched(key);
@@ -721,9 +753,9 @@ const rosterDetailApp = createApp({
             if (contact && !/^\d{11}$/.test(contact)) {
                 return '联系方式必须为11位数字';
             }
-            const quote = String(form.monthly_quote_tax || '').trim();
+            const quote = String(form.quote_amount_tax || '').trim();
             if (quote && !isValidSalaryAmountInput(quote)) {
-                return '月报价(含税)必须为4-6位数字（可带逗号）';
+                return '报价(含税)格式无效';
             }
             const preSalary = String(form.pre_tax_salary || '').trim();
             if (preSalary && !isValidSalaryAmountInput(preSalary)) {
@@ -799,7 +831,19 @@ const rosterDetailApp = createApp({
             appendGmCalcQueryPart(parts, 'full_name', form.full_name);
             appendGmCalcQueryPart(parts, 'work_location', form.work_location);
             appendGmCalcQueryPart(parts, 'position', form.position_title);
-            appendGmCalcQueryPart(parts, 'monthly_quote_tax', normalizeAmountText(form.monthly_quote_tax));
+            appendGmCalcQueryPart(parts, 'quote_tax_unit', window.CrmFinance ? window.CrmFinance.offerTaxUnitFromQuoteUnit(form.quote_unit) : '人月');
+            appendGmCalcQueryPart(parts, 'quote_amount_tax', normalizeAmountText(form.quote_amount_tax));
+            appendGmCalcQueryPart(parts, 'monthly_billable_days', form.monthly_billable_days || '20.67');
+            appendGmCalcQueryPart(parts, 'daily_billable_hours', form.daily_billable_hours || '8');
+            const convertedMonthly = window.CrmFinance
+                ? window.CrmFinance.standardMonthlyQuoteTax(
+                    form.quote_unit,
+                    form.quote_amount_tax,
+                    form.monthly_billable_days,
+                    form.daily_billable_hours,
+                )
+                : normalizeAmountText(form.quote_amount_tax);
+            appendGmCalcQueryPart(parts, 'monthly_quote_tax', String(Math.round(convertedMonthly || 0)));
             appendGmCalcQueryPart(parts, 'pre_tax_salary', normalizeAmountText(form.pre_tax_salary));
             appendGmCalcQueryPart(parts, 'gms', normalizeAmountText(form.gms));
             appendGmCalcQueryPart(parts, 'gm_pct', form.gm_pct);
@@ -830,6 +874,12 @@ const rosterDetailApp = createApp({
             FORM_FIELDS.forEach((f) => {
                 const raw = row[f.key] != null ? String(row[f.key]) : '';
                 if (f.key === 'zntx_onboarding_channel') return;
+                if (f.key === 'quote_unit') {
+                    form.quote_unit = window.CrmFinance
+                        ? window.CrmFinance.normalizeQuoteUnit(raw || 'monthly')
+                        : (raw || 'monthly');
+                    return;
+                }
                 if (DATE_FIELD_KEYS.has(f.key)) {
                     form[f.key] = normalizeDateForInput(raw, false);
                 } else if (ROSTER_AMOUNT_FIELD_KEYS.has(f.key)) {
@@ -938,8 +988,12 @@ const rosterDetailApp = createApp({
                 payload[f.key] = form[f.key];
             });
             payload.zntx_onboarding_channel = String(form.zntx_onboarding_channel || '').trim();
-            // 提交前规范化金额文本，兼容用户输入千分位/货币符号
-            payload.monthly_quote_tax = normalizeAmountText(payload.monthly_quote_tax);
+            payload.quote_unit = window.CrmFinance
+                ? window.CrmFinance.normalizeQuoteUnit(form.quote_unit || 'monthly')
+                : (form.quote_unit || 'monthly');
+            payload.quote_amount_tax = normalizeAmountText(payload.quote_amount_tax);
+            payload.monthly_billable_days = String(form.monthly_billable_days || '20.67').trim();
+            payload.daily_billable_hours = String(form.daily_billable_hours || '8').trim();
             payload.pre_tax_salary = normalizeAmountText(payload.pre_tax_salary);
             payload.gms = normalizeAmountText(payload.gms);
             payload.gm_pct = formatGmPctWithSymbol(payload.gm_pct);
@@ -1349,9 +1403,10 @@ const rosterDetailApp = createApp({
                 if (workLocRaw != null && String(workLocRaw).trim() !== '') {
                     form.work_location = String(workLocRaw).trim();
                 }
-                const quoteRaw = params.get('prefill_monthly_quote_tax');
+                const quoteRaw = params.get('prefill_quote_amount_tax') || params.get('prefill_monthly_quote_tax');
                 if (quoteRaw != null && String(quoteRaw).trim() !== '') {
-                    form.monthly_quote_tax = formatAmountThousandsInput(quoteRaw);
+                    form.quote_amount_tax = formatAmountThousandsInput(quoteRaw);
+                    form.quote_unit = 'monthly';
                 }
                 const salaryRaw = params.get('prefill_pre_tax_salary');
                 if (salaryRaw != null && String(salaryRaw).trim() !== '') {
@@ -1404,6 +1459,7 @@ const rosterDetailApp = createApp({
             canViewRosterLogs,
             rosterCustomerSelectOptions,
             onboardingChannelSelectOptions,
+            showQuoteBillingDays, showDailyBillableHours,
             openAdd, openEdit, openRosterDetail, openRosterGmCalculatorFromRosterForm, formReadonly, calcFieldsLocked, canUseGmCalc, saveForm, doDelete, canDeletePermission,
             triggerImport, onImportFile, exportCsv, openLogs, closeLogs, formatDate, restoreLatestBackup, clearFilters, hasFilterField, isRequiredField, isAmountField, isGmPctField, isGmCalcOutputField, isCalcInputLockedField, onAmountFieldInput, onGmPctFieldInput, onGmPctFieldBlur, fieldInputType, markTouched, getFieldError,
             showRosterValidation, closeValidation, copyValidationResults,

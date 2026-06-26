@@ -294,10 +294,12 @@
         if (!app) return "";
         var st = String(app.status || "").trim();
         if (st === "pending_first_interview") {
-          return String(app.first_interview_schedule == null ? "" : app.first_interview_schedule).trim();
+          var first = String(app.first_interview_schedule == null ? "" : app.first_interview_schedule).trim();
+          return first ? first + "（一面）" : "";
         }
         if (st === "first_interview_passed") {
-          return String(app.second_interview_schedule == null ? "" : app.second_interview_schedule).trim();
+          var second = String(app.second_interview_schedule == null ? "" : app.second_interview_schedule).trim();
+          return second ? second + "（二面）" : "";
         }
         return "";
       }
@@ -423,6 +425,7 @@
         ref: ref,
         reactive: reactive,
         computed: computed,
+        watch: watch,
         rmsRequest: rmsRequest,
         toast: toast,
         loadApplications: loadApplications,

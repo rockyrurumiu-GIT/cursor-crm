@@ -197,11 +197,28 @@
       hiredAtDates[String(appId)] = value;
     }
 
-    function validateProgressFormValues(formValues, mode, targetStatus) {
+    function interviewScheduleKindForTransition(fromStatus, toStatus, mode) {
+      if (mode !== "transition") return "";
+      if (Labels.interviewScheduleKindForTransition) {
+        return Labels.interviewScheduleKindForTransition(fromStatus, toStatus);
+      }
+      return "";
+    }
+
+    function validateProgressFormValues(formValues, mode, targetStatus, fromStatus) {
       formValues = formValues || {};
       var note = String(formValues.note || "").trim();
       if (mode === "correction" && note.length < 2) {
         return "状态修正备注至少 2 个字";
+      }
+      var scheduleKind = interviewScheduleKindForTransition(fromStatus, targetStatus, mode);
+      if (scheduleKind) {
+        if (!String(formValues.interview_date || "").trim()) {
+          return scheduleKind === "second" ? "请选择二面日期" : "请选择一面日期";
+        }
+        if (!String(formValues.interview_time || "").trim()) {
+          return scheduleKind === "second" ? "请选择二面时间" : "请选择一面时间";
+        }
       }
       if (targetStatus === "hired") {
         var dateVal = String(formValues.hired_at || "").trim();
@@ -212,10 +229,15 @@
       return "";
     }
 
-    async function submitProgressConfirm(applicationId, toStatus, mode, formValues) {
+    async function submitProgressConfirm(applicationId, toStatus, mode, formValues, fromStatus) {
       formValues = formValues || {};
       var note = String(formValues.note || "").trim();
       var body = { to_status: toStatus, mode: mode, note: note };
+      var scheduleKind = interviewScheduleKindForTransition(fromStatus, toStatus, mode);
+      if (scheduleKind) {
+        body.interview_date = String(formValues.interview_date || "").trim();
+        body.interview_time = String(formValues.interview_time || "").trim();
+      }
       if (toStatus === "hired") {
         body.hired_at = String(formValues.hired_at || todayDateStr()).trim();
       }
@@ -254,15 +276,34 @@
         if (app.status === "hired" && targetStatus !== "hired") {
           hint = "确认后将清空入职时间。";
         }
-        var fields = [{
-          type: "textarea",
-          name: "note",
-          label: "备注/原因",
-          placeholder: mode === "correction" ? "必填，至少 2 个字" : "可选",
-          required: mode === "correction",
-          minLength: mode === "correction" ? 2 : 0,
-          minLengthMessage: "状态修正备注至少 2 个字",
-        }];
+        var scheduleKind = interviewScheduleKindForTransition(app.status, targetStatus, mode);
+        var fields = [];
+        if (scheduleKind) {
+          fields.push({
+            type: "date",
+            name: "interview_date",
+            label: scheduleKind === "second" ? "二面日期" : "一面日期",
+            value: todayDateStr(),
+            required: true,
+          });
+          fields.push({
+            type: "time",
+            name: "interview_time",
+            label: scheduleKind === "second" ? "二面时间" : "一面时间",
+            value: "09:00",
+            required: true,
+          });
+        } else {
+          fields.push({
+            type: "textarea",
+            name: "note",
+            label: "备注/原因",
+            placeholder: mode === "correction" ? "必填，至少 2 个字" : "可选",
+            required: mode === "correction",
+            minLength: mode === "correction" ? 2 : 0,
+            minLengthMessage: "状态修正备注至少 2 个字",
+          });
+        }
         if (targetStatus === "hired") {
           fields.push({
             type: "date",
@@ -282,7 +323,7 @@
           zIndex: 120,
           initialError: dialogError || "",
           validate: function (values) {
-            var err = validateProgressFormValues(values, mode, targetStatus);
+            var err = validateProgressFormValues(values, mode, targetStatus, app.status);
             if (err) {
               return { ok: false, message: err };
             }
@@ -290,12 +331,17 @@
           },
         });
         if (!result || !result.ok) return;
-        var validationError = validateProgressFormValues(result.values || {}, mode, targetStatus);
+        var validationError = validateProgressFormValues(
+          result.values || {},
+          mode,
+          targetStatus,
+          app.status
+        );
         if (validationError) {
           dialogError = validationError;
           continue;
         }
-        await submitProgressConfirm(app.id, targetStatus, mode, result.values || {});
+        await submitProgressConfirm(app.id, targetStatus, mode, result.values || {}, app.status);
         return;
       }
     }

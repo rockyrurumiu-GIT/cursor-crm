@@ -28,36 +28,13 @@ from schemas.delivery_roster import (
     ZNTX_ROSTER_EXPORT_HEADERS,
 )
 from services.date_utils import parse_loose_date
-
-
-# ---------------------------------------------------------------------------
-# Salary / ratio helpers
-# ---------------------------------------------------------------------------
-
-def roster_strip_amount_for_ratio(v: str) -> str:
-    return re.sub(r"[¥￥,\s\u00a0]", "", str(v or "").strip())
-
-
-def format_roster_salary_quote_ratio(monthly_quote_tax: str, pre_tax_salary: str) -> str:
-    """薪资报价比 = 税前工资 / 月报价(含税)，百分比保留两位小数。"""
-    q = roster_strip_amount_for_ratio(monthly_quote_tax)
-    p = roster_strip_amount_for_ratio(pre_tax_salary)
-    if not q or not p:
-        return ""
-    if not re.fullmatch(r"\d{4,6}", q) or not re.fullmatch(r"\d{4,6}", p):
-        return ""
-    qf = float(q)
-    pf = float(p)
-    if qf <= 0:
-        return ""
-    return f"{(pf / qf) * 100:.2f}%"
-
-
-def apply_roster_salary_quote_ratio(data: Dict[str, str]) -> None:
-    data["salary_quote_ratio"] = format_roster_salary_quote_ratio(
-        data.get("monthly_quote_tax", ""),
-        data.get("pre_tax_salary", ""),
-    )
+from services.quote_finance import (
+    apply_roster_quote_fields,
+    apply_roster_salary_quote_ratio,
+    ensure_quote_defaults,
+    format_roster_salary_quote_ratio,
+    strip_quote_amount as roster_strip_amount_for_ratio,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +162,7 @@ def add_roster_entry(
 # ---------------------------------------------------------------------------
 
 def roster_entry_to_dict(e: Any) -> dict:
-    return {
+    row = {
         "id": e.id,
         "client_id": e.client_id,
         "serial_no": e.serial_no or "",
@@ -200,12 +177,12 @@ def roster_entry_to_dict(e: Any) -> dict:
         "regularization_status": e.regularization_status or "",
         "throme_staff_no": e.throme_staff_no or "",
         "regularization_date": e.regularization_date or "",
+        "quote_unit": getattr(e, "quote_unit", None) or "monthly",
+        "quote_amount_tax": getattr(e, "quote_amount_tax", None) or "",
+        "monthly_billable_days": getattr(e, "monthly_billable_days", None) or "20.67",
+        "daily_billable_hours": getattr(e, "daily_billable_hours", None) or "8",
         "monthly_quote_tax": e.monthly_quote_tax or "",
         "pre_tax_salary": e.pre_tax_salary or "",
-        "salary_quote_ratio": format_roster_salary_quote_ratio(
-            e.monthly_quote_tax or "",
-            e.pre_tax_salary or "",
-        ),
         "gms": e.gms or "",
         "gm_pct": e.gm_pct or "",
         "employee_plus1": e.employee_plus1 or "",
@@ -225,6 +202,11 @@ def roster_entry_to_dict(e: Any) -> dict:
         "leave_reason": e.leave_reason or "",
         "remarks": e.remarks or "",
     }
+    ensure_quote_defaults(row)
+    apply_roster_quote_fields(row)
+    coef = row.get("salary_quote_ratio", "")
+    row["quote_coefficient"] = coef
+    return row
 
 
 def normalize_roster_payload(d: Dict[str, Any]) -> Dict[str, str]:
@@ -241,6 +223,10 @@ def normalize_roster_payload(d: Dict[str, Any]) -> Dict[str, str]:
         "regularization_status",
         "throme_staff_no",
         "regularization_date",
+        "quote_unit",
+        "quote_amount_tax",
+        "monthly_billable_days",
+        "daily_billable_hours",
         "monthly_quote_tax",
         "pre_tax_salary",
         "salary_quote_ratio",
@@ -280,14 +266,16 @@ def validate_roster_business_fields(data: Dict[str, str]) -> None:
     def _normalize_amount_text(v: str) -> str:
         return re.sub(r"[¥￥,\s\u00a0]", "", str(v or "").strip())
 
+    ensure_quote_defaults(data)
+
     contact = str(data.get("contact_info", "")).strip()
     if contact and not re.fullmatch(r"\d{11}", contact):
         raise HTTPException(status_code=400, detail="联系方式必须为11位数字")
 
-    for k, label in (("monthly_quote_tax", "月报价(含税)"), ("pre_tax_salary", "税前工资")):
+    for k, label in (("quote_amount_tax", "报价(含税)"), ("pre_tax_salary", "税前工资")):
         v = _normalize_amount_text(data.get(k, ""))
-        if v and not re.fullmatch(r"\d{4,6}", v):
-            raise HTTPException(status_code=400, detail=f"{label}必须为4-6位数字（可带逗号）")
+        if v and not re.fullmatch(r"\d{1,8}(?:\.\d{1,2})?", v):
+            raise HTTPException(status_code=400, detail=f"{label}格式无效")
 
     gm_pct = str(data.get("gm_pct", "")).strip()
     gm_pct_norm = gm_pct.replace("\uff05", "%")

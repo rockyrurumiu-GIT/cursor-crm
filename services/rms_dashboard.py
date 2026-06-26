@@ -307,7 +307,12 @@ def _app_counts_as_stage_passed(
     date_to: str,
     snapshot_as_of: Optional[str],
 ) -> bool:
-    if not _app_had_transition_to_in_period(histories, pass_status, date_from, date_to):
+    if stage_key == "client_screen":
+        if not _app_had_transition_in_period(
+            histories, _CLIENT_SCREEN_PASSED_STATUSES, date_from, date_to
+        ):
+            return False
+    elif not _app_had_transition_to_in_period(histories, pass_status, date_from, date_to):
         return False
     guard = _STAGE_PASS_CURRENT_GUARD.get(stage_key)
     if guard is None:

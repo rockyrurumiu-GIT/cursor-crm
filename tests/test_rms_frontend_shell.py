@@ -22,6 +22,7 @@ def _html_table_slice(html: str, table_open_marker: str) -> str:
 
 
 RMS_JS_BUNDLE_FILES = (
+    "static/js/core/crm-finance.js",
     "static/js/pages/rms-application-labels.js",
     "static/js/pages/rms-core.js",
     "static/js/pages/rms-candidate-report.js",
@@ -98,6 +99,7 @@ def test_rms_frontend_js_assets_exist():
     for rel in RMS_JS_BUNDLE_FILES:
         assert (REPO_ROOT / rel).is_file(), f"missing {rel}"
 
+    assert "/static/js/core/crm-finance.js" in rms_html
     assert "/static/js/pages/rms-application-labels.js" in rms_html
     assert "/static/js/pages/rms-core.js" in rms_html
     assert "/static/js/pages/rms-jobs.js" in rms_html
@@ -119,6 +121,11 @@ def test_rms_frontend_js_assets_exist():
     assert "r3c-20260614" not in rms_html
     assert "rms-ui-20260636" in rms_html
     assert rms_html.count("rms-ui-20260636") >= 11
+    assert "报价系数" in rms_html
+    assert "薪资报价比" not in rms_html
+    assert "converted_monthly_quote_tax" in (REPO_ROOT / "templates/pages/calc.html").read_text(encoding="utf-8")
+    assert "offerConvertedMonthlyQuote" in (REPO_ROOT / "static/js/pages/rms-offer-management.js").read_text(encoding="utf-8")
+    assert "CrmFinance" in roster_src
 
     for sym in ("rmsRequest", "fuzzyMatch", "showValidationPrompt", "showRmsBootError", "createListPagination", "RMS_LIST_PAGE_SIZE"):
         assert sym in core_src, f"missing core symbol: {sym}"
@@ -867,7 +874,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert 'data-rms-action="roster-convert-open"' in apps_region
     assert "openRosterConvertModal" in apps_region
     assert "data-rms-roster-required" in html
-    assert "月报价(含税)" in html
+    assert "报价(含税)" in html
+    assert "报价系数" in html
     roster_js = (REPO_ROOT / "static/js/pages/rms-roster-conversion.js").read_text(encoding="utf-8")
     assert "submitRosterConvert" in roster_js
     assert "openRosterGmCalculatorFromRms" in roster_js

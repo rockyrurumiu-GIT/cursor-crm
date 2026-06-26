@@ -20,6 +20,7 @@ from tests.test_rms_phase2_mvp import (
     _login,
     _revoke_role_permissions,
     _set_role_data_scope,
+    _status_transition_body,
     _trial_job_and_candidate,
     _user_id,
 )
@@ -101,7 +102,7 @@ def _advance_to_pending_offer(client, login, app_id: int) -> None:
         r = client.post(
             f"/api/rms/applications/{app_id}/status",
             cookies=login.cookies,
-            json={"to_status": st},
+            json=_status_transition_body(st),
         )
         assert r.status_code == 200, r.text
 

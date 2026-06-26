@@ -263,7 +263,8 @@
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/pages/gm-calculator.js?v=6"></script>
+<script src="/static/js/core/crm-finance.js?v=1"></script>
+<script src="/static/js/pages/gm-calculator.js?v=7"></script>
 <script>
 const { createApp, ref, computed, onMounted } = Vue;
 const core = window.GmCalculatorCore;
@@ -318,8 +319,12 @@ createApp({
             rosterAdd: '',
             offerSource: {
                 quoteTaxUnit: '',
+                quoteAmountTax: null,
                 monthlyQuoteTax: null,
+                convertedMonthlyQuoteTax: null,
                 preTaxSalary: null,
+                monthlyBillableDays: '20.67',
+                dailyBillableHours: '8',
             },
         });
         const authHeader = () => window.crmAuthHeader();
@@ -664,11 +669,27 @@ createApp({
             if (targetId != null && String(targetId).trim() !== '') {
                 form.value.targetClientId = String(targetId).trim();
             }
-            const quote = params.get('monthly_quote_tax');
+            const quoteAmount = params.get('quote_amount_tax');
+            const quoteConverted = params.get('monthly_quote_tax');
+            const quote = quoteAmount != null && String(quoteAmount).trim() !== ''
+                ? quoteAmount
+                : quoteConverted;
             if (quote != null && String(quote).trim() !== '') {
                 const n = core.parseMoneyInput(quote);
                 form.value.quoteTaxIncluded = n;
                 moneyDisplay.value.quoteTaxIncluded = core.formatMoneyInput(n);
+                passthrough.value.offerSource.quoteAmountTax = n;
+            }
+            if (quoteConverted != null && String(quoteConverted).trim() !== '') {
+                passthrough.value.offerSource.convertedMonthlyQuoteTax = core.parseMoneyInput(quoteConverted);
+            } else if (quote != null && String(quote).trim() !== '' && window.CrmFinance) {
+                const unitParam = params.get('quote_tax_unit') || '人月';
+                passthrough.value.offerSource.convertedMonthlyQuoteTax = window.CrmFinance.standardMonthlyQuoteTax(
+                    unitParam,
+                    quote,
+                    params.get('monthly_billable_days') || '20.67',
+                    params.get('daily_billable_hours') || '8',
+                );
             }
             const salary = params.get('pre_tax_salary');
             if (salary != null && String(salary).trim() !== '') {
@@ -693,9 +714,14 @@ createApp({
                 passthrough.value.offerSource.quoteTaxUnit = String(quoteUnit).trim();
                 form.value.quoteUnit = offerUnitToCalcUnit[quoteUnit] || 'month';
             }
-            if (quote != null && String(quote).trim() !== '') {
-                passthrough.value.offerSource.monthlyQuoteTax = core.parseMoneyInput(quote);
-            }
+            const billingDays = params.get('monthly_billable_days');
+            const billingHours = params.get('daily_billable_hours');
+            passthrough.value.offerSource.monthlyBillableDays = billingDays != null && String(billingDays).trim() !== ''
+                ? String(billingDays).trim()
+                : '20.67';
+            passthrough.value.offerSource.dailyBillableHours = billingHours != null && String(billingHours).trim() !== ''
+                ? String(billingHours).trim()
+                : '8';
             if (salary != null && String(salary).trim() !== '') {
                 passthrough.value.offerSource.preTaxSalary = core.parseMoneyInput(salary);
             }
@@ -741,34 +767,29 @@ createApp({
             const currentUnit = calcUnitToOfferUnit[form.value.quoteUnit] || '';
             const src = passthrough.value.offerSource || {};
             const unitOk = String(src.quoteTaxUnit || '') === String(currentUnit || '');
-            const quoteOk = offerApprovalMoneySame(form.value.quoteTaxIncluded, src.monthlyQuoteTax);
+            const rawQuoteOk = offerApprovalMoneySame(form.value.quoteTaxIncluded, src.quoteAmountTax);
+            const convertedOk = offerApprovalMoneySame(r.L, src.convertedMonthlyQuoteTax);
             const salaryOk = offerApprovalMoneySame(form.value.salary, src.preTaxSalary);
-            if (!unitOk || !quoteOk || !salaryOk) {
-                const mismatches = [];
-                if (!unitOk) {
-                    mismatches.push(
-                        '报价单位不一致（Offer：' + (src.quoteTaxUnit || '—') + '，计算器：' + (currentUnit || '—') + '）'
-                    );
-                }
-                if (!quoteOk) {
-                    mismatches.push(
-                        '报价金额不一致（Offer：' + formatOfferSourceMoney(src.monthlyQuoteTax)
-                        + '，计算器：' + formatOfferSourceMoney(form.value.quoteTaxIncluded) + '）'
-                    );
-                }
-                if (!salaryOk) {
-                    mismatches.push(
-                        '税前工资不一致（Offer：' + formatOfferSourceMoney(src.preTaxSalary)
-                        + '，计算器：' + formatOfferSourceMoney(form.value.salary) + '）'
-                    );
-                }
-                await showOfferApprovalMismatchDialog(mismatches);
+            const daysOk = offerApprovalMoneySame(
+                src.monthlyBillableDays || 20.67,
+                src.monthlyBillableDays || 20.67,
+            );
+            const hoursOk = form.value.quoteUnit !== 'hour'
+                || offerApprovalMoneySame(src.dailyBillableHours || 8, src.dailyBillableHours || 8);
+            if (!unitOk || !rawQuoteOk || !convertedOk || !salaryOk || !daysOk || !hoursOk) {
+                await showOfferApprovalMismatchDialog([
+                    '测算器中的报价/工资与 Offer 审批表单不一致，请确认后再回填。',
+                ]);
                 return;
             }
             const payload = {
                 type: 'rms_offer_gm_calc_result',
                 quote_tax_unit: calcUnitToOfferUnit[form.value.quoteUnit] || '',
+                quote_amount_tax: String(form.value.quoteTaxIncluded || ''),
                 monthly_quote_tax: String(form.value.quoteTaxIncluded || ''),
+                converted_monthly_quote_tax: String(Math.round(r.L)),
+                monthly_billable_days: String(src.monthlyBillableDays || '20.67'),
+                daily_billable_hours: String(src.dailyBillableHours || '8'),
                 pre_tax_salary: String(form.value.salary || ''),
                 gm_amount: String(Math.round(r.Z)),
                 gm_pct: (r.margin * 100).toFixed(2),
@@ -789,6 +810,7 @@ createApp({
                 from_calc: '1',
             });
             if (Number.isFinite(r.L) && r.L !== 0) {
+                params.set('prefill_quote_amount_tax', String(Math.round(r.quoteRaw || r.L)));
                 params.set('prefill_monthly_quote_tax', String(Math.round(r.L)));
             }
             if (Number.isFinite(r.salary) && r.salary !== 0) {

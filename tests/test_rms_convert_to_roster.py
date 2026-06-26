@@ -148,7 +148,10 @@ def _full_roster_payload(cand, client_row, job, **overrides):
         "business_line": "测试线",
         "entry_date": "2026-06-15",
         "regularization_status": "未转正",
-        "monthly_quote_tax": "10000",
+        "quote_unit": "monthly",
+        "quote_amount_tax": "10000",
+        "monthly_billable_days": "20.67",
+        "daily_billable_hours": "8",
         "pre_tax_salary": "8000",
         "gms": "2000",
         "gm_pct": "20%",
@@ -206,7 +209,7 @@ def test_hired_roster_draft_prefill(client_rbac, admin_auth, rms_engine, uniq):
     assert payload["gms"] == "2000"
     assert payload["gm_pct"] == "20%"
     assert body["offer_financial_locked"] is True
-    assert body["quote_tax_display"] == "10,000"
+    assert body["quote_tax_display"] == "10,000 (人月)"
     assert f"#{app_id}" in payload["remarks"]
 
 
@@ -232,7 +235,9 @@ def test_hired_roster_draft_converts_day_quote_to_monthly(client_rbac, admin_aut
     assert r.status_code == 200, r.text
     payload = r.json()["roster_payload"]
     assert payload["monthly_quote_tax"] == "20670"
-    assert r.json()["quote_tax_display"] == "20,670"
+    assert payload["quote_amount_tax"] == "1000"
+    assert payload["quote_unit"] == "daily"
+    assert r.json()["quote_tax_display"] == "1,000 (人天)"
 
 
 def test_hired_roster_draft_converts_hour_quote_to_monthly(client_rbac, admin_auth, rms_engine, uniq):
@@ -257,7 +262,9 @@ def test_hired_roster_draft_converts_hour_quote_to_monthly(client_rbac, admin_au
     assert r.status_code == 200, r.text
     payload = r.json()["roster_payload"]
     assert payload["monthly_quote_tax"] == "16536"
-    assert r.json()["quote_tax_display"] == "16,536"
+    assert payload["quote_amount_tax"] == "100"
+    assert payload["quote_unit"] == "hourly"
+    assert r.json()["quote_tax_display"] == "100 (人时)"
 
 
 def test_hired_roster_draft_without_offer_returns_400(client_rbac, admin_auth, rms_engine, uniq):
@@ -334,6 +341,8 @@ def test_convert_success_writes_roster_and_application(client_rbac, admin_auth, 
     body = r.json()
     assert body["roster_entry"]["full_name"] == payload["full_name"]
     assert body["roster_entry"]["monthly_quote_tax"] == "10000"
+    assert body["roster_entry"]["salary_quote_ratio"] == "1.25"
+    assert body["roster_entry"]["quote_coefficient"] == "1.25"
     assert body["roster_entry"]["pre_tax_salary"] == "8000"
     assert body["roster_entry"]["gms"] == "2000"
     assert body["roster_entry"]["gm_pct"] == "20%"

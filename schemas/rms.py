@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Literal, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict
 
@@ -322,6 +322,85 @@ def validate_status_correction_note(note: str) -> str:
     return v
 
 
+def progress_order_index(status: str) -> int:
+    s = normalize_application_status(status)
+    try:
+        return APPLICATION_PROGRESS_ORDER.index(s)
+    except ValueError:
+        return -1
+
+
+def validate_correction_backward(from_status: str, to_status: str) -> None:
+    """状态修正仅允许改回前序节点（APPLICATION_PROGRESS_ORDER 中更靠前）。"""
+    from fastapi import HTTPException
+
+    from_idx = progress_order_index(from_status)
+    to_idx = progress_order_index(to_status)
+    if from_idx < 0 or to_idx < 0:
+        raise HTTPException(status_code=400, detail="非法招聘进展状态")
+    if to_idx >= from_idx:
+        raise HTTPException(
+            status_code=400,
+            detail="状态修正仅允许改回前序节点，不可往后跳转",
+        )
+
+
+_INTERVIEW_TIME_RE = re.compile(r"^\d{2}:\d{2}$")
+
+
+def validate_interview_schedule_date(value: str) -> str:
+    from fastapi import HTTPException
+
+    v = (value or "").strip()
+    if not v:
+        raise HTTPException(status_code=400, detail="请选择面试日期")
+    if not _HIRED_AT_RE.match(v):
+        raise HTTPException(status_code=400, detail="面试日期格式须为 YYYY-MM-DD")
+    return v
+
+
+def validate_interview_schedule_time(value: str) -> str:
+    from fastapi import HTTPException
+
+    v = (value or "").strip()
+    if not v:
+        raise HTTPException(status_code=400, detail="请选择面试时间")
+    if not _INTERVIEW_TIME_RE.match(v):
+        raise HTTPException(status_code=400, detail="面试时间格式须为 HH:MM")
+    return v
+
+
+def build_interview_schedule_note(kind: str, date_str: str, time_str: str) -> str:
+    date_val = validate_interview_schedule_date(date_str)
+    time_val = validate_interview_schedule_time(time_str)
+    if kind == "first":
+        prefix = "一面时间"
+    elif kind == "second":
+        prefix = "二面时间"
+    else:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail="非法面试场次")
+    return f"{prefix}{date_val} {time_val}"
+
+
+def resolve_transition_history_note(from_status: str, to_status: str, data: Dict[str, Any]) -> str:
+    """正常推进时解析状态历史备注（含约面/二面必填时间）。"""
+    if from_status == "scheduling_interview" and to_status == "pending_first_interview":
+        return build_interview_schedule_note(
+            "first",
+            str(data.get("interview_date") or ""),
+            str(data.get("interview_time") or ""),
+        )
+    if from_status == "pending_first_interview" and to_status == "first_interview_passed":
+        return build_interview_schedule_note(
+            "second",
+            str(data.get("interview_date") or ""),
+            str(data.get("interview_time") or ""),
+        )
+    return str(data.get("note") or "").strip()
+
+
 def validate_delivery_review_failed_note(note: str) -> str:
     from fastapi import HTTPException
 
@@ -404,6 +483,8 @@ class ApplicationStatusBody(BaseModel):
     hired_at: str = ""
     reason: str = ""
     note: str = ""
+    interview_date: str = ""
+    interview_time: str = ""
 
 
 class DeliveryReviewBody(BaseModel):

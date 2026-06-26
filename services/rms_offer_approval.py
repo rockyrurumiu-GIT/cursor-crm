@@ -32,6 +32,7 @@ from services.rms_offer_approvers import (
 )
 from services.rms_offer_approval_config import approval_step_short_label, resolve_offer_approvers
 from services.rms_roster_conversion import _build_roster_payload_prefill
+from services.quote_finance import apply_offer_quote_fields, compute_monthly_quote_tax
 
 
 def _username_for_user_id(db: Session, user_id: Optional[int]) -> str:
@@ -252,6 +253,7 @@ def _validate_offer_body(body: Dict[str, Any]) -> Dict[str, str]:
         raise HTTPException(status_code=400, detail="折扣月数须为不打折、1、2 或 3")
     if data["quote_tax_unit"] not in OFFER_QUOTE_TAX_UNITS:
         raise HTTPException(status_code=400, detail="报价单位须为人月、人天或人时")
+    apply_offer_quote_fields(data)
     return data
 
 
@@ -403,6 +405,9 @@ def submit_offer_approval(
         gm_amount=validated["gm_amount"],
         monthly_quote_tax=validated["monthly_quote_tax"],
         quote_tax_unit=validated["quote_tax_unit"],
+        quote_amount_tax=validated["quote_amount_tax"],
+        monthly_billable_days=validated["monthly_billable_days"],
+        daily_billable_hours=validated["daily_billable_hours"],
         pre_tax_salary=validated["pre_tax_salary"],
         probation_days=validated["probation_days"],
         probation_discount_months=validated["probation_discount_months"],
@@ -916,6 +921,18 @@ def offer_record_to_dict(
     created_at = normalize_rms_date(getattr(record, "created_at", None) or "") or (
         str(getattr(record, "created_at", None) or "").strip()[:10]
     )
+    quote_tax_unit = record.quote_tax_unit or ""
+    raw_amount = str(getattr(record, "quote_amount_tax", None) or "").strip()
+    if not raw_amount:
+        raw_amount = str(record.monthly_quote_tax or "").strip()
+    days = str(getattr(record, "monthly_billable_days", None) or "20.67")
+    hours = str(getattr(record, "daily_billable_hours", None) or "8")
+    converted_monthly = compute_monthly_quote_tax(
+        raw_amount,
+        quote_tax_unit,
+        days,
+        hours,
+    )
     return {
         "id": record.id,
         "application_id": record.application_id,
@@ -928,9 +945,13 @@ def offer_record_to_dict(
         "current_approval_node_label": approval_node_label(node) if node else "",
         "gm_pct": record.gm_pct or "",
         "gm_amount": record.gm_amount or "",
-        "monthly_quote_tax": record.monthly_quote_tax or "",
-        "quote_tax_unit": record.quote_tax_unit or "",
-        "quote_tax_display": _format_quote_tax_display(record.monthly_quote_tax, record.quote_tax_unit),
+        "quote_amount_tax": raw_amount,
+        "monthly_quote_tax": converted_monthly,
+        "quote_tax_unit": quote_tax_unit,
+        "monthly_billable_days": days,
+        "daily_billable_hours": hours,
+        "converted_monthly_quote_tax": converted_monthly,
+        "quote_tax_display": _format_quote_tax_display(raw_amount, quote_tax_unit),
         "pre_tax_salary": record.pre_tax_salary or "",
         "probation_days": record.probation_days or "",
         "probation_discount_months": record.probation_discount_months or "",

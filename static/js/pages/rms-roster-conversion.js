@@ -8,6 +8,7 @@
     var ref = deps.ref;
     var reactive = deps.reactive;
     var computed = deps.computed;
+    var watch = deps.watch;
     var rmsRequest = deps.rmsRequest;
     var toast = deps.toast;
     var loadApplications = deps.loadApplications;
@@ -34,6 +35,10 @@
       entry_date: "",
       regularization_status: "未转正",
       regularization_date: "",
+      quote_unit: "monthly",
+      quote_amount_tax: "",
+      monthly_billable_days: "20.67",
+      daily_billable_hours: "8",
       monthly_quote_tax: "",
       pre_tax_salary: "",
       salary_quote_ratio: "",
@@ -58,6 +63,10 @@
       rosterConvertForm.entry_date = "";
       rosterConvertForm.regularization_status = "未转正";
       rosterConvertForm.regularization_date = "";
+      rosterConvertForm.quote_unit = "monthly";
+      rosterConvertForm.quote_amount_tax = "";
+      rosterConvertForm.monthly_billable_days = "20.67";
+      rosterConvertForm.daily_billable_hours = "8";
       rosterConvertForm.monthly_quote_tax = "";
       rosterConvertForm.pre_tax_salary = "";
       rosterConvertForm.salary_quote_ratio = "";
@@ -118,6 +127,35 @@
       return s + "%";
     }
 
+    function refreshRosterConvertQuoteCoefficient() {
+      var Fin = global.CrmFinance;
+      if (!Fin) return;
+      rosterConvertForm.salary_quote_ratio = Fin.quoteCoefficient(
+        rosterConvertForm.quote_unit,
+        rosterConvertForm.quote_amount_tax,
+        rosterConvertForm.pre_tax_salary,
+        rosterConvertForm.monthly_billable_days,
+        rosterConvertForm.daily_billable_hours
+      );
+    }
+
+    if (watch) {
+      watch(
+        function () {
+          return [
+            rosterConvertForm.quote_unit,
+            rosterConvertForm.quote_amount_tax,
+            rosterConvertForm.monthly_billable_days,
+            rosterConvertForm.daily_billable_hours,
+            rosterConvertForm.pre_tax_salary,
+          ];
+        },
+        function () {
+          refreshRosterConvertQuoteCoefficient();
+        }
+      );
+    }
+
     function validateRosterConvertForm() {
       var required = [
         ["employment_status", "在职情况"],
@@ -129,7 +167,7 @@
         ["business_line", "业务线"],
         ["entry_date", "入职时间"],
         ["regularization_status", "转正"],
-        ["monthly_quote_tax", "月报价(含税)"],
+        ["quote_amount_tax", "报价(含税)"],
         ["pre_tax_salary", "税前工资"],
         ["gms", "GM$"],
         ["gm_pct", "GM%"],
@@ -156,13 +194,26 @@
 
     function openRosterGmCalculatorFromRms() {
       if (!rosterConvertModal.value) return;
+      var Fin = global.CrmFinance || {};
       var parts = ["return_to=roster", "roster_add=1"];
       appendGmCalcQueryPart(parts, "targetClientId", rosterConvertModal.value.clientId);
       appendGmCalcQueryPart(parts, "full_name", rosterConvertForm.full_name);
       appendGmCalcQueryPart(parts, "work_location", rosterConvertForm.work_location);
       appendGmCalcQueryPart(parts, "position", rosterConvertForm.position_title);
-      appendGmCalcQueryPart(parts, "monthly_quote_tax", normalizeRosterAmountText(rosterConvertForm.monthly_quote_tax));
-      appendGmCalcQueryPart(parts, "quote_tax_unit", "人月");
+      var quoteUnit = rosterConvertForm.quote_unit || "monthly";
+      appendGmCalcQueryPart(parts, "quote_tax_unit", Fin.offerTaxUnitFromQuoteUnit ? Fin.offerTaxUnitFromQuoteUnit(quoteUnit) : "人月");
+      appendGmCalcQueryPart(parts, "quote_amount_tax", normalizeRosterAmountText(rosterConvertForm.quote_amount_tax));
+      appendGmCalcQueryPart(parts, "monthly_billable_days", rosterConvertForm.monthly_billable_days || "20.67");
+      appendGmCalcQueryPart(parts, "daily_billable_hours", rosterConvertForm.daily_billable_hours || "8");
+      var converted = Fin.standardMonthlyQuoteTax
+        ? Fin.standardMonthlyQuoteTax(
+          quoteUnit,
+          rosterConvertForm.quote_amount_tax,
+          rosterConvertForm.monthly_billable_days,
+          rosterConvertForm.daily_billable_hours
+        )
+        : normalizeRosterAmountText(rosterConvertForm.quote_amount_tax);
+      appendGmCalcQueryPart(parts, "monthly_quote_tax", String(Math.round(converted || 0)));
       appendGmCalcQueryPart(parts, "pre_tax_salary", normalizeRosterAmountText(rosterConvertForm.pre_tax_salary));
       appendGmCalcQueryPart(parts, "gms", normalizeRosterAmountText(rosterConvertForm.gms));
       appendGmCalcQueryPart(parts, "gm_pct", rosterConvertForm.gm_pct);
@@ -196,6 +247,7 @@
         if (payload[key] != null) rosterConvertForm[key] = String(payload[key]);
       });
       applyOnboardingChannelToForm(payload.zntx_onboarding_channel);
+      refreshRosterConvertQuoteCoefficient();
     }
 
     function closeRosterConvertModal() {
@@ -226,7 +278,12 @@
         payload[key] = rosterConvertForm[key];
       });
       payload.zntx_onboarding_channel = resolveOnboardingChannelForSave();
-      payload.monthly_quote_tax = normalizeRosterAmountText(payload.monthly_quote_tax);
+      payload.quote_unit = global.CrmFinance
+        ? global.CrmFinance.normalizeQuoteUnit(rosterConvertForm.quote_unit || "monthly")
+        : (rosterConvertForm.quote_unit || "monthly");
+      payload.quote_amount_tax = normalizeRosterAmountText(payload.quote_amount_tax);
+      payload.monthly_billable_days = String(rosterConvertForm.monthly_billable_days || "20.67").trim();
+      payload.daily_billable_hours = String(rosterConvertForm.daily_billable_hours || "8").trim();
       payload.pre_tax_salary = normalizeRosterAmountText(payload.pre_tax_salary);
       payload.gms = normalizeRosterAmountText(payload.gms);
       payload.gm_pct = formatGmPctSymbol(payload.gm_pct);

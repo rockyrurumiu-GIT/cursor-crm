@@ -412,15 +412,42 @@
       return Math.abs(x - y) < 0.01;
     }
 
+    function offerConvertedMonthlyQuote() {
+      var Fin = global.CrmFinance;
+      if (!Fin) return 0;
+      return Fin.standardMonthlyQuoteTax(
+        offerApprovalForm.quote_tax_unit,
+        offerApprovalForm.monthly_quote_tax,
+        "20.67",
+        "8"
+      );
+    }
+
     function handleOfferGmCalcMessage(event) {
       if (event.origin !== window.location.origin) return;
       if (!offerApprovalModal.value) return;
       var data = event.data || {};
       if (data.type !== "rms_offer_gm_calc_result") return;
+      var Fin = global.CrmFinance;
       var unitOk = String(data.quote_tax_unit || "") === String(offerApprovalForm.quote_tax_unit || "");
-      var quoteOk = moneySame(data.monthly_quote_tax, offerApprovalForm.monthly_quote_tax);
+      var rawQuoteOk = moneySame(
+        data.quote_amount_tax || data.monthly_quote_tax,
+        offerApprovalForm.monthly_quote_tax
+      );
+      var offerConverted = offerConvertedMonthlyQuote();
+      var calcConverted = Number(data.converted_monthly_quote_tax);
+      if (!Number.isFinite(calcConverted) && Fin) {
+        calcConverted = Fin.standardMonthlyQuoteTax(
+          data.quote_tax_unit,
+          data.quote_amount_tax || data.monthly_quote_tax,
+          data.monthly_billable_days || "20.67",
+          data.daily_billable_hours || "8"
+        );
+      }
+      var convertedOk = Math.abs(Number(calcConverted || 0) - Number(offerConverted || 0)) < 0.01;
       var salaryOk = moneySame(data.pre_tax_salary, offerApprovalForm.pre_tax_salary);
-      if (!unitOk || !quoteOk || !salaryOk) {
+      if (!unitOk || !rawQuoteOk || !convertedOk || !salaryOk) {
+        alert("测算器中的报价/工资与 Offer 审批表单不一致，请确认后再回填。");
         return;
       }
       offerApprovalForm.gm_amount = formatOfferMoney(data.gm_amount);
@@ -437,7 +464,11 @@
       if (!offerApprovalModal.value) return;
       var parts = ["return_to=offer_approval"];
       appendGmCalcQueryPart(parts, "quote_tax_unit", offerApprovalForm.quote_tax_unit);
-      appendGmCalcQueryPart(parts, "monthly_quote_tax", normalizeOfferAmountText(offerApprovalForm.monthly_quote_tax));
+      appendGmCalcQueryPart(parts, "quote_amount_tax", normalizeOfferAmountText(offerApprovalForm.monthly_quote_tax));
+      appendGmCalcQueryPart(parts, "monthly_billable_days", "20.67");
+      appendGmCalcQueryPart(parts, "daily_billable_hours", "8");
+      var converted = offerConvertedMonthlyQuote();
+      appendGmCalcQueryPart(parts, "monthly_quote_tax", String(Math.round(converted || 0)));
       appendGmCalcQueryPart(parts, "pre_tax_salary", normalizeOfferAmountText(offerApprovalForm.pre_tax_salary));
       appendGmCalcQueryPart(parts, "full_name", offerApprovalForm.full_name);
       appendGmCalcQueryPart(parts, "work_location", offerApprovalForm.work_location);
@@ -457,7 +488,7 @@
 
     function formatOfferRowQuote(row) {
       if (!row) return "—";
-      var amt = formatOfferMoney(row.monthly_quote_tax);
+      var amt = formatOfferMoney(row.quote_amount_tax || row.monthly_quote_tax);
       var unit = String(row.quote_tax_unit || "").trim();
       if (amt) {
         return unit ? amt + " (" + unit + ")" : amt;

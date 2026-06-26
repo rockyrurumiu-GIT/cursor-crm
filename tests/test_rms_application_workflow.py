@@ -1478,4 +1478,24 @@ def test_format_interview_schedule_display():
     assert format_interview_schedule_display("7/1下午3点", kind="first") == "7/1下午3点"
     assert format_interview_schedule_display("二面时间8/2上午10点", kind="second") == "8/2上午10点"
     assert format_interview_schedule_display("8/2上午10点", kind="second") == ""
+    assert format_interview_schedule_display("一面时间2026-06-27 15:00", kind="first") == "2026-06-27 15:00"
+
+
+def test_build_interview_schedule_note():
+    from schemas.rms import build_interview_schedule_note
+
+    assert build_interview_schedule_note("first", "2026-06-27", "15:00") == "一面时间2026-06-27 15:00"
+    assert build_interview_schedule_note("second", "2026-06-28", "09:30") == "二面时间2026-06-28 09:30"
+
+
+def test_validate_correction_backward():
+    import pytest
+    from fastapi import HTTPException
+
+    from schemas.rms import validate_correction_backward
+
+    validate_correction_backward("first_interview_passed", "pending_first_interview")
+    with pytest.raises(HTTPException) as exc:
+        validate_correction_backward("pending_client_screen", "onboarding")
+    assert "前序" in exc.value.detail
 
