@@ -646,6 +646,131 @@
         flex-shrink: 0;
         white-space: nowrap;
     }
+    .rms-offer-prior-comments {
+        border-top: 1px solid #eaeef2;
+        padding-top: 0.875rem;
+        margin-top: 0.25rem;
+    }
+    .rms-offer-prior-comments__head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 0.625rem;
+    }
+    .rms-offer-prior-comments__title {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #1f2328;
+    }
+    .rms-offer-prior-comments__count {
+        font-size: 0.75rem;
+        color: #8c959f;
+        white-space: nowrap;
+    }
+    .rms-offer-prior-comments__list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.625rem;
+    }
+    .rms-offer-prior-comments__card {
+        border: 1px solid #d0d7de;
+        border-radius: 0.625rem;
+        background: #f6f8fa;
+        overflow: hidden;
+    }
+    .rms-offer-prior-comments__card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        background: #fff;
+        border-bottom: 1px solid #eaeef2;
+    }
+    .rms-offer-prior-comments__badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: #1f2328;
+    }
+    .rms-offer-prior-comments__step-no {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.125rem;
+        height: 1.125rem;
+        padding: 0 0.25rem;
+        border-radius: 9999px;
+        background: #dbeafe;
+        color: #1d4ed8;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .rms-offer-prior-comments__status {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.125rem 0.5rem;
+        border-radius: 9999px;
+        border: 1px solid #bbf7d0;
+        background: #f0fdf4;
+        color: #15803d;
+        font-size: 0.6875rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .rms-offer-prior-comments__status--submitted {
+        border-color: #bfdbfe;
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+    .rms-offer-prior-comments__meta {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.5rem 1rem;
+        padding: 0.625rem 0.75rem 0.5rem;
+    }
+    .rms-offer-prior-comments__meta-item {
+        min-width: 0;
+    }
+    .rms-offer-prior-comments__meta-label {
+        display: block;
+        font-size: 0.6875rem;
+        color: #8c959f;
+        margin-bottom: 0.125rem;
+    }
+    .rms-offer-prior-comments__meta-value {
+        display: block;
+        font-size: 0.8125rem;
+        color: #1f2328;
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .rms-offer-prior-comments__body {
+        margin: 0 0.75rem 0.75rem;
+        padding: 0.625rem 0.75rem;
+        border: 1px solid #eaeef2;
+        border-radius: 0.5rem;
+        background: #fff;
+    }
+    .rms-offer-prior-comments__body-label {
+        display: block;
+        font-size: 0.6875rem;
+        color: #8c959f;
+        margin-bottom: 0.25rem;
+    }
+    .rms-offer-prior-comments__text {
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: #1f2328;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
     .rms-offer-approval-hint {
         display: inline-flex;
         align-items: center;
@@ -2140,6 +2265,10 @@
                         </template>
                         <span v-else class="text-xs text-[#9ca3af]">仅支持图片格式</span>
                     </div>
+                    <label class="sm:col-span-2 lg:col-span-3 flex flex-col gap-1 border-t border-[#eaeef2] pt-3 mt-1">
+                        <span class="text-[#57606a]">交付提交的备注意见<span class="text-red-500">*</span></span>
+                        <textarea v-model.trim="offerApprovalForm.submission_remark" rows="3" class="crm-form-control" placeholder="请填写交付侧说明，供一级审批参考"></textarea>
+                    </label>
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-between shrink-0">
@@ -2186,6 +2315,64 @@
                             <span class="text-xs text-[#57606a]">点击查看附件</span>
                         </template>
                         <span v-else class="text-xs text-[#9ca3af]">无附件</span>
+                    </div>
+                    <div v-if="offerDetailModal.submission_remark" class="sm:col-span-3 lg:col-span-6 rms-offer-prior-comments">
+                        <div class="rms-offer-prior-comments__head">
+                            <span class="rms-offer-prior-comments__title">交付提交意见</span>
+                        </div>
+                        <div class="rms-offer-prior-comments__list">
+                            <article class="rms-offer-prior-comments__card">
+                                <div class="rms-offer-prior-comments__card-head">
+                                    <span class="rms-offer-prior-comments__badge">交付提交</span>
+                                    <span class="rms-offer-prior-comments__status rms-offer-prior-comments__status--submitted">已提交</span>
+                                </div>
+                                <div class="rms-offer-prior-comments__meta">
+                                    <div class="rms-offer-prior-comments__meta-item">
+                                        <span class="rms-offer-prior-comments__meta-label">提交人</span>
+                                        <span class="rms-offer-prior-comments__meta-value">{{ offerDetailModal.created_by_label || '—' }}</span>
+                                    </div>
+                                    <div class="rms-offer-prior-comments__meta-item">
+                                        <span class="rms-offer-prior-comments__meta-label">提交时间</span>
+                                        <span class="rms-offer-prior-comments__meta-value">{{ offerDetailModal.submission_submitted_at || formatRmsDate(offerDetailModal.created_at) || '—' }}</span>
+                                    </div>
+                                </div>
+                                <div class="rms-offer-prior-comments__body">
+                                    <span class="rms-offer-prior-comments__body-label">备注意见</span>
+                                    <p class="rms-offer-prior-comments__text">{{ offerDetailModal.submission_remark }}</p>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+                    <div v-if="offerDetailModal.prior_approval_comments && offerDetailModal.prior_approval_comments.length" class="sm:col-span-3 lg:col-span-6 rms-offer-prior-comments">
+                        <div class="rms-offer-prior-comments__head">
+                            <span class="rms-offer-prior-comments__title">前序审批意见</span>
+                            <span class="rms-offer-prior-comments__count">共 {{ offerDetailModal.prior_approval_comments.length }} 条</span>
+                        </div>
+                        <div class="rms-offer-prior-comments__list">
+                            <article v-for="(pc, pcIdx) in offerDetailModal.prior_approval_comments" :key="'pc'+pcIdx" class="rms-offer-prior-comments__card">
+                                <div class="rms-offer-prior-comments__card-head">
+                                    <span class="rms-offer-prior-comments__badge">
+                                        <span class="rms-offer-prior-comments__step-no">{{ pcIdx + 1 }}</span>
+                                        {{ pc.step_label || '—' }}
+                                    </span>
+                                    <span class="rms-offer-prior-comments__status">已通过</span>
+                                </div>
+                                <div class="rms-offer-prior-comments__meta">
+                                    <div class="rms-offer-prior-comments__meta-item">
+                                        <span class="rms-offer-prior-comments__meta-label">审批人</span>
+                                        <span class="rms-offer-prior-comments__meta-value">{{ pc.approver_label || '—' }}</span>
+                                    </div>
+                                    <div class="rms-offer-prior-comments__meta-item">
+                                        <span class="rms-offer-prior-comments__meta-label">审批时间</span>
+                                        <span class="rms-offer-prior-comments__meta-value">{{ pc.acted_at || '—' }}</span>
+                                    </div>
+                                </div>
+                                <div class="rms-offer-prior-comments__body">
+                                    <span class="rms-offer-prior-comments__body-label">审批意见</span>
+                                    <p class="rms-offer-prior-comments__text">{{ pc.comment || '—' }}</p>
+                                </div>
+                            </article>
+                        </div>
                     </div>
                     <label class="sm:col-span-3 lg:col-span-6 flex flex-col gap-1">
                         <span class="text-[#57606a]">评审意见<span class="text-red-500">*</span></span>
@@ -2708,15 +2895,15 @@
 <script src="/static/js/vendor/vue.global.prod.js"></script>
 <script src="/static/js/core/crm-api.js"></script>
 <script src="/static/js/core/crm-toast.js"></script>
-<script src="/static/js/pages/rms-application-labels.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms-core.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms-candidate-report.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms-jobs.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms-candidates.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms-applications.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms-pipeline.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms-delivery-review.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms-roster-conversion.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms-offer-management.js?v=rms-ui-20260626c"></script>
-<script src="/static/js/pages/rms.js?v=rms-ui-20260626c"></script>
+<script src="/static/js/pages/rms-application-labels.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-core.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-candidate-report.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-jobs.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-candidates.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-applications.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-pipeline.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-delivery-review.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-roster-conversion.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms-offer-management.js?v=rms-ui-20260626f"></script>
+<script src="/static/js/pages/rms.js?v=rms-ui-20260626f"></script>
 {% endblock %}

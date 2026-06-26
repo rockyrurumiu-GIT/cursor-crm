@@ -19,6 +19,7 @@ from schemas.rms import (
     OFFER_PROBATION_DISCOUNT_MONTHS,
     OFFER_QUOTE_TAX_UNITS,
     OFFER_RECORD_TAB_STATUSES,
+    normalize_rms_date,
     utc_date_str,
 )
 from services import rms_applications as app_svc
@@ -29,7 +30,7 @@ from services.rms_offer_approvers import (
     STEP_OPS_HEAD,
     approval_node_label,
 )
-from services.rms_offer_approval_config import resolve_offer_approvers
+from services.rms_offer_approval_config import approval_step_short_label, resolve_offer_approvers
 from services.rms_roster_conversion import _build_roster_payload_prefill
 
 
@@ -182,17 +183,25 @@ async def upload_offer_quote_attachment(
     return {"path": rel, "file_name": raw_name or safe}
 
 
-def _offer_quote_attachment_path(record: Any) -> str:
+def _offer_form_dict(record: Any) -> Dict[str, str]:
     raw = getattr(record, "form_json", "") or ""
     if not raw:
-        return ""
+        return {}
     try:
         form = json.loads(raw)
     except (ValueError, TypeError):
-        return ""
+        return {}
     if not isinstance(form, dict):
-        return ""
-    return str(form.get("quote_confirm_attachment") or "").strip()
+        return {}
+    return {str(k): str(v or "").strip() for k, v in form.items()}
+
+
+def _offer_quote_attachment_path(record: Any) -> str:
+    return _offer_form_dict(record).get("quote_confirm_attachment", "")
+
+
+def _submission_remark(record: Any) -> str:
+    return _offer_form_dict(record).get("submission_remark", "")
 
 
 def view_offer_quote_attachment(
@@ -864,6 +873,36 @@ def _format_quote_tax_display(amount: Any, unit: Any) -> str:
     return f"{amt} ({u})" if u else amt
 
 
+def _prior_approval_comments(
+    db: Session,
+    offer_record_id: int,
+    *,
+    RmsOfferApprovalStep: Type[Any],
+) -> List[Dict[str, str]]:
+    """Approved steps before the current pending node (for 二/三级审批弹窗展示)."""
+    steps = (
+        db.query(RmsOfferApprovalStep)
+        .filter(
+            RmsOfferApprovalStep.offer_record_id == int(offer_record_id),
+            RmsOfferApprovalStep.status == "approved",
+        )
+        .order_by(RmsOfferApprovalStep.step_order.asc())
+        .all()
+    )
+    out: List[Dict[str, str]] = []
+    for step in steps:
+        out.append(
+            {
+                "step_type": (step.step_type or "").strip(),
+                "step_label": approval_step_short_label(step.step_type),
+                "approver_label": _display_name_for_user_id(db, step.approver_user_id),
+                "comment": (step.comment or "").strip(),
+                "acted_at": normalize_rms_date(getattr(step, "acted_at", None) or ""),
+            }
+        )
+    return out
+
+
 def offer_record_to_dict(
     db: Session,
     record: Any,
@@ -873,6 +912,10 @@ def offer_record_to_dict(
     pending_step = _get_pending_step(db, int(record.id), RmsOfferApprovalStep)
     node = (record.current_approval_node or "").strip()
     quote_attachment_path = _offer_quote_attachment_path(record)
+    submission_remark = _submission_remark(record)
+    created_at = normalize_rms_date(getattr(record, "created_at", None) or "") or (
+        str(getattr(record, "created_at", None) or "").strip()[:10]
+    )
     return {
         "id": record.id,
         "application_id": record.application_id,
@@ -897,6 +940,8 @@ def offer_record_to_dict(
             f"/api/rms/offers/{int(record.id)}/quote-attachment" if quote_attachment_path else ""
         ),
         "reason": record.reason or "",
+        "submission_remark": submission_remark,
+        "submission_submitted_at": created_at,
         "created_by": record.created_by,
         "created_at": record.created_at or "",
         "updated_at": record.updated_at or "",
@@ -904,6 +949,11 @@ def offer_record_to_dict(
         "pending_approver_user_id": pending_step.approver_user_id if pending_step else None,
         "pending_approver_label": _user_label_for_user_id(
             db, pending_step.approver_user_id if pending_step else None
+        ),
+        "prior_approval_comments": _prior_approval_comments(
+            db,
+            int(record.id),
+            RmsOfferApprovalStep=RmsOfferApprovalStep,
         ),
     }
 

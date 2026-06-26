@@ -39,6 +39,7 @@ OFFER_BODY = {
     "gm_pct": "15",
     "planned_onboard_date": "2026-07-01",
     "quote_confirm_attachment": "rms/offer_quotes/test/quote.png",
+    "submission_remark": "候选人意向明确，建议尽快推进",
 }
 
 
@@ -233,6 +234,7 @@ def test_submit_moves_application_to_offer_approval_pending(
     row = next(o for o in listed if o["id"] == offer["id"])
     assert row["pending_approver_label"]
     assert dept_user in row["pending_approver_label"]
+    assert row["submission_remark"] == OFFER_BODY["submission_remark"]
 
 
 def test_submit_offer_requires_quote_confirm_attachment(
@@ -252,6 +254,25 @@ def test_submit_offer_requires_quote_confirm_attachment(
     )
     assert r.status_code == 400, r.text
     assert "客户报价确认" in r.json()["detail"]
+
+
+def test_submit_offer_requires_submission_remark(
+    client_rbac, admin_auth, rms_engine, uniq, approvers_config
+):
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"sr_{uniq}")
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _advance_to_pending_offer(client_rbac, login, app_id)
+
+    body = dict(OFFER_BODY)
+    body["submission_remark"] = ""
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/offer-approval",
+        cookies=login.cookies,
+        json=body,
+    )
+    assert r.status_code == 400, r.text
+    assert "交付提交的备注意见" in r.json()["detail"]
 
 
 _PNG_1X1 = bytes.fromhex(
@@ -749,6 +770,13 @@ def test_ops_cannot_see_or_approve_before_prior_step(
     row = next(o for o in listed_after.json() if o["id"] == offer_id)
     assert row["can_approve"] is True
     assert row["current_approval_node"] == "ops_head"
+    assert row.get("submission_remark")
+    prior = row.get("prior_approval_comments") or []
+    assert len(prior) == 1
+    assert prior[0]["step_type"] == "dept_superior"
+    assert prior[0]["step_label"] == "部门上级"
+    assert prior[0]["comment"] == "ok"
+    assert prior[0]["approver_label"]
     assert _approve_as(client_rbac, ops_user, offer_id).status_code == 200
 
 

@@ -24,6 +24,12 @@ STEP_TYPE_LABELS = {
     STEP_GM: "总经理审批中",
 }
 
+STEP_TYPE_SHORT_LABELS = {
+    STEP_DEPT_SUPERIOR: "部门上级",
+    STEP_OPS_HEAD: "经营负责人",
+    STEP_GM: "总经理",
+}
+
 OFFER_APPROVAL_CONFIG_INCOMPLETE = "Offer审批链未配置完整，请联系管理员在系统管理中配置"
 
 _CONFIG_FIELDS = ("dept_superior_user_id", "ops_head_user_id", "gm_user_id")
@@ -38,6 +44,10 @@ class ApprovalStepSpec:
 
 def approval_node_label(step_type: str) -> str:
     return STEP_TYPE_LABELS.get((step_type or "").strip(), step_type or "")
+
+
+def approval_step_short_label(step_type: str) -> str:
+    return STEP_TYPE_SHORT_LABELS.get((step_type or "").strip(), step_type or "")
 
 
 def _dept_scope_key(dept_id: int) -> str:

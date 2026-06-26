@@ -37,6 +37,7 @@
       gm_pct: "",
       planned_onboard_date: "",
       quote_confirm_attachment: "",
+      submission_remark: "",
     });
     var offerApprovalSaving = ref(false);
     var offerApprovalError = ref("");
@@ -548,6 +549,7 @@
         ["gm_pct", "GM%"],
         ["planned_onboard_date", "计划入职日期"],
         ["quote_confirm_attachment", "客户报价确认"],
+        ["submission_remark", "交付提交的备注意见"],
       ];
       for (var i = 0; i < required.length; i++) {
         if (!String(offerApprovalForm[required[i][0]] || "").trim()) {
