@@ -48,6 +48,17 @@
     var jobStageChartRows = deps.jobStageChartRows;
     var jobStageChartTotal = deps.jobStageChartTotal;
 
+    function mergeTooltipLabel(baseOptions, labelFn) {
+      if (!labelFn) return baseOptions;
+      var plugins = Object.assign({}, baseOptions.plugins);
+      var tooltip = Object.assign({}, plugins.tooltip);
+      var callbacks = Object.assign({}, tooltip.callbacks, {
+        label: function (c) { return labelFn(c); },
+      });
+      plugins.tooltip = Object.assign({}, tooltip, { callbacks: callbacks });
+      return Object.assign({}, baseOptions, { plugins: plugins });
+    }
+
     function horizontalBarOptionsForStyle(prefix, suffix, style) {
       var opts = horizontalBarOptions(prefix, suffix);
       if (opts.scales && opts.scales.x && opts.scales.x.grid) {
@@ -204,6 +215,13 @@
       var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
       var palette = paletteForStyle(style);
       var accent = palette[KIT.selectedShade(presetStyleColorCfg(style))];
+      var customTooltipLabel = opts.tooltipLabel;
+      function finalizeOptions(base) {
+        if (typeof customTooltipLabel !== "function") return base;
+        return mergeTooltipLabel(base, function (c) {
+          return customTooltipLabel(c, rows);
+        });
+      }
       safeRenderChart(canvasId, function () {
         var canvas = document.getElementById(canvasId);
         if (!canvas) return;
@@ -220,7 +238,7 @@
               labels: labels,
               datasets: [{ data: values, backgroundColor: colors, borderColor: "#fff", borderWidth: 2 }],
             },
-            options: doughnutChartOptionsForStyle(prefix, suffix, prefix + KIT.fmtNum(total) + suffix),
+            options: finalizeOptions(doughnutChartOptionsForStyle(prefix, suffix, prefix + KIT.fmtNum(total) + suffix)),
           });
           return;
         }
@@ -240,7 +258,7 @@
                 borderWidth: 2,
               }],
             },
-            options: lineChartOptionsForStyle(prefix, suffix, style, false),
+            options: finalizeOptions(lineChartOptionsForStyle(prefix, suffix, style, false)),
           });
           return;
         }
@@ -258,7 +276,7 @@
                 categoryPercentage: 0.68,
               }],
             },
-            options: verticalBarOptionsForStyle(prefix, suffix, style),
+            options: finalizeOptions(verticalBarOptionsForStyle(prefix, suffix, style)),
           });
           return;
         }
@@ -275,7 +293,7 @@
               categoryPercentage: 0.68,
             }],
           },
-          options: horizontalBarOptionsForStyle(prefix, suffix, style),
+          options: finalizeOptions(horizontalBarOptionsForStyle(prefix, suffix, style)),
         });
       });
     }
@@ -487,26 +505,25 @@
       );
     }
 
-    function renderLifecycleFunnelChart(canvasId) {
-      safeRenderChart(canvasId, function () {
-        var canvas = document.getElementById(canvasId);
-        if (!canvas) return;
-        destroyChartKey(canvasId);
-        var rows = lifecycleRows.value.filter(function (r) { return r.key !== "resume"; });
-        if (!rows.length) return;
-        chartInstances[canvasId] = new Chart(canvas, {
-          type: "bar",
-          data: {
-            labels: rows.map(function (r) { return r.label; }),
-            datasets: [{
-              data: rows.map(function (r) { return r.funnel_count || 0; }),
-              backgroundColor: rmsShadeRamp(rows.length),
-              borderRadius: 6,
-              barPercentage: 0.72,
-            }],
-          },
-          options: horizontalBarOptions("人数"),
+    function renderLifecycleFunnelChart(canvasId, w) {
+      var block = "lifecycle_funnel";
+      var style = rmsPresetStyle(w && w.config, block);
+      var rows = lifecycleRows.value.map(function (r) {
+          return {
+            label: r.label,
+            value: r.funnel_count != null ? r.funnel_count : 0,
+            pass_rate: r.pass_rate,
+          };
         });
+      renderPresetSeriesChart(canvasId, applyPresetStyleRows(rows, style), style, {
+        prefix: "",
+        suffix: "",
+        tooltipLabel: function (c, chartRows) {
+          var row = chartRows[c.dataIndex];
+          var count = presetTooltipValue("", "", c.parsed);
+          if (!row || !row.pass_rate || row.pass_rate === "—") return count;
+          return count + " (" + row.pass_rate + ")";
+        },
       });
     }
 
@@ -700,7 +717,7 @@
         return;
       }
       if (block === "lifecycle_funnel") {
-        renderLifecycleFunnelChart(rmsId);
+        renderLifecycleFunnelChart(rmsId, w);
         return;
       }
       if (block === "chart_lifecycle_pass_rate") {

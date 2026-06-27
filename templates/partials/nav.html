@@ -137,17 +137,19 @@
             </div>
         </div>
     </div>
-    <div class="gh-nav-item{% if path == '/home/trash' or path.startswith('/rms/import-help') or path.startswith('/rms/recommend-help') or path.startswith('/tools/calc') %} nav-active{% endif %}" data-crm-nav-any="rms.candidates.read,rms.applications.write,tools.gm_calc.read">
+    <div class="gh-nav-item{% if path == '/home/trash' or path.startswith('/help/sync-server-db') or path.startswith('/help/code-update') or path.startswith('/rms/import-help') or path.startswith('/rms/recommend-help') or path.startswith('/tools/calc') %} nav-active{% endif %}" data-crm-nav-help-center="1">
         <span class="nav-trigger cursor-default">帮助中心
             <svg class="w-4 h-4 inline opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </span>
         <div class="gh-mega">
             <div class="gh-mega-panel p-4">
                 <div class="gh-mega-col-h">帮助文档</div>
-                <a class="gh-mega-link" href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">GM测算器</a>
+                <a class="gh-mega-link" href="/tools/calc" data-crm-nav-delivery-or-super="1">GM测算器</a>
                 <a class="gh-mega-link" href="/home/trash" data-crm-nav-super="1">回收站与空间</a>
-                <a class="gh-mega-link" href="/rms/import-help" data-crm-nav-perm="rms.candidates.read">帮助文件-如何批量导入候选人</a>
-                <a class="gh-mega-link" href="/rms/recommend-help" data-crm-nav-perm="rms.applications.write">帮助文件-如何分配非本人需求</a>
+                <a class="gh-mega-link" href="/help/sync-server-db" data-crm-nav-super="1">帮助文件-同步服务器DB到本地</a>
+                <a class="gh-mega-link" href="/help/code-update" data-crm-nav-super="1">帮助文件-代码更新</a>
+                <a class="gh-mega-link" href="/rms/import-help" data-crm-nav-super="1">帮助文件-如何批量导入候选人</a>
+                <a class="gh-mega-link" href="/rms/recommend-help" data-crm-nav-super="1">帮助文件-如何分配非本人需求</a>
             </div>
         </div>
     </div>

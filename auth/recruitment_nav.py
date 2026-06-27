@@ -20,8 +20,6 @@ _RECRUITMENT_DEPT_MATCH_SQL = (
 
 _RECRUITMENT_HTML_PREFIXES = (
     "/rms",
-    "/tools/calc",
-    "/home/trash",
     "/login",
     "/static",
 )

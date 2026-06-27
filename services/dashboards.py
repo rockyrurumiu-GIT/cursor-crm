@@ -325,6 +325,7 @@ def _axis_labels(source_key: str, config: dict) -> Tuple[str, str]:
 RMS_PRESET_STYLE_BLOCKS: FrozenSet[str] = frozenset({
     "chart_pipeline",
     "chart_pending_backlog",
+    "lifecycle_funnel",
     "chart_lifecycle_pass_rate",
     "chart_job_pending_backlog",
     "chart_client_hired_ranking",

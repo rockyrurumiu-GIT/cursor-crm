@@ -12,6 +12,7 @@
   var RMS_PRESET_STYLE_BLOCKS = {
     chart_pipeline: true,
     chart_pending_backlog: true,
+    lifecycle_funnel: true,
     chart_lifecycle_pass_rate: true,
     chart_job_pending_backlog: true,
     chart_client_hired_ranking: true,
@@ -54,7 +55,7 @@
   }
 
   function defaultRmsPresetStyle(block) {
-    return {
+    var style = {
       color: "green",
       color_shade: 2,
       sort: "value_desc",
@@ -64,6 +65,11 @@
       bar_radius: RMS_CHART_BAR_RADIUS,
       max_items: 8,
     };
+    if (block === "lifecycle_funnel") {
+      style.sort = "original";
+      style.max_items = 12;
+    }
+    return style;
   }
 
   function rmsPresetStyle(config, block) {

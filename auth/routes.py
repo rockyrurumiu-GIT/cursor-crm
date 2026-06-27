@@ -152,9 +152,11 @@ def build_router(
             "is_super": ctx.is_super,
             "must_change_password": ctx.must_change_password,
         }
+        from auth import delivery_nav as delivery_nav_mod
         from auth import recruitment_nav as recruit_nav
 
         payload["recruitment_nav_only"] = recruit_nav.is_recruitment_nav_only_user(db, ctx)
+        payload["delivery_org_user"] = delivery_nav_mod.user_in_delivery_org_dept(db, ctx)
         if Client is not None:
             from services import rms_scope as rms_ds
 

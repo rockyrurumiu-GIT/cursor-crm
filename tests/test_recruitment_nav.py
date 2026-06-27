@@ -83,7 +83,7 @@ def test_recruitment_nav_only_me_and_page_redirect(client_rbac, admin_auth, rms_
     assert allowed.status_code == 200
 
     help_page = client_rbac.get("/rms/import-help", cookies=login.cookies, follow_redirects=False)
-    assert help_page.status_code != 302
+    assert help_page.status_code == 403
 
 
 def test_non_recruitment_user_not_nav_restricted(client_rbac, admin_auth, rms_engine):
@@ -108,9 +108,10 @@ def test_non_recruitment_user_not_nav_restricted(client_rbac, admin_auth, rms_en
 
 def test_sidebar_marks_recruitment_allowed_groups():
     html = SIDEBAR_PATH.read_text(encoding="utf-8")
-    assert html.count('data-crm-nav-recruitment-allow="1"') == 2
+    assert html.count('data-crm-nav-recruitment-allow="1"') == 1
     assert 'class="bms-nav-label">招聘' in html
     assert 'class="bms-nav-label">帮助中心' in html
+    assert 'data-crm-nav-help-center="1"' in html
 
 
 def test_base_shell_applies_recruitment_nav_only_flag():

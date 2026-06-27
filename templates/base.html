@@ -1637,6 +1637,7 @@
     <script>
         window.crmPermissions = [];
         window.crmIsSuper = false;
+        window.crmDeliveryOrgUser = false;
         window.crmRecruitmentNavOnly = false;
         window.crmAuthMode = (document.body && document.body.getAttribute('data-crm-auth-mode')) || 'rbac';
         window.crmMeUser = null;
@@ -1783,12 +1784,21 @@
                 var brand = document.querySelector('.bms-brand');
                 if (brand) brand.setAttribute('href', '/rms');
             }
-            document.querySelectorAll('[data-crm-nav-perm],[data-crm-nav-any],[data-crm-nav-super]').forEach(function (el) {
+            var canViewHelpCenter = window.crmIsSuper || window.crmDeliveryOrgUser;
+            document.querySelectorAll('[data-crm-nav-perm],[data-crm-nav-any],[data-crm-nav-super],[data-crm-nav-delivery-or-super],[data-crm-nav-help-center]').forEach(function (el) {
                 if (window.crmRecruitmentNavOnly && !el.closest('[data-crm-nav-recruitment-allow]')) {
+                    return;
+                }
+                if (el.hasAttribute('data-crm-nav-help-center')) {
+                    el.style.display = canViewHelpCenter ? '' : 'none';
                     return;
                 }
                 if (el.hasAttribute('data-crm-nav-super')) {
                     el.style.display = window.crmIsSuper ? '' : 'none';
+                    return;
+                }
+                if (el.hasAttribute('data-crm-nav-delivery-or-super')) {
+                    el.style.display = canViewHelpCenter ? '' : 'none';
                     return;
                 }
                 var ok = false;
@@ -2805,6 +2815,7 @@
                 window.crmAuthMode = data.auth_mode || 'legacy';
                 window.crmPermissions = data.permissions || [];
                 window.crmIsSuper = (data.roles || []).indexOf('SUPER_ADMIN') >= 0;
+                window.crmDeliveryOrgUser = !!data.delivery_org_user;
                 window.crmRecruitmentNavOnly = !!data.recruitment_nav_only;
                 window.crmMeUser = data.user || null;
                 var u = (data.user && data.user.display_name) || (data.user && data.user.username) || '';

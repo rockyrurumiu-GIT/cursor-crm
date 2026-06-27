@@ -24,8 +24,8 @@ def test_dashboard_nav_under_company():
 def test_gm_calc_nav_under_help_center():
     nav = _nav_html()
     help_section = nav.split('class="nav-trigger cursor-default">帮助中心', 1)[1]
-    assert re.search(r'data-crm-nav-any="[^"]*tools\.gm_calc\.read', nav)
-    assert 'href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">GM测算器' in help_section
+    assert 'data-crm-nav-help-center="1"' in nav
+    assert 'href="/tools/calc" data-crm-nav-delivery-or-super="1">GM测算器' in help_section
     customer_section = nav.split("<!-- 客户（含费用折算器子项） -->", 1)[1].split("<!-- 商机", 1)[0]
     assert 'href="/tools/calc"' not in customer_section
 
@@ -48,10 +48,12 @@ def test_rms_nav_entry():
     assert "帮助文件" not in rms_section
     help_section = nav.split('class="nav-trigger cursor-default">帮助中心', 1)[1]
     assert 'href="/home/trash" data-crm-nav-super="1">回收站与空间' in help_section
+    assert 'href="/help/sync-server-db" data-crm-nav-super="1">帮助文件-同步服务器DB到本地' in help_section
+    assert 'href="/help/code-update" data-crm-nav-super="1">帮助文件-代码更新' in help_section
     assert 'href="/rms/import-help"' in help_section
-    assert 'data-crm-nav-perm="rms.candidates.read">帮助文件-如何批量导入候选人' in help_section
-    assert 'data-crm-nav-perm="rms.applications.write">帮助文件-如何分配非本人需求' in help_section
-    assert 'data-crm-nav-perm="tools.gm_calc.read">GM测算器' in help_section
+    assert 'data-crm-nav-super="1">帮助文件-如何批量导入候选人' in help_section
+    assert 'data-crm-nav-super="1">帮助文件-如何分配非本人需求' in help_section
+    assert 'href="/tools/calc" data-crm-nav-delivery-or-super="1">GM测算器' in help_section
     gm_idx = help_section.index('href="/tools/calc"')
     trash_idx = help_section.index('href="/home/trash"')
     assert gm_idx < trash_idx
@@ -101,8 +103,13 @@ def test_trash_nav_super_admin_only():
     sidebar = (Path(__file__).resolve().parent.parent / "templates" / "partials" / "sidebar_nav.html").read_text(encoding="utf-8")
     base = (Path(__file__).resolve().parent.parent / "templates" / "base.html").read_text(encoding="utf-8")
     assert 'href="/home/trash" data-crm-nav-super="1">回收站与空间' in sidebar
+    assert 'href="/help/sync-server-db" data-crm-nav-super="1">帮助文件-同步服务器DB到本地' in sidebar
+    assert 'href="/help/code-update" data-crm-nav-super="1">帮助文件-代码更新' in sidebar
+    assert 'href="/tools/calc" data-crm-nav-delivery-or-super="1">GM测算器' in sidebar
     assert "data-crm-nav-super" in base
     assert "window.crmIsSuper" in base
+    assert "window.crmDeliveryOrgUser" in base
+    assert "data.delivery_org_user" in base
 
 
 def test_funnel_nav_under_customers_last():
@@ -111,3 +118,45 @@ def test_funnel_nav_under_customers_last():
     customer_section = nav.split("<!-- 客户（含费用折算器子项） -->", 1)[1].split("<!-- 商机", 1)[0]
     assert 'href="/tools/calc"' not in customer_section
     assert 'href="/dashboards"' not in customer_section
+
+
+def test_code_update_help_page_content():
+    help_html = (
+        Path(__file__).resolve().parent.parent
+        / "templates"
+        / "pages"
+        / "help_code_update.html"
+    ).read_text(encoding="utf-8")
+    assert "代码更新" in help_html
+    assert "rsync -avz" in help_html
+    assert "rocky@47.116.194.98:/home/rocky/BMS/" in help_html
+    assert "sudo systemctl restart bms" in help_html
+
+
+def test_code_update_help_requires_super_admin(client, admin_auth):
+    from tests.helpers import auth_header
+
+    ok = client.get("/help/code-update", headers=auth_header(*admin_auth))
+    assert ok.status_code == 200, ok.text
+    assert "代码更新" in ok.text
+
+
+def test_sync_server_db_help_page_content():
+    help_html = (
+        Path(__file__).resolve().parent.parent
+        / "templates"
+        / "pages"
+        / "help_sync_server_db.html"
+    ).read_text(encoding="utf-8")
+    assert "同步服务器 DB 到本地测试环境" in help_html
+    assert "crm_v8.server-sync.db" in help_html
+    assert "run_migrations.py" in help_html
+    assert "rsync -av rocky@" in help_html
+
+
+def test_sync_server_db_help_requires_super_admin(client, admin_auth):
+    from tests.helpers import auth_header
+
+    ok = client.get("/help/sync-server-db", headers=auth_header(*admin_auth))
+    assert ok.status_code == 200, ok.text
+    assert "同步服务器 DB 到本地测试环境" in ok.text

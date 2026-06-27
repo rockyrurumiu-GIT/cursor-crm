@@ -541,7 +541,7 @@ def test_import_help_page_content_and_placeholders():
     assert "/Users/rocky" not in html
 
 
-def test_import_help_requires_candidates_read(rms_client, admin_auth, uniq):
+def test_import_help_requires_super_admin(rms_client, admin_auth, uniq):
     client, engine = rms_client
     user, pwd = admin_auth
     ok = client.get("/rms/import-help", headers=auth_header(user, pwd))
@@ -553,25 +553,7 @@ def test_import_help_requires_candidates_read(rms_client, admin_auth, uniq):
     assert denied.status_code == 403
 
 
-def test_import_help_visible_with_only_candidates_read(
-    rms_client, admin_auth, uniq
-):
-    client, engine = rms_client
-    viewer = f"cand_only_{uniq[:8]}"
-    perms = (
-        "rms.jobs.read",
-        "rms.analytics.read",
-        "rms.candidates.read",
-        "rms.candidates.write",
-    )
-    _revoke_role_permissions(engine, ROLE_VIEWER, perms)
-    try:
-        _grant_role_permissions(engine, ROLE_VIEWER, ("rms.candidates.read",))
-        _create_user(client, admin_auth, viewer, [ROLE_VIEWER])
-        r = client.get("/rms/import-help", headers=auth_header(viewer, "pass1234"))
-        assert r.status_code == 200, r.text
-        nav = NAV_PATH.read_text(encoding="utf-8")
-        assert 'data-crm-nav-any="rms.jobs.read,rms.analytics.read,rms.candidates.read"' in nav
-        assert 'data-crm-nav-perm="rms.candidates.read">帮助文件-如何批量导入候选人' in nav
-    finally:
-        _revoke_role_permissions(engine, ROLE_VIEWER, ("rms.candidates.read",))
+def test_import_help_nav_super_admin_only():
+    nav = NAV_PATH.read_text(encoding="utf-8")
+    assert 'data-crm-nav-super="1">帮助文件-如何批量导入候选人' in nav
+    assert 'data-crm-nav-help-center="1"' in nav

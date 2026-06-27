@@ -2,7 +2,7 @@
 {% set path = (request.url.path.rstrip('/')) or '/' %}
 {# ---- 二级 active：服务端最长匹配（多个 href 命中时取路径段最长者）---- #}
 {% set _hrefs = [
-    '/home/trash', '/materials', '/contracts',
+    '/home/trash', '/help/sync-server-db', '/help/code-update', '/materials', '/contracts',
     '/customers', '/contacts/all', '/customers/visits', '/tools/calc', '/dashboards', '/home/funnel',
     '/opportunity/leads', '/opportunity/pool', '/opportunity/dashboard',
     '/goals/quarter', '/goals/personal', '/goals/team',
@@ -30,7 +30,7 @@
 {% set g_delivery = path.startswith('/delivery') or path.startswith('/customers/roster') %}
 {% set g_rms = path.startswith('/rms') and not path.startswith('/rms/import-help') and not path.startswith('/rms/recommend-help') %}
 {% set g_system = path.startswith('/system') %}
-{% set g_help = path == '/home/trash' or path.startswith('/rms/import-help') or path.startswith('/rms/recommend-help') or path.startswith('/tools/calc') %}
+{% set g_help = path == '/home/trash' or path.startswith('/help/sync-server-db') or path.startswith('/help/code-update') or path.startswith('/rms/import-help') or path.startswith('/rms/recommend-help') or path.startswith('/tools/calc') %}
 <nav class="bms-nav" aria-label="主导航">
     <!-- 首页 -->
     <div class="bms-nav-group{% if g_home %} is-open is-active{% endif %}" data-crm-nav-any="crm.clients.read,materials.read,materials.public.read,materials.internal.read,dashboard.read">
@@ -126,17 +126,19 @@
         </div>
     </div>
     <!-- 帮助中心 -->
-    <div class="bms-nav-group{% if g_help %} is-open is-active{% endif %}" data-crm-nav-recruitment-allow="1" data-crm-nav-any="rms.candidates.read,rms.applications.write,tools.gm_calc.read">
+    <div class="bms-nav-group{% if g_help %} is-open is-active{% endif %}" data-crm-nav-help-center="1">
         <button type="button" class="bms-nav-trigger" aria-expanded="{{ 'true' if g_help else 'false' }}">
             <svg class="bms-nav-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"/></svg>
             <span class="bms-nav-label">帮助中心</span>
             <svg class="bms-nav-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
         </button>
         <div class="bms-nav-sub">
-            <a class="bms-nav-link{% if ns.active == '/tools/calc' %} is-current{% endif %}" href="/tools/calc" data-crm-nav-perm="tools.gm_calc.read">GM测算器</a>
+            <a class="bms-nav-link{% if ns.active == '/tools/calc' %} is-current{% endif %}" href="/tools/calc" data-crm-nav-delivery-or-super="1">GM测算器</a>
             <a class="bms-nav-link{% if ns.active == '/home/trash' %} is-current{% endif %}" href="/home/trash" data-crm-nav-super="1">回收站与空间</a>
-            <a class="bms-nav-link{% if ns.active == '/rms/import-help' %} is-current{% endif %}" href="/rms/import-help" data-crm-nav-perm="rms.candidates.read">帮助文件-如何批量导入候选人</a>
-            <a class="bms-nav-link{% if ns.active == '/rms/recommend-help' %} is-current{% endif %}" href="/rms/recommend-help" data-crm-nav-perm="rms.applications.write">帮助文件-如何分配非本人需求</a>
+            <a class="bms-nav-link{% if ns.active == '/help/sync-server-db' %} is-current{% endif %}" href="/help/sync-server-db" data-crm-nav-super="1">帮助文件-同步服务器DB到本地</a>
+            <a class="bms-nav-link{% if ns.active == '/help/code-update' %} is-current{% endif %}" href="/help/code-update" data-crm-nav-super="1">帮助文件-代码更新</a>
+            <a class="bms-nav-link{% if ns.active == '/rms/import-help' %} is-current{% endif %}" href="/rms/import-help" data-crm-nav-super="1">帮助文件-如何批量导入候选人</a>
+            <a class="bms-nav-link{% if ns.active == '/rms/recommend-help' %} is-current{% endif %}" href="/rms/recommend-help" data-crm-nav-super="1">帮助文件-如何分配非本人需求</a>
         </div>
     </div>
 </nav>

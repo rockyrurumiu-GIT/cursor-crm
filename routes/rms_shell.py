@@ -9,7 +9,7 @@ from typing import Callable
 from fastapi import Depends, Request
 from fastapi.responses import HTMLResponse
 
-from auth.deps import require_permission
+from auth.deps import _require_super_admin, require_permission
 
 
 def register_rms_shell_routes(app, *, page_renderer: Callable):
@@ -30,14 +30,14 @@ def register_rms_shell_routes(app, *, page_renderer: Callable):
     @app.get("/rms/import-help", response_class=HTMLResponse)
     async def page_rms_import_help(
         request: Request,
-        _user: str = Depends(require_permission("rms.candidates.read")),
+        _ctx=Depends(_require_super_admin),
     ):
         return page_renderer("pages/rms_import_help.html", request)
 
     @app.get("/rms/recommend-help", response_class=HTMLResponse)
     async def page_rms_recommend_help(
         request: Request,
-        _user: str = Depends(require_permission("rms.applications.write")),
+        _ctx=Depends(_require_super_admin),
     ):
         return page_renderer("pages/rms_recommend_help.html", request)
 

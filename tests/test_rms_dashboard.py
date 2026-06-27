@@ -370,6 +370,55 @@ def test_rms_preset_style_stripped_for_non_preset_block(client_rbac, admin_auth,
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
 
+def test_rms_lifecycle_funnel_preset_style_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    tab = _lifecycle_tab(client_rbac, login.cookies)
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab['id']}/widgets",
+        json={
+            "title": "招聘生命周期漏斗",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "lifecycle_funnel",
+                "style": {
+                    "color": "turquoise",
+                    "color_shade": 3,
+                    "sort": "original",
+                    "chart_type": "line",
+                    "show_grid": True,
+                    "bar_radius": 10,
+                    "max_items": 12,
+                },
+            },
+            "x": 0,
+            "y": 30,
+            "w": 12,
+            "h": 6,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    wid = body["id"]
+    assert body["config"]["block"] == "lifecycle_funnel"
+    assert body["config"]["style"]["color"] == "turquoise"
+    assert body["config"]["style"]["color_shade"] == 3
+    assert body["config"]["style"]["sort"] == "original"
+    assert body["config"]["style"]["chart_type"] == "line"
+    assert body["config"]["style"]["bar_radius"] == 10
+    assert body["config"]["style"]["max_items"] == 12
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    lifecycle = next(t for t in boards[0]["tabs"] if t["id"] == tab["id"])
+    saved = next(w for w in lifecycle["widgets"] if w["id"] == wid)
+    assert saved["config"]["style"]["chart_type"] == "line"
+    assert saved["config"]["style"]["sort"] == "original"
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
 def test_rms_preset_style_clamps_invalid_values(client_rbac, admin_auth, rms_engine, uniq):
     user, pwd = admin_auth
     login = _login(client_rbac, user, pwd)

@@ -1771,6 +1771,22 @@ async def page_home_trash(
     return _page("pages/home_trash.html", request)
 
 
+@app.get("/help/sync-server-db", response_class=HTMLResponse)
+async def page_help_sync_server_db(
+    request: Request,
+    _ctx: AuthContext = Depends(auth_deps._require_super_admin),
+):
+    return _page("pages/help_sync_server_db.html", request)
+
+
+@app.get("/help/code-update", response_class=HTMLResponse)
+async def page_help_code_update(
+    request: Request,
+    _ctx: AuthContext = Depends(auth_deps._require_super_admin),
+):
+    return _page("pages/help_code_update.html", request)
+
+
 @app.get("/materials", response_class=HTMLResponse)
 async def page_materials(
     request: Request,
