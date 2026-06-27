@@ -139,6 +139,50 @@
   padding-bottom: 9px;
 }
 .rms-job-stage-table .metric-with-rate { cursor: help; }
+.rms-job-stage-table .metric-loss-with-hint {
+  cursor: default;
+  white-space: nowrap;
+}
+.rms-job-stage-table .metric-loss-with-hint .rms-job-stage-hint-wrap {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 0.15rem;
+}
+.rms-job-stage-hint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 9999px;
+  border: 1px solid #0969da;
+  color: #0969da;
+  background: #f6f8fa;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+  flex-shrink: 0;
+  user-select: none;
+  vertical-align: middle;
+}
+.rms-job-stage-hint-popup {
+  position: fixed;
+  z-index: 10050;
+  max-width: 16rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  background: #24292f;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  text-align: left;
+  box-shadow: 0 8px 24px rgba(31, 35, 40, 0.18);
+  pointer-events: none;
+}
 .rms-job-stage-table th.col-compact,
 .rms-job-stage-table td.col-compact {
   width: 2.6rem; min-width: 2.6rem; max-width: 3rem;
@@ -640,16 +684,25 @@
                                         <td class="col-compact">{{ row.pending_client_screen }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(row, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
                                         <td>{{ row.scheduling_interview_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(row, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
+                                        <td class="metric-with-rate metric-loss-with-hint">
+                                            <span>{{ jobStageMetricText(row, 'interview_abandoned', 'interview_abandoned_rate') }}</span>
+                                            <span v-if="jobStageLossMetricCount(row, 'interview_abandoned') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(row, 'interview_abandoned_names')" tabindex="0" :aria-label="jobStageLossNamesHint(row, 'interview_abandoned_names')"><span class="rms-job-stage-hint">?</span></span>
+                                        </td>
                                         <td>{{ row.pending_interview }}</td>
                                         <td>{{ row.first_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'first_interview_passed_count', 'first_interview_count', '一面通过')">{{ jobStageMetricText(row, 'first_interview_passed_count', 'first_interview_passed_rate') }}</td>
                                         <td>{{ row.second_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'second_interview_passed_count', 'second_interview_count', '二面通过')">{{ jobStageMetricText(row, 'second_interview_passed_count', 'second_interview_passed_rate') }}</td>
                                         <td>{{ row.pending_offer_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'offer_dropped_count', 'second_interview_passed_count', '弃offer')">{{ jobStageMetricText(row, 'offer_dropped_count', 'offer_dropped_count_rate') }}</td>
+                                        <td class="metric-with-rate metric-loss-with-hint">
+                                            <span>{{ jobStageMetricText(row, 'offer_dropped_count', 'offer_dropped_count_rate') }}</span>
+                                            <span v-if="jobStageLossMetricCount(row, 'offer_dropped_count') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(row, 'offer_dropped_names')" tabindex="0" :aria-label="jobStageLossNamesHint(row, 'offer_dropped_names')"><span class="rms-job-stage-hint">?</span></span>
+                                        </td>
                                         <td>{{ row.onboarding_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'onboarding_lost_count', 'onboarding_count', '在途流失')">{{ jobStageMetricText(row, 'onboarding_lost_count', 'onboarding_lost_count_rate') }}</td>
+                                        <td class="metric-with-rate metric-loss-with-hint">
+                                            <span>{{ jobStageMetricText(row, 'onboarding_lost_count', 'onboarding_lost_count_rate') }}</span>
+                                            <span v-if="jobStageLossMetricCount(row, 'onboarding_lost_count') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(row, 'onboarding_lost_names')" tabindex="0" :aria-label="jobStageLossNamesHint(row, 'onboarding_lost_names')"><span class="rms-job-stage-hint">?</span></span>
+                                        </td>
                                         <td>{{ row.hired_count }}</td>
                                     </tr>
                                     <tr v-if="clientJobStageTotal" class="total-row">
@@ -664,16 +717,25 @@
                                         <td class="col-compact">{{ clientJobStageTotal.pending_client_screen }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
                                         <td>{{ clientJobStageTotal.scheduling_interview_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'interview_abandoned', 'internal_screen_passed', '放弃面试')">{{ jobStageMetricText(clientJobStageTotal, 'interview_abandoned', 'interview_abandoned_rate') }}</td>
+                                        <td class="metric-with-rate metric-loss-with-hint">
+                                            <span>{{ jobStageMetricText(clientJobStageTotal, 'interview_abandoned', 'interview_abandoned_rate') }}</span>
+                                            <span v-if="jobStageLossMetricCount(clientJobStageTotal, 'interview_abandoned') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(clientJobStageTotal, 'interview_abandoned_names')" tabindex="0" :aria-label="jobStageLossNamesHint(clientJobStageTotal, 'interview_abandoned_names')"><span class="rms-job-stage-hint">?</span></span>
+                                        </td>
                                         <td>{{ clientJobStageTotal.pending_interview }}</td>
                                         <td>{{ clientJobStageTotal.first_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'first_interview_passed_count', 'first_interview_count', '一面通过')">{{ jobStageMetricText(clientJobStageTotal, 'first_interview_passed_count', 'first_interview_passed_rate') }}</td>
                                         <td>{{ clientJobStageTotal.second_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'second_interview_passed_count', 'second_interview_count', '二面通过')">{{ jobStageMetricText(clientJobStageTotal, 'second_interview_passed_count', 'second_interview_passed_rate') }}</td>
                                         <td>{{ clientJobStageTotal.pending_offer_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'offer_dropped_count', 'second_interview_passed_count', '弃offer')">{{ jobStageMetricText(clientJobStageTotal, 'offer_dropped_count', 'offer_dropped_count_rate') }}</td>
+                                        <td class="metric-with-rate metric-loss-with-hint">
+                                            <span>{{ jobStageMetricText(clientJobStageTotal, 'offer_dropped_count', 'offer_dropped_count_rate') }}</span>
+                                            <span v-if="jobStageLossMetricCount(clientJobStageTotal, 'offer_dropped_count') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(clientJobStageTotal, 'offer_dropped_names')" tabindex="0" :aria-label="jobStageLossNamesHint(clientJobStageTotal, 'offer_dropped_names')"><span class="rms-job-stage-hint">?</span></span>
+                                        </td>
                                         <td>{{ clientJobStageTotal.onboarding_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'onboarding_lost_count', 'onboarding_count', '在途流失')">{{ jobStageMetricText(clientJobStageTotal, 'onboarding_lost_count', 'onboarding_lost_count_rate') }}</td>
+                                        <td class="metric-with-rate metric-loss-with-hint">
+                                            <span>{{ jobStageMetricText(clientJobStageTotal, 'onboarding_lost_count', 'onboarding_lost_count_rate') }}</span>
+                                            <span v-if="jobStageLossMetricCount(clientJobStageTotal, 'onboarding_lost_count') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(clientJobStageTotal, 'onboarding_lost_names')" tabindex="0" :aria-label="jobStageLossNamesHint(clientJobStageTotal, 'onboarding_lost_names')"><span class="rms-job-stage-hint">?</span></span>
+                                        </td>
                                         <td>{{ clientJobStageTotal.hired_count }}</td>
                                     </tr>
                                 </tbody>
@@ -1149,8 +1211,8 @@
 {% block page_scripts %}
 <script src="/static/js/shared/dashboard-widget-kit.js?v=dashboard-widget-kit-twenty-12"></script>
 <script src="/static/js/pages/rms-dashboard-core.js?v=dashboard-split-d4-20260616"></script>
-<script src="/static/js/pages/rms-dashboard-metrics.js?v=dashboard-split-d4-20260616"></script>
+<script src="/static/js/pages/rms-dashboard-metrics.js?v=dashboard-loss-hint-20260627"></script>
 <script src="/static/js/pages/rms-dashboard-charts.js?v=dashboard-split-d4-20260616"></script>
 <script src="/static/js/pages/rms-dashboard-inspector.js?v=dashboard-split-d4-20260616"></script>
-<script src="/static/js/pages/rms-dashboard.js?v=dashboard-delete-perm-20260617"></script>
+<script src="/static/js/pages/rms-dashboard.js?v=dashboard-loss-hint-20260627"></script>
 {% endblock %}

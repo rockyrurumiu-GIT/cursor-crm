@@ -119,6 +119,19 @@
       return String(count) + " (" + rate + ")";
     }
 
+    function jobStageLossMetricCount(row, countKey) {
+      if (!row) return 0;
+      var count = row[countKey];
+      return count == null ? 0 : count;
+    }
+
+    function jobStageLossNamesHint(row, namesKey) {
+      if (!row) return "";
+      var names = row[namesKey];
+      if (!names || !names.length) return "暂无人员姓名";
+      return names.join("\n");
+    }
+
     function jobStageMetricTitle(row, countKey, denomKey, label) {
       if (!row) return label;
       var count = row[countKey];
@@ -176,6 +189,8 @@
       recruiterRecommendVsHiredRows: recruiterRecommendVsHiredRows,
       jobStageMetricText: jobStageMetricText,
       jobStageMetricTitle: jobStageMetricTitle,
+      jobStageLossMetricCount: jobStageLossMetricCount,
+      jobStageLossNamesHint: jobStageLossNamesHint,
       activeFilterSummary: activeFilterSummary,
     };
   }

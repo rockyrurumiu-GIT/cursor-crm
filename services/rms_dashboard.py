@@ -64,15 +64,11 @@ _PENDING_SECOND_INTERVIEW_SNAPSHOT_STATUSES = frozenset({"first_interview_passed
 _PENDING_FINAL_INTERVIEW_SNAPSHOT_STATUSES = frozenset({"second_interview_passed"})
 _ONBOARDING_SNAPSHOT_STATUSES = frozenset({"onboarding"})
 
-_FIRST_INTERVIEW_OUTCOME_STATUSES = frozenset({
-    "first_interview_passed",
-    "first_interview_failed",
-})
-_SECOND_INTERVIEW_OUTCOME_STATUSES = frozenset({
-    "second_interview_passed",
-    "second_interview_failed",
-    "second_interview_abandoned",
-})
+_LOSS_METRIC_NAME_KEYS = (
+    "interview_abandoned_names",
+    "offer_dropped_names",
+    "onboarding_lost_names",
+)
 _INTERVIEW_PASSED_STATUSES = frozenset({
     "first_interview_passed",
     "second_interview_passed",
@@ -140,12 +136,24 @@ _INTERNAL_SCREEN_PASSED_STATUSES = _statuses_from("pending_client_screen")
 _FIRST_INTERVIEW_PASSED_STATUSES = _statuses_from("first_interview_passed") - frozenset({
     "first_interview_failed",
 })
+# 一面数历史：与一面通过双保险一致，并含 first_interview_failed
+_FIRST_INTERVIEW_REACHED_STATUSES = frozenset(
+    _FIRST_INTERVIEW_PASSED_STATUSES | frozenset({"first_interview_failed"})
+)
 _SECOND_INTERVIEW_PASSED_STATUSES = _statuses_from("second_interview_passed") - frozenset({
     "second_interview_failed",
     "second_interview_abandoned",
 })
+# 二面数历史：与二面通过双保险一致，并含 second_interview_failed / second_interview_abandoned
+_SECOND_INTERVIEW_REACHED_STATUSES = frozenset(
+    _SECOND_INTERVIEW_PASSED_STATUSES | frozenset({
+        "second_interview_failed",
+        "second_interview_abandoned",
+    })
+)
 _FINAL_INTERVIEW_PASSED_STATUSES = _statuses_from("pending_offer")
-_OFFER_PASSED_STATUSES = _statuses_from("onboarding") - frozenset({"onboarding_lost"})
+# 接 offer：周期内进入在途及之后（含在途流失）；弃 offer 为 offer 阶段 fail，不算接 offer
+_OFFER_PASSED_STATUSES = _statuses_from("onboarding")
 
 # 各阶段「通过」：周期内曾到达对应节点及之后（双保险），且当前仍在该集合内；
 # 改回前序节点或该阶段 fail/弃面等结果态时不计入。
@@ -294,7 +302,7 @@ def _app_counts_as_interviewed(
     snapshot_as_of: Optional[str],
 ) -> bool:
     if not _app_had_transition_in_period(
-        histories, _FIRST_INTERVIEW_OUTCOME_STATUSES, date_from, date_to
+        histories, _FIRST_INTERVIEW_REACHED_STATUSES, date_from, date_to
     ):
         return False
     return _status_at(app, histories, snapshot_as_of) in _INTERVIEWED_CURRENT_STATUSES
@@ -308,7 +316,7 @@ def _app_counts_as_second_interviewed(
     snapshot_as_of: Optional[str],
 ) -> bool:
     if not _app_had_transition_in_period(
-        histories, _SECOND_INTERVIEW_OUTCOME_STATUSES, date_from, date_to
+        histories, _SECOND_INTERVIEW_REACHED_STATUSES, date_from, date_to
     ):
         return False
     return _status_at(app, histories, snapshot_as_of) in _SECOND_INTERVIEWED_CURRENT_STATUSES
@@ -671,18 +679,38 @@ def _period_label(filters: Dict[str, Any]) -> str:
     return "全量"
 
 
-def _empty_job_metrics() -> Dict[str, int]:
-    return {key: 0 for key in _SUMMARY_METRIC_KEYS}
+def _empty_job_metrics() -> Dict[str, Any]:
+    metrics: Dict[str, Any] = {key: 0 for key in _SUMMARY_METRIC_KEYS}
+    for key in _LOSS_METRIC_NAME_KEYS:
+        metrics[key] = []
+    return metrics
+
+
+def _candidate_display_name(app: Any, candidate_names: Dict[int, str]) -> str:
+    cid = getattr(app, "candidate_id", None)
+    if cid is not None:
+        name = (candidate_names.get(int(cid)) or "").strip()
+        if name:
+            return name
+        return f"候选人#{cid}"
+    return f"投递#{getattr(app, 'id', '?')}"
+
+
+def _append_unique_name(names: List[str], name: str) -> None:
+    if name and name not in names:
+        names.append(name)
 
 
 def _metrics_for_apps(
     apps: List[Any],
     hist_map: Dict[int, List[Any]],
     filters: Dict[str, Any],
-) -> Dict[str, int]:
+    candidate_names: Optional[Dict[int, str]] = None,
+) -> Dict[str, Any]:
     date_from, date_to = _period_bounds(filters)
     snapshot_as_of = _snapshot_as_of(filters)
     metrics = _empty_job_metrics()
+    names_by_id = candidate_names or {}
 
     for app in apps:
         histories = hist_map.get(app.id, [])
@@ -721,6 +749,10 @@ def _metrics_for_apps(
             metrics["client_screen_passed"] += 1
         if _app_had_transition_in_period(histories, _ABANDONED_STATUSES, date_from, date_to):
             metrics["interview_abandoned"] += 1
+            _append_unique_name(
+                metrics["interview_abandoned_names"],
+                _candidate_display_name(app, names_by_id),
+            )
         if status_snapshot in _PENDING_INTERVIEW_SNAPSHOT_STATUSES:
             metrics["pending_interview"] += 1
         if status_snapshot in _PENDING_SECOND_INTERVIEW_SNAPSHOT_STATUSES:
@@ -766,12 +798,20 @@ def _metrics_for_apps(
             histories, _OFFER_DROPPED_STATUSES, date_from, date_to
         ):
             metrics["offer_dropped_count"] += 1
+            _append_unique_name(
+                metrics["offer_dropped_names"],
+                _candidate_display_name(app, names_by_id),
+            )
         if status_snapshot in _ONBOARDING_SNAPSHOT_STATUSES:
             metrics["onboarding_count"] += 1
         if _app_had_transition_in_period(
             histories, _ONBOARDING_LOST_STATUSES, date_from, date_to
         ):
             metrics["onboarding_lost_count"] += 1
+            _append_unique_name(
+                metrics["onboarding_lost_names"],
+                _candidate_display_name(app, names_by_id),
+            )
         if _app_counts_as_hired(app, histories, date_from, date_to, snapshot_as_of):
             metrics["hired_count"] += 1
         if status_snapshot == "hired" and not getattr(app, "converted_to_roster_entry_id", None):
@@ -909,11 +949,31 @@ def _client_job_stage_summary(
     for app in scoped_apps:
         apps_by_job[int(app.job_id)].append(app)
 
+    candidate_ids = {
+        int(app.candidate_id)
+        for app in scoped_apps
+        if getattr(app, "candidate_id", None) is not None
+    }
+    candidate_names: Dict[int, str] = {}
+    if candidate_ids:
+        from sqlalchemy import text
+
+        ids_sql = ",".join(str(i) for i in sorted(candidate_ids))
+        for cid, name in db.execute(
+            text(f"SELECT id, name FROM rms_candidates WHERE id IN ({ids_sql})")
+        ):
+            candidate_names[int(cid)] = (name or "").strip()
+
     rows: List[Dict[str, Any]] = []
     total = _empty_job_metrics()
     total_headcount = 0
     for job in sorted(jobs, key=lambda j: int(j.id)):
-        metrics = _metrics_for_apps(apps_by_job.get(int(job.id), []), hist_map, filters)
+        metrics = _metrics_for_apps(
+            apps_by_job.get(int(job.id), []),
+            hist_map,
+            filters,
+            candidate_names,
+        )
         cid = int(job.client_id) if job.client_id is not None else None
         headcount = int(job.headcount or 0) if (job.status or "").strip() == "open" else 0
         total_headcount += headcount
@@ -929,6 +989,9 @@ def _client_job_stage_summary(
         rows.append(row)
         for key in _SUMMARY_METRIC_KEYS:
             total[key] += metrics[key]
+        for key in _LOSS_METRIC_NAME_KEYS:
+            for name in metrics[key]:
+                _append_unique_name(total[key], name)
 
     return {
         "period_label": _period_label(filters),

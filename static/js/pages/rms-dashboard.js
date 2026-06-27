@@ -88,6 +88,93 @@
 
   KIT.installChartPlugins(typeof Chart !== "undefined" ? Chart : undefined, typeof ChartDataLabels !== "undefined" ? ChartDataLabels : undefined);
 
+  function initJobStageLossHintPopovers(rootEl) {
+    var root = rootEl || document.getElementById(MOUNT_ID);
+    if (!root || root.getAttribute("data-rms-job-stage-hint-inited")) return;
+    root.setAttribute("data-rms-job-stage-hint-inited", "1");
+
+    var popup = null;
+    var activeWrap = null;
+
+    function ensurePopup() {
+      if (popup) return popup;
+      popup = document.createElement("div");
+      popup.className = "rms-job-stage-hint-popup";
+      popup.setAttribute("role", "tooltip");
+      popup.hidden = true;
+      document.body.appendChild(popup);
+      return popup;
+    }
+
+    function hidePopup() {
+      activeWrap = null;
+      if (!popup) return;
+      popup.hidden = true;
+    }
+
+    function positionPopup(wrap) {
+      var text = String(wrap.getAttribute("data-hint") || "").trim();
+      if (!text) {
+        hidePopup();
+        return;
+      }
+      var box = ensurePopup();
+      box.textContent = text;
+      box.hidden = false;
+      var rect = wrap.getBoundingClientRect();
+      var gap = 6;
+      box.style.left = "0px";
+      box.style.top = "0px";
+      var boxRect = box.getBoundingClientRect();
+      var left = rect.left + rect.width / 2 - boxRect.width / 2;
+      var top = rect.bottom + gap;
+      var pad = 8;
+      if (left < pad) left = pad;
+      if (left + boxRect.width > window.innerWidth - pad) {
+        left = Math.max(pad, window.innerWidth - pad - boxRect.width);
+      }
+      if (top + boxRect.height > window.innerHeight - pad) {
+        top = rect.top - gap - boxRect.height;
+      }
+      box.style.left = left + "px";
+      box.style.top = top + "px";
+    }
+
+    function showForWrap(wrap) {
+      if (!wrap) return;
+      activeWrap = wrap;
+      positionPopup(wrap);
+    }
+
+    root.addEventListener("mouseover", function (e) {
+      var wrap = e.target.closest && e.target.closest(".rms-job-stage-hint-wrap");
+      if (wrap && root.contains(wrap)) showForWrap(wrap);
+    });
+    root.addEventListener("mouseout", function (e) {
+      var wrap = e.target.closest && e.target.closest(".rms-job-stage-hint-wrap");
+      if (!wrap) return;
+      var rel = e.relatedTarget;
+      if (rel && wrap.contains(rel)) return;
+      hidePopup();
+    });
+    root.addEventListener("focusin", function (e) {
+      var wrap = e.target.closest && e.target.closest(".rms-job-stage-hint-wrap");
+      if (wrap && root.contains(wrap)) showForWrap(wrap);
+    });
+    root.addEventListener("focusout", function (e) {
+      var wrap = e.target.closest && e.target.closest(".rms-job-stage-hint-wrap");
+      if (!wrap) return;
+      var rel = e.relatedTarget;
+      if (rel && wrap.contains(rel)) return;
+      hidePopup();
+    });
+    root.addEventListener("scroll", function () {
+      if (activeWrap) positionPopup(activeWrap);
+      else hidePopup();
+    }, true);
+    window.addEventListener("resize", hidePopup);
+  }
+
   function richTitle(text) {
     var t = (text || "").trim();
     var nl = t.indexOf("\n");
@@ -245,6 +332,8 @@
         var recruiterRecommendVsHiredRows = metrics.recruiterRecommendVsHiredRows;
         var jobStageMetricText = metrics.jobStageMetricText;
         var jobStageMetricTitle = metrics.jobStageMetricTitle;
+        var jobStageLossMetricCount = metrics.jobStageLossMetricCount;
+        var jobStageLossNamesHint = metrics.jobStageLossNamesHint;
         var activeFilterSummary = metrics.activeFilterSummary;
 
         var filteredJobOptions = computed(function () {
@@ -1102,6 +1191,7 @@
 
         onMounted(function () {
           var rootEl = document.getElementById(MOUNT_ID);
+          initJobStageLossHintPopovers(rootEl);
           watch([initialized, loading], function () {
             if (rootEl) {
               rootEl.setAttribute("data-ready", (initialized.value && !loading.value) ? "1" : "0");
@@ -1229,6 +1319,8 @@
           clientJobStagePeriodLabel: clientJobStagePeriodLabel,
           jobStageMetricText: jobStageMetricText,
           jobStageMetricTitle: jobStageMetricTitle,
+          jobStageLossMetricCount: jobStageLossMetricCount,
+          jobStageLossNamesHint: jobStageLossNamesHint,
           activeFilterSummary: activeFilterSummary,
           tabNeedsDashboardData: tabNeedsDashboardData,
           chartCanvasId: chartCanvasId,

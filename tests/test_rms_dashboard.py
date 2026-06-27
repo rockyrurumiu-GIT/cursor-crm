@@ -2422,6 +2422,50 @@ def test_lifecycle_first_interview_pass_includes_later_status_without_first_pass
     assert first_interview["passed"] == 1
 
 
+def test_client_job_stage_first_interview_count_aligns_with_pass_after_skip(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """修正跳过 first_interview_passed 但已到二面：一面数与一面通过均计入。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"fics_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    period_day = "2026-06-27"
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": period_day, "id": app_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'pending_client_screen', 'second_interview_passed', "
+                "'status_correction', '补录二面通过', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'second_interview_passed', "
+                "current_stage = 'second_interview_passed' WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    row = _job_row(dash.json()["client_job_stage_summary"], job_id)
+    assert row["first_interview_count"] == 1
+    assert row["first_interview_passed_count"] == 1
+    assert row["second_interview_count"] == 1
+    assert row["second_interview_passed_count"] == 1
+
+
 def test_lifecycle_second_interview_pass_includes_later_status_without_second_passed(
     client_rbac, admin_auth, rms_engine, uniq
 ):
@@ -2463,6 +2507,207 @@ def test_lifecycle_second_interview_pass_includes_later_status_without_second_pa
         row for row in dash.json()["lifecycle_funnel"]["rows"] if row["key"] == "second_interview"
     )
     assert second_interview["passed"] == 1
+    row = _job_row(dash.json()["client_job_stage_summary"], job_id)
+    assert row["second_interview_count"] == 1
+    assert row["second_interview_passed_count"] == 1
+
+
+def test_client_job_stage_second_interview_count_aligns_with_pass_after_skip(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """修正跳过 second_interview_passed 但已到在途：二面数与二面通过均计入。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"sics_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    period_day = "2026-06-27"
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": period_day, "id": app_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'first_interview_passed', 'onboarding', "
+                "'status_correction', '补录在途', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'onboarding', "
+                "current_stage = 'onboarding' WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    row = _job_row(dash.json()["client_job_stage_summary"], job_id)
+    assert row["second_interview_count"] == 1
+    assert row["second_interview_passed_count"] == 1
+
+
+def test_client_job_stage_loss_metrics_include_candidate_names(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """放弃面试/弃offer/在途流失单元格附带统计到的人员姓名。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    suffix = f"loss_{uniq}"
+    cand_name = f"Cand {suffix}"
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, suffix)
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    period_day = "2026-06-28"
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": period_day, "id": app_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'first_interview_passed', 'second_interview_abandoned', "
+                "'transition', '二面弃面', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'pending_offer', 'offer_dropped', "
+                "'offer_dropped', '弃offer', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'onboarding', 'onboarding_lost', "
+                "'onboarding_lost', '在途流失', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    row = _job_row(dash.json()["client_job_stage_summary"], job_id)
+    assert row["interview_abandoned"] == 1
+    assert row["interview_abandoned_names"] == [cand_name]
+    assert row["offer_dropped_count"] == 1
+    assert row["offer_dropped_names"] == [cand_name]
+    assert row["onboarding_lost_count"] == 1
+    assert row["onboarding_lost_names"] == [cand_name]
+    total = dash.json()["client_job_stage_summary"]["total"]
+    assert cand_name in total["interview_abandoned_names"]
+    assert cand_name in total["offer_dropped_names"]
+    assert cand_name in total["onboarding_lost_names"]
+
+
+def test_lifecycle_offer_pass_includes_onboarding_lost(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """在途流失仍计接 offer（已进在途后才流失）；弃 offer 不计。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"loil_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    period_day = "2026-06-29"
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": period_day, "id": app_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'pending_offer', 'onboarding', "
+                "'transition', '接offer进在途', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'onboarding', 'onboarding_lost', "
+                "'onboarding_lost', '在途流失', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'onboarding_lost', "
+                "current_stage = 'onboarding_lost' WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    by_key = {s["key"]: s for s in dash.json()["lifecycle_funnel"]["rows"]}
+    assert by_key["offer"]["passed"] == 1
+    assert by_key["offer"]["failed"] == 0
+
+
+def test_lifecycle_offer_pass_excludes_offer_dropped(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """弃 offer 不计接 offer。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"loed_{uniq}")
+    job_id = client_rbac.get(
+        f"/api/rms/applications/{app_id}", cookies=login.cookies
+    ).json()["job_id"]
+    period_day = "2026-06-29"
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+            {"d": period_day, "id": app_id},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'pending_offer', 'offer_dropped', "
+                "'offer_dropped', '弃offer', 1, :d)"
+            ),
+            {"app_id": app_id, "d": period_day},
+        )
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = 'offer_dropped', "
+                "current_stage = 'offer_dropped' WHERE id = :id"
+            ),
+            {"id": app_id},
+        )
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    by_key = {s["key"]: s for s in dash.json()["lifecycle_funnel"]["rows"]}
+    assert by_key["offer"]["passed"] == 0
+    assert by_key["offer"]["failed"] == 1
 
 
 def test_lifecycle_second_interview_pass_excludes_rollback_to_prior_status(
