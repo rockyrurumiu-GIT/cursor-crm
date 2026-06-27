@@ -291,6 +291,26 @@ def register_rms_dashboard_routes(
         board_svc.lock_rms_tab_widgets(db, tab_id, DashboardTab)
         return result
 
+    @app.put("/api/rms/dashboard-tabs/{tab_id}")
+    async def api_update_rms_tab(
+        tab_id: int,
+        body: RmsTabBody,
+        db: Session = Depends(get_db),
+        _user: str = Depends(require_permission("dashboard.write")),
+    ):
+        _assert_rms_tab(db, tab_id)
+        payload: dict = {}
+        if body.name is not None:
+            name = (body.name or "").strip()
+            if not name:
+                raise HTTPException(status_code=400, detail="name 不能为空")
+            payload["name"] = name
+        if body.sort_order is not None:
+            payload["sort_order"] = int(body.sort_order)
+        if not payload:
+            raise HTTPException(status_code=400, detail="无更新字段")
+        return board_svc.update_tab(db, tab_id, payload, DashboardTab)
+
     @app.delete("/api/rms/dashboard-tabs/{tab_id}")
     async def api_delete_rms_tab(
         tab_id: int,

@@ -67,7 +67,7 @@ RMS_BLOCK_LABELS: Dict[str, str] = {
     "filter_summary": "当前筛选摘要",
     "chart_pending_backlog": "图表 · 待处理积压",
     "lifecycle_funnel": "图表 · 招聘生命周期漏斗",
-    "chart_lifecycle_pass_rate": "图表 · 阶段通过率",
+    "chart_lifecycle_pass_rate": "图表 · 五率通过率",
     "table_lifecycle_detail": "表格 · 生命周期明细",
     "chart_history_pass": "图表 · 阶段通过率",
     "table_history": "表格 · 阶段明细",

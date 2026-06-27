@@ -1068,6 +1068,8 @@ def test_rms_dashboard_twenty_shell():
     assert "数值降序" in html
 
     assert "/static/js/pages/rms-dashboard-core.js" in html
+    assert "/static/js/pages/rms-core.js" in html
+    assert html.index("rms-core.js") < html.index("rms-dashboard-core.js")
     assert "/static/js/pages/rms-dashboard-inspector.js" in html
     assert html.index("rms-dashboard-core.js") < html.index("rms-dashboard-metrics.js")
     assert html.index("rms-dashboard-metrics.js") < html.index("rms-dashboard-charts.js")
@@ -1186,6 +1188,7 @@ def test_rms_dashboard_twenty_shell():
         "花名册核对",
         "table_lifecycle_detail",
         "/static/js/pages/rms-dashboard-core.js",
+        "/static/js/pages/rms-core.js",
         "/static/js/pages/rms-dashboard-metrics.js",
         "/static/js/pages/rms-dashboard-charts.js",
         "/static/js/pages/rms-dashboard-inspector.js",
@@ -1207,6 +1210,7 @@ def test_rms_dashboard_twenty_shell():
         "附加展示",
         "新建看板",
         "编辑",
+        "dash-tw-tab-label",
         "+ 组件",
         "card-actions",
         "icon-btn",
@@ -1227,6 +1231,9 @@ def test_rms_dashboard_twenty_shell():
         "已入职",
         "metric-with-rate",
         "rms-job-stage-hint",
+        "clientJobStagePagedRows",
+        "clientJobStageGoPage",
+        "条 / 页",
         "card-resize-handle",
         "chart_client_job_stage_grouped",
         "chart_client_job_stage_stacked",
@@ -1258,6 +1265,9 @@ def test_rms_dashboard_twenty_shell():
         "job_ids",
         "cityOptions",
         "clientJobStageRows",
+        "clientJobStagePagedRows",
+        "clientJobStageCurrentPage",
+        "clientJobStageGoPage",
         "jobStageMetricText",
         "jobStageMetricTitle",
         "jobStageLossMetricCount",

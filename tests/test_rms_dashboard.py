@@ -278,6 +278,30 @@ def test_rms_dashboard_widget_crud(client_rbac, admin_auth, rms_engine, uniq):
     assert deleted.status_code == 200, deleted.text
 
 
+def test_rms_dashboard_tab_rename(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    overview = next(t for t in boards[0]["tabs"] if t["name"] == "总览")
+    tab_id = overview["id"]
+    renamed = client_rbac.put(
+        f"/api/rms/dashboard-tabs/{tab_id}",
+        json={"name": "招聘总览"},
+        cookies=login.cookies,
+    )
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["name"] == "招聘总览"
+    boards_after = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    tab_names = [t["name"] for t in boards_after[0]["tabs"]]
+    assert "招聘总览" in tab_names
+    empty = client_rbac.put(
+        f"/api/rms/dashboard-tabs/{tab_id}",
+        json={"name": "   "},
+        cookies=login.cookies,
+    )
+    assert empty.status_code == 400
+
+
 def test_rms_preset_style_config_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
     user, pwd = admin_auth
     login = _login(client_rbac, user, pwd)
@@ -387,6 +411,7 @@ def test_rms_lifecycle_funnel_preset_style_roundtrip(client_rbac, admin_auth, rm
                     "color_shade": 3,
                     "sort": "original",
                     "chart_type": "line",
+                    "metric": "pass_rate",
                     "show_grid": True,
                     "bar_radius": 10,
                     "max_items": 12,
@@ -414,6 +439,7 @@ def test_rms_lifecycle_funnel_preset_style_roundtrip(client_rbac, admin_auth, rm
     lifecycle = next(t for t in boards[0]["tabs"] if t["id"] == tab["id"])
     saved = next(w for w in lifecycle["widgets"] if w["id"] == wid)
     assert saved["config"]["style"]["chart_type"] == "line"
+    assert saved["config"]["style"]["metric"] == "pass_rate"
     assert saved["config"]["style"]["sort"] == "original"
 
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
@@ -2667,13 +2693,13 @@ def test_client_job_stage_loss_metrics_include_candidate_names(
     assert dash.status_code == 200, dash.text
     row = _job_row(dash.json()["client_job_stage_summary"], job_id)
     assert row["interview_abandoned"] == 1
-    assert row["interview_abandoned_names"] == [cand_name]
+    assert row["interview_abandoned_names"] == [f"{cand_name} · 二面弃面"]
     assert row["offer_dropped_count"] == 1
     assert row["offer_dropped_names"] == [cand_name]
     assert row["onboarding_lost_count"] == 1
     assert row["onboarding_lost_names"] == [cand_name]
     total = dash.json()["client_job_stage_summary"]["total"]
-    assert cand_name in total["interview_abandoned_names"]
+    assert f"{cand_name} · 二面弃面" in total["interview_abandoned_names"]
     assert cand_name in total["offer_dropped_names"]
     assert cand_name in total["onboarding_lost_names"]
 

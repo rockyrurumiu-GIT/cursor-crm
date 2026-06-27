@@ -1,16 +1,14 @@
 {% extends "base.html" %}
 {% block title %}招聘Dashboard · ITO BMS{% endblock %}
+{% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
 .dash-root { display: flex; flex-direction: column; min-height: calc(100vh - 110px); background: #fafafa; }
-.dash-top-bar {
-  display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
-  padding: 0 1.25rem; background: #fff; border-bottom: 1px solid #e6e8eb;
-}
 .dash-toolbar-right { display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.45rem; flex-shrink: 0; }
+.dash-page-tabs-right { display: flex; align-items: flex-end; gap: 0.75rem; flex-shrink: 0; }
 .dash-tw-tabs {
   display: flex; align-items: flex-end; flex-wrap: wrap; gap: 0;
   min-height: 42px; flex: 1; min-width: 0;
@@ -26,6 +24,16 @@
   content: ""; position: absolute; left: 0.65rem; right: 0.65rem; bottom: 0;
   height: 2px; background: #1f2328; border-radius: 1px 1px 0 0;
 }
+.dash-tw-tab--edit { cursor: pointer; }
+.dash-tw-tab-label {
+  display: inline-block;
+  min-width: 1ch;
+  outline: none;
+  cursor: text;
+  white-space: nowrap;
+}
+.dash-tw-tab-label:focus { outline: none; }
+.dash-tw-tab--edit.active .dash-tw-tab-label { font-weight: 600; color: #1f2328; }
 .dash-page-tabs-row {
   display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem;
   padding: 0 1.25rem; background: #fff; border-bottom: 1px solid #e6e8eb;
@@ -37,22 +45,76 @@
 }
 .tbtn:hover { background: #f2f3f5; }
 .tbtn:disabled { opacity: 0.4; cursor: default; }
-.tbtn-primary { background: #1f2328; color: #fff; border-color: #1f2328; }
-.tbtn-primary:hover { background: #000; }
+.tbtn-primary { background: #456595; color: #fff; border-color: #456595; }
+.tbtn-primary:hover { background: #3a567f; }
+.dash-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 2.25rem; width: 2.25rem; border-radius: 6px;
+  border: 1px solid #D7DBE0; background: #fff; color: #5B5F6E;
+  transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+.dash-icon-btn:hover:not(:disabled) { background: #F9FAFB; color: #1A1D1F; }
+.dash-icon-btn:disabled { opacity: 0.4; cursor: default; }
+.dash-icon-btn-primary {
+  border-color: transparent; background: #456595; color: #fff;
+}
+.dash-icon-btn-primary:hover:not(:disabled) { background: #3a567f; color: #fff; }
+.dash-icon-btn svg { width: 18px; height: 18px; }
+.dash-page-header { padding: 2rem 1.25rem 0.35rem; background: #fafafa; flex-shrink: 0; }
 .dash-canvas { flex: 1; padding: 1rem 1.25rem; overflow: auto; }
+.dash-canvas-grid-wrap { position: relative; max-width: 1280px; margin: 0 auto; }
 .dash-grid {
   display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 52px;
-  gap: 12px; max-width: 1280px; margin: 0 auto;
+  gap: 12px;
 }
+.dash-grid-drag-layer {
+  position: absolute; inset: 0; pointer-events: none; z-index: 50;
+}
+.drag-layer-cell { position: relative; pointer-events: none; min-height: 0; }
+.card-drag-handle {
+  pointer-events: auto; position: absolute; top: 4px; left: 4px; z-index: 1;
+  display: inline-flex; align-items: center; gap: 0.3rem; max-width: calc(100% - 8px);
+  padding: 0.15rem 0.45rem 0.15rem 0.3rem; border: 1px solid #c5cad1; border-radius: 6px;
+  background: #fff; box-shadow: 0 2px 8px rgba(16, 24, 40, 0.1); cursor: grab;
+  font-size: 0.72rem; color: #5b6370; touch-action: none; user-select: none;
+}
+.card-drag-handle:hover { border-color: #7B96B8; color: #374151; box-shadow: 0 2px 10px rgba(16, 24, 40, 0.14); }
+.drag-layer-cell.is-active .card-drag-handle { border-color: #7B96B8; background: #f8fafc; }
+.drag-layer-cell.is-dragging .card-drag-handle { cursor: grabbing; border-color: #456595; background: #eff4ff; }
+.card-drag-handle-grip {
+  width: 10px; height: 14px; flex-shrink: 0;
+  background-image: radial-gradient(circle, #98a2b3 1.5px, transparent 1.6px);
+  background-size: 5px 5px; background-position: 0 0, 5px 0, 0 5px, 5px 5px;
+}
+.card-drag-handle-label {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.widget-layer-select {
+  height: 2rem; max-width: 11rem; padding: 0 0.55rem; border: 1px solid #d0d7de;
+  border-radius: 0.375rem; background: #fff; font-size: 0.78rem; color: #374151;
+}
+.widget-layer-select:focus { outline: none; border-color: #456595; box-shadow: 0 0 0 2px rgba(69, 101, 149, 0.18); }
 .dash-card.dash-card--filter { overflow: visible; z-index: 6; max-height: none; }
 .dash-card.dash-card--filter.dash-card--filter-open { z-index: 30; }
-.dash-card.dash-card--filter .card-body { overflow: visible; flex: 0 1 auto; min-height: 0; }
+.dash-card.dash-card--filter .card-body { align-items: center; overflow: visible; flex: 0 1 auto; min-height: 0; }
+.dash-card.dash-card--filter:not(.editing) .card-head { display: none; }
+.dash-card.dash-card--filter:not(.editing) { padding-top: 0.65rem; padding-bottom: 0.65rem; align-self: start; }
 .dash-card {
-  background: #fff; border: 1px solid #eceef1; border-radius: 10px; padding: 0.75rem 0.9rem;
+  background: #fff; border: 1px solid #E5E7EB; border-radius: 12px; padding: 0.75rem 0.9rem;
   display: flex; flex-direction: column; min-height: 0; max-height: 100%; overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
 }
-.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; flex-shrink: 0; }
-.card-title { font-weight: 500; font-size: 0.875rem; color: #374151; }
+.card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; flex-shrink: 0; gap: 0.35rem; }
+.card-title { font-weight: 500; font-size: 0.875rem; color: #374151; min-width: 0; }
+.dash-card-title-input {
+  flex: 1; min-width: 0; max-width: calc(100% - 5rem);
+  padding: 0.15rem 0.35rem; margin: 0;
+  font: inherit; font-weight: 500; font-size: 0.875rem; color: #374151;
+  background: #fff; border: 1px solid #D7DBE0; border-radius: 4px; line-height: 1.25;
+}
+.dash-card-title-input:focus {
+  outline: none; border-color: #456595; box-shadow: 0 0 0 2px rgba(69, 101, 149, 0.2);
+}
 .card-body { flex: 1; display: flex; min-height: 0; position: relative; overflow: auto; }
 .num-wrap { display: flex; flex-direction: column; justify-content: center; gap: 0.35rem; width: 100%; }
 .num-value { font-size: 2rem; line-height: 1.1; font-weight: 600; color: #1f2328; }
@@ -66,9 +128,25 @@
 .state-forbidden { color: #cf222e; }
 .field { margin-bottom: 0; }
 .field > label { display: block; font-size: 0.78rem; color: #5b6370; margin-bottom: 0.25rem; }
+.rms-dash-filter-shell { width: 100%; }
+.rms-dash-filter-toolbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
+  overflow: visible;
+}
+.rms-dash-filter-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 2.25rem; width: 2.25rem; padding: 0; border-radius: 6px;
+  border: 1px solid #D7DBE0; background: #fff; font-size: 0.875rem; font-weight: 500;
+  color: #1A1D1F; cursor: pointer; transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.rms-dash-filter-toggle:hover { background: #F9FAFB; }
+.rms-dash-filter-toggle.is-active { border-color: #16A39A; color: #16A39A; }
+.rms-dash-filter-toggle svg { width: 18px; height: 18px; flex-shrink: 0; }
 .rms-dash-filter-row {
   overflow: visible;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .rms-filter-placeholder { color: #9ca3af; }
 .rms-dash-filter-compact {
@@ -96,13 +174,25 @@
 }
 .rms-stage-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 .rms-stage-table thead th {
-  text-align: left; font-weight: 500; color: #98a2b3; padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid #f2f3f5; background: transparent;
+  text-align: left; font-weight: 600; color: #6B7280; padding: 8px 12px;
+  border-bottom: 1px solid #E5E7EB; background: #F9FAFB; white-space: nowrap;
 }
 .rms-stage-table tbody td {
-  padding: 0.4rem 0.5rem; color: #374151; border-bottom: 1px solid #f2f3f5;
+  padding: 10px 12px; color: #1A1D1F; border-bottom: 1px solid #EEF0F2; background: #fff;
 }
-.rms-stage-table tbody tr:last-child td { border-bottom: none; }
+.rms-stage-table tbody tr:hover td { background: #F9FAFB; }
+.rms-stage-table thead th .ct-th-icon {
+  display: inline-block; width: 14px; height: 14px; margin-right: 6px;
+  vertical-align: middle; color: #16A39A;
+}
+#main-shell.bms-sidebar-dark #rms-dashboard-app .rms-job-stage-table thead th,
+#main-shell.bms-sidebar-dark #rms-dashboard-app .rms-stage-table thead th {
+  background: #3B6699; color: #fff; border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+#main-shell.bms-sidebar-dark #rms-dashboard-app .rms-job-stage-table thead th .ct-th-icon,
+#main-shell.bms-sidebar-dark #rms-dashboard-app .rms-stage-table thead th .ct-th-icon {
+  color: #CBD9EC;
+}
 .rms-job-stage-scroll {
   overflow: auto;
   width: 100%;
@@ -111,23 +201,120 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
-.rms-job-stage-table { width: 100%; min-width: 56rem; border-collapse: collapse; font-size: 0.78rem; }
+.rms-job-stage-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+}
+.rms-job-stage-pagination {
+  flex-shrink: 0;
+  width: 100%;
+  border-top: 1px solid #EEF0F2;
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+}
+.rms-job-stage-table { width: 100%; min-width: 56rem; border-collapse: collapse; font-size: 0.78rem; --rms-job-stage-sticky-job-width: 9.5rem; --rms-job-stage-sticky-client-width: 6.5rem; --rms-job-stage-sticky-time-width: 4.5rem; }
+.rms-job-stage-table .rms-job-stage-sticky-job,
+.rms-job-stage-table .rms-job-stage-sticky-client,
+.rms-job-stage-table .rms-job-stage-sticky-time {
+  position: sticky;
+  z-index: 30;
+  background: #fff;
+}
+.rms-job-stage-table .rms-job-stage-sticky-job {
+  left: 0;
+  width: var(--rms-job-stage-sticky-job-width);
+  min-width: var(--rms-job-stage-sticky-job-width);
+  max-width: var(--rms-job-stage-sticky-job-width);
+  border-right: 1px solid #EEF0F2;
+  box-shadow: none;
+  background-clip: border-box;
+}
+.rms-job-stage-table .rms-job-stage-sticky-client {
+  left: calc(var(--rms-job-stage-sticky-job-width) - 1px);
+  width: calc(var(--rms-job-stage-sticky-client-width) + 1px);
+  min-width: calc(var(--rms-job-stage-sticky-client-width) + 1px);
+  max-width: calc(var(--rms-job-stage-sticky-client-width) + 1px);
+  border-right: 1px solid #EEF0F2;
+  box-shadow: 4px 0 8px -4px rgba(15, 23, 42, 0.08);
+  background-clip: border-box;
+}
+.rms-job-stage-table .rms-job-stage-sticky-time {
+  right: 0;
+  width: var(--rms-job-stage-sticky-time-width);
+  min-width: var(--rms-job-stage-sticky-time-width);
+  max-width: var(--rms-job-stage-sticky-time-width);
+  box-shadow: -4px 0 8px -4px rgba(15, 23, 42, 0.08);
+}
+.rms-job-stage-table td.rms-job-stage-sticky-job {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 岗位名：单行省略，悬停由浏览器原生 title 显示全文（仅一个提示，不会重复）。 */
+#rms-dashboard-app .rms-job-stage-table .rms-job-title-cell {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #0969da;
+  font-weight: 600;
+}
+#rms-dashboard-app .rms-job-stage-table tbody tr.total-row .rms-job-title-cell {
+  color: #1e3a5f;
+}
+.rms-job-stage-table thead .rms-job-stage-sticky-job,
+.rms-job-stage-table thead .rms-job-stage-sticky-client,
+.rms-job-stage-table thead .rms-job-stage-sticky-time {
+  z-index: 34;
+  background: #F9FAFB;
+  border-right: none;
+  box-shadow: none;
+}
+.rms-job-stage-table thead .rms-job-stage-sticky-client { z-index: 33; }
+.rms-job-stage-table tbody tr:hover .rms-job-stage-sticky-job,
+.rms-job-stage-table tbody tr:hover .rms-job-stage-sticky-client,
+.rms-job-stage-table tbody tr:hover .rms-job-stage-sticky-time {
+  background: #F9FAFB;
+}
+.rms-job-stage-table tbody tr.total-row .rms-job-stage-sticky-job,
+.rms-job-stage-table tbody tr.total-row .rms-job-stage-sticky-client,
+.rms-job-stage-table tbody tr.total-row .rms-job-stage-sticky-time {
+  background: #d4e4f7;
+}
+#main-shell.bms-sidebar-dark #rms-dashboard-app .rms-job-stage-table thead .rms-job-stage-sticky-job,
+#main-shell.bms-sidebar-dark #rms-dashboard-app .rms-job-stage-table thead .rms-job-stage-sticky-client,
+#main-shell.bms-sidebar-dark #rms-dashboard-app .rms-job-stage-table thead .rms-job-stage-sticky-time {
+  background: #3B6699;
+}
 .rms-job-stage-table thead th {
   position: sticky;
   top: 0;
-  z-index: 2;
+  z-index: 32;
   text-align: left;
-  font-weight: 500;
-  color: #98a2b3;
-  padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid #f2f3f5;
-  background: #fff;
+  font-weight: 600;
+  color: #6B7280;
+  padding: 8px 12px;
+  border-bottom: 1px solid #E5E7EB;
+  background: #F9FAFB;
   white-space: nowrap;
-  box-shadow: 0 1px 0 #eceef1;
+  box-shadow: 0 1px 0 #E5E7EB;
+}
+.rms-job-stage-table thead th .ct-th-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: middle;
+  color: #16A39A;
 }
 .rms-job-stage-table tbody td {
-  padding: 0.4rem 0.5rem; color: #374151; border-bottom: 1px solid #f2f3f5; white-space: nowrap;
+  padding: 10px 12px; color: #1A1D1F; border-bottom: 1px solid #EEF0F2; white-space: nowrap; background: #fff;
 }
+.rms-job-stage-table tbody tr:hover td { background: #F9FAFB; }
+.rms-job-stage-table td.col-job-title { font-weight: 600; color: #0969da; }
+.rms-job-stage-table tbody tr.total-row td.col-job-title { color: #1e3a5f; }
 .rms-job-stage-table tbody tr:last-child td { border-bottom: none; }
 .rms-job-stage-table tbody tr.total-row td {
   background: #d4e4f7;
@@ -226,6 +413,9 @@
   align-items: center;
   gap: 0.4rem;
 }
+.rms-dash-filter-actions .rms-dash-filter-toggle {
+  flex-shrink: 0;
+}
 .rms-dash-filter-actions .tbtn {
   min-width: 3.75rem;
   height: 2.25rem;
@@ -248,7 +438,7 @@
 .dash-page-tabs-actions { display: flex; align-items: center; gap: 0.4rem; padding-bottom: 0.45rem; flex-shrink: 0; }
 .tbtn-danger { color: #cf222e; border-color: #f0c4c4; }
 .tbtn-danger:hover { background: #fdf0f0; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; align-items: center; justify-content: center; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 200; display: flex; align-items: center; justify-content: center; }
 .modal-panel { background: #fff; border-radius: 14px; padding: 1.25rem; width: 90%; max-width: 420px; }
 .dash-card.editing { border-style: dashed; border-color: #d5d9de; position: relative; }
 .dash-card.editing:hover { border-color: #9aa9bd; box-shadow: 0 2px 10px rgba(16,24,40,0.06); }
@@ -257,15 +447,16 @@
 .dash-card.editing.is-resizing { z-index: 20; box-shadow: 0 8px 24px rgba(16,24,40,0.12); }
 .dash-card.editing .card-body { pointer-events: none; }
 .dash-card.editing.dash-card--filter .card-body { pointer-events: auto; }
-.dash-card.editing .card-resize-handle { pointer-events: auto; }
-.card-head-draggable { cursor: grab; touch-action: none; user-select: none; position: relative; z-index: 1; }
+.dash-card.editing .card-resize-handle { pointer-events: auto; z-index: 3; }
 .card-resize-handle {
   position: absolute; right: 6px; bottom: 6px; width: 14px; height: 14px;
   border-right: 2px solid #c5cad1; border-bottom: 2px solid #c5cad1;
   border-radius: 0 0 3px 0; cursor: nwse-resize; touch-action: none; z-index: 2;
 }
+body.rms-dashboard-edit-mode #handbook-assistant {
+  display: none !important;
+}
 .dash-card.editing .card-resize-handle:hover { border-color: #6b7280; }
-.card-head-draggable:active { cursor: grabbing; }
 .card-actions { display: flex; gap: 0.25rem; }
 .icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: #6b7280; cursor: pointer; font-size: 0.85rem; }
 .icon-btn:hover { background: #f2f3f5; color: #1f2328; }
@@ -396,37 +587,71 @@
 {% block content %}
 {% raw %}
 <div id="rms-dashboard-app" class="dash-root">
-    <div class="dash-top-bar">
-        <nav class="dash-tw-tabs" aria-label="看板">
-            <button v-for="d in dashboards" :key="d.id" type="button"
-                :class="['dash-tw-tab', activeDashboardId === d.id ? 'active' : '']"
-                @click="selectDashboard(d.id)">{{ d.name }}</button>
-            <button v-if="canWrite" type="button" class="dash-tw-tab-add" @click="openDashboardModal()">
-                <span class="dash-tw-tab-add-icon" aria-hidden="true">+</span> 新建看板
-            </button>
-        </nav>
-        <div class="dash-toolbar-right">
-            <button type="button" class="tbtn" :disabled="loading" @click="loadDashboard">刷新</button>
-            <button type="button" class="tbtn" @click="goRosterTab">核对已入职与花名册</button>
-            <template v-if="canWrite">
-                <button v-if="!editMode" type="button" class="tbtn tbtn-primary" @click="editMode = true">编辑</button>
-                <button v-else type="button" class="tbtn tbtn-primary" @click="editMode = false">完成</button>
-            </template>
-        </div>
+    <div class="dash-page-header">
+        <h1 class="text-2xl font-bold text-gray-900">招聘 Dashboard</h1>
     </div>
-
     <div class="dash-page-tabs-row" v-if="activeDashboard">
         <nav class="dash-tw-tabs" aria-label="标签页">
-            <button v-for="t in activeDashboard.tabs" :key="t.id" type="button"
-                :class="['dash-tw-tab', activeTabId === t.id ? 'active' : '']"
-                @click="selectTab(t.id)">{{ t.name }}</button>
+            <template v-for="t in activeDashboard.tabs" :key="t.id">
+                <button v-if="editMode && canWrite" type="button"
+                    :class="['dash-tw-tab', 'dash-tw-tab--edit', activeTabId === t.id ? 'active' : '']"
+                    @click="selectTab(t.id)">
+                    <span
+                        class="dash-tw-tab-label"
+                        contenteditable="true"
+                        spellcheck="false"
+                        :ref="bindTabLabelEl(t)"
+                        :aria-label="'标签页名称：' + (t.name || '')"
+                        @click.stop
+                        @keydown.enter.prevent="$event.target.blur()"
+                        @input="onTabNameInput(t, $event)"
+                        @blur="saveTabNameInline(t, $event)"
+                    ></span>
+                </button>
+                <button v-else type="button"
+                    :class="['dash-tw-tab', activeTabId === t.id ? 'active' : '']"
+                    @click="selectTab(t.id)">{{ t.name }}</button>
+            </template>
             <button v-if="editMode && canWrite" type="button" class="dash-tw-tab-add" @click="openTabModal()">
                 <span class="dash-tw-tab-add-icon" aria-hidden="true">+</span> 新建标签页
             </button>
         </nav>
-        <div v-if="editMode && canWrite" class="dash-page-tabs-actions">
-            <button type="button" class="tbtn" :disabled="!activeTabId" @click="openWidgetPanel()">+ 组件</button>
-            <button v-if="canDelete" type="button" class="tbtn tbtn-danger" :disabled="!activeDashboardId" @click="deleteActiveDashboard">删除看板</button>
+        <div class="dash-page-tabs-right">
+            <div v-if="editMode && canWrite" class="dash-page-tabs-actions">
+                <select class="widget-layer-select" :value="activeWidgetId || ''" aria-label="选择组件" @change="selectWidgetFromPicker">
+                    <option value="">选择组件…</option>
+                    <option v-for="w in editableWidgets" :key="w.id" :value="w.id">{{ w.title || '未命名组件' }}</option>
+                </select>
+                <button type="button" class="tbtn" :disabled="!activeTabId" @click="openWidgetPanel()">+ 组件</button>
+            </div>
+            <div class="dash-toolbar-right">
+                <span class="group relative inline-flex">
+                    <button type="button" class="dash-icon-btn" :disabled="loading" @click="loadDashboard" aria-label="刷新">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">刷新</span>
+                </span>
+                <span class="group relative inline-flex">
+                    <button type="button" class="dash-icon-btn" @click="goRosterTab" aria-label="核对已入职与花名册">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m-6 9 2 2 4-4"/></svg>
+                    </button>
+                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">核对已入职与花名册</span>
+                </span>
+                <template v-if="canWrite">
+                    <span v-if="!editMode" class="group relative inline-flex">
+                        <button type="button" class="dash-icon-btn dash-icon-btn-primary" @click="editMode = true" aria-label="编辑">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                        </button>
+                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">编辑</span>
+                    </span>
+                    <span v-else class="group relative inline-flex">
+                        <button type="button" class="dash-icon-btn dash-icon-btn-primary" @click="editMode = false" aria-label="完成">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg>
+                        </button>
+                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">完成</span>
+                    </span>
+                </template>
+            </div>
         </div>
     </div>
 
@@ -434,17 +659,26 @@
         <p v-if="error" class="state-msg state-forbidden" style="margin-bottom:0.75rem;">{{ error }}</p>
         <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
 
-        <div v-if="activeTab && displayItems.length" class="dash-grid">
+        <div v-if="activeTab && displayItems.length" class="dash-canvas-grid-wrap">
+            <div class="dash-grid">
             <div v-for="item in displayItems" :key="item.key"
                  class="dash-card"
                  :class="{ editing: editMode, 'dash-card-extra-view': item.isExtra, 'dash-card--filter': item.block === 'filter', 'dash-card--filter-open': item.block === 'filter' && jobFilterDropdownOpen, 'is-active': editMode && activeWidgetId === item.widget.id, 'is-dragging': dragWidgetId === item.widget.id, 'is-resizing': resizeWidgetId === item.widget.id }"
                  :style="item.style"
                  :data-widget-id="item.widget.id">
                 <div class="card-head"
-                     :class="{ 'card-head-draggable': editMode && canWrite && !item.isExtra }"
-                     @pointerdown="onCardHeadPointerDown(item, $event)">
+                     v-if="item.block !== 'filter' || (editMode && canWrite && !item.isExtra)">
                     <span v-if="item.isExtra" class="extra-view-tag">附加 · {{ extraRenderLabel(item.extraView.render) }}</span>
-                    <span class="card-title">{{ item.title }}</span>
+                    <input v-if="item.block !== 'filter' && editMode && canWrite && !item.isExtra && item.widget.id != null"
+                        class="dash-card-title-input"
+                        v-model="widgetTitleDrafts[item.widget.id]"
+                        :aria-label="'组件标题：' + (item.title || '')"
+                        @click.stop
+                        @pointerdown.stop
+                        @focus="syncWidgetTitleDraft(item.widget)"
+                        @keydown.enter="$event.target.blur()"
+                        @blur="saveWidgetTitleInline(item.widget)" />
+                    <span v-else-if="item.block !== 'filter'" class="card-title">{{ item.title }}</span>
                     <div v-if="editMode && canWrite && !item.isExtra" class="card-actions">
                         <span class="icon-btn" @click="openDisplayItemPanel(item)" title="编辑">✎</span>
                         <span class="icon-btn" @click="duplicateWidget(item.widget)" title="复制">⧉</span>
@@ -461,7 +695,15 @@
                           @pointerdown="onCardResizePointerDown(item, $event)"></span>
                     <template v-if="item.widget.widget_type === 'rms_block'">
                     <template v-if="item.block === 'filter'">
-                        <div class="crm-filter-row rms-dash-filter-row text-sm">
+                        <div class="rms-dash-filter-shell text-sm">
+                            <div class="rms-dash-filter-toolbar">
+                                <button type="button"
+                                    class="rms-dash-filter-toggle is-active"
+                                    aria-label="筛选"
+                                    @click.stop="filterPanelExpanded = !filterPanelExpanded">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                                </button>
+                                <div v-show="filterPanelExpanded" class="crm-filter-row rms-dash-filter-row">
                             <select v-if="clientOptions.length" v-model="filters.client_id" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :title="clientFieldLabel">
                                 <option value="">{{ clientFieldLabel }}</option>
                                 <option v-for="c in clientOptions" :key="c.id" :value="String(c.id)">{{ c.name }}</option>
@@ -504,11 +746,6 @@
                                 <option v-for="c in cityOptions" :key="c" :value="c">{{ c }}</option>
                             </select>
                             <input v-else v-model="filters.city" class="crm-filter-item crm-filter-control rms-dash-filter-compact" placeholder="城市" />
-                            <select v-if="deliveryUserOptions.length" v-model="filters.delivery_user_id" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :title="deliveryFieldLabel">
-                                <option value="">{{ deliveryFieldLabel }}</option>
-                                <option v-for="u in deliveryUserOptions" :key="'d'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
-                            </select>
-                            <input v-else v-model="filters.delivery_user_id" type="number" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :placeholder="deliveryFieldLabel" />
                             <select v-if="recruiterUserOptions.length" v-model="filters.recruiter_user_id" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :title="recruiterFieldLabel">
                                 <option value="">{{ recruiterFieldLabel }}</option>
                                 <option v-for="u in recruiterUserOptions" :key="'r'+u.id" :value="String(u.id)">{{ u.display_name || u.username }}</option>
@@ -522,9 +759,27 @@
                                 <span class="crm-filter-date-label">统计周期止</span>
                                 <input v-model="filters.date_to" type="date" class="crm-filter-date-input" title="统计周期止" />
                             </div>
-                            <div class="crm-filter-item rms-dash-filter-actions">
-                                <button type="button" class="tbtn" :disabled="loading" @click.stop="cancelFilters">取消</button>
-                                <button type="button" class="tbtn tbtn-primary" :disabled="loading" @click.stop="applyFilters">应用</button>
+                                </div>
+                                <div class="crm-filter-item rms-dash-filter-actions ml-auto">
+                                    <span class="group relative inline-flex">
+                                        <button type="button"
+                                            class="rms-dash-filter-toggle"
+                                            :class="{ 'is-active': appliedFilters.include_zero_resume_jobs }"
+                                            :disabled="loading"
+                                            :aria-pressed="appliedFilters.include_zero_resume_jobs ? 'true' : 'false'"
+                                            aria-label="0简历岗位不隐藏"
+                                            @click.stop="toggleIncludeZeroResumeJobs">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 9h14v10a2 2 0 0 0 2 2H7a2 2 0 0 1-2-2V9Z"/>
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6"/>
+                                            </svg>
+                                        </button>
+                                        <span class="pointer-events-none absolute left-1/2 bottom-full z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">0简历岗位不隐藏</span>
+                                    </span>
+                                    <button type="button" class="tbtn" :disabled="loading" @click.stop="cancelFilters">取消</button>
+                                    <button type="button" class="tbtn tbtn-primary" :disabled="loading" @click.stop="applyFilters">应用</button>
+                                </div>
                             </div>
                         </div>
                     </template>
@@ -663,19 +918,41 @@
                     <!-- 客户岗位阶段统计 -->
                     <template v-else-if="item.block === 'table_client_job_stage'">
                         <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
-                        <div v-else class="rms-job-stage-scroll">
+                        <template v-else>
+                        <div class="rms-job-stage-panel">
+                        <div class="rms-job-stage-scroll">
                             <table class="rms-job-stage-table">
                                 <thead><tr>
-                                    <th>时间</th><th>客户</th><th>岗位</th><th class="col-compact">HC</th><th>地点</th>
-                                    <th class="col-compact">简历数</th><th>内筛通过</th><th>重复</th><th class="col-compact">待客筛</th>
-                                    <th>客筛通过</th><th>约面中</th><th>放弃面试</th><th>待面试</th><th>一面数</th><th>一面通过</th><th>二面数</th><th>二面通过</th>
-                                    <th>待offer</th><th>接offer</th><th>弃offer</th><th>在途</th><th>在途流失</th><th>已入职</th>
+                                    <th class="rms-job-stage-sticky-job"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2ZM9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>岗位</th>
+                                    <th class="rms-job-stage-sticky-client"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5h17v10a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5v-10ZM8.5 8.5V6.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/></svg>客户</th>
+                                    <th class="col-compact"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 19V5M4 19h16M8 16v-4M12 16V9M16 16v-6"/></svg>HC</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21c4-4 6-7.2 6-10a6 6 0 1 0-12 0c0 2.8 2 6 6 10ZM12 13a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/></svg>地点</th>
+                                    <th class="col-compact"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path stroke-linecap="round" stroke-linejoin="round" d="M14 2v6h6"/></svg>简历数</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg>内筛通过</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 2H9a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1Z"/></svg>重复</th>
+                                    <th class="col-compact"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>待客筛</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg>客筛通过</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M4 11h16M5 21h14a2 2 0 0 0 2-2V7H3v12a2 2 0 0 0 2 2Z"/></svg>约面中</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M18 6 6 18M6 6l12 12"/></svg>放弃面试</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>待面试</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 19V5M4 19h16M8 16v-4M12 16V9M16 16v-6"/></svg>一面数</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg>一面通过</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 19V5M4 19h16M8 16v-4M12 16V9M16 16v-6"/></svg>二面数</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg>二面通过</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 7.5V12l3 1.8"/></svg>待offer</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg>接offer</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M18 6 6 18M6 6l12 12"/></svg>弃offer</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0-5 5m5-5H6"/></svg>在途</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M18 6 6 18M6 6l12 12"/></svg>在途流失</th>
+                                    <th><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>已入职</th>
+                                    <th class="rms-job-stage-sticky-time"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M4 11h16M5 21h14a2 2 0 0 0 2-2V7H3v12a2 2 0 0 0 2 2Z"/></svg>时间</th>
                                 </tr></thead>
                                 <tbody v-if="clientJobStageRows.length">
-                                    <tr v-for="row in clientJobStageRows" :key="row.job_id">
-                                        <td>{{ clientJobStagePeriodLabel }}</td>
-                                        <td>{{ row.client_name || '—' }}</td>
-                                        <td>{{ row.job_title }}</td>
+                                    <tr v-for="row in clientJobStagePagedRows" :key="row.job_id">
+                                        <td class="col-job-title rms-job-stage-sticky-job">
+                                            <div class="rms-job-title-cell" :title="row.job_title">{{ row.job_title }}</div>
+                                        </td>
+                                        <td class="rms-job-stage-sticky-client">{{ row.client_name || '—' }}</td>
                                         <td class="col-compact">{{ row.headcount }}</td>
                                         <td>{{ row.location || '—' }}</td>
                                         <td class="col-compact">{{ row.pushed_resume_count }}</td>
@@ -705,11 +982,13 @@
                                             <span v-if="jobStageLossMetricCount(row, 'onboarding_lost_count') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(row, 'onboarding_lost_names')" tabindex="0" :aria-label="jobStageLossNamesHint(row, 'onboarding_lost_names')"><span class="rms-job-stage-hint">?</span></span>
                                         </td>
                                         <td>{{ row.hired_count }}</td>
+                                        <td class="rms-job-stage-sticky-time">{{ clientJobStagePeriodLabel }}</td>
                                     </tr>
                                     <tr v-if="clientJobStageTotal" class="total-row">
-                                        <td>{{ clientJobStagePeriodLabel }}</td>
-                                        <td>合计</td>
-                                        <td>—</td>
+                                        <td class="col-job-title rms-job-stage-sticky-job">
+                                            <div class="rms-job-title-cell">合计</div>
+                                        </td>
+                                        <td class="rms-job-stage-sticky-client">—</td>
                                         <td class="col-compact">{{ clientJobStageTotal.headcount }}</td>
                                         <td>—</td>
                                         <td class="col-compact">{{ clientJobStageTotal.pushed_resume_count }}</td>
@@ -739,6 +1018,7 @@
                                             <span v-if="jobStageLossMetricCount(clientJobStageTotal, 'onboarding_lost_count') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(clientJobStageTotal, 'onboarding_lost_names')" tabindex="0" :aria-label="jobStageLossNamesHint(clientJobStageTotal, 'onboarding_lost_names')"><span class="rms-job-stage-hint">?</span></span>
                                         </td>
                                         <td>{{ clientJobStageTotal.hired_count }}</td>
+                                        <td class="rms-job-stage-sticky-time">{{ clientJobStagePeriodLabel }}</td>
                                     </tr>
                                 </tbody>
                                 <tbody v-else>
@@ -746,6 +1026,17 @@
                                 </tbody>
                             </table>
                         </div>
+                        <div v-if="clientJobStageRows.length" class="rms-job-stage-pagination flex flex-wrap items-center justify-between gap-3 px-1 pb-1">
+                            <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ clientJobStageRows.length }}</span> 条，第 {{ clientJobStageCurrentPage }} / {{ clientJobStageTotalPages }} 页</p>
+                            <div class="flex items-center gap-1.5">
+                                <button type="button" @click="clientJobStageGoPage(clientJobStageCurrentPage - 1)" :disabled="clientJobStageCurrentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
+                                <button v-for="p in clientJobStagePageNumbers" :key="'cjs-pg-'+p" type="button" @click="clientJobStageGoPage(p)" :class="p === clientJobStageCurrentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors">{{ p }}</button>
+                                <button type="button" @click="clientJobStageGoPage(clientJobStageCurrentPage + 1)" :disabled="clientJobStageCurrentPage >= clientJobStageTotalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
+                                <span class="ml-1 inline-flex h-8 items-center rounded-[6px] border border-[#D7DBE0] bg-white px-2.5 text-sm text-[#6B7280]">{{ clientJobStagePageSize }} 条 / 页</span>
+                            </div>
+                        </div>
+                        </div>
+                        </template>
                     </template>
 
                     <!-- 花名册 -->
@@ -863,6 +1154,20 @@
                     </template>
                 </div>
             </div>
+            </div>
+            <div v-if="editMode && canWrite" class="dash-grid dash-grid-drag-layer" aria-hidden="true">
+                <div v-for="(item, idx) in dragLayerItems" :key="'drag-' + item.key"
+                     class="drag-layer-cell"
+                     :class="{ 'is-active': activeWidgetId === item.widget.id, 'is-dragging': dragWidgetId === item.widget.id }"
+                     :style="dragLayerStyle(item, idx)">
+                    <button type="button" class="card-drag-handle"
+                            :aria-label="'拖动：' + (item.title || '组件')"
+                            @pointerdown="onDragHandlePointerDown(item, $event)">
+                        <span class="card-drag-handle-grip" aria-hidden="true"></span>
+                        <span class="card-drag-handle-label">{{ item.title || '未命名组件' }}</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <div v-else-if="activeDashboard && !activeTab" class="empty-canvas">暂无标签页{{ editMode ? '，点击上方「+ 标签页」新建。' : '。' }}</div>
@@ -972,6 +1277,15 @@
                                 <span v-for="t in rmsPresetChartTypePills" :key="'preset-chart-' + t"
                                       :class="['inspector-pill', (widgetForm.config.style && widgetForm.config.style.chart_type) === t || (!widgetForm.config.style || !widgetForm.config.style.chart_type) && t === 'horizontal_bar' ? 'active' : '']"
                                       @click="selectPresetChartType(t)">{{ rmsPresetChartTypeLabel(t) }}</span>
+                            </div>
+                        </div>
+                        <div v-if="isLifecycleFunnelBlock(widgetForm.config.block)" class="field">
+                            <label>统计口径</label>
+                            <div class="inspector-type-pills">
+                                <span :class="['inspector-pill', lifecycleFunnelMetric === 'count' ? 'active' : '']"
+                                      @click="selectPresetMetric('count')">节点人数</span>
+                                <span :class="['inspector-pill', lifecycleFunnelMetric === 'pass_rate' ? 'active' : '']"
+                                      @click="selectPresetMetric('pass_rate')">五率通过率</span>
                             </div>
                         </div>
                         <div class="field color-picker-wrap" v-click-outside="closeColorPicker">
@@ -1212,9 +1526,10 @@
 {% endblock %}
 {% block page_scripts %}
 <script src="/static/js/shared/dashboard-widget-kit.js?v=dashboard-widget-kit-twenty-12"></script>
-<script src="/static/js/pages/rms-dashboard-core.js?v=dashboard-split-d4-20260616"></script>
-<script src="/static/js/pages/rms-dashboard-metrics.js?v=dashboard-loss-hint-20260627"></script>
-<script src="/static/js/pages/rms-dashboard-charts.js?v=dashboard-split-d4-20260616"></script>
-<script src="/static/js/pages/rms-dashboard-inspector.js?v=dashboard-split-d4-20260616"></script>
-<script src="/static/js/pages/rms-dashboard.js?v=dashboard-loss-hint-20260627"></script>
+<script src="/static/js/pages/rms-core.js?v=rms-core-list-pagination-20260627"></script>
+<script src="/static/js/pages/rms-dashboard-core.js?v=dashboard-zero-resume-filter-20260627"></script>
+<script src="/static/js/pages/rms-dashboard-metrics.js?v=dashboard-zero-resume-filter-20260627"></script>
+<script src="/static/js/pages/rms-dashboard-charts.js?v=dashboard-five-rates-pct-20260627"></script>
+<script src="/static/js/pages/rms-dashboard-inspector.js?v=dashboard-metric-persist-20260627"></script>
+<script src="/static/js/pages/rms-dashboard.js?v=dashboard-zero-resume-toggle-20260627"></script>
 {% endblock %}

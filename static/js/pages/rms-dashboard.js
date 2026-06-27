@@ -6,6 +6,7 @@
   "use strict";
 
   var Core = global.CrmRmsDashboardCore || {};
+  var RmsCore = global.CrmRmsCore || {};
   var MOUNT_ID = "rms-dashboard-app";
   var KIT = window.DashboardWidgetKit;
   var CHART_BLOCKS = {
@@ -80,6 +81,7 @@
   var computed = Vue.computed;
   var watch = Vue.watch;
   var onMounted = Vue.onMounted;
+  var onUnmounted = Vue.onUnmounted;
   var nextTick = Vue.nextTick;
 
   var chartInstances = Core.getChartInstances ? Core.getChartInstances() : {};
@@ -232,6 +234,8 @@
         var showTabModal = ref(false);
         var dashboardForm = ref({ id: null, name: "", description: "" });
         var tabForm = ref({ name: "", rms_template: "overview" });
+        var tabNameDrafts = ref({});
+        var widgetTitleDrafts = ref({});
 
         var dragWidgetId = ref(null);
         var resizeWidgetId = ref(null);
@@ -246,6 +250,7 @@
         var jobFilterDropdownOpen = ref(false);
         var jobFilterRef = ref(null);
         var jobIdsDraft = ref([]);
+        var filterPanelExpanded = ref(true);
 
         var filters = reactive(cloneFilters());
         var appliedFilters = reactive(cloneFilters());
@@ -303,6 +308,15 @@
           return out;
         });
 
+        var dragLayerItems = computed(function () {
+          return displayItems.value.filter(function (item) { return !item.isExtra; });
+        });
+
+        var editableWidgets = computed(function () {
+          var tab = activeTab.value;
+          return (tab && tab.widgets) ? tab.widgets.slice() : [];
+        });
+
         if (!global.CrmRmsDashboardMetrics || typeof global.CrmRmsDashboardMetrics.createDashboardMetrics !== "function") {
           showMountError("RMS Dashboard Metrics 未加载，请刷新后重试。");
           return {};
@@ -335,6 +349,25 @@
         var jobStageLossMetricCount = metrics.jobStageLossMetricCount;
         var jobStageLossNamesHint = metrics.jobStageLossNamesHint;
         var activeFilterSummary = metrics.activeFilterSummary;
+
+        var clientJobStageListPageSize = (RmsCore.RMS_LIST_PAGE_SIZE || 8) + 2;
+        var clientJobStagePagination = RmsCore.createListPagination
+          ? RmsCore.createListPagination({
+              ref: ref,
+              computed: computed,
+              watch: watch,
+              filteredRows: clientJobStageRows,
+              prefix: "clientJobStage",
+              pageSize: clientJobStageListPageSize,
+            })
+          : {
+              pagedRows: clientJobStageRows,
+              clientJobStageCurrentPage: ref(1),
+              clientJobStageTotalPages: computed(function () { return 1; }),
+              clientJobStagePageNumbers: computed(function () { return [1]; }),
+              clientJobStageGoPage: function () {},
+              pageSize: clientJobStageListPageSize,
+            };
 
         var filteredJobOptions = computed(function () {
           var jobs = jobOptions.value || [];
@@ -417,6 +450,7 @@
           target.city = next.city;
           target.date_from = next.date_from;
           target.date_to = next.date_to;
+          target.include_zero_resume_jobs = !!next.include_zero_resume_jobs;
         }
 
         function syncDraftFromApplied() {
@@ -550,12 +584,33 @@
           activeWidgetId.value = widgetId;
         }
 
+        function filterLayoutSavings(widgets, beforeY) {
+          var savings = 0;
+          if (!widgets || !widgets.length) return 0;
+          widgets.forEach(function (widget) {
+            if (widgetBlock(widget) !== "filter") return;
+            var wy = Number(widget.y) || 0;
+            var wh = Number(widget.h) || 3;
+            if (wh > 1 && wy < beforeY) savings += wh - 1;
+          });
+          return savings;
+        }
+
         function cardStyle(w) {
+          var tab = activeTab.value;
+          var widgets = (tab && tab.widgets) || [];
+          var block = widgetBlock(w);
           var x = Math.max(0, Math.min(11, w.x || 0));
           var ww = Math.max(1, Math.min(12, w.w || 4));
+          var y = Math.max(0, Number(w.y) || 0);
+          var h = Math.max(1, w.h || 3);
+          if (!editMode.value) {
+            if (block === "filter") h = 1;
+            else y = Math.max(0, y - filterLayoutSavings(widgets, y));
+          }
           var style = {
             gridColumn: (x + 1) + " / span " + ww,
-            gridRow: ((w.y || 0) + 1) + " / span " + Math.max(1, w.h || 3),
+            gridRow: (y + 1) + " / span " + h,
           };
           if (editMode.value && w.id != null) {
             if (dragWidgetId.value === w.id || resizeWidgetId.value === w.id) {
@@ -585,18 +640,52 @@
           return { rect: rect, gap: gap, rowH: rowH, colW: colW };
         }
 
-        function pointerToGrid(grid, clientX, clientY, spanW) {
+        function pointerToGrid(grid, clientX, clientY, spanW, offsetX, offsetY) {
           var m = gridMetrics(grid);
           var cellW = m.colW + m.gap;
           var cellH = m.rowH + m.gap;
-          var relX = clientX - m.rect.left;
-          var relY = clientY - m.rect.top;
+          var relX = clientX - (offsetX || 0) - m.rect.left;
+          var relY = clientY - (offsetY || 0) - m.rect.top;
           var x = Math.floor(relX / cellW);
           var y = Math.floor(relY / cellH);
           x = Math.max(0, Math.min(11, x));
           x = Math.min(x, 12 - Math.max(1, spanW || 1));
           y = Math.max(0, y);
           return { x: x, y: y };
+        }
+
+        function dragPointerOffset(grid, widget, clientX, clientY) {
+          var m = gridMetrics(grid);
+          var cellW = m.colW + m.gap;
+          var cellH = m.rowH + m.gap;
+          return {
+            offsetX: clientX - m.rect.left - (Number(widget.x) || 0) * cellW,
+            offsetY: clientY - m.rect.top - (Number(widget.y) || 0) * cellH,
+          };
+        }
+
+        function dragLayerStyle(item, index) {
+          var w = item.widget;
+          var style = cardStyle(w);
+          var z = 100 + (index || 0);
+          if (activeWidgetId.value === w.id) z += 500;
+          if (dragWidgetId.value === w.id) z += 1000;
+          style.zIndex = z;
+          return style;
+        }
+
+        function scrollWidgetIntoView(widgetId) {
+          if (widgetId == null) return;
+          var el = document.querySelector('.dash-card[data-widget-id="' + widgetId + '"]');
+          if (el && el.scrollIntoView) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+
+        function selectWidgetFromPicker(evt) {
+          var raw = evt && evt.target ? evt.target.value : "";
+          var id = raw === "" ? null : Number(raw);
+          if (id == null || !Number.isFinite(id)) return;
+          bringWidgetToFront(id);
+          scrollWidgetIntoView(id);
         }
 
         function findWidgetById(id) {
@@ -612,7 +701,14 @@
           if (!dragState || evt.pointerId !== dragState.pointerId) return;
           var widget = findWidgetById(dragState.widgetId);
           if (!widget) return;
-          var pos = pointerToGrid(dragState.grid, evt.clientX, evt.clientY, dragState.w);
+          var pos = pointerToGrid(
+            dragState.grid,
+            evt.clientX,
+            evt.clientY,
+            dragState.w,
+            dragState.offsetX,
+            dragState.offsetY
+          );
           widget.x = pos.x;
           widget.y = pos.y;
         }
@@ -644,14 +740,12 @@
         }
 
         function jobStageChartRows(limit) {
-          var summary = data.value && data.value.client_job_stage_summary;
-          var rows = summary && summary.rows ? summary.rows : [];
+          var rows = clientJobStageRows.value || [];
           return rows.slice(0, limit || 12);
         }
 
         function jobStageChartTotal() {
-          var summary = data.value && data.value.client_job_stage_summary;
-          return summary && summary.total ? summary.total : null;
+          return clientJobStageTotal.value;
         }
 
         var Insp = global.CrmRmsDashboardInspector;
@@ -705,6 +799,16 @@
         });
         var renderSingleWidget = charts.renderSingleWidget;
         var renderVisibleCharts = charts.renderVisibleCharts;
+
+        function toggleIncludeZeroResumeJobs() {
+          var next = !appliedFilters.include_zero_resume_jobs;
+          filters.include_zero_resume_jobs = next;
+          appliedFilters.include_zero_resume_jobs = next;
+        }
+
+        watch(function () { return appliedFilters.include_zero_resume_jobs; }, function () {
+          nextTick(function () { renderVisibleCharts({ animate: false }); });
+        });
 
         function persistWidgetLayout(widget) {
           if (!widget || widget.id == null) return Promise.resolve();
@@ -775,22 +879,24 @@
           document.addEventListener("pointercancel", onCardResizeEnd);
         }
 
-        function onCardHeadPointerDown(item, evt) {
+        function onDragHandlePointerDown(item, evt) {
           if (!editMode.value || !canWrite.value || item.isExtra) return;
           if (evt.button !== 0) return;
-          if (evt.target.closest(".card-actions")) return;
-          if (evt.target.closest(".card-resize-handle")) return;
           var w = item.widget;
           if (!w || w.id == null) return;
           bringWidgetToFront(w.id);
-          var grid = evt.currentTarget.closest(".dash-grid");
+          var grid = document.querySelector(".dash-canvas-grid-wrap .dash-grid");
           if (!grid) return;
           evt.preventDefault();
+          evt.stopPropagation();
+          var offsets = dragPointerOffset(grid, w, evt.clientX, evt.clientY);
           dragState = {
             widgetId: w.id,
             w: w.w || 6,
             grid: grid,
             pointerId: evt.pointerId,
+            offsetX: offsets.offsetX,
+            offsetY: offsets.offsetY,
           };
           dragWidgetId.value = w.id;
           document.addEventListener("pointermove", onCardDragMove);
@@ -992,6 +1098,7 @@
           blankWidget: blankWidget,
           suggestNextLayout: suggestNextLayout,
           widgetBlock: widgetBlock,
+          syncWidgetTitleDraftsFromTab: syncWidgetTitleDraftsFromTab,
         });
 
         function openDisplayItemPanel(item) {
@@ -1101,6 +1208,85 @@
           tabForm.value = { name: "", rms_template: "overview" };
           showTabModal.value = true;
         }
+        function syncTabNameDraftsFromDashboard() {
+          var d = activeDashboard.value;
+          var drafts = {};
+          if (d && d.tabs) {
+            d.tabs.forEach(function (t) { drafts[t.id] = t.name || ""; });
+          }
+          tabNameDrafts.value = drafts;
+        }
+        function bindTabLabelEl(tab) {
+          return function (el) {
+            if (!el) return;
+            if (document.activeElement === el) return;
+            var draft = tabNameDrafts.value[tab.id];
+            el.textContent = draft != null ? draft : (tab.name || "");
+          };
+        }
+        function onTabNameInput(tab, evt) {
+          if (!tab || tab.id == null || !evt || !evt.target) return;
+          tabNameDrafts.value[tab.id] = String(evt.target.textContent || "").replace(/\n/g, "");
+        }
+        function saveTabNameInline(tab, evt) {
+          if (!tab || tab.id == null) return;
+          if (evt && evt.target) {
+            onTabNameInput(tab, evt);
+          }
+          var name = (tabNameDrafts.value[tab.id] != null ? String(tabNameDrafts.value[tab.id]) : "").trim();
+          if (!name) {
+            tabNameDrafts.value[tab.id] = tab.name || "";
+            if (evt && evt.target) evt.target.textContent = tab.name || "";
+            return;
+          }
+          if (name === (tab.name || "").trim()) return;
+          api("PUT", "/api/rms/dashboard-tabs/" + tab.id, { name: name })
+            .then(function () {
+              tab.name = name;
+            })
+            .catch(function (e) {
+              tabNameDrafts.value[tab.id] = tab.name || "";
+              if (evt && evt.target) evt.target.textContent = tab.name || "";
+              error.value = e.message || String(e);
+            });
+        }
+        function flushTabNameDrafts() {
+          var d = activeDashboard.value;
+          if (!d || !d.tabs) return;
+          d.tabs.forEach(function (t) { saveTabNameInline(t); });
+        }
+        function syncWidgetTitleDraftsFromTab() {
+          var tab = activeTab.value;
+          var drafts = {};
+          if (tab && tab.widgets) {
+            tab.widgets.forEach(function (w) { drafts[w.id] = w.title || ""; });
+          }
+          widgetTitleDrafts.value = drafts;
+        }
+        function syncWidgetTitleDraft(widget) {
+          if (!widget || widget.id == null) return;
+          widgetTitleDrafts.value[widget.id] = widget.title || "";
+        }
+        function saveWidgetTitleInline(widget) {
+          if (!widget || widget.id == null) return;
+          var draft = widgetTitleDrafts.value[widget.id];
+          var title = (draft != null ? String(draft) : "").trim();
+          if (!title) {
+            widgetTitleDrafts.value[widget.id] = widget.title || "";
+            return;
+          }
+          if (title === (widget.title || "").trim()) return;
+          widget.title = title;
+          persistWidgetLayout(widget).catch(function (e) {
+            widgetTitleDrafts.value[widget.id] = widget.title || "";
+            error.value = e.message || String(e);
+          });
+        }
+        function flushWidgetTitleDrafts() {
+          var tab = activeTab.value;
+          if (!tab || !tab.widgets) return;
+          tab.widgets.forEach(function (w) { saveWidgetTitleInline(w); });
+        }
         function saveTab() {
           if (!activeDashboardId.value) return;
           api("POST", "/api/rms/dashboard-boards/" + activeDashboardId.value + "/tabs", {
@@ -1112,6 +1298,7 @@
           }).then(function () {
             var d = dashboards.value.find(function (x) { return x.id === activeDashboardId.value; });
             if (d && d.tabs && d.tabs.length) activeTabId.value = d.tabs[d.tabs.length - 1].id;
+            if (editMode.value) syncTabNameDraftsFromDashboard();
             return nextTick();
           }).then(function () {
             reloadActiveTabData();
@@ -1169,11 +1356,43 @@
           return row ? row.label : key;
         }
 
+        function lifecycleFunnelMetricFor(w) {
+          var block = widgetBlock(w);
+          if (block === "chart_lifecycle_pass_rate") return "pass_rate";
+          var style = (w && w.config && w.config.style) || {};
+          return style.metric || "count";
+        }
+
         watch(activeTab, function () {
           reloadActiveTabData();
         });
+        var chatbotWasVisibleBeforeEdit = ref(false);
+
+        function syncChatbotForEditMode(on) {
+          document.body.classList.toggle("rms-dashboard-edit-mode", !!on);
+          var chatShell = document.getElementById("handbook-assistant");
+          if (!chatShell) return;
+          if (on) {
+            chatbotWasVisibleBeforeEdit.value = !chatShell.classList.contains("hidden");
+            if (window.crmHideHandbookAssistant) window.crmHideHandbookAssistant();
+            return;
+          }
+          if (chatbotWasVisibleBeforeEdit.value) {
+            chatShell.classList.remove("hidden");
+            chatbotWasVisibleBeforeEdit.value = false;
+          }
+        }
+
         watch(editMode, function (on) {
-          if (!on) activeWidgetId.value = null;
+          syncChatbotForEditMode(on);
+          if (!on) {
+            dragState = null;
+            dragWidgetId.value = null;
+            flushTabNameDrafts();
+            activeWidgetId.value = null;
+          } else if (canWrite.value) {
+            syncTabNameDraftsFromDashboard();
+          }
           destroyAllCharts();
           nextTick(function () { renderVisibleCharts({ animate: false }); });
         });
@@ -1257,6 +1476,11 @@
           loadFilterOptions();
         });
 
+        onUnmounted(function () {
+          syncChatbotForEditMode(false);
+          document.body.classList.remove("rms-dashboard-edit-mode");
+        });
+
         return Object.assign({
           loading: loading,
           initialized: initialized,
@@ -1268,6 +1492,7 @@
           appliedFilters: appliedFilters,
           applyFilters: applyFilters,
           cancelFilters: cancelFilters,
+          toggleIncludeZeroResumeJobs: toggleIncludeZeroResumeJobs,
           dashboards: dashboards,
           metadata: metadata,
           widgetData: widgetData,
@@ -1277,18 +1502,24 @@
           activeDashboard: activeDashboard,
           activeTab: activeTab,
           displayItems: displayItems,
+          dragLayerItems: dragLayerItems,
+          editableWidgets: editableWidgets,
           editMode: editMode,
           canWrite: canWrite,
           canDelete: canDelete,
           dragWidgetId: dragWidgetId,
           resizeWidgetId: resizeWidgetId,
           activeWidgetId: activeWidgetId,
-          onCardHeadPointerDown: onCardHeadPointerDown,
+          dragLayerStyle: dragLayerStyle,
+          onDragHandlePointerDown: onDragHandlePointerDown,
+          selectWidgetFromPicker: selectWidgetFromPicker,
           onCardResizePointerDown: onCardResizePointerDown,
           showDashboardModal: showDashboardModal,
           showTabModal: showTabModal,
           dashboardForm: dashboardForm,
           tabForm: tabForm,
+          tabNameDrafts: tabNameDrafts,
+          widgetTitleDrafts: widgetTitleDrafts,
           clientOptions: clientOptions,
           jobOptions: jobOptions,
           filteredJobOptions: filteredJobOptions,
@@ -1298,6 +1529,7 @@
           jobFilterRef: jobFilterRef,
           jobFilterDropdownOpen: jobFilterDropdownOpen,
           jobIdsDraft: jobIdsDraft,
+          filterPanelExpanded: filterPanelExpanded,
           jobFilterSummary: jobFilterSummary,
           toggleJobFilterDropdown: toggleJobFilterDropdown,
           toggleJobFilterDraft: toggleJobFilterDraft,
@@ -1315,6 +1547,12 @@
           hiredCount: hiredCount,
           resumeToHireRate: resumeToHireRate,
           clientJobStageRows: clientJobStageRows,
+          clientJobStagePagedRows: clientJobStagePagination.pagedRows,
+          clientJobStageCurrentPage: clientJobStagePagination.clientJobStageCurrentPage || clientJobStagePagination.currentPage,
+          clientJobStageTotalPages: clientJobStagePagination.clientJobStageTotalPages || clientJobStagePagination.totalPages,
+          clientJobStagePageNumbers: clientJobStagePagination.clientJobStagePageNumbers || clientJobStagePagination.pageNumbers,
+          clientJobStageGoPage: clientJobStagePagination.clientJobStageGoPage || clientJobStagePagination.goPage,
+          clientJobStagePageSize: clientJobStagePagination.pageSize,
           clientJobStageTotal: clientJobStageTotal,
           clientJobStagePeriodLabel: clientJobStagePeriodLabel,
           jobStageMetricText: jobStageMetricText,
@@ -1328,6 +1566,7 @@
           widgetBlock: widgetBlock,
           cardStyle: cardStyle,
           blockLabel: blockLabel,
+          lifecycleFunnelMetricFor: lifecycleFunnelMetricFor,
           themeColor: themeColor,
           legendOf: legendOf,
           showLegend: showLegend,
@@ -1350,6 +1589,11 @@
           saveDashboard: saveDashboard,
           deleteActiveDashboard: deleteActiveDashboard,
           openTabModal: openTabModal,
+          saveTabNameInline: saveTabNameInline,
+          bindTabLabelEl: bindTabLabelEl,
+          onTabNameInput: onTabNameInput,
+          saveWidgetTitleInline: saveWidgetTitleInline,
+          syncWidgetTitleDraft: syncWidgetTitleDraft,
           saveTab: saveTab,
           blankWidget: blankWidget,
           duplicateWidget: duplicateWidget,

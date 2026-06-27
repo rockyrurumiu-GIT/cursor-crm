@@ -68,6 +68,13 @@
     if (block === "lifecycle_funnel") {
       style.sort = "original";
       style.max_items = 12;
+      style.metric = "count";
+    }
+    if (block === "chart_lifecycle_pass_rate") {
+      style.sort = "original";
+      style.max_items = 12;
+      style.chart_type = "line";
+      style.metric = "pass_rate";
     }
     return style;
   }
@@ -111,6 +118,15 @@
     return out;
   }
 
+  function isLifecycleFunnelBlock(block) {
+    return block === "lifecycle_funnel";
+  }
+
+  function isLifecyclePassRateBlock(block) {
+    return block === "chart_lifecycle_pass_rate"
+      || (block === "lifecycle_funnel");
+  }
+
   function createDashboardInspector(deps) {
     var ref = deps.ref;
     var computed = deps.computed;
@@ -132,6 +148,7 @@
     var blankWidget = deps.blankWidget;
     var suggestNextLayout = deps.suggestNextLayout;
     var widgetBlock = deps.widgetBlock;
+    var syncWidgetTitleDraftsFromTab = deps.syncWidgetTitleDraftsFromTab;
 
     var widgetAutosaveTimer = null;
     var widgetPersistInFlight = false;
@@ -199,6 +216,13 @@
     });
     var isRmsBlock = computed(function () {
       return widgetForm.value.widget_type === "rms_block";
+    });
+
+    var lifecycleFunnelMetric = computed(function () {
+      var block = widgetForm.value.config && widgetForm.value.config.block;
+      if (block === "chart_lifecycle_pass_rate") return "pass_rate";
+      var style = widgetForm.value.config && widgetForm.value.config.style;
+      return (style && style.metric) || "count";
     });
 
     var rmsPresetChartTypePills = computed(function () {
@@ -365,12 +389,28 @@
       panelUserEdited.value = true;
       flushPersistWidget();
     }
+    function selectPresetMetric(metric) {
+      if (!widgetForm.value.config) widgetForm.value.config = {};
+      var block = widgetForm.value.config.block || "lifecycle_funnel";
+      if (!isLifecycleFunnelBlock(block)) return;
+      if (!widgetForm.value.config.style) {
+        widgetForm.value.config.style = defaultRmsPresetStyle(block);
+      }
+      widgetForm.value.config.style.metric = metric === "pass_rate" ? "pass_rate" : "count";
+      panelUserEdited.value = true;
+      syncWidgetFormToTab();
+      var wid = widgetForm.value.id;
+      if (wid != null) {
+        refreshWidgetChart(wid, { animate: false });
+      }
+      flushPersistWidget();
+    }
     function closeColorPicker() {
       colorPickerOpen.value = false;
     }
 
     var RMS_BLOCK_LAYOUT_PRESETS = {
-      filter: { w: 12, h: 3, title: "筛选" },
+      filter: { w: 12, h: 1, title: "筛选" },
       kpi_clients: { w: 4, h: 3, title: "有需求客户数" },
       kpi_jobs: { w: 4, h: 3, title: "需求总数" },
       kpi_hc: { w: 4, h: 3, title: "HC 总数" },
@@ -381,7 +421,7 @@
       chart_pending_backlog: { w: 4, h: 6, title: "待处理积压" },
       filter_summary: { w: 4, h: 6, title: "当前筛选" },
       lifecycle_funnel: { w: 12, h: 6, title: "招聘生命周期漏斗" },
-      chart_lifecycle_pass_rate: { w: 12, h: 5, title: "阶段通过率" },
+      chart_lifecycle_pass_rate: { w: 12, h: 5, title: "五率通过率" },
       table_lifecycle_detail: { w: 12, h: 5, title: "生命周期明细" },
       chart_history_pass: { w: 12, h: 6, title: "阶段通过率" },
       table_history: { w: 12, h: 5, title: "阶段明细" },
@@ -540,10 +580,30 @@
       );
     }
 
-    function flushPersistWidget() {
+    function syncWidgetFormToTab() {
+      var f = widgetForm.value;
+      if (!f || f.id == null) return;
+      var tab = activeTab.value;
+      if (!tab || !tab.widgets) return;
+      for (var i = 0; i < tab.widgets.length; i++) {
+        if (tab.widgets[i].id !== f.id) continue;
+        tab.widgets[i].title = f.title;
+        tab.widgets[i].widget_type = f.widget_type;
+        tab.widgets[i].source_key = f.source_key || "";
+        tab.widgets[i].config = buildConfig();
+        tab.widgets[i].x = f.x;
+        tab.widgets[i].y = f.y;
+        tab.widgets[i].w = f.w;
+        tab.widgets[i].h = f.h;
+        break;
+      }
+    }
+
+    function flushPersistWidget(force) {
       clearWidgetAutosaveTimer();
       suppressWidgetWatchPersist();
-      if (!canAutosaveWidget()) return Promise.resolve();
+      if (!force && !canAutosaveWidget()) return Promise.resolve();
+      if (force && (!activeTabId.value || !widgetFormCanPersist())) return Promise.resolve();
       if (widgetPersistInFlight) {
         widgetPersistQueued = true;
         return Promise.resolve();
@@ -655,14 +715,20 @@
       });
     }
     function closePanel() {
+      clearWidgetAutosaveTimer();
+      var shouldFlush = panelAutosaveReady.value && panelUserEdited.value;
+      if (shouldFlush) {
+        syncWidgetFormToTab();
+        flushPersistWidget(true);
+      }
       panelAutosaveReady.value = false;
       panelUserEdited.value = false;
       panelView.value = "main";
       activePicker.value = null;
-      clearWidgetAutosaveTimer();
       panelOpen.value = false;
       colorPickerOpen.value = false;
       syncChatbotForPanel(false);
+      if (typeof syncWidgetTitleDraftsFromTab === "function") syncWidgetTitleDraftsFromTab();
     }
     function openPicker(kind) {
       activePicker.value = kind;
@@ -985,6 +1051,9 @@
       selectRmsBlock: selectRmsBlock,
       onRmsBlockChange: onRmsBlockChange,
       selectPresetChartType: selectPresetChartType,
+      selectPresetMetric: selectPresetMetric,
+      isLifecycleFunnelBlock: isLifecycleFunnelBlock,
+      lifecycleFunnelMetric: lifecycleFunnelMetric,
       rmsPresetChartTypeLabel: rmsPresetChartTypeLabel,
       defaultRmsPresetStyle: defaultRmsPresetStyle,
       rmsPresetStyle: rmsPresetStyle,

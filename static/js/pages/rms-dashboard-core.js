@@ -101,6 +101,7 @@
       city: src.city != null ? String(src.city) : "",
       date_from: src.date_from != null ? String(src.date_from) : "",
       date_to: src.date_to != null ? String(src.date_to) : "",
+      include_zero_resume_jobs: !!src.include_zero_resume_jobs,
     };
   }
 

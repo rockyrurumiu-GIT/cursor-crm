@@ -5,6 +5,81 @@
 (function (global) {
   "use strict";
 
+  var SUMMARY_METRIC_KEYS = [
+    "pushed_resume_count",
+    "internal_screen_passed",
+    "duplicate_count",
+    "pending_internal_screen",
+    "pending_client_screen",
+    "scheduling_interview_count",
+    "client_screen_passed",
+    "interview_abandoned",
+    "pending_interview",
+    "pending_second_interview",
+    "pending_final_interview",
+    "first_interview_count",
+    "first_interview_passed_count",
+    "second_interview_count",
+    "second_interview_passed_count",
+    "interviewed",
+    "interview_passed",
+    "pending_offer_count",
+    "offer_accepted_count",
+    "offer_dropped_count",
+    "onboarding_count",
+    "onboarding_lost_count",
+    "hired_count",
+    "pending_roster_conversion_count",
+  ];
+  var LOSS_METRIC_NAME_KEYS = [
+    "interview_abandoned_names",
+    "offer_dropped_names",
+    "onboarding_lost_names",
+  ];
+  var JOB_STAGE_RATE_SPECS = [
+    ["internal_screen_passed", "internal_screen_passed_rate", "pushed_resume_count"],
+    ["duplicate_count", "duplicate_count_rate", "pushed_resume_count"],
+    ["client_screen_passed", "client_screen_passed_rate", "internal_screen_passed"],
+    ["interview_abandoned", "interview_abandoned_rate", "internal_screen_passed"],
+    ["first_interview_passed_count", "first_interview_passed_rate", "first_interview_count"],
+    ["second_interview_passed_count", "second_interview_passed_rate", "second_interview_count"],
+    ["interview_passed", "interview_passed_rate", "interviewed"],
+    ["offer_accepted_count", "offer_accepted_count_rate", "second_interview_passed_count"],
+    ["offer_dropped_count", "offer_dropped_count_rate", "second_interview_passed_count"],
+    ["onboarding_lost_count", "onboarding_lost_count_rate", "onboarding_count"],
+  ];
+
+  function jobStageRate(numerator, denominator) {
+    if (denominator <= 0) return "—";
+    return Math.round(100 * numerator / denominator) + "%";
+  }
+
+  function aggregateJobStageRows(rows) {
+    if (!rows.length) return null;
+    var total = { headcount: 0 };
+    SUMMARY_METRIC_KEYS.forEach(function (key) { total[key] = 0; });
+    LOSS_METRIC_NAME_KEYS.forEach(function (key) { total[key] = []; });
+    rows.forEach(function (row) {
+      total.headcount += row.headcount || 0;
+      SUMMARY_METRIC_KEYS.forEach(function (key) {
+        total[key] += row[key] || 0;
+      });
+      LOSS_METRIC_NAME_KEYS.forEach(function (key) {
+        (row[key] || []).forEach(function (name) {
+          if (name && total[key].indexOf(name) < 0) total[key].push(name);
+        });
+      });
+    });
+    JOB_STAGE_RATE_SPECS.forEach(function (spec) {
+      total[spec[1]] = jobStageRate(total[spec[0]] || 0, total[spec[2]] || 0);
+    });
+    return total;
+  }
+
+  function isZeroResumeJobRow(row) {
+    return !row || (row.pushed_resume_count || 0) === 0;
+  }
+
   function createDashboardMetrics(deps) {
     var computed = deps.computed;
     var data = deps.data;
@@ -38,11 +113,17 @@
     });
     var clientJobStageRows = computed(function () {
       var summary = clientJobStageSummary.value;
-      return summary && summary.rows ? summary.rows : [];
+      var rows = summary && summary.rows ? summary.rows : [];
+      if (appliedFilters.include_zero_resume_jobs) return rows;
+      return rows.filter(function (row) { return !isZeroResumeJobRow(row); });
     });
     var clientJobStageTotal = computed(function () {
       var summary = clientJobStageSummary.value;
-      return summary && summary.total ? summary.total : null;
+      if (!summary) return null;
+      if (appliedFilters.include_zero_resume_jobs) {
+        return summary.total || null;
+      }
+      return aggregateJobStageRows(clientJobStageRows.value);
     });
     var clientJobStagePeriodLabel = computed(function () {
       var summary = clientJobStageSummary.value;
@@ -146,7 +227,6 @@
       var labels = {
         client_id: "客户ID",
         job_ids: "岗位",
-        delivery_user_id: "交付用户ID",
         recruiter_user_id: "推荐人用户ID",
         city: "城市",
         date_from: "统计周期起",
@@ -168,6 +248,9 @@
       });
       if ((!appliedFilters.job_ids || !appliedFilters.job_ids.length) && appliedFilters.job_ids_text) {
         out.push({ key: "job_ids_text", label: "岗位", value: String(appliedFilters.job_ids_text) });
+      }
+      if (appliedFilters.include_zero_resume_jobs) {
+        out.push({ key: "include_zero_resume_jobs", label: "岗位", value: "0简历岗位不隐藏" });
       }
       return out;
     });

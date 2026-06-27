@@ -343,6 +343,7 @@ RMS_LEGACY_PRESET_PALETTE: Dict[str, str] = {
     "gray_3": "gray",
 }
 RMS_PRESET_SORT_VALUES: FrozenSet[str] = frozenset({"value_desc", "value_asc", "original"})
+RMS_PRESET_METRIC_VALUES: FrozenSet[str] = frozenset({"count", "pass_rate"})
 
 
 def _clamp_int(value: Any, lo: int, hi: int, default: int) -> int:
@@ -370,11 +371,15 @@ def _sanitize_rms_preset_style(raw: dict) -> dict:
     chart_type = raw.get("chart_type", "horizontal_bar")
     if chart_type not in RMS_PRESET_CHART_TYPES:
         chart_type = "horizontal_bar"
+    metric = raw.get("metric", "count")
+    if metric not in RMS_PRESET_METRIC_VALUES:
+        metric = "count"
     return {
         "color": color,
         "color_shade": color_shade,
         "sort": sort,
         "chart_type": chart_type,
+        "metric": metric,
         "show_grid": bool(raw.get("show_grid", True)),
         "show_values": bool(raw.get("show_values", False)),
         "bar_radius": _clamp_int(raw.get("bar_radius"), 4, 16, 8),
@@ -1866,30 +1871,30 @@ def _add_rms_default_tabs(db: Session, dashboard_id: int, DashboardTab, Dashboar
 
 _RMS_TEMPLATE_WIDGETS = {
     "overview": [
-        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 3},
-        {"title": "简历数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_resume_count"}, "x": 0, "y": 3, "w": 4, "h": 3},
-        {"title": "入职数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_hired_count"}, "x": 4, "y": 3, "w": 4, "h": 3},
-        {"title": "百简历入职转化率", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_resume_to_hire_rate"}, "x": 8, "y": 3, "w": 4, "h": 3},
-        {"title": "招聘管道（活动态）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_pipeline"}, "x": 0, "y": 6, "w": 8, "h": 6},
-        {"title": "待处理积压", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_pending_backlog"}, "x": 8, "y": 6, "w": 4, "h": 6},
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 1},
+        {"title": "简历数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_resume_count"}, "x": 0, "y": 1, "w": 4, "h": 3},
+        {"title": "入职数", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_hired_count"}, "x": 4, "y": 1, "w": 4, "h": 3},
+        {"title": "百简历入职转化率", "widget_type": "rms_block", "source_key": "", "config": {"block": "kpi_resume_to_hire_rate"}, "x": 8, "y": 1, "w": 4, "h": 3},
+        {"title": "招聘管道（活动态）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_pipeline"}, "x": 0, "y": 4, "w": 8, "h": 6},
+        {"title": "待处理积压", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_pending_backlog"}, "x": 8, "y": 4, "w": 4, "h": 6},
     ],
     "lifecycle": [
-        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 3},
-        {"title": "招聘生命周期漏斗", "widget_type": "rms_block", "source_key": "", "config": {"block": "lifecycle_funnel"}, "x": 0, "y": 3, "w": 12, "h": 6},
-        {"title": "阶段通过率", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_lifecycle_pass_rate"}, "x": 0, "y": 9, "w": 12, "h": 5},
-        {"title": "生命周期明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_lifecycle_detail"}, "x": 0, "y": 14, "w": 12, "h": 5},
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 1},
+        {"title": "招聘生命周期漏斗", "widget_type": "rms_block", "source_key": "", "config": {"block": "lifecycle_funnel"}, "x": 0, "y": 1, "w": 12, "h": 6},
+        {"title": "五率通过率", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_lifecycle_pass_rate", "style": {"chart_type": "line", "sort": "original", "metric": "pass_rate"}}, "x": 0, "y": 7, "w": 12, "h": 5},
+        {"title": "生命周期明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_lifecycle_detail"}, "x": 0, "y": 12, "w": 12, "h": 5},
     ],
     "client_job": [
-        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 3},
-        {"title": "岗位待处理积压", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_job_pending_backlog"}, "x": 0, "y": 3, "w": 6, "h": 6},
-        {"title": "客户入职量排行", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_hired_ranking"}, "x": 6, "y": 3, "w": 6, "h": 6},
-        {"title": "客户岗位阶段统计", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_client_job_stage"}, "x": 0, "y": 9, "w": 12, "h": 6},
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 1},
+        {"title": "岗位待处理积压", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_job_pending_backlog"}, "x": 0, "y": 1, "w": 6, "h": 6},
+        {"title": "客户入职量排行", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_hired_ranking"}, "x": 6, "y": 1, "w": 6, "h": 6},
+        {"title": "客户岗位阶段统计", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_client_job_stage"}, "x": 0, "y": 7, "w": 12, "h": 6},
     ],
     "recruiter": [
-        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 3},
-        {"title": "当月入职排名", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_recruiter"}, "x": 0, "y": 3, "w": 12, "h": 6},
-        {"title": "推荐量 vs 入职量", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_recruiter_recommend_vs_hired"}, "x": 0, "y": 9, "w": 12, "h": 6},
-        {"title": "人效明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_recruiter"}, "x": 0, "y": 15, "w": 12, "h": 6},
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 1},
+        {"title": "当月入职排名", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_recruiter"}, "x": 0, "y": 1, "w": 12, "h": 6},
+        {"title": "推荐量 vs 入职量", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_recruiter_recommend_vs_hired"}, "x": 0, "y": 7, "w": 12, "h": 6},
+        {"title": "人效明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_recruiter"}, "x": 0, "y": 13, "w": 12, "h": 6},
     ],
     "roster": [
         {"title": "已入职与花名册一致性核对", "widget_type": "rms_block", "source_key": "", "config": {"block": "roster_header"}, "x": 0, "y": 0, "w": 12, "h": 2},
@@ -1900,10 +1905,10 @@ _RMS_TEMPLATE_WIDGETS = {
         {"title": "核对明细", "widget_type": "rms_block", "source_key": "", "config": {"block": "table_roster"}, "x": 0, "y": 5, "w": 12, "h": 7},
     ],
     "test": [
-        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 2},
-        {"title": "岗位阶段（分组柱）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_job_stage_grouped"}, "x": 0, "y": 2, "w": 12, "h": 7},
-        {"title": "岗位阶段（堆叠柱）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_job_stage_stacked"}, "x": 0, "y": 9, "w": 12, "h": 7},
-        {"title": "岗位阶段（漏斗）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_job_stage_funnel"}, "x": 0, "y": 16, "w": 12, "h": 6},
+        {"title": "筛选", "widget_type": "rms_block", "source_key": "", "config": {"block": "filter"}, "x": 0, "y": 0, "w": 12, "h": 1},
+        {"title": "岗位阶段（分组柱）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_job_stage_grouped"}, "x": 0, "y": 1, "w": 12, "h": 7},
+        {"title": "岗位阶段（堆叠柱）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_job_stage_stacked"}, "x": 0, "y": 8, "w": 12, "h": 7},
+        {"title": "岗位阶段（漏斗）", "widget_type": "rms_block", "source_key": "", "config": {"block": "chart_client_job_stage_funnel"}, "x": 0, "y": 15, "w": 12, "h": 6},
     ],
 }
 
@@ -2257,7 +2262,7 @@ def _sync_rms_filter_block_height(
     DashboardTab,
     DashboardWidget,
 ) -> None:
-    """Shrink RMS filter block from h=3 to h=2 and pull widgets below up (single-row filter)."""
+    """Shrink RMS filter block to h=1 and pull widgets below up (single-row filter)."""
     rms_dashboard_ids = {
         int(row[0])
         for row in db.query(DashboardDashboard.id)
@@ -2284,15 +2289,17 @@ def _sync_rms_filter_block_height(
             cfg = _parse_json(w.config_json or "{}", {})
             if (cfg.get("block") or "").strip() != "filter":
                 continue
-            if int(w.h or 0) != 3:
+            old_h = int(w.h or 0)
+            if old_h <= 1:
                 continue
-            filter_widgets.append(w)
+            filter_widgets.append((w, old_h))
         if not filter_widgets:
             continue
-        for fw in filter_widgets:
+        for fw, old_h in filter_widgets:
             fy = int(fw.y or 0)
-            shift_from = fy + 3
-            fw.h = 2
+            shift_from = fy + old_h
+            savings = old_h - 1
+            fw.h = 1
             fw.updated_at = now
             changed = True
             for w in widgets:
@@ -2300,7 +2307,7 @@ def _sync_rms_filter_block_height(
                     continue
                 wy = int(w.y or 0)
                 if wy >= shift_from:
-                    w.y = wy - 1
+                    w.y = wy - savings
                     w.updated_at = now
                     changed = True
     if changed:

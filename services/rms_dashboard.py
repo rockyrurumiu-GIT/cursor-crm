@@ -57,6 +57,10 @@ _STAGE_FAIL = {
 }
 
 _ABANDONED_STATUSES = frozenset({"second_interview_abandoned", "final_interview_abandoned"})
+_ABANDONED_STAGE_LABELS = {
+    "second_interview_abandoned": "二面弃面",
+    "final_interview_abandoned": "终面弃面",
+}
 
 _SCHEDULING_INTERVIEW_SNAPSHOT_STATUSES = frozenset({"scheduling_interview"})
 _PENDING_INTERVIEW_SNAPSHOT_STATUSES = frozenset({"pending_first_interview"})
@@ -702,6 +706,44 @@ def _append_unique_name(names: List[str], name: str) -> None:
         names.append(name)
 
 
+def _abandoned_stage_labels_in_period(
+    histories: List[Any],
+    date_from: str,
+    date_to: str,
+) -> List[str]:
+    labels: List[str] = []
+    seen: Set[str] = set()
+    for hist in histories:
+        to_status = (hist.to_status or "").strip()
+        if to_status not in _ABANDONED_STATUSES:
+            continue
+        if _has_period_filter({"date_from": date_from, "date_to": date_to}):
+            if not _event_in_period(_date_only(hist.changed_at), date_from, date_to):
+                continue
+        label = _ABANDONED_STAGE_LABELS.get(to_status, to_status)
+        if label in seen:
+            continue
+        seen.add(label)
+        labels.append(label)
+    return labels
+
+
+def _format_interview_abandoned_hint(name: str, stage_labels: List[str]) -> str:
+    if not stage_labels:
+        return name
+    return name + " · " + "、".join(stage_labels)
+
+
+def _append_unique_interview_abandoned_hint(
+    names: List[str],
+    name: str,
+    stage_labels: List[str],
+) -> None:
+    hint = _format_interview_abandoned_hint(name, stage_labels)
+    if hint and hint not in names:
+        names.append(hint)
+
+
 def _metrics_for_apps(
     apps: List[Any],
     hist_map: Dict[int, List[Any]],
@@ -750,9 +792,10 @@ def _metrics_for_apps(
             metrics["client_screen_passed"] += 1
         if _app_had_transition_in_period(histories, _ABANDONED_STATUSES, date_from, date_to):
             metrics["interview_abandoned"] += 1
-            _append_unique_name(
+            _append_unique_interview_abandoned_hint(
                 metrics["interview_abandoned_names"],
                 _candidate_display_name(app, names_by_id),
+                _abandoned_stage_labels_in_period(histories, date_from, date_to),
             )
         if status_snapshot in _PENDING_INTERVIEW_SNAPSHOT_STATUSES:
             metrics["pending_interview"] += 1
@@ -876,7 +919,7 @@ _LIFECYCLE_FUNNEL_SPECS = (
     ("second_interview", "二面通过"),
     ("final_interview", "终面通过"),
     ("offer", "接offer"),
-    ("hired_summary", "已入职"),
+    ("hired_summary", "入职"),
 )
 
 

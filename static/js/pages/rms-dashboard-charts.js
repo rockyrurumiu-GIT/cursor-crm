@@ -207,6 +207,21 @@
       };
     }
 
+    function applyPercentScaleToOptions(base, chartType) {
+      if (!base || !base.scales) return base;
+      var axisKey = chartType === "horizontal_bar" ? "x" : "y";
+      var axis = base.scales[axisKey];
+      if (!axis) return base;
+      base.scales[axisKey] = Object.assign({}, axis, {
+        min: 0,
+        max: 100,
+        ticks: Object.assign({}, axis.ticks || {}, {
+          callback: function (value) { return value + "%"; },
+        }),
+      });
+      return base;
+    }
+
     function renderPresetSeriesChart(canvasId, rows, style, opts) {
       opts = opts || {};
       var prefix = opts.prefix != null ? String(opts.prefix) : "";
@@ -217,10 +232,14 @@
       var accent = palette[KIT.selectedShade(presetStyleColorCfg(style))];
       var customTooltipLabel = opts.tooltipLabel;
       function finalizeOptions(base) {
-        if (typeof customTooltipLabel !== "function") return base;
-        return mergeTooltipLabel(base, function (c) {
-          return customTooltipLabel(c, rows);
-        });
+        var out = base;
+        if (opts.percentScale) out = applyPercentScaleToOptions(out, chartType);
+        if (typeof customTooltipLabel === "function") {
+          out = mergeTooltipLabel(out, function (c) {
+            return customTooltipLabel(c, rows);
+          });
+        }
+        return out;
       }
       safeRenderChart(canvasId, function () {
         var canvas = document.getElementById(canvasId);
@@ -505,9 +524,36 @@
       );
     }
 
+    function buildLifecyclePassRateRows() {
+      return lifecycleRows.value
+        .filter(function (r) { return r.key !== "resume" && r.pass_rate_value != null; })
+        .map(function (r) {
+          return {
+            label: r.label,
+            value: r.pass_rate_value != null ? r.pass_rate_value : 0,
+            passed: r.passed,
+            processed: r.processed,
+          };
+        });
+    }
+
+    function lifecyclePassRateTooltip(c, chartRows) {
+      var row = chartRows[c.dataIndex];
+      var pct = presetTooltipValue("", "%", c.parsed);
+      if (!row) return pct;
+      if (row.processed != null && row.processed > 0) {
+        return row.label + ": " + pct + " (" + row.passed + "/" + row.processed + ")";
+      }
+      return row.label + ": " + pct;
+    }
+
     function renderLifecycleFunnelChart(canvasId, w) {
       var block = "lifecycle_funnel";
       var style = rmsPresetStyle(w && w.config, block);
+      if ((style.metric || "count") === "pass_rate") {
+        renderLifecyclePassRateChart(canvasId, w, { blockKey: block, style: style });
+        return;
+      }
       var rows = lifecycleRows.value.map(function (r) {
           return {
             label: r.label,
@@ -527,18 +573,17 @@
       });
     }
 
-    function renderLifecyclePassRateChart(canvasId, w) {
-      var block = "chart_lifecycle_pass_rate";
-      var style = rmsPresetStyle(w && w.config, block);
-      var rows = lifecycleRows.value
-        .filter(function (r) { return r.key !== "resume" && r.pass_rate_value != null; })
-        .map(function (r) {
-          return {
-            label: r.label,
-            value: r.pass_rate_value != null ? r.pass_rate_value : 0,
-          };
-        });
-      renderPresetSeriesChart(canvasId, applyPresetStyleRows(rows, style), style, { prefix: "", suffix: "%" });
+    function renderLifecyclePassRateChart(canvasId, w, renderOpts) {
+      renderOpts = renderOpts || {};
+      var block = renderOpts.blockKey || "chart_lifecycle_pass_rate";
+      var style = renderOpts.style || rmsPresetStyle(w && w.config, block);
+      var rows = buildLifecyclePassRateRows();
+      renderPresetSeriesChart(canvasId, applyPresetStyleRows(rows, style), style, {
+        prefix: "",
+        suffix: "%",
+        percentScale: true,
+        tooltipLabel: lifecyclePassRateTooltip,
+      });
     }
 
     function renderJobPendingBacklogChart(canvasId, w) {
