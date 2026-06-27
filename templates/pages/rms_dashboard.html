@@ -669,7 +669,7 @@
                                     <th>时间</th><th>客户</th><th>岗位</th><th class="col-compact">HC</th><th>地点</th>
                                     <th class="col-compact">简历数</th><th>内筛通过</th><th>重复</th><th class="col-compact">待客筛</th>
                                     <th>客筛通过</th><th>约面中</th><th>放弃面试</th><th>待面试</th><th>一面数</th><th>一面通过</th><th>二面数</th><th>二面通过</th>
-                                    <th>待offer</th><th>弃offer</th><th>在途</th><th>在途流失</th><th>已入职</th>
+                                    <th>待offer</th><th>接offer</th><th>弃offer</th><th>在途</th><th>在途流失</th><th>已入职</th>
                                 </tr></thead>
                                 <tbody v-if="clientJobStageRows.length">
                                     <tr v-for="row in clientJobStageRows" :key="row.job_id">
@@ -694,6 +694,7 @@
                                         <td>{{ row.second_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'second_interview_passed_count', 'second_interview_count', '二面通过')">{{ jobStageMetricText(row, 'second_interview_passed_count', 'second_interview_passed_rate') }}</td>
                                         <td>{{ row.pending_offer_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'offer_accepted_count', 'second_interview_passed_count', '接offer')">{{ jobStageMetricText(row, 'offer_accepted_count', 'offer_accepted_count_rate') }}</td>
                                         <td class="metric-with-rate metric-loss-with-hint">
                                             <span>{{ jobStageMetricText(row, 'offer_dropped_count', 'offer_dropped_count_rate') }}</span>
                                             <span v-if="jobStageLossMetricCount(row, 'offer_dropped_count') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(row, 'offer_dropped_names')" tabindex="0" :aria-label="jobStageLossNamesHint(row, 'offer_dropped_names')"><span class="rms-job-stage-hint">?</span></span>
@@ -727,6 +728,7 @@
                                         <td>{{ clientJobStageTotal.second_interview_count }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'second_interview_passed_count', 'second_interview_count', '二面通过')">{{ jobStageMetricText(clientJobStageTotal, 'second_interview_passed_count', 'second_interview_passed_rate') }}</td>
                                         <td>{{ clientJobStageTotal.pending_offer_count }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'offer_accepted_count', 'second_interview_passed_count', '接offer')">{{ jobStageMetricText(clientJobStageTotal, 'offer_accepted_count', 'offer_accepted_count_rate') }}</td>
                                         <td class="metric-with-rate metric-loss-with-hint">
                                             <span>{{ jobStageMetricText(clientJobStageTotal, 'offer_dropped_count', 'offer_dropped_count_rate') }}</span>
                                             <span v-if="jobStageLossMetricCount(clientJobStageTotal, 'offer_dropped_count') > 0" class="rms-job-stage-hint-wrap" :data-hint="jobStageLossNamesHint(clientJobStageTotal, 'offer_dropped_names')" tabindex="0" :aria-label="jobStageLossNamesHint(clientJobStageTotal, 'offer_dropped_names')"><span class="rms-job-stage-hint">?</span></span>
@@ -740,7 +742,7 @@
                                     </tr>
                                 </tbody>
                                 <tbody v-else>
-                                    <tr><td colspan="22" class="state-msg">暂无数据</td></tr>
+                                    <tr><td colspan="23" class="state-msg">暂无数据</td></tr>
                                 </tbody>
                             </table>
                         </div>

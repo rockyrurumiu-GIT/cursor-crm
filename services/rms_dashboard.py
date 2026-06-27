@@ -100,6 +100,7 @@ _SUMMARY_METRIC_KEYS = (
     "interviewed",
     "interview_passed",
     "pending_offer_count",
+    "offer_accepted_count",
     "offer_dropped_count",
     "onboarding_count",
     "onboarding_lost_count",
@@ -794,6 +795,16 @@ def _metrics_for_apps(
             metrics["interview_passed"] += 1
         if status_snapshot == "pending_offer":
             metrics["pending_offer_count"] += 1
+        if _app_counts_as_stage_passed(
+            app,
+            histories,
+            "offer",
+            "onboarding",
+            date_from,
+            date_to,
+            snapshot_as_of,
+        ):
+            metrics["offer_accepted_count"] += 1
         if _app_had_transition_in_period(
             histories, _OFFER_DROPPED_STATUSES, date_from, date_to
         ):
@@ -827,6 +838,7 @@ _JOB_STAGE_RATE_SPECS = (
     ("first_interview_passed_count", "first_interview_passed_rate", "first_interview_count"),
     ("second_interview_passed_count", "second_interview_passed_rate", "second_interview_count"),
     ("interview_passed", "interview_passed_rate", "interviewed"),
+    ("offer_accepted_count", "offer_accepted_count_rate", "second_interview_passed_count"),
     ("offer_dropped_count", "offer_dropped_count_rate", "second_interview_passed_count"),
     ("onboarding_lost_count", "onboarding_lost_count_rate", "onboarding_count"),
 )

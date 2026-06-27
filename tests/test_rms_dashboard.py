@@ -858,7 +858,7 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
 
     row = dash_row()
     assert row["pending_offer_count"] == 1
-    assert row["interview_passed"] == 1
+    assert row["offer_accepted_count"] == 0
     assert row["interviewed"] == 1
     assert row["first_interview_count"] == 1
     assert row["first_interview_passed_count"] == 1
@@ -871,9 +871,20 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
     assert row["hired_count"] == 0
 
     _set_application_onboarding(rms_engine, app_id)
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'pending_offer', 'onboarding', 'transition', '进在途', 1, '2026-06-01')"
+            ),
+            {"app_id": app_id},
+        )
 
     row = dash_row()
     assert row["pending_offer_count"] == 0
+    assert row["offer_accepted_count"] == 1
+    assert row["offer_accepted_count_rate"] == "100%"
     assert row["onboarding_count"] == 1
     assert row["hired_count"] == 0
 
@@ -886,6 +897,7 @@ def test_dashboard_client_job_stage_metrics(client_rbac, admin_auth, rms_engine,
 
     row = dash_row()
     assert row["onboarding_count"] == 0
+    assert row["offer_accepted_count"] == 1
     assert row["hired_count"] == 1
     assert row["first_interview_count"] == 1
     assert row["first_interview_passed_count"] == 1
@@ -2666,6 +2678,8 @@ def test_lifecycle_offer_pass_includes_onboarding_lost(
     by_key = {s["key"]: s for s in dash.json()["lifecycle_funnel"]["rows"]}
     assert by_key["offer"]["passed"] == 1
     assert by_key["offer"]["failed"] == 0
+    row = _job_row(dash.json()["client_job_stage_summary"], job_id)
+    assert row["offer_accepted_count"] == 1
 
 
 def test_lifecycle_offer_pass_excludes_offer_dropped(
