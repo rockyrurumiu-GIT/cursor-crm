@@ -17,10 +17,12 @@
     chart_job_pending_backlog: true,
     chart_client_hired_ranking: true,
     chart_recruiter_recommend_vs_hired: true,
+    chart_pipeline_dialysis: true,
   };
 
   var RMS_PRESET_GROUPED_CHART_BLOCKS = {
     chart_recruiter_recommend_vs_hired: true,
+    chart_pipeline_dialysis: true,
   };
 
   var RMS_PRESET_CHART_TYPE_LABELS = {
@@ -87,6 +89,17 @@
       style.metric = "pass_rate";
     }
     if (block === "chart_recruiter_recommend_vs_hired") {
+      style.show_group_composition = true;
+    }
+    if (block === "chart_pipeline_dialysis") {
+      style.chart_type = "bar";
+      style.sort = "original";
+      style.max_items = 12;
+      style.color = "blue";
+      style.color_shade = 2;
+      style.pipeline_data_mode = "active";
+      style.group_mode = "grouped";
+      style.show_data_labels = true;
       style.show_group_composition = true;
     }
     return style;
@@ -521,6 +534,7 @@
       table_history: { w: 12, h: 5, title: "阶段明细" },
       chart_recruiter: { w: 12, h: 6, title: "当月入职排名" },
       chart_recruiter_recommend_vs_hired: { w: 12, h: 6, title: "推荐量 vs 入职量" },
+      chart_pipeline_dialysis: { w: 12, h: 6, title: "管道透析" },
       table_recruiter: { w: 12, h: 6, title: "人效明细" },
       chart_job_pending_backlog: { w: 6, h: 6, title: "岗位待处理积压" },
       chart_client_hired_ranking: { w: 6, h: 6, title: "客户入职量排行" },
@@ -1080,6 +1094,16 @@
       widgetForm.value.config.group_mode = ev.target.checked ? "stacked" : "grouped";
       flushPersistWidget();
     }
+    function togglePresetGroupMode(ev) {
+      if (!widgetForm.value.config) widgetForm.value.config = {};
+      if (!widgetForm.value.config.style) {
+        widgetForm.value.config.style = defaultRmsPresetStyle(
+          widgetForm.value.config.block || "chart_pipeline"
+        );
+      }
+      widgetForm.value.config.style.group_mode = ev.target.checked ? "stacked" : "grouped";
+      flushPersistWidget();
+    }
     function selectWidgetType(t) {
       if (widgetForm.value.widget_type === t) return;
       panelUserEdited.value = true;
@@ -1111,6 +1135,7 @@
       }
       if (t === "featured_bar") {
         widgetForm.value.config.extra_views = [];
+        if (widgetForm.value.config.show_grid === undefined) widgetForm.value.config.show_grid = true;
       }
       flushPersistWidget();
     }
@@ -1255,6 +1280,7 @@
       manualDragGhostPillStyle: manualDragGhostPillStyle,
       applyPicker: applyPicker,
       toggleGroupMode: toggleGroupMode,
+      togglePresetGroupMode: togglePresetGroupMode,
     };
   }
 

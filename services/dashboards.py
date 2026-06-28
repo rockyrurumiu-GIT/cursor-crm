@@ -51,6 +51,7 @@ from services.delivery_roster import sql_roster_employment_active_pool
 FEATURED_VALUE_MODES: FrozenSet[str] = frozenset({"auto", "sum", "latest", "average"})
 LINE1_VALUE_MODES: FrozenSet[str] = frozenset({"sum", "latest", "average", "max"})
 LINE1_X_AXIS_MODES: FrozenSet[str] = frozenset({"all", "snapshot", "historical"})
+PIPELINE_DATA_MODES: FrozenSet[str] = frozenset({"active", "loss"})
 LINE1_ACTIVE_INDEX_MODES: FrozenSet[str] = frozenset({"first", "middle", "last"})
 HIGHLIGHT_ITEM_MODES: FrozenSet[str] = frozenset({"max", "latest"})
 
@@ -310,12 +311,14 @@ def _normalize_widget_config(config: dict) -> dict:
         "highlight_latest": bool(c.get("highlight_latest", True)),
         "highlight_item": str(c.get("highlight_item") or "latest").strip(),
         "show_tooltip": bool(c.get("show_tooltip", True)),
+        "show_grid": bool(c.get("show_grid", True)),
         "featured_value_mode": str(c.get("featured_value_mode") or "auto"),
         "show_point_values": bool(c.get("show_point_values", True)),
         "show_summary_legend": bool(c.get("show_summary_legend", True)),
         "show_group_composition": bool(c.get("show_group_composition", True)),
         "line1_value_mode": str(c.get("line1_value_mode") or "sum").strip(),
         "line1_x_axis_mode": str(c.get("line1_x_axis_mode") or "all"),
+        "pipeline_data_mode": str(c.get("pipeline_data_mode") or "active").strip(),
         "line1_range_label": str(c.get("line1_range_label") or "Last 12 months"),
         "line1_active_index": str(c.get("line1_active_index") or "middle"),
         "show_line1_range": bool(c.get("show_line1_range", True)),
@@ -325,6 +328,9 @@ def _normalize_widget_config(config: dict) -> dict:
     x_mode = out["line1_x_axis_mode"]
     if x_mode not in LINE1_X_AXIS_MODES:
         out["line1_x_axis_mode"] = "all"
+    pipeline_mode = out["pipeline_data_mode"]
+    if pipeline_mode not in PIPELINE_DATA_MODES:
+        out["pipeline_data_mode"] = "active"
     fvm = out["featured_value_mode"]
     if fvm not in FEATURED_VALUE_MODES:
         out["featured_value_mode"] = "auto"
@@ -371,6 +377,7 @@ RMS_PRESET_STYLE_BLOCKS: FrozenSet[str] = frozenset({
     "chart_job_pending_backlog",
     "chart_client_hired_ranking",
     "chart_recruiter_recommend_vs_hired",
+    "chart_pipeline_dialysis",
 })
 RMS_PRESET_STYLE_KEYS: FrozenSet[str] = frozenset({
     "color", "color_shade", "sort", "show_grid", "bar_radius", "max_items", "show_values", "palette",
@@ -379,6 +386,7 @@ RMS_PRESET_STYLE_KEYS: FrozenSet[str] = frozenset({
     "highlight_item",
     "featured_value_mode", "show_point_values", "show_tooltip", "show_summary_legend",
     "show_group_composition",
+    "pipeline_data_mode", "group_mode", "show_data_labels",
     "line1_value_mode", "line1_x_axis_mode", "line1_range_label", "line1_active_index",
     "show_line1_range", "show_line1_fullscreen", "show_line1_grid",
 })
@@ -437,6 +445,12 @@ def _sanitize_rms_preset_style(raw: dict) -> dict:
     highlight_item = str(raw.get("highlight_item") or "latest").strip()
     if highlight_item not in HIGHLIGHT_ITEM_MODES:
         highlight_item = "latest"
+    pipeline_data_mode = str(raw.get("pipeline_data_mode") or "active").strip()
+    if pipeline_data_mode not in PIPELINE_DATA_MODES:
+        pipeline_data_mode = "active"
+    group_mode = str(raw.get("group_mode") or "grouped").strip()
+    if group_mode not in ("stacked", "grouped"):
+        group_mode = "grouped"
     return {
         "color": color,
         "color_shade": color_shade,
@@ -464,6 +478,9 @@ def _sanitize_rms_preset_style(raw: dict) -> dict:
         "show_line1_range": bool(raw.get("show_line1_range", True)),
         "show_line1_fullscreen": bool(raw.get("show_line1_fullscreen", True)),
         "show_line1_grid": bool(raw.get("show_line1_grid", True)),
+        "pipeline_data_mode": pipeline_data_mode,
+        "group_mode": group_mode,
+        "show_data_labels": bool(raw.get("show_data_labels", True)),
     }
 
 
@@ -692,9 +709,11 @@ def validate_widget_config(
         out["show_line1_grid"] = bool(norm.get("show_line1_grid", True))
     if widget_type == "featured_bar":
         out["show_summary_legend"] = bool(norm.get("show_summary_legend", True))
+        out["show_grid"] = bool(norm.get("show_grid", True))
         out["highlight_item"] = norm["highlight_item"]
     if secondary_axis_field:
         out["show_group_composition"] = bool(norm.get("show_group_composition", True))
+        out["pipeline_data_mode"] = norm["pipeline_data_mode"]
     if date_group:
         out["date_group"] = date_group
     if source_key == "roster_entries":
@@ -1432,6 +1451,67 @@ def _query_line1_rms_axis_series(
     )
 
 
+def _query_rms_pipeline_grouped_series(
+    db: Session,
+    ctx: AuthContext,
+    source_key: str,
+    config: dict,
+    models: dict,
+    dashboard_filters: Optional[dict],
+) -> dict:
+    config = _normalize_widget_config(config)
+    metric = config.get("metric", "count")
+    if metric != "count":
+        raise HTTPException(status_code=400, detail="管道活跃/损耗数据仅支持计数")
+    secondary = config.get("secondary_axis_field") or ""
+    if not secondary:
+        raise HTTPException(status_code=400, detail="管道活跃/损耗数据需要分组依据")
+    mode = str(config.get("pipeline_data_mode") or "active").strip()
+    if mode not in PIPELINE_DATA_MODES:
+        mode = "active"
+
+    RmsApplication = models["RmsApplication"]
+    RmsJob = models["RmsJob"]
+    Client = models["Client"]
+    RmsApplicationStatusHistory = models["RmsApplicationStatusHistory"]
+    filters = dict(dashboard_filters or {})
+    apps = rms_dash._scoped_apps(db, ctx, RmsApplication, RmsJob, Client, filters)
+    hist_map = rms_dash._hist_for_apps(
+        db, [a.id for a in apps], RmsApplicationStatusHistory
+    )
+    hide_empty = bool(config.get("omit_null_values") or config.get("hide_empty"))
+    prefix = config.get("prefix", "")
+    suffix = config.get("suffix", "")
+    group_mode = config.get("group_mode") or DEFAULT_GROUP_MODE
+    limit = int(config.get("limit") or 20)
+    x_axis_label, y_axis_label = _axis_labels(source_key, config)
+
+    primary_labels, secondary_labels, matrix = rms_dash.compute_pipeline_grouped_series(
+        apps,
+        hist_map,
+        filters,
+        mode,
+        secondary,
+        db,
+        Client,
+        hide_empty=hide_empty,
+    )
+    primary_labels = primary_labels[:limit]
+    trimmed_matrix = {pl: matrix.get(pl, {}) for pl in primary_labels}
+    return _finalize_grouped_series(
+        primary_labels,
+        secondary_labels,
+        trimmed_matrix,
+        group_mode,
+        prefix,
+        suffix,
+        x_axis_label,
+        y_axis_label,
+        hide_empty=False,
+        limit=limit,
+    )
+
+
 def query_widget_data(
     db: Session,
     ctx: AuthContext,
@@ -1459,6 +1539,17 @@ def query_widget_data(
     field_key = config.get("aggregate_field") or config.get("field") or ""
     group_by = config.get("primary_axis_field") or config.get("group_by") or ""
     secondary = config.get("secondary_axis_field") or ""
+    pipeline_mode = str(config.get("pipeline_data_mode") or "active").strip()
+    if (
+        source_key == "rms_applications"
+        and secondary
+        and group_by in ("current_stage", "status")
+        and pipeline_mode in PIPELINE_DATA_MODES
+    ):
+        return _query_rms_pipeline_grouped_series(
+            db, ctx, source_key, config, models, dashboard_filters
+        )
+
     date_group = config.get("date_group") or ""
     filters = config.get("filters") or []
     limit = int(config.get("limit") or 20)

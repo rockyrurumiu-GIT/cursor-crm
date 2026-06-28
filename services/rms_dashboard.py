@@ -3,12 +3,16 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Type, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 from sqlalchemy.orm import Session
 
 from auth.service import AuthContext
-from schemas.rms import ACTIVE_PIPELINE_STATUSES, APPLICATION_PROGRESS_ORDER, normalize_rms_date
+from schemas.rms import (
+    ACTIVE_PIPELINE_STATUSES,
+    APPLICATION_PROGRESS_ORDER,
+    normalize_rms_date,
+)
 from services import rms_scope as rms_ds
 
 _PIPELINE_LABELS = {
@@ -1159,6 +1163,222 @@ def list_delivery_dept_users(
     )
 
 
+PIPELINE_ACTIVE_BUCKET_SPECS: Tuple[Tuple[str, str], ...] = (
+    ("active_recommendation", "活跃推荐数"),
+    ("pending_internal_screen", "待内筛"),
+    ("pending_client_screen", "待客筛"),
+    ("pending_first_interview", "待一面"),
+    ("pending_second_interview", "待二面"),
+    ("pending_final_interview", "待终面"),
+    ("pending_offer", "待offer"),
+    ("onboarding", "在途"),
+)
+
+PIPELINE_LOSS_BUCKET_SPECS: Tuple[Tuple[str, str], ...] = (
+    ("historical_resume", "历史简历数"),
+    ("internal_screen_failed", "内筛fail"),
+    ("client_screen_failed", "客筛fail"),
+    ("duplicate", "重复"),
+    ("first_interview_failed", "一面fail"),
+    ("second_interview_failed", "二面fail"),
+    ("final_interview_failed", "终面fail"),
+    ("offer_dropped", "弃offer"),
+    ("onboarding_lost", "在途流失"),
+)
+
+
+def _app_matches_pipeline_active_bucket(
+    app: Any,
+    histories: List[Any],
+    snapshot_as_of: str,
+    bucket_key: str,
+) -> bool:
+    status = _status_at(app, histories, snapshot_as_of)
+    if bucket_key == "active_recommendation":
+        return status in ACTIVE_PIPELINE_STATUSES
+    if bucket_key == "pending_internal_screen":
+        return status == "pending_internal_screen"
+    if bucket_key == "pending_client_screen":
+        return status == "pending_client_screen"
+    if bucket_key == "pending_first_interview":
+        return status == "pending_first_interview"
+    if bucket_key == "pending_second_interview":
+        return status == "first_interview_passed"
+    if bucket_key == "pending_final_interview":
+        return status == "second_interview_passed"
+    if bucket_key == "pending_offer":
+        return status == "pending_offer"
+    if bucket_key == "onboarding":
+        return status == "onboarding"
+    return False
+
+
+def _app_matches_pipeline_loss_bucket(
+    app: Any,
+    histories: List[Any],
+    date_from: str,
+    date_to: str,
+    bucket_key: str,
+) -> bool:
+    if bucket_key == "historical_resume":
+        return _recommended_in_period(app, date_from, date_to)
+    if bucket_key == "internal_screen_failed":
+        return _app_had_transition_in_period(
+            histories, {"internal_screen_failed"}, date_from, date_to
+        )
+    if bucket_key == "client_screen_failed":
+        return _app_had_transition_in_period(
+            histories, {"client_screen_failed"}, date_from, date_to
+        )
+    if bucket_key == "duplicate":
+        return _app_had_transition_to_in_period(
+            histories, "client_screen_duplicate", date_from, date_to
+        )
+    if bucket_key == "first_interview_failed":
+        return _app_had_transition_in_period(
+            histories, {"first_interview_failed"}, date_from, date_to
+        )
+    if bucket_key == "second_interview_failed":
+        return _app_had_transition_in_period(
+            histories, {"second_interview_failed"}, date_from, date_to
+        )
+    if bucket_key == "final_interview_failed":
+        return _app_had_transition_in_period(
+            histories, {"final_interview_failed"}, date_from, date_to
+        )
+    if bucket_key == "offer_dropped":
+        return _app_had_transition_in_period(
+            histories, _OFFER_DROPPED_STATUSES, date_from, date_to
+        )
+    if bucket_key == "onboarding_lost":
+        return _app_had_transition_in_period(
+            histories, _ONBOARDING_LOST_STATUSES, date_from, date_to
+        )
+    return False
+
+
+def _is_client_secondary_field(field: str) -> bool:
+    return (field or "").strip() in ("client", "client_id")
+
+
+def compute_pipeline_grouped_series(
+    apps: List[Any],
+    hist_map: Dict[int, List[Any]],
+    filters: Dict[str, Any],
+    mode: str,
+    secondary_field: str,
+    db: Session,
+    Client: Type[Any],
+    *,
+    hide_empty: bool = False,
+) -> tuple[List[str], List[str], Dict[str, Dict[str, float]]]:
+    """Grouped pipeline buckets (active snapshot / loss historical) by secondary axis."""
+    specs = (
+        PIPELINE_ACTIVE_BUCKET_SPECS
+        if mode == "active"
+        else PIPELINE_LOSS_BUCKET_SPECS
+    )
+    snapshot_as_of = _snapshot_as_of(filters)
+    date_from, date_to = _period_bounds(filters)
+
+    groups: Dict[Any, List[Any]] = defaultdict(list)
+    for app in apps:
+        if _is_client_secondary_field(secondary_field):
+            sk = getattr(app, "client_id", None)
+        else:
+            sk = getattr(app, secondary_field, None)
+        sk = sk if sk is not None else "(空)"
+        groups[sk].append(app)
+
+    name_map: Dict[int, str] = {}
+    if _is_client_secondary_field(secondary_field) and Client is not None:
+        cids = []
+        for key in groups:
+            if key == "(空)":
+                continue
+            try:
+                cids.append(int(key))
+            except (TypeError, ValueError):
+                pass
+        if cids:
+            for cid, cname in (
+                db.query(Client.id, Client.name).filter(Client.id.in_(cids)).all()
+            ):
+                name_map[int(cid)] = (cname or "").strip() or f"客户#{cid}"
+
+    def _secondary_label(raw_key: Any) -> str:
+        if _is_client_secondary_field(secondary_field):
+            if raw_key == "(空)":
+                return "(空)"
+            try:
+                cid = int(raw_key)
+            except (TypeError, ValueError):
+                return str(raw_key)
+            return name_map.get(cid, f"客户#{cid}")
+        return str(raw_key) if raw_key != "(空)" else "(空)"
+
+    secondary_raw_keys = sorted(groups.keys(), key=lambda k: _secondary_label(k))
+    secondary_labels = [_secondary_label(k) for k in secondary_raw_keys]
+    primary_labels = [label for _, label in specs]
+    matrix: Dict[str, Dict[str, float]] = {}
+
+    for bucket_key, bucket_label in specs:
+        row: Dict[str, float] = {}
+        for raw_sk, sec_label in zip(secondary_raw_keys, secondary_labels):
+            count = 0
+            for app in groups[raw_sk]:
+                histories = hist_map.get(app.id, [])
+                if mode == "active":
+                    matched = _app_matches_pipeline_active_bucket(
+                        app, histories, snapshot_as_of, bucket_key
+                    )
+                else:
+                    matched = _app_matches_pipeline_loss_bucket(
+                        app, histories, date_from, date_to, bucket_key
+                    )
+                if matched:
+                    count += 1
+            row[sec_label] = float(count)
+        if hide_empty and not any(row.get(sl, 0) for sl in secondary_labels):
+            continue
+        matrix[bucket_label] = row
+
+    if hide_empty:
+        primary_labels = [pl for pl in primary_labels if pl in matrix]
+    return primary_labels, secondary_labels, matrix
+
+
+def _pipeline_dialysis_grouped(
+    apps: List[Any],
+    hist_map: Dict[int, List[Any]],
+    filters: Dict[str, Any],
+    db: Session,
+    Client: Type[Any],
+) -> Dict[str, Any]:
+    """Pipeline dialysis grouped by client — active snapshot + loss historical buckets."""
+
+    def _pack(mode: str) -> Dict[str, Any]:
+        primary_labels, secondary_labels, matrix = compute_pipeline_grouped_series(
+            apps,
+            hist_map,
+            filters,
+            mode,
+            "client",
+            db,
+            Client,
+            hide_empty=False,
+        )
+        data_rows: List[Dict[str, Any]] = []
+        for pl in primary_labels:
+            row: Dict[str, Any] = {"label": pl}
+            for sl in secondary_labels:
+                row[sl] = matrix.get(pl, {}).get(sl, 0.0)
+            data_rows.append(row)
+        return {"keys": secondary_labels, "data": data_rows}
+
+    return {"active": _pack("active"), "loss": _pack("loss")}
+
+
 LINE1_SNAPSHOT_STATUS_ORDER: Tuple[str, ...] = tuple(_PIPELINE_LABELS.keys())
 
 LINE1_HISTORICAL_STAGE_LABELS: Tuple[Tuple[str, str], ...] = (
@@ -1309,5 +1529,8 @@ def compute_rms_dashboard(
             db, ctx, scoped_apps, hist_map, RmsJob, Client, filters
         ),
         "lifecycle_funnel": _lifecycle_funnel(scoped_apps, hist_map, filters),
+        "pipeline_dialysis": _pipeline_dialysis_grouped(
+            scoped_apps, hist_map, filters, db, Client
+        ),
     }
 

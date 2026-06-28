@@ -49,6 +49,7 @@
     var jobPendingBacklogRows = deps.jobPendingBacklogRows;
     var clientHiredRankingRows = deps.clientHiredRankingRows;
     var recruiterRecommendVsHiredRows = deps.recruiterRecommendVsHiredRows;
+    var pipelineDialysisGrouped = deps.pipelineDialysisGrouped;
 
     var jobStageChartRows = deps.jobStageChartRows;
     var jobStageChartTotal = deps.jobStageChartTotal;
@@ -1004,6 +1005,69 @@
       });
     }
 
+    function pipelineDialysisGroupedRows(slice, style) {
+      var rows = (slice && slice.data) ? slice.data.slice() : [];
+      if (style.sort === "value_desc") {
+        rows.sort(function (a, b) {
+          var keys = slice.keys || [];
+          var sumA = keys.reduce(function (s, k) { return s + (Number(a[k]) || 0); }, 0);
+          var sumB = keys.reduce(function (s, k) { return s + (Number(b[k]) || 0); }, 0);
+          return sumB - sumA;
+        });
+      } else if (style.sort === "value_asc") {
+        rows.sort(function (a, b) {
+          var keys = slice.keys || [];
+          var sumA = keys.reduce(function (s, k) { return s + (Number(a[k]) || 0); }, 0);
+          var sumB = keys.reduce(function (s, k) { return s + (Number(b[k]) || 0); }, 0);
+          return sumA - sumB;
+        });
+      }
+      var max = Number(style.max_items || 0);
+      if (max > 0) rows = rows.slice(0, max);
+      return rows;
+    }
+
+    function renderPipelineDialysisChart(canvasId, w) {
+      var block = "chart_pipeline_dialysis";
+      var style = rmsPresetStyle(w && w.config, block);
+      var mode = style.pipeline_data_mode || "active";
+      var pd = pipelineDialysisGrouped && pipelineDialysisGrouped.value;
+      if (!pd) return;
+      var slice = pd[mode];
+      if (!slice || !slice.data || !slice.data.length) return;
+      var rows = pipelineDialysisGroupedRows(slice, style);
+      if (!rows.length) return;
+      var groupedData = {
+        status: "ok",
+        kind: "grouped_series",
+        keys: slice.keys || [],
+        data: rows,
+        prefix: "",
+        suffix: "",
+      };
+      var chartType = resolvePresetChartType(style);
+      if (chartType === "pie") chartType = "bar";
+      var pseudoWidget = {
+        widget_type: chartType === "horizontal_bar" ? "horizontal_bar" : "bar",
+        title: w && w.title,
+        config: {
+          color: style.color,
+          color_shade: style.color_shade,
+          group_mode: style.group_mode || "grouped",
+          display_data_label: style.show_data_labels !== false,
+          display_legend: true,
+          show_group_composition: style.show_group_composition !== false,
+          show_grid: style.show_grid !== false,
+          pipeline_data_mode: mode,
+        },
+      };
+      safeRenderChart(canvasId, function () {
+        KIT.renderGroupedChart(chartInstances, destroyChartKey, pseudoWidget, groupedData, {
+          animate: true,
+        });
+      });
+    }
+
     function renderSingleWidget(w, opts) {
       opts = opts || {};
       if (!chartsAvailable() || !w) return;
@@ -1056,6 +1120,10 @@
       }
       if (block === "chart_recruiter_recommend_vs_hired") {
         renderRecruiterRecommendVsHiredChart(rmsId, w);
+        return;
+      }
+      if (block === "chart_pipeline_dialysis") {
+        renderPipelineDialysisChart(rmsId, w);
         return;
       }
 

@@ -1118,7 +1118,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                     </template>
 
                     <!-- 图表 -->
-                    <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter' || item.block === 'chart_pending_backlog' || item.block === 'lifecycle_funnel' || item.block === 'chart_lifecycle_pass_rate' || item.block === 'chart_job_pending_backlog' || item.block === 'chart_client_hired_ranking' || item.block === 'chart_recruiter_recommend_vs_hired' || item.block === 'chart_client_job_stage_grouped' || item.block === 'chart_client_job_stage_stacked' || item.block === 'chart_client_job_stage_funnel'">
+                    <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter' || item.block === 'chart_pending_backlog' || item.block === 'lifecycle_funnel' || item.block === 'chart_lifecycle_pass_rate' || item.block === 'chart_job_pending_backlog' || item.block === 'chart_client_hired_ranking' || item.block === 'chart_recruiter_recommend_vs_hired' || item.block === 'chart_pipeline_dialysis' || item.block === 'chart_client_job_stage_grouped' || item.block === 'chart_client_job_stage_stacked' || item.block === 'chart_client_job_stage_funnel'">
                         <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
                         <p v-else-if="!rmsChartHasData(item.block)" class="state-msg">暂无数据</p>
                         <div v-else class="chart-area">
@@ -1685,6 +1685,17 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             <span>显示分组构成</span>
                             <input type="checkbox" v-model="widgetForm.config.style.show_group_composition" />
                         </div>
+                        <template v-if="widgetForm.config.block === 'chart_pipeline_dialysis'">
+                            <div class="field">
+                                <label>数据类型</label>
+                                <select v-model="widgetForm.config.style.pipeline_data_mode">
+                                    <option value="active">活跃数据</option>
+                                    <option value="loss">损耗数据</option>
+                                </select>
+                            </div>
+                            <div class="toggle-row"><span>显示标签数据</span><input type="checkbox" v-model="widgetForm.config.style.show_data_labels" /></div>
+                            <div class="toggle-row"><span>堆叠条形图</span><input type="checkbox" :checked="(widgetForm.config.style.group_mode || 'grouped') === 'stacked'" @change="togglePresetGroupMode" /></div>
+                        </template>
                         <div v-if="!(widgetForm.config.style && widgetForm.config.style.chart_type === 'line_1')" class="toggle-row">
                             <span>显示网格线</span>
                             <input type="checkbox" v-model="widgetForm.config.style.show_grid" />
@@ -1858,13 +1869,46 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             </div>
                         </template>
                         <template v-else-if="widgetForm.widget_type === 'featured_bar'">
+                            <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="field color-picker-wrap" v-click-outside="closeColorPicker">
+                                <label>颜色</label>
+                                <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
+                                    <span class="color-picker-value">
+                                        <span class="color-picker-preview" :style="{background: widgetPalette(widgetForm.config)[selectedShade(widgetForm.config)]}"></span>
+                                        {{ selectedColorRowLabel }}
+                                    </span>
+                                    <span style="font-size:.7rem;color:#9aa0a6">▾</span>
+                                </button>
+                                <div v-if="colorPickerOpen" class="color-popover">
+                                    <input class="color-popover-search" v-model="colorSearch" placeholder="搜索颜色" />
+                                    <div v-for="row in filteredColorRows" :key="row.key" class="color-popover-row">
+                                        <span class="color-popover-label">{{ row.label }}</span>
+                                        <div class="color-popover-swatches">
+                                            <span v-for="(shade, si) in row.shades" :key="si"
+                                                  :class="['color-popover-swatch', isColorSwatchActive(row, si) ? 'active' : '']"
+                                                  :style="{background: shade}"
+                                                  @click="pickColor(row.key, si)"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="line1-other-block">
                                 <div class="inspector-section-title">其他</div>
                                 <div class="line1-toggle-list">
                                     <label class="line1-toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.show_tooltip" /></label>
                                     <label class="line1-toggle-row"><span>显示摘要图例</span><input type="checkbox" v-model="widgetForm.config.show_summary_legend" /></label>
+                                    <label v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="line1-toggle-row"><span>显示标签数据</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></label>
                                     <label v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="line1-toggle-row"><span>堆叠条形图</span><input type="checkbox" :checked="widgetForm.config.group_mode === 'stacked'" @change="toggleGroupMode" /></label>
                                     <label v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="line1-toggle-row"><span>显示分组构成</span><input type="checkbox" v-model="widgetForm.config.show_group_composition" /></label>
+                                    <label class="line1-toggle-row"><span>显示网格线</span><input type="checkbox" v-model="widgetForm.config.show_grid" /></label>
+                                </div>
+                            </div>
+                            <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.source_key === 'rms_applications' && (widgetForm.config.primary_axis_field === 'status' || widgetForm.config.primary_axis_field === 'current_stage')" class="line1-inspector-grid">
+                                <div class="field line1-metric-field">
+                                    <label>数据类型</label>
+                                    <select class="line1-metric-select" v-model="widgetForm.config.pipeline_data_mode">
+                                        <option value="active">活跃数据</option>
+                                        <option value="loss">损耗数据</option>
+                                    </select>
                                 </div>
                             </div>
                             <div class="line1-inspector-grid">

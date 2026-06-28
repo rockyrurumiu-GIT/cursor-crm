@@ -191,6 +191,21 @@
       return (data.value && data.value.recruiter_performance) || [];
     });
 
+    var pipelineDialysisGrouped = computed(function () {
+      return (data.value && data.value.pipeline_dialysis) || null;
+    });
+
+    function pipelineDialysisHasData(mode) {
+      var pd = pipelineDialysisGrouped.value;
+      if (!pd) return false;
+      var slice = pd[mode || "active"];
+      if (!slice || !slice.data || !slice.data.length) return false;
+      var keys = slice.keys || [];
+      return slice.data.some(function (row) {
+        return keys.some(function (k) { return Number(row[k]) > 0; });
+      });
+    }
+
     function jobStageMetricText(row, countKey, rateKey) {
       if (!row) return "—";
       var count = row[countKey];
@@ -270,6 +285,8 @@
       jobPendingBacklogRows: jobPendingBacklogRows,
       clientHiredRankingRows: clientHiredRankingRows,
       recruiterRecommendVsHiredRows: recruiterRecommendVsHiredRows,
+      pipelineDialysisGrouped: pipelineDialysisGrouped,
+      pipelineDialysisHasData: pipelineDialysisHasData,
       jobStageMetricText: jobStageMetricText,
       jobStageMetricTitle: jobStageMetricTitle,
       jobStageLossMetricCount: jobStageLossMetricCount,

@@ -22,6 +22,7 @@
     chart_job_pending_backlog: true,
     chart_client_hired_ranking: true,
     chart_recruiter_recommend_vs_hired: true,
+    chart_pipeline_dialysis: true,
   };
 
   var JOB_STAGE_CHART_COLORS = Core.JOB_STAGE_CHART_COLORS || {};
@@ -350,6 +351,8 @@
         var jobPendingBacklogRows = metrics.jobPendingBacklogRows;
         var clientHiredRankingRows = metrics.clientHiredRankingRows;
         var recruiterRecommendVsHiredRows = metrics.recruiterRecommendVsHiredRows;
+        var pipelineDialysisGrouped = metrics.pipelineDialysisGrouped;
+        var pipelineDialysisHasData = metrics.pipelineDialysisHasData;
         var jobStageMetricText = metrics.jobStageMetricText;
         var jobStageMetricTitle = metrics.jobStageMetricTitle;
         var jobStageLossMetricCount = metrics.jobStageLossMetricCount;
@@ -524,6 +527,9 @@
           if (block === "chart_recruiter_recommend_vs_hired") {
             return recruiterRecommendVsHiredRows.value.length > 0;
           }
+          if (block === "chart_pipeline_dialysis") {
+            return pipelineDialysisHasData("active") || pipelineDialysisHasData("loss");
+          }
           return false;
         }
 
@@ -550,6 +556,7 @@
           table_history: true,
           chart_recruiter: true,
           chart_recruiter_recommend_vs_hired: true,
+          chart_pipeline_dialysis: true,
           table_recruiter: true,
           chart_job_pending_backlog: true,
           chart_client_hired_ranking: true,
@@ -802,6 +809,7 @@
           jobPendingBacklogRows: jobPendingBacklogRows,
           clientHiredRankingRows: clientHiredRankingRows,
           recruiterRecommendVsHiredRows: recruiterRecommendVsHiredRows,
+          pipelineDialysisGrouped: pipelineDialysisGrouped,
           jobStageChartRows: jobStageChartRows,
           jobStageChartTotal: jobStageChartTotal,
           nextTick: nextTick,

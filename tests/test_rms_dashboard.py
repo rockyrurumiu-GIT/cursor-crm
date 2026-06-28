@@ -82,6 +82,14 @@ def test_dashboard_returns_structure(client_rbac, admin_auth, rms_engine, uniq):
     assert "period_label" in summary
     assert "open_job_count" in body["demand_overview"]
     assert "lifecycle_funnel" in body
+    assert "pipeline_dialysis" in body
+    pd = body["pipeline_dialysis"]
+    assert "active" in pd and "loss" in pd
+    for mode in ("active", "loss"):
+        slice_ = pd[mode]
+        assert "keys" in slice_ and "data" in slice_
+        assert isinstance(slice_["keys"], list)
+        assert isinstance(slice_["data"], list)
     stages = body["historical_overview"][0]["stages"]
     assert stages, "expected at least one historical stage"
     for stage in stages:
@@ -417,6 +425,29 @@ def test_rms_widget_show_group_composition_config_roundtrip(client_rbac, admin_a
     client_rbac.delete(f"/api/rms/dashboard-widgets/{created.json()['id']}", cookies=login.cookies)
 
 
+def test_rms_featured_bar_show_grid_config_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        widget_type="featured_bar",
+        source_key="rms_applications",
+        config={
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "secondary_axis_field": "client_id",
+            "group_mode": "stacked",
+            "show_grid": False,
+        },
+    )
+    assert created.status_code == 200, created.text
+    cfg = created.json()["config"]
+    assert cfg.get("show_grid") is False
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{created.json()['id']}", cookies=login.cookies)
+
+
 def test_rms_grouped_composition_frontend_assets():
     from pathlib import Path
 
@@ -426,7 +457,9 @@ def test_rms_grouped_composition_frontend_assets():
     html = (root / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
     assert "bms-grouped-composition" in kit
     assert "show_group_composition" in inspector
+    assert "show_grid" in kit
     assert "显示分组构成" in html
+    assert "显示网格线" in html
 
 
 def test_rms_preset_style_stripped_for_non_preset_block(client_rbac, admin_auth, rms_engine, uniq):
@@ -852,7 +885,9 @@ def test_rms_dashboard_metadata(client_rbac, admin_auth, rms_engine, uniq):
     assert any(b["key"] == "kpi_jobs" for b in body["rms_blocks"])
     assert any(b["key"] == "table_client_job_stage" for b in body["rms_blocks"])
     assert any(b["key"] == "lifecycle_funnel" for b in body["rms_blocks"])
+    assert any(b["key"] == "chart_pipeline_dialysis" for b in body["rms_blocks"])
     addable_keys = {b["key"] for b in body["rms_blocks"]}
+    assert "chart_pipeline_dialysis" in addable_keys
     for legacy_key in (
         "chart_client_job_stage_grouped",
         "chart_client_job_stage_stacked",
@@ -1984,6 +2019,61 @@ def test_rms_widget_data_grouped_series_featured_bar(client_rbac, admin_auth, rm
     assert body["kind"] == "grouped_series"
     assert body.get("keys")
     assert body.get("data")
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_widget_pipeline_active_grouped_series(client_rbac, admin_auth, rms_engine, uniq):
+    from sqlalchemy import text
+
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"pipe_{uniq}")
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id, source="内推", name="Pipe Cand"),
+    )
+    assert cand.status_code == 200, cand.text
+    app = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+    )
+    assert app.status_code == 200, app.text
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = :status, current_stage = :status WHERE id = :id"
+            ),
+            {"id": app.json()["id"], "status": "pending_first_interview"},
+        )
+
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        widget_type="featured_bar",
+        source_key="rms_applications",
+        config={
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "secondary_axis_field": "client_id",
+            "group_mode": "grouped",
+            "pipeline_data_mode": "active",
+            "display_data_label": True,
+        },
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["kind"] == "grouped_series"
+    labels = [row["label"] for row in body.get("data") or []]
+    assert "待一面" in labels
+    assert "活跃推荐数" in labels
+    pending_row = next(r for r in body["data"] if r["label"] == "待一面")
+    assert sum(pending_row.get(k, 0) for k in body.get("keys") or []) >= 1.0
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
 

@@ -56,6 +56,7 @@
   var GROUPED_COMPOSITION_MAX_SEGMENTS = 6;
   var GROUPED_COMPOSITION_OTHER_LABEL = "其他";
 
+  // 分组/堆叠纵向柱状图的统一蓝色配色（逆向自参考图）。
   function primarySortToLegacy(sort) {
     var map = {
       position_asc: "label_asc", position_desc: "label_desc",
@@ -124,6 +125,7 @@
         return LINE1_VALUE_MODES.indexOf(mode) >= 0 ? mode : "sum";
       })(),
       line1_x_axis_mode: String(c.line1_x_axis_mode || "all"),
+      pipeline_data_mode: String(c.pipeline_data_mode || "active").trim(),
       line1_range_label: String(c.line1_range_label || "Last 12 months"),
       line1_active_index: String(c.line1_active_index || "middle"),
       show_line1_range: c.show_line1_range !== false,
@@ -138,6 +140,7 @@
       show_average_line: c.show_average_line !== false,
       show_tooltip: c.show_tooltip !== false,
       show_summary_legend: c.show_summary_legend !== false,
+      show_grid: c.show_grid !== false,
     };
   }
 
@@ -160,6 +163,19 @@
     return out;
   }
   function shadeHover(cfg) { return widgetPalette(cfg)[4]; }
+  // 取 n 个跨度尽量大的同色系 shade（pal 为由浅到深 5 档），返回顺序由浅到深。
+  // 例：n=3 → 第 1、3、5 档（差异更大），而非相邻的 1、2、3 档。
+  function spacedShadeColors(pal, n) {
+    var L = pal.length;
+    if (n <= 0) return [];
+    if (n === 1) return [pal[Math.min(L - 1, 2)]];
+    var out = [];
+    for (var i = 0; i < n; i++) {
+      if (n <= L) out.push(pal[Math.round((i * (L - 1)) / (n - 1))]);
+      else out.push(mixHex(pal[0], pal[L - 1], i / (n - 1)));
+    }
+    return out;
+  }
   function themeOf(cfgOrColor) {
     var cfg = typeof cfgOrColor === "string" ? { color: cfgOrColor, color_shade: 2 } : (cfgOrColor || {});
     var pal = widgetPalette(cfg);
@@ -241,7 +257,13 @@
     if (opts && opts.forceRecreate) return false;
     if (data.kind === "grouped_series") {
       if (w.widget_type !== "bar" && w.widget_type !== "line" && w.widget_type !== "horizontal_bar") return false;
-      return chart.config.type === "bar" || chart.config.type === "line";
+      if (chart.config.type !== "bar" && chart.config.type !== "line") return false;
+      var gCfg = normalizeWidgetConfig(w.config || {});
+      // 切换堆叠/分组或改配色时样式不同，强制重建而非动画更新。
+      if (chart.$crmGroupMode != null && chart.$crmGroupMode !== gCfg.group_mode) return false;
+      if (chart.$crmColorKey != null && chart.$crmColorKey !== gCfg.color + "/" + gCfg.color_shade) return false;
+      if (chart.$crmPipelineMode != null && chart.$crmPipelineMode !== gCfg.pipeline_data_mode) return false;
+      return true;
     }
     if (data.kind !== "series") return false;
     var chartType = resolveChartType(w, opts);
@@ -468,6 +490,7 @@
         client_id: null, include_left: false, block: "kpi_jobs",
         extra_views: [],
         show_group_composition: true,
+        show_grid: true,
       }, defaults.config || {}),
       x: defaults.x != null ? defaults.x : 0,
       y: defaults.y != null ? defaults.y : 0,
@@ -522,6 +545,7 @@
       });
       if (c.secondary_axis_field) {
         out.show_group_composition = c.show_group_composition !== false;
+        out.pipeline_data_mode = c.pipeline_data_mode || "active";
       }
       if (f.widget_type === "line_1") {
         var line1Mode = String(c.line1_value_mode || "sum").trim();
@@ -537,6 +561,7 @@
         out.show_average_line = c.show_average_line !== false;
         out.show_tooltip = c.show_tooltip !== false;
         out.show_summary_legend = c.show_summary_legend !== false;
+        out.show_grid = c.show_grid !== false;
         out.highlight_item = c.highlight_item === "max" ? "max" : "latest";
       }
     }
@@ -654,6 +679,17 @@
     renderGroupedComposition(mount, model);
   }
 
+  // 堆叠柱：仅整柱「最顶一段」圆角，其余段直角，做出整体顶部圆角的扁平效果。
+  function stackedTopRadius(ctx) {
+    var dss = (ctx.chart && ctx.chart.data && ctx.chart.data.datasets) || [];
+    var topMost = -1;
+    for (var k = 0; k < dss.length; k++) {
+      if (Number((dss[k].data || [])[ctx.dataIndex]) > 0) topMost = k;
+    }
+    if (ctx.datasetIndex !== topMost) return 0;
+    return { topLeft: 8, topRight: 8, bottomLeft: 0, bottomRight: 0 };
+  }
+
   function renderGroupedChart(chartInstances, destroyChartKey, w, data, opts) {
     opts = opts || {};
     var canvasId = opts.canvasId || chartCanvasId(w, opts.viewIndex);
@@ -735,21 +771,43 @@
     }
     var barScales = cartesianScales({ display: false });
     if (stacked) { barScales.x.stacked = true; barScales.y.stacked = true; }
+    if (barScales.y && barScales.y.grid) barScales.y.grid.display = cfg.show_grid !== false;
     applyAxisNames(barScales, cfg, data, "bar");
     applyRange(barScales, cfg, "bar");
-    chartInstances[canvasId] = new Chart(canvas, {
-      type: "bar",
-      data: { labels: labels, datasets: datasets },
-      options: chartMotionOptions({
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: !!(cfg.display_legend || cfg.show_legend) },
-          datalabels: (cfg.display_data_label || cfg.data_labels) ? { display: true, anchor: "end", align: "end", clip: false, color: "#98a2b3", font: { size: 10, weight: "500" }, formatter: dataLabel(prefix) } : { display: false },
-          tooltip: whiteTooltip(function (c) { return (c.dataset.label ? c.dataset.label + ": " : "") + prefix + fmtNum(c.parsed.y); }),
-        },
-        scales: barScales,
-      }),
+    // 颜色取自所选配色，取跨度大的 shade（如 3 组 → 第 1/3/5 档）。
+    var segN = datasets.length;
+    var segColors = spacedShadeColors(pal, segN); // 由浅到深
+    var groupedColors = segColors.slice().reverse(); // 分组：由深到浅
+    datasets.forEach(function (ds, i) {
+      if (stacked) {
+        ds.backgroundColor = segColors[i]; // 自底向上由浅到深
+        ds.borderRadius = stackedTopRadius;
+        ds.borderSkipped = false;
+        ds.maxBarThickness = 44;
+        ds.categoryPercentage = 0.58;
+        ds.barPercentage = 0.7;
+      } else {
+        ds.backgroundColor = groupedColors[i];
+        ds.borderRadius = 999;
+        ds.borderSkipped = false;
+        ds.maxBarThickness = 22;
+        ds.categoryPercentage = 0.66;
+        ds.barPercentage = 0.62;
+      }
     });
+    var barOptions = chartMotionOptions({
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: !!(cfg.display_legend || cfg.show_legend) },
+        datalabels: (cfg.display_data_label || cfg.data_labels) ? { display: true, anchor: "end", align: "end", clip: false, color: "#98a2b3", font: { size: 10, weight: "500" }, formatter: dataLabel(prefix) } : { display: false },
+        tooltip: whiteTooltip(function (c) { return (c.dataset.label ? c.dataset.label + ": " : "") + prefix + fmtNum(c.parsed.y); }),
+      },
+      scales: barScales,
+    });
+    chartInstances[canvasId] = new Chart(canvas, { type: "bar", data: { labels: labels, datasets: datasets }, options: barOptions });
+    chartInstances[canvasId].$crmGroupMode = cfg.group_mode;
+    chartInstances[canvasId].$crmColorKey = cfg.color + "/" + cfg.color_shade;
+    chartInstances[canvasId].$crmPipelineMode = cfg.pipeline_data_mode;
     syncGroupedComposition(canvas, data, cfg);
   }
 
