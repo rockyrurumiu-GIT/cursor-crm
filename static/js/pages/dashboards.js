@@ -6,6 +6,7 @@
   "use strict";
 
   const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
+  const KIT = window.DashboardWidgetKit;
   const chartInstances = {};
   let widgetAutosaveTimer = null;
   let widgetPersistInFlight = false;
@@ -239,20 +240,32 @@
   }
 
   const METRIC_LABELS = { count: "计数", sum: "求和", avg: "平均", min: "最小", max: "最大" };
-  const CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line"];
+  const CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar"];
   const DATA_WIDGET_TYPES = ["number"].concat(CHART_WIDGET_TYPES);
   const TYPE_LABELS = {
     number: "数字", bar: "柱状", horizontal_bar: "横向排名", pie: "环形", line: "折线",
+    featured_line: "重点折线",
+    featured_bar: "重点柱状",
     rich_text: "文本", iframe: "网页", roster_summary: "花名册概览",
   };
   const TYPE_ICONS = {
     number: "#", bar: "▮", horizontal_bar: "▤", pie: "◔", line: "📈",
+    featured_line: "◉",
+    featured_bar: "▮",
     rich_text: "¶", iframe: "▭", roster_summary: "▦",
   };
 
   function chartCanvasId(w, viewIndex) {
     if (viewIndex == null || viewIndex === undefined) return "chart-" + w.id;
     return "chart-" + w.id + "-ev-" + viewIndex;
+  }
+
+  function featuredChartMountId(w) {
+    return "featured-line-" + w.id;
+  }
+
+  function featuredBarMountId(item) {
+    return "featured-bar-" + item.widget.id;
   }
 
   function destroyChartKey(key) {
@@ -310,8 +323,15 @@
             filters: [], limit: 20, color: "green", color_shade: 2, sort: "value_desc",
             show_legend: true, show_value_center: true, data_labels: false, hide_empty: false,
             url: "", content: "", prefix: "", suffix: "",
+            comparison_label: "较上期", average_label: "Avg",
+            show_average_line: true, show_comparison: true, highlight_latest: true,
+            featured_value_mode: "auto", show_point_values: false,
+            show_tooltip: true,
+            show_summary_legend: true,
             client_id: null, include_left: false,
             extra_views: [],
+            primary_axis_field: "", secondary_axis_field: "", secondary_axis_sort: "label_asc",
+            group_mode: "stacked", show_group_composition: true,
           },
           x: 0, y: 0, w: 6, h: 5,
         };
@@ -379,6 +399,13 @@
       });
       const groupByFields = computed(function () {
         return sourceFields.value.filter(function (f) { return f.kind === "text" || f.kind === "datetime"; });
+      });
+      const supportsSecondary = computed(function () {
+        var t = widgetForm.value.widget_type;
+        return ["bar", "horizontal_bar", "line", "featured_bar"].indexOf(t) >= 0;
+      });
+      const secondaryAxisFields = computed(function () {
+        return sourceFields.value.filter(function (f) { return f.kind === "text"; });
       });
       const isDateGroup = computed(function () {
         const f = sourceFields.value.find(function (x) { return x.key === widgetForm.value.config.group_by; });
@@ -477,13 +504,39 @@
         if (widgetForm.value.widget_type === t) return;
         panelUserEdited.value = true;
         widgetForm.value.widget_type = t;
+        if (t === "featured_line") {
+          var f = widgetForm.value;
+          if (!f.title || f.title === "新组件") f.title = "统计趋势";
+          var c = f.config;
+          if (c.comparison_label === undefined || c.comparison_label === "") c.comparison_label = "较上期";
+          if (c.average_label === undefined || c.average_label === "") c.average_label = "Avg";
+          if (c.show_average_line === undefined) c.show_average_line = true;
+          if (c.show_comparison === undefined) c.show_comparison = true;
+          if (c.highlight_latest === undefined) c.highlight_latest = true;
+          if (c.featured_value_mode === undefined || c.featured_value_mode === "") c.featured_value_mode = "auto";
+          if (c.show_point_values === undefined) c.show_point_values = false;
+        }
+        if (t === "featured_bar") {
+          var fb = widgetForm.value;
+          if (!fb.title || fb.title === "新组件") fb.title = "统计趋势";
+          var fc = fb.config;
+          if (fc.average_label === undefined || fc.average_label === "") fc.average_label = "Avg";
+          if (fc.show_average_line === undefined) fc.show_average_line = true;
+          if (fc.show_tooltip === undefined) fc.show_tooltip = true;
+          if (fc.show_summary_legend === undefined) fc.show_summary_legend = true;
+          if (fc.highlight_latest === undefined) fc.highlight_latest = true;
+          fc.extra_views = [];
+        }
+        if (t === "pie" || t === "number" || t === "featured_line") {
+          widgetForm.value.config.secondary_axis_field = "";
+          widgetForm.value.config.group_mode = "stacked";
+        }
         flushPersistWidget();
       }
 
-      // Line charts require a date_group group_by; keep frontend honest by forcing line type for datetime groups.
+      // Datetime grouping uses date_group; keep line / featured_line / featured_bar on their types.
       watch(function () { return [widgetForm.value.widget_type, widgetForm.value.config.group_by]; }, function () {
-        if (isDateGroup.value && widgetForm.value.widget_type !== "line") {
-          // allow but default to month grouping
+        if (isDateGroup.value && ["line", "featured_line", "featured_bar"].indexOf(widgetForm.value.widget_type) >= 0) {
           if (!widgetForm.value.config.date_group) widgetForm.value.config.date_group = "month";
         }
       });
@@ -562,6 +615,33 @@
         Object.keys(chartInstances).forEach(function (k) {
           destroyChartKey(k);
         });
+        document.querySelectorAll(".chart-area").forEach(function (el) {
+          if (KIT && KIT.clearGroupedComposition) KIT.clearGroupedComposition(el);
+        });
+        document.querySelectorAll(".bms-featured-line-mount").forEach(function (el) {
+          if (window.CrmFeaturedLineChartKit) window.CrmFeaturedLineChartKit.destroyFeaturedLine(el);
+        });
+        document.querySelectorAll(".bms-featured-bar-mount").forEach(function (el) {
+          if (window.CrmFeaturedBarChartKit) window.CrmFeaturedBarChartKit.destroyFeaturedBarChart(el);
+        });
+      }
+
+      function toggleGroupMode(ev) {
+        widgetForm.value.config.group_mode = ev.target.checked ? "stacked" : "grouped";
+        flushPersistWidget();
+      }
+
+      function renderFeaturedLineWidget(w, data) {
+        var mount = document.getElementById(featuredChartMountId(w));
+        if (!mount || !window.CrmFeaturedLineChartKit) return;
+        var accent = themeOf(w.config || {}).base;
+        window.CrmFeaturedLineChartKit.renderFeaturedLine(mount, w, data, { lineColor: accent });
+      }
+
+      function renderFeaturedBarWidget(w, data) {
+        var mount = document.getElementById("featured-bar-" + w.id);
+        if (!mount || !window.CrmFeaturedBarChartKit) return;
+        window.CrmFeaturedBarChartKit.renderFeaturedBarChart(mount, w, data);
       }
 
       function renderChart(w, data, opts) {
@@ -670,18 +750,44 @@
         const tab = activeTab.value;
         if (!tab || !tab.widgets) return;
         tab.widgets.forEach(function (w) {
-          if (CHART_WIDGET_TYPES.indexOf(w.widget_type) < 0) return;
-          const data = widgetData.value[w.id];
-          if (!data) return;
-          renderChart(w, data, { viewIndex: null });
-          const views = (w.config && w.config.extra_views) || [];
-          views.forEach(function (ev, idx) {
-            renderChart(w, data, {
-              render: ev.render,
-              viewIndex: idx,
-              canvasId: chartCanvasId(w, idx),
-              limit: ev.limit != null ? ev.limit : 6,
+          renderSingleWidget(w);
+        });
+      }
+
+      function renderSingleWidget(w, opts) {
+        opts = opts || {};
+        if (CHART_WIDGET_TYPES.indexOf(w.widget_type) < 0) return;
+        const data = widgetData.value[w.id];
+        if (!data) return;
+        if (w.widget_type === "featured_line") {
+          renderFeaturedLineWidget(w, data);
+          return;
+        }
+        if (w.widget_type === "featured_bar") {
+          var secField = (w.config && w.config.secondary_axis_field) || "";
+          if (secField && data.kind === "grouped_series" && KIT) {
+            KIT.renderGroupedChart(chartInstances, destroyChartKey, w, data, {
+              viewIndex: null,
+              animate: opts.animate !== false,
             });
+            return;
+          }
+          renderFeaturedBarWidget(w, data);
+          return;
+        }
+        if (!KIT) return;
+        KIT.renderCrmChart(chartInstances, destroyChartKey, w, data, {
+          viewIndex: null,
+          animate: opts.animate !== false,
+        });
+        const views = (w.config && w.config.extra_views) || [];
+        views.forEach(function (ev, idx) {
+          KIT.renderCrmChart(chartInstances, destroyChartKey, w, data, {
+            render: ev.render,
+            viewIndex: idx,
+            canvasId: chartCanvasId(w, idx),
+            limit: ev.limit != null ? ev.limit : 6,
+            animate: opts.animate !== false,
           });
         });
       }
@@ -866,9 +972,18 @@
         }
         const out = {
           metric: c.metric, field: c.field, group_by: c.group_by,
+          primary_axis_field: c.group_by || c.primary_axis_field || "",
           filters: (c.filters || []).filter(function (x) { return x.field; }),
           prefix: c.prefix || "", suffix: c.suffix || "",
         };
+        if (isChart.value) {
+          out.secondary_axis_field = String(c.secondary_axis_field || "").trim();
+          out.secondary_axis_sort = String(c.secondary_axis_sort || "label_asc").trim();
+          out.group_mode = String(c.group_mode || "stacked").trim();
+          if (out.secondary_axis_field) {
+            out.show_group_composition = c.show_group_composition !== false;
+          }
+        }
         // date_group path: backend rejects a datetime group_by and re-derives it
         // from created_at, so send group_by empty and let the date_group drive it.
         if (isDateGroup.value) { out.group_by = ""; out.date_group = c.date_group; }
@@ -883,21 +998,38 @@
           out.show_value_center = !!c.show_value_center;
           out.data_labels = !!c.data_labels;
           out.hide_empty = !!c.hide_empty;
-          out.extra_views = (c.extra_views || []).map(function (ev) {
-            const row = {
-              render: ev.render,
-              x: Number(ev.x) || 0,
-              y: Number(ev.y) || 0,
-              w: Number(ev.w) || 4,
-              h: Number(ev.h) || 4,
-            };
-            const t = (ev.title || "").trim();
-            if (t) row.title = t;
-            if (ev.render === "horizontal_bar" && ev.limit != null && ev.limit !== "") {
-              row.limit = Number(ev.limit);
-            }
-            return row;
-          });
+          if (f.widget_type === "featured_line") {
+            out.comparison_label = c.comparison_label || "较上期";
+            out.average_label = c.average_label || "Avg";
+            out.show_average_line = c.show_average_line !== false;
+            out.show_comparison = c.show_comparison !== false;
+            out.highlight_latest = c.highlight_latest !== false;
+            out.show_point_values = c.show_point_values === true;
+          } else if (f.widget_type === "featured_bar") {
+            out.average_label = c.average_label || "Avg";
+            out.show_average_line = c.show_average_line !== false;
+            out.show_tooltip = c.show_tooltip !== false;
+            out.show_summary_legend = c.show_summary_legend !== false;
+            out.highlight_latest = c.highlight_latest !== false;
+            out.featured_value_mode = c.featured_value_mode || "auto";
+            out.show_point_values = c.show_point_values === true;
+          } else {
+            out.extra_views = (c.extra_views || []).map(function (ev) {
+              const row = {
+                render: ev.render,
+                x: Number(ev.x) || 0,
+                y: Number(ev.y) || 0,
+                w: Number(ev.w) || 4,
+                h: Number(ev.h) || 4,
+              };
+              const t = (ev.title || "").trim();
+              if (t) row.title = t;
+              if (ev.render === "horizontal_bar" && ev.limit != null && ev.limit !== "") {
+                row.limit = Number(ev.limit);
+              }
+              return row;
+            });
+          }
         }
         return out;
       }
@@ -956,6 +1088,9 @@
       }
 
       onMounted(function () {
+        if (KIT && typeof Chart !== "undefined") {
+          KIT.installChartPlugins(Chart, window.ChartDataLabels);
+        }
         fetch("/api/me", { headers: window.crmAuthHeader ? window.crmAuthHeader() : {}, credentials: "same-origin" })
           .then(function (r) { return r.json(); })
           .then(function (me) {
@@ -986,11 +1121,12 @@
         showDashboardModal, showTabModal, panelOpen,
         dashboardForm, tabForm, widgetForm,
         needsDataSource, needsField, needsGroupBy, isChart, isDateGroup, isRosterSummary,
+        supportsSecondary, secondaryAxisFields, toggleGroupMode,
         sourceFields, numericFields, groupByFields,
         colorPickerOpen, colorSearch, filteredColorRows, selectedColorRowLabel,
         isColorSwatchActive, pickColor, closeColorPicker, widgetPalette, selectedShade,
         cardStyle, themeColor, swatchColor, sourceLabel, metricLabel, typeLabel, typeIcon,
-        richTitle, richBody, showLegend, legendOf,
+        richTitle, richBody, showLegend, legendOf, featuredChartMountId, featuredBarMountId,
         rosterTiles, rosterScopeLabel, rosterHeadcount, isRosterClientCard,
         selectDashboard,
         openDashboardModal, saveDashboard, deleteActiveDashboard,

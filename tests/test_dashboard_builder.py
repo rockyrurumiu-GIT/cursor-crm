@@ -883,3 +883,918 @@ def test_legacy_widget_without_style_still_renders(client, admin_auth):
     assert data["kind"] == "series"
     assert "total" in data
     client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_dashboard_metadata_includes_featured_line(client, admin_auth):
+    headers = _admin_headers(admin_auth)
+    r = client.get("/api/dashboard-metadata", headers=headers)
+    assert r.status_code == 200
+    types = r.json()["widget_types"]
+    assert "featured_line" in types
+    assert "featured_bar" in types
+    assert types.index("line") < types.index("featured_line")
+    assert types.index("featured_line") < types.index("featured_bar")
+    assert types.index("featured_bar") < types.index("rich_text")
+
+
+def test_featured_line_widget_config_roundtrip(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Line Dash")
+    payload = {
+        "title": "趋势",
+        "widget_type": "featured_line",
+        "source_key": "opportunities",
+        "config": {
+            "metric": "count",
+            "group_by": "stage",
+            "prefix": "$",
+            "suffix": "",
+            "comparison_label": "环比",
+            "average_label": "均值",
+            "show_average_line": False,
+            "show_comparison": True,
+            "highlight_latest": False,
+            "featured_value_mode": "latest",
+            "show_point_values": True,
+            "color": "blue",
+            "color_shade": 3,
+        },
+    }
+    r = client.post(f"/api/dashboard-tabs/{tab_id}/widgets", headers=headers, json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["widget_type"] == "featured_line"
+    cfg = body["config"]
+    assert cfg["comparison_label"] == "环比"
+    assert cfg["average_label"] == "均值"
+    assert cfg["show_average_line"] is False
+    assert cfg["show_comparison"] is True
+    assert cfg["highlight_latest"] is False
+    assert cfg["featured_value_mode"] == "latest"
+    assert cfg["show_point_values"] is True
+    assert cfg["prefix"] == "$"
+    assert cfg.get("extra_views", []) == []
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_line_rejects_secondary_axis(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Line Secondary")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Bad",
+            "widget_type": "featured_line",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "secondary_axis_field": "owner",
+            },
+        },
+    )
+    assert r.status_code == 400
+    assert "secondary_axis_field" in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_line_rejects_extra_views(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Line Extra")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Bad",
+            "widget_type": "featured_line",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "extra_views": [{"render": "doughnut", "x": 0, "y": 0, "w": 6, "h": 6}],
+            },
+        },
+    )
+    assert r.status_code == 400
+    assert "extra_views" in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_line_series_data(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Line Data")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "By stage",
+            "widget_type": "featured_line",
+            "source_key": "opportunities",
+            "config": {"metric": "count", "group_by": "stage", "sort": "value_desc"},
+        },
+    )
+    assert r.status_code == 200, r.text
+    widget_id = r.json()["id"]
+    r = client.get(f"/api/dashboard-widgets/{widget_id}/data", headers=headers)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["status"] == "ok"
+    assert data["kind"] == "series"
+    assert "labels" in data and "values" in data
+    assert "total" in data
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_line_widget_type_unchanged(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Line Unchanged")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Line chart",
+            "widget_type": "line",
+            "source_key": "opportunities",
+            "config": {"metric": "count", "group_by": "stage", "limit": 5},
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["widget_type"] == "line"
+    r = client.get(f"/api/dashboard-widgets/{body['id']}/data", headers=headers)
+    assert r.status_code == 200
+    assert r.json()["kind"] == "series"
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_line_frontend_assets():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "templates/pages/dashboards.html").read_text(encoding="utf-8")
+    js = (root / "static/js/pages/dashboards.js").read_text(encoding="utf-8")
+    assert "featured-line-chart-kit.js" in html
+    assert "bms-featured-line-mount" in html
+    assert "featured_line" in js
+    assert "重点折线" in js
+
+
+def test_featured_bar_frontend_assets():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "templates/pages/dashboards.html").read_text(encoding="utf-8")
+    js = (root / "static/js/pages/dashboards.js").read_text(encoding="utf-8")
+    kit = (root / "static/js/shared/featured-bar-chart-kit.js").read_text(encoding="utf-8")
+    assert "featured-bar-chart-kit.js" in html
+    assert "bms-featured-bar-mount" in html
+    assert "featured_bar" in html
+    assert "featured_bar" in js
+    assert "重点柱状" in js
+    assert "CrmFeaturedBarChartKit" in js
+    assert "normalizeFeaturedBarData" in kit
+    assert "renderFeaturedBarChart" in kit
+    assert "CrmFeaturedBarChartKit" in kit
+    assert "fb-stripe-inactive" in kit
+    assert "fb-stripe-active" in kit
+    assert "bms-featured-legend" in kit
+    assert "show_summary_legend" in kit
+    assert "#cbd5e1" in kit
+    assert 'opacity="0.72"' in kit
+    assert "['bar','horizontal_bar','pie','line'].includes" in html
+
+
+def test_dashboard_metadata_includes_featured_line(client, admin_auth):
+    headers = _admin_headers(admin_auth)
+    r = client.get("/api/dashboard-metadata", headers=headers)
+    assert r.status_code == 200
+    types = r.json()["widget_types"]
+    assert "featured_line" in types
+    assert "featured_bar" in types
+    assert types.index("line") < types.index("featured_line")
+    assert types.index("featured_line") < types.index("featured_bar")
+    assert types.index("featured_bar") < types.index("rich_text")
+
+
+def test_featured_line_widget_config_roundtrip(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Line Dash")
+    payload = {
+        "title": "趋势",
+        "widget_type": "featured_line",
+        "source_key": "opportunities",
+        "config": {
+            "metric": "count",
+            "group_by": "stage",
+            "prefix": "$",
+            "suffix": "",
+            "comparison_label": "环比",
+            "average_label": "均值",
+            "show_average_line": False,
+            "show_comparison": True,
+            "highlight_latest": False,
+            "featured_value_mode": "latest",
+            "show_point_values": True,
+            "color": "blue",
+            "color_shade": 3,
+        },
+    }
+    r = client.post(f"/api/dashboard-tabs/{tab_id}/widgets", headers=headers, json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["widget_type"] == "featured_line"
+    cfg = body["config"]
+    assert cfg["comparison_label"] == "环比"
+    assert cfg["average_label"] == "均值"
+    assert cfg["show_average_line"] is False
+    assert cfg["show_comparison"] is True
+    assert cfg["highlight_latest"] is False
+    assert cfg["featured_value_mode"] == "latest"
+    assert cfg["show_point_values"] is True
+    assert cfg["prefix"] == "$"
+    assert cfg.get("extra_views", []) == []
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_line_rejects_secondary_axis(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Line Secondary")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Bad",
+            "widget_type": "featured_line",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "secondary_axis_field": "owner",
+            },
+        },
+    )
+    assert r.status_code == 400
+    assert "secondary_axis_field" in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_line_rejects_extra_views(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Line Extra")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Bad",
+            "widget_type": "featured_line",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "extra_views": [{"render": "doughnut", "x": 0, "y": 0, "w": 6, "h": 6}],
+            },
+        },
+    )
+    assert r.status_code == 400
+    assert "extra_views" in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_line_series_data(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Line Data")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "By stage",
+            "widget_type": "featured_line",
+            "source_key": "opportunities",
+            "config": {"metric": "count", "group_by": "stage", "sort": "value_desc"},
+        },
+    )
+    assert r.status_code == 200, r.text
+    widget_id = r.json()["id"]
+    r = client.get(f"/api/dashboard-widgets/{widget_id}/data", headers=headers)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["status"] == "ok"
+    assert data["kind"] == "series"
+    assert "labels" in data and "values" in data
+    assert "total" in data
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_line_widget_type_unchanged(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Line Unchanged")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Line chart",
+            "widget_type": "line",
+            "source_key": "opportunities",
+            "config": {"metric": "count", "group_by": "stage", "limit": 5},
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["widget_type"] == "line"
+    r = client.get(f"/api/dashboard-widgets/{body['id']}/data", headers=headers)
+    assert r.status_code == 200
+    assert r.json()["kind"] == "series"
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_line_frontend_assets():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "templates/pages/dashboards.html").read_text(encoding="utf-8")
+    js = (root / "static/js/pages/dashboards.js").read_text(encoding="utf-8")
+    assert "featured-line-chart-kit.js" in html
+    assert "bms-featured-line-mount" in html
+    assert "featured_line" in js
+    assert "重点折线" in js
+
+
+def test_featured_bar_frontend_assets():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "templates/pages/dashboards.html").read_text(encoding="utf-8")
+    js = (root / "static/js/pages/dashboards.js").read_text(encoding="utf-8")
+    kit = (root / "static/js/shared/featured-bar-chart-kit.js").read_text(encoding="utf-8")
+    assert "featured-bar-chart-kit.js" in html
+    assert "bms-featured-bar-mount" in html
+    assert "featured_bar" in html
+    assert "featured_bar" in js
+    assert "重点柱状" in js
+    assert "CrmFeaturedBarChartKit" in js
+    assert "normalizeFeaturedBarData" in kit
+    assert "renderFeaturedBarChart" in kit
+    assert "CrmFeaturedBarChartKit" in kit
+    assert "fb-stripe-inactive" in kit
+    assert "fb-stripe-active" in kit
+    assert "bms-featured-legend" in kit
+    assert "show_summary_legend" in kit
+    assert "#cbd5e1" in kit
+    assert 'opacity="0.72"' in kit
+    assert "['bar','horizontal_bar','pie','line'].includes" in html
+
+
+def test_featured_line_chart_kit_renders_multi_point_series():
+    """Multi-point SVG path must render under strict mode (no implicit global i)."""
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/featured-line-chart-kit.js"
+    script = f"""
+const fs = require("fs");
+function makeEl(tag) {{
+  const node = {{
+    tagName: tag.toUpperCase(),
+    className: "",
+    textContent: "",
+    title: "",
+    style: {{}},
+    _inner: "",
+    children: [],
+    appendChild(c) {{ this.children.push(c); return c; }},
+  }};
+  Object.defineProperty(node, "innerHTML", {{
+    get() {{ return node._inner; }},
+    set(v) {{ node._inner = String(v); }},
+  }});
+  return node;
+}}
+const document = {{ createElement: makeEl }};
+globalThis.document = document;
+globalThis.ResizeObserver = undefined;
+eval(fs.readFileSync({str(kit)!r}, "utf8"));
+const K = globalThis.CrmFeaturedLineChartKit;
+const mountEl = document.createElement("div");
+const widget = {{ title: "统计趋势", widget_type: "featured_line", config: {{}} }};
+const apiData = {{
+  status: "ok",
+  kind: "series",
+  labels: ["A", "B", "C"],
+  values: [1, 3, 2],
+  total: 6,
+}};
+K.renderFeaturedLine(mountEl, widget, apiData);
+function collectHtml(node) {{
+  let s = (node.className || "") + (node._inner || "") + (node.textContent || "");
+  for (const c of node.children || []) s += collectHtml(c);
+  return s;
+}}
+const blob = collectHtml(mountEl);
+for (const needle of ["bms-featured-line-card", "bms-featured-line-svg", "bms-featured-line-path", "bms-featured-kpi-row", "bms-featured-main-value", "bms-featured-line-tooltip", "bms-featured-line-average-label"]) {{
+  if (!blob.includes(needle)) {{
+    console.error("missing " + needle);
+    process.exit(1);
+  }}
+}}
+if (blob.includes("bms-featured-line-point-label")) {{
+  console.error("default should not render point labels");
+  process.exit(1);
+}}
+"""
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_grouped_composition_frontend_assets():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "templates/pages/dashboards.html").read_text(encoding="utf-8")
+    rms_html = (root / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
+    js = (root / "static/js/pages/dashboards.js").read_text(encoding="utf-8")
+    kit = (root / "static/js/shared/dashboard-widget-kit.js").read_text(encoding="utf-8")
+    inspector = (root / "static/js/pages/rms-dashboard-inspector.js").read_text(encoding="utf-8")
+    charts = (root / "static/js/pages/rms-dashboard-charts.js").read_text(encoding="utf-8")
+
+    assert "dashboard-widget-kit.js" in html
+    assert "显示分组构成" in html
+    assert "show_group_composition" in js
+    assert "renderSingleWidget" in js
+    assert "KIT.renderCrmChart" in js
+    assert "buildGroupedCompositionModel" in kit
+    assert "bms-grouped-composition" in kit
+    assert "syncGroupedComposition" in kit
+    assert "bms-grouped-composition-segment" in html
+    assert "bms-grouped-composition-segment" in rms_html
+    assert "show_group_composition" in inspector
+    assert "syncPresetGroupedComposition" in charts
+
+
+def test_grouped_composition_kit_renders_percent_legend():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/dashboard-widget-kit.js"
+    script = f"""
+const fs = require("fs");
+function makeEl(tag) {{
+  const node = {{
+    tagName: tag.toUpperCase(),
+    className: "",
+    textContent: "",
+    title: "",
+    style: {{}},
+    _inner: "",
+    children: [],
+    appendChild(c) {{ this.children.push(c); return c; }},
+    querySelector() {{ return null; }},
+  }};
+  Object.defineProperty(node, "innerHTML", {{
+    get() {{ return node._inner; }},
+    set(v) {{ node._inner = String(v); }},
+  }});
+  return node;
+}}
+const document = {{ createElement: makeEl }};
+globalThis.document = document;
+globalThis.window = globalThis;
+eval(fs.readFileSync({str(kit)!r}, "utf8"));
+const K = globalThis.DashboardWidgetKit;
+const mountEl = document.createElement("div");
+const model = K.buildGroupedCompositionModel({{
+  keys: ["祖龙-ZL", "蛮啾-MJ", "贝塔科技-BT"],
+  data: [
+    {{ label: "待一面", "祖龙-ZL": 2, "蛮啾-MJ": 3, "贝塔科技-BT": 2 }},
+    {{ label: "一面fail", "祖龙-ZL": 1, "蛮啾-MJ": 0, "贝塔科技-BT": 0 }},
+    {{ label: "在途", "祖龙-ZL": 0, "蛮啾-MJ": 2, "贝塔科技-BT": 0 }},
+  ],
+}});
+K.renderGroupedComposition(mountEl, model);
+function collectHtml(node) {{
+  let s = (node.className || "") + (node._inner || "") + (node.textContent || "");
+  for (const c of node.children || []) s += collectHtml(c);
+  return s;
+}}
+const blob = collectHtml(mountEl);
+for (const needle of ["bms-grouped-composition-segment", "bms-grouped-composition-value", "祖龙-ZL", "%"]) {{
+  if (!blob.includes(needle)) {{
+    console.error("missing " + needle);
+    process.exit(1);
+  }}
+}}
+"""
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_grouped_composition_kit_respects_show_group_composition_false():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/dashboard-widget-kit.js"
+    script = f"""
+const fs = require("fs");
+function makeEl(tag) {{
+  const node = {{
+    tagName: tag.toUpperCase(),
+    className: "",
+    textContent: "",
+    style: {{}},
+    _inner: "",
+    children: [],
+    appendChild(c) {{ this.children.push(c); return c; }},
+    closest() {{ return this; }},
+    parentElement: null,
+    querySelector(sel) {{
+      if (sel === ".bms-grouped-composition") return null;
+      return null;
+    }},
+  }};
+  node.parentElement = node;
+  return node;
+}}
+const document = {{ createElement: makeEl }};
+globalThis.document = document;
+globalThis.window = globalThis;
+eval(fs.readFileSync({str(kit)!r}, "utf8"));
+const K = globalThis.DashboardWidgetKit;
+const canvas = makeEl("canvas");
+canvas.className = "chart-area";
+K.syncGroupedComposition(canvas, {{
+  keys: ["A"],
+  data: [{{ label: "X", A: 1 }}],
+}}, {{ show_group_composition: false }});
+if (canvas.children.length) {{
+  console.error("expected no composition children");
+  process.exit(1);
+}}
+"""
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_grouped_series_show_group_composition_config_roundtrip(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Grouped Composition Config")
+    payload = {
+        "title": "Grouped",
+        "widget_type": "bar",
+        "source_key": "opportunities",
+        "config": {
+            "metric": "count",
+            "primary_axis_field": "stage",
+            "secondary_axis_field": "probability",
+            "group_mode": "stacked",
+            "show_group_composition": False,
+        },
+    }
+    r = client.post(f"/api/dashboard-tabs/{tab_id}/widgets", headers=headers, json=payload)
+    assert r.status_code == 200, r.text
+    cfg = r.json()["config"]
+    assert cfg.get("secondary_axis_field") == "probability"
+    assert cfg.get("show_group_composition") is False
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_bms_widget_data_grouped_series(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "BMS Grouped Series")
+    created = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Grouped Bar",
+            "widget_type": "bar",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "primary_axis_field": "stage",
+                "secondary_axis_field": "probability",
+                "group_mode": "stacked",
+            },
+        },
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client.get(f"/api/dashboard-widgets/{wid}/data", headers=headers)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["kind"] == "grouped_series"
+    assert "keys" in body
+    assert "data" in body
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def _featured_line_kit_node_script(extra_body: str, kit_path) -> str:
+    return f"""
+const fs = require("fs");
+function makeEl(tag) {{
+  const node = {{
+    tagName: tag.toUpperCase(),
+    className: "",
+    textContent: "",
+    title: "",
+    style: {{}},
+    _inner: "",
+    children: [],
+    appendChild(c) {{ this.children.push(c); return c; }},
+    querySelector(sel) {{
+      function walk(n) {{
+        if (!n) return null;
+        const cls = n.className || "";
+        if (sel === "." + cls.split(" ")[0] && cls.includes(sel.slice(1))) return n;
+        for (const c of n.children || []) {{
+          const hit = walk(c);
+          if (hit) return hit;
+        }}
+        return null;
+      }}
+      return walk(this);
+    }},
+  }};
+  Object.defineProperty(node, "innerHTML", {{
+    get() {{ return node._inner; }},
+    set(v) {{ node._inner = String(v); }},
+  }});
+  return node;
+}}
+const document = {{ createElement: makeEl }};
+globalThis.document = document;
+globalThis.ResizeObserver = undefined;
+eval(fs.readFileSync({str(kit_path)!r}, "utf8"));
+const K = globalThis.CrmFeaturedLineChartKit;
+function collectHtml(node) {{
+  let s = (node.className || "") + (node._inner || "") + (node.textContent || "");
+  for (const c of node.children || []) s += collectHtml(c);
+  return s;
+}}
+{extra_body}
+"""
+
+
+def test_featured_line_chart_kit_percent_suffix_uses_latest():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/featured-line-chart-kit.js"
+    body = """
+const mountEl = document.createElement("div");
+const widget = { title: "五率", widget_type: "featured_line", config: { suffix: " %" } };
+const apiData = {
+  status: "ok", kind: "series",
+  labels: ["一", "二", "三"],
+  values: [80, 90, 100],
+  total: 270,
+};
+K.renderFeaturedLine(mountEl, widget, apiData);
+const blob = collectHtml(mountEl);
+if (!blob.includes("100%")) { console.error("expected 100% main"); process.exit(1); }
+if (!blob.includes("最新值")) { console.error("expected 最新值 note"); process.exit(1); }
+if (blob.includes("270%")) { console.error("should not sum percents"); process.exit(1); }
+if (blob.includes("bms-featured-line-point-label")) { console.error("default should not render point labels"); process.exit(1); }
+if (!blob.includes("bms-featured-line-tooltip")) { console.error("expected active tooltip"); process.exit(1); }
+const mountEl2 = document.createElement("div");
+K.renderFeaturedLine(mountEl2, { config: { suffix: " %", show_point_values: true } }, apiData);
+const blob2 = collectHtml(mountEl2);
+if (!blob2.includes("bms-featured-line-point-label")) { console.error("expected point labels when enabled"); process.exit(1); }
+"""
+    result = subprocess.run(["node", "-e", _featured_line_kit_node_script(body, kit)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_featured_line_chart_kit_sum_mode_still_sums():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/featured-line-chart-kit.js"
+    body = """
+const mountEl = document.createElement("div");
+const widget = { title: "趋势", widget_type: "featured_line", config: { featured_value_mode: "sum", suffix: "" } };
+const apiData = {
+  status: "ok", kind: "series",
+  labels: ["A", "B", "C"],
+  values: [1, 3, 2],
+  total: 6,
+};
+K.renderFeaturedLine(mountEl, widget, apiData);
+const blob = collectHtml(mountEl);
+if (!blob.includes("6")) { console.error("expected sum 6"); process.exit(1); }
+if (blob.includes("最新值")) { console.error("sum mode should not show 最新值"); process.exit(1); }
+"""
+    result = subprocess.run(["node", "-e", _featured_line_kit_node_script(body, kit)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_featured_line_chart_kit_null_api_data_safe():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/featured-line-chart-kit.js"
+    body = """
+const model = K.normalizeFeaturedLineData({ title: "空", config: { prefix: "P" } }, null);
+if (!model.empty) { console.error("expected empty"); process.exit(1); }
+if (model.valuePrefix !== "P") { console.error("bad prefix"); process.exit(1); }
+"""
+    result = subprocess.run(["node", "-e", _featured_line_kit_node_script(body, kit)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_featured_bar_config_roundtrip(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Bar Dash")
+    payload = {
+        "title": "柱状趋势",
+        "widget_type": "featured_bar",
+        "source_key": "opportunities",
+        "config": {
+            "metric": "count",
+            "group_by": "stage",
+            "prefix": "$",
+            "suffix": "",
+            "average_label": "均值",
+            "show_average_line": False,
+            "show_tooltip": True,
+            "show_summary_legend": False,
+            "highlight_latest": False,
+            "color": "blue",
+            "color_shade": 3,
+        },
+    }
+    r = client.post(f"/api/dashboard-tabs/{tab_id}/widgets", headers=headers, json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["widget_type"] == "featured_bar"
+    cfg = body["config"]
+    assert cfg["average_label"] == "均值"
+    assert cfg["show_average_line"] is False
+    assert cfg["show_tooltip"] is True
+    assert cfg["show_summary_legend"] is False
+    assert cfg["highlight_latest"] is False
+    assert cfg["featured_value_mode"] == "latest"
+    assert cfg["show_point_values"] is True
+    assert cfg["prefix"] == "$"
+    assert cfg.get("extra_views", []) == []
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_bar_accepts_secondary_axis(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Bar Secondary")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Grouped Featured Bar",
+            "widget_type": "featured_bar",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "primary_axis_field": "stage",
+                "secondary_axis_field": "owner",
+            },
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["config"]["secondary_axis_field"] == "owner"
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_bar_rejects_extra_views(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Featured Bar Extra")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Bad",
+            "widget_type": "featured_bar",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "extra_views": [{"render": "doughnut", "x": 0, "y": 0, "w": 6, "h": 6}],
+            },
+        },
+    )
+    assert r.status_code == 400
+    assert "featured_bar 不支持 extra_views" in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_featured_bar_chart_kit_renders_multi_point_series():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/featured-bar-chart-kit.js"
+    script = f"""
+const fs = require("fs");
+function makeEl(tag) {{
+  const node = {{
+    tagName: tag.toUpperCase(),
+    className: "",
+    textContent: "",
+    title: "",
+    style: {{}},
+    _inner: "",
+    children: [],
+    appendChild(c) {{ this.children.push(c); return c; }},
+  }};
+  Object.defineProperty(node, "innerHTML", {{
+    get() {{ return node._inner; }},
+    set(v) {{ node._inner = String(v); }},
+  }});
+  return node;
+}}
+const document = {{ createElement: makeEl }};
+globalThis.document = document;
+globalThis.ResizeObserver = undefined;
+eval(fs.readFileSync({str(kit)!r}, "utf8"));
+const K = globalThis.CrmFeaturedBarChartKit;
+const mountEl = document.createElement("div");
+const widget = {{ title: "统计趋势", widget_type: "featured_bar", config: {{}} }};
+const apiData = {{
+  status: "ok",
+  kind: "series",
+  labels: ["2024-01", "2024-02", "2024-03"],
+  values: [1, 3, 2],
+  total: 6,
+}};
+K.renderFeaturedBarChart(mountEl, widget, apiData);
+function collectHtml(node) {{
+  let s = (node.className || "") + (node._inner || "") + (node.textContent || "");
+  for (const c of node.children || []) s += collectHtml(c);
+  return s;
+}}
+const blob = collectHtml(mountEl);
+for (const needle of ["bms-featured-bar-card", "bms-featured-bar-svg", "bms-featured-bar-rect--active", "bms-featured-bar-hit", "bms-featured-bar-axis-label", "bms-featured-legend-row", "bms-featured-legend-swatch", "%"]) {{
+  if (!blob.includes(needle)) {{
+    console.error("missing " + needle);
+    process.exit(1);
+  }}
+}}
+"""
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_featured_bar_chart_kit_legend_percent_suffix_shows_raw_value():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/featured-bar-chart-kit.js"
+    script = f"""
+const fs = require("fs");
+function makeEl(tag) {{
+  const node = {{
+    tagName: tag.toUpperCase(),
+    className: "",
+    textContent: "",
+    title: "",
+    style: {{}},
+    _inner: "",
+    children: [],
+    appendChild(c) {{ this.children.push(c); return c; }},
+  }};
+  Object.defineProperty(node, "innerHTML", {{
+    get() {{ return node._inner; }},
+    set(v) {{ node._inner = String(v); }},
+  }});
+  return node;
+}}
+const document = {{ createElement: makeEl }};
+globalThis.document = document;
+globalThis.ResizeObserver = undefined;
+eval(fs.readFileSync({str(kit)!r}, "utf8"));
+const K = globalThis.CrmFeaturedBarChartKit;
+const mountEl = document.createElement("div");
+const widget = {{ title: "五率", widget_type: "featured_bar", config: {{ suffix: "%" }} }};
+const apiData = {{
+  status: "ok",
+  kind: "series",
+  labels: ["一面", "二面", "Offer"],
+  values: [80, 20, 0],
+  suffix: "%",
+}};
+K.renderFeaturedBarChart(mountEl, widget, apiData);
+function collectHtml(node) {{
+  let s = (node.className || "") + (node._inner || "") + (node.textContent || "");
+  for (const c of node.children || []) s += collectHtml(c);
+  return s;
+}}
+const blob = collectHtml(mountEl);
+if (!blob.includes("80%")) {{ console.error("expected raw 80%"); process.exit(1); }}
+if (blob.includes("133.3%")) {{ console.error("must not show share-of-total for percent suffix"); process.exit(1); }}
+"""
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+

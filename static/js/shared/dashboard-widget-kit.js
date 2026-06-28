@@ -6,14 +6,16 @@
 
   var EXTRA_RENDER_LABELS = { doughnut: "环形图", horizontal_bar: "横向排名（柱图）" };
   var METRIC_LABELS = { count: "计数", sum: "求和", avg: "平均", min: "最小", max: "最大" };
-  var CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line"];
+  var CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar"];
   var DATA_WIDGET_TYPES = ["number"].concat(CHART_WIDGET_TYPES);
   var TYPE_LABELS = {
     number: "数字", bar: "柱状", horizontal_bar: "横向排名", pie: "环形", line: "折线",
+    featured_line: "重点折线", featured_bar: "重点柱状",
     rich_text: "文本", iframe: "网页", roster_summary: "花名册概览", rms_block: "招聘预设",
   };
   var TYPE_ICONS = {
     number: "#", bar: "▮", horizontal_bar: "▤", pie: "◔", line: "📈",
+    featured_line: "◉", featured_bar: "▮",
     rich_text: "¶", iframe: "▭", roster_summary: "▦", rms_block: "▦",
   };
 
@@ -48,6 +50,10 @@
   var TWENTY_COLOR_ROWS = TWENTY_HUE_BASES.map(function (t) {
     return { key: t[0], label: t[1], shades: buildHueShades(t[2]) };
   });
+
+  var GROUPED_COMPOSITION_COLORS = ["#1e96e8", "#36c8e8", "#ffc04d", "#22c55e", "#a855f7", "#ef4444"];
+  var GROUPED_COMPOSITION_MAX_SEGMENTS = 6;
+  var GROUPED_COMPOSITION_OTHER_LABEL = "其他";
 
   function primarySortToLegacy(sort) {
     var map = {
@@ -111,6 +117,7 @@
       include_left: !!c.include_left,
       client_id: c.client_id,
       url: c.url, content: c.content, block: c.block,
+      show_group_composition: c.show_group_composition !== false,
     };
   }
 
@@ -440,6 +447,7 @@
         url: "", content: "", prefix: "", suffix: "",
         client_id: null, include_left: false, block: "kpi_jobs",
         extra_views: [],
+        show_group_composition: true,
       }, defaults.config || {}),
       x: defaults.x != null ? defaults.x : 0,
       y: defaults.y != null ? defaults.y : 0,
@@ -492,8 +500,122 @@
         if (ev.render === "horizontal_bar" && ev.limit != null && ev.limit !== "") row.limit = Number(ev.limit);
         return row;
       });
+      if (c.secondary_axis_field) {
+        out.show_group_composition = c.show_group_composition !== false;
+      }
     }
     return out;
+  }
+
+  function compositionStripeBackground(color) {
+    var light = mixHex(color, "#ffffff", 0.18);
+    var dark = mixHex(color, "#000000", 0.08);
+    return "repeating-linear-gradient(-45deg, " + light + ", " + light + " 4px, " + dark + " 4px, " + dark + " 8px), linear-gradient(180deg, " + mixHex(color, "#ffffff", 0.12) + " 0%, " + color + " 100%)";
+  }
+
+  function buildGroupedCompositionModel(input) {
+    input = input || {};
+    var entries = [];
+    if (Array.isArray(input.datasets) && input.datasets.length) {
+      input.datasets.forEach(function (ds, i) {
+        var label = String((ds && ds.label) || ("Series " + (i + 1)));
+        var total = (ds.data || []).reduce(function (sum, v) { return sum + (Number(v) || 0); }, 0);
+        entries.push({ key: label, label: label, total: total });
+      });
+    } else {
+      var keys = input.keys || [];
+      var rows = input.data || [];
+      keys.forEach(function (key) {
+        var total = rows.reduce(function (sum, row) { return sum + (Number(row[key]) || 0); }, 0);
+        entries.push({ key: key, label: key, total: total });
+      });
+    }
+    entries.sort(function (a, b) { return b.total - a.total; });
+    var max = GROUPED_COMPOSITION_MAX_SEGMENTS;
+    var visible = entries.slice(0, max);
+    var rest = entries.slice(max);
+    if (rest.length) {
+      var otherTotal = rest.reduce(function (sum, item) { return sum + item.total; }, 0);
+      visible.push({ key: GROUPED_COMPOSITION_OTHER_LABEL, label: GROUPED_COMPOSITION_OTHER_LABEL, total: otherTotal });
+    }
+    var grandTotal = visible.reduce(function (sum, item) { return sum + item.total; }, 0);
+    return visible.map(function (item, idx) {
+      var pct = grandTotal > 0 ? Math.round((item.total / grandTotal) * 100) : 0;
+      return {
+        key: item.key,
+        label: item.label,
+        total: item.total,
+        pct: pct,
+        color: GROUPED_COMPOSITION_COLORS[idx % GROUPED_COMPOSITION_COLORS.length],
+      };
+    });
+  }
+
+  function renderGroupedComposition(containerEl, model) {
+    if (!containerEl || !model || !model.length) return null;
+    var root = document.createElement("div");
+    root.className = "bms-grouped-composition";
+
+    var strip = document.createElement("div");
+    strip.className = "bms-grouped-composition-strip";
+    model.forEach(function (item) {
+      if (item.total <= 0 && model.length > 1) return;
+      var seg = document.createElement("span");
+      seg.className = "bms-grouped-composition-segment";
+      seg.style.flexGrow = String(Math.max(item.pct, item.total > 0 ? 1 : 0));
+      seg.style.flexBasis = "0";
+      seg.style.background = compositionStripeBackground(item.color);
+      seg.title = item.label + " " + item.pct + "%";
+      strip.appendChild(seg);
+    });
+    root.appendChild(strip);
+
+    var legend = document.createElement("div");
+    legend.className = "bms-grouped-composition-legend";
+    model.forEach(function (item) {
+      var row = document.createElement("div");
+      row.className = "bms-grouped-composition-row";
+
+      var swatch = document.createElement("span");
+      swatch.className = "bms-grouped-composition-swatch";
+      swatch.style.background = compositionStripeBackground(item.color);
+      if (typeof swatch.setAttribute === "function") swatch.setAttribute("aria-hidden", "true");
+
+      var label = document.createElement("span");
+      label.className = "bms-grouped-composition-label";
+      label.textContent = item.label;
+      label.title = item.label;
+
+      var valueEl = document.createElement("span");
+      valueEl.className = "bms-grouped-composition-value";
+      valueEl.textContent = item.pct + "%";
+
+      row.appendChild(swatch);
+      row.appendChild(label);
+      row.appendChild(valueEl);
+      legend.appendChild(row);
+    });
+    root.appendChild(legend);
+    containerEl.appendChild(root);
+    return root;
+  }
+
+  function clearGroupedComposition(containerEl) {
+    if (!containerEl) return;
+    var existing = containerEl.querySelector(".bms-grouped-composition");
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+  }
+
+  function syncGroupedComposition(canvas, input, cfg) {
+    if (!canvas) return;
+    cfg = cfg || {};
+    var mount = canvas.closest(".chart-area") || canvas.parentElement;
+    if (!mount) return;
+    clearGroupedComposition(mount);
+    if (cfg.show_group_composition === false) return;
+    var model = buildGroupedCompositionModel(input);
+    if (!model.length) return;
+    renderGroupedComposition(mount, model);
   }
 
   function renderGroupedChart(chartInstances, destroyChartKey, w, data, opts) {
@@ -511,10 +633,12 @@
           if (existing.options.scales.y) existing.options.scales.y.stacked = stacked;
         }
         existing.update("active");
+        syncGroupedComposition(canvas, data, cfg);
         return;
       }
     }
     destroyChartKey(canvasId);
+    clearGroupedComposition(canvas.closest(".chart-area") || canvas.parentElement);
 
     var prefix = data.prefix || "";
     var keys = data.keys || [];
@@ -530,7 +654,7 @@
         data: rows.map(function (r) { return r[key] || 0; }),
         backgroundColor: pal[(i + 2) % pal.length],
         borderColor: w.widget_type === "line" ? pal[(i + 2) % pal.length] : undefined,
-        borderRadius: w.widget_type === "bar" || w.widget_type === "horizontal_bar" ? 6 : undefined,
+        borderRadius: w.widget_type === "bar" || w.widget_type === "horizontal_bar" || w.widget_type === "featured_bar" ? 6 : undefined,
         fill: w.widget_type === "line" ? false : undefined,
         tension: w.widget_type === "line" ? 0.25 : undefined,
         pointRadius: w.widget_type === "line" ? 2 : undefined,
@@ -561,6 +685,7 @@
           scales: scales,
         }),
       });
+      syncGroupedComposition(canvas, data, cfg);
       return;
     }
     if (w.widget_type === "line") {
@@ -569,6 +694,7 @@
         data: { labels: labels, datasets: datasets },
         options: lineChartOptions(cfg, prefix, data, false),
       });
+      syncGroupedComposition(canvas, data, cfg);
       return;
     }
     var barScales = cartesianScales({ display: false });
@@ -588,6 +714,7 @@
         scales: barScales,
       }),
     });
+    syncGroupedComposition(canvas, data, cfg);
   }
 
   function renderCrmChart(chartInstances, destroyChartKey, w, data, opts) {
@@ -709,7 +836,13 @@
     normalizeWidgetConfig: normalizeWidgetConfig,
     buildConfig: buildConfig,
     renderCrmChart: renderCrmChart,
+    renderGroupedChart: renderGroupedChart,
     installChartPlugins: installChartPlugins,
+    buildGroupedCompositionModel: buildGroupedCompositionModel,
+    renderGroupedComposition: renderGroupedComposition,
+    syncGroupedComposition: syncGroupedComposition,
+    clearGroupedComposition: clearGroupedComposition,
+    GROUPED_COMPOSITION_COLORS: GROUPED_COMPOSITION_COLORS,
     extraRenderLabel: function (render) { return EXTRA_RENDER_LABELS[render] || render; },
   };
 })(window);

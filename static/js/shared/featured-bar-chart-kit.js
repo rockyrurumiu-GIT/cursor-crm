@@ -1,0 +1,495 @@
+/**
+ * BMS Dashboard — featured_bar (重点柱状) SVG card renderer.
+ */
+(function (global) {
+  "use strict";
+
+  var FEATURED_BLUE = "#1e96e8";
+  var MAX_POINTS = 12;
+  var MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function fmtNum(v) {
+    if (v == null || Number.isNaN(Number(v))) return "0";
+    var n = Number(v);
+    if (Number.isInteger(n)) return n.toLocaleString();
+    return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+
+  function formatValue(prefix, suffix, value) {
+    return (prefix || "") + fmtNum(value) + (suffix || "");
+  }
+
+  function currentPeriodLabel(dateGroup) {
+    var now = new Date();
+    var y = now.getFullYear();
+    var m = String(now.getMonth() + 1).padStart(2, "0");
+    var d = String(now.getDate()).padStart(2, "0");
+    if (dateGroup === "day") return y + "-" + m + "-" + d;
+    if (dateGroup === "week") {
+      var jan1 = new Date(y, 0, 1);
+      var dayOfYear = Math.floor((now - jan1) / 86400000);
+      var week = Math.floor((dayOfYear + jan1.getDay()) / 7);
+      return y + "-W" + String(week).padStart(2, "0");
+    }
+    if (dateGroup === "year") return String(y);
+    return y + "-" + m;
+  }
+
+  function shortAxisLabel(label) {
+    var s = String(label || "");
+    var monthMatch = /^(\d{4})-(\d{2})$/.exec(s);
+    if (monthMatch) {
+      var mi = parseInt(monthMatch[2], 10) - 1;
+      if (mi >= 0 && mi < 12) return MONTH_SHORT[mi];
+    }
+    var dayMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (dayMatch) return dayMatch[2] + "/" + dayMatch[3];
+    if (s.length > 8) return s.slice(0, 8);
+    return s;
+  }
+
+  function resolveActiveIndex(points, cfg) {
+    if (cfg.highlight_latest === false) return -1;
+    if (!points.length) return -1;
+    var current = currentPeriodLabel(cfg.date_group || "month");
+    var i;
+    for (i = 0; i < points.length; i++) {
+      if (points[i].label === current) return i;
+    }
+    return points.length - 1;
+  }
+
+  function normalizeFeaturedBarData(widget, apiData) {
+    var cfg = (widget && widget.config) || {};
+    var prefix = cfg.prefix != null && cfg.prefix !== "" ? cfg.prefix : ((apiData && apiData.prefix) || "");
+    var suffix = cfg.suffix != null && cfg.suffix !== "" ? cfg.suffix : ((apiData && apiData.suffix) || "");
+    var avgLabelBase = cfg.average_label || "Avg";
+    var showAverageLine = cfg.show_average_line !== false;
+    var showTooltip = cfg.show_tooltip !== false;
+    var showSummaryLegend = cfg.show_summary_legend !== false;
+    var emptyBase = {
+      empty: true,
+      unsupported: false,
+      points: [],
+      activeIndex: -1,
+      averageValue: 0,
+      averageLabel: avgLabelBase,
+      valuePrefix: prefix,
+      valueSuffix: suffix,
+      showAverageLine: showAverageLine,
+      showTooltip: showTooltip,
+      showSummaryLegend: showSummaryLegend,
+    };
+
+    if (!apiData || apiData.status !== "ok" || apiData.kind !== "series") {
+      return emptyBase;
+    }
+
+    var labels = apiData.labels || [];
+    var values = apiData.values || [];
+    var points = [];
+    var i;
+    for (i = 0; i < labels.length && points.length < MAX_POINTS; i++) {
+      var val = Number(values[i]);
+      if (!Number.isFinite(val)) continue;
+      points.push({ label: String(labels[i]), value: val });
+    }
+
+    if (!points.length) {
+      return emptyBase;
+    }
+
+    var hasNegative = points.some(function (p) { return p.value < 0; });
+    if (hasNegative) {
+      return {
+        empty: false,
+        unsupported: true,
+        points: points,
+        activeIndex: -1,
+        averageValue: 0,
+        averageLabel: avgLabelBase,
+        valuePrefix: prefix,
+        valueSuffix: suffix,
+        showAverageLine: showAverageLine,
+        showTooltip: showTooltip,
+        showSummaryLegend: showSummaryLegend,
+      };
+    }
+
+    var sum = 0;
+    points.forEach(function (p) { sum += p.value; });
+    var averageValue = points.length ? sum / points.length : 0;
+    var activeIndex = resolveActiveIndex(points, cfg);
+
+    return {
+      empty: false,
+      unsupported: false,
+      points: points,
+      activeIndex: activeIndex,
+      averageValue: averageValue,
+      averageLabel: avgLabelBase + " " + formatValue(prefix, suffix, averageValue),
+      valuePrefix: prefix,
+      valueSuffix: suffix,
+      showAverageLine: showAverageLine,
+      showTooltip: showTooltip,
+      showSummaryLegend: showSummaryLegend,
+    };
+  }
+
+  function destroyFeaturedBarChart(mountEl) {
+    if (!mountEl) return;
+    if (typeof mountEl._featuredBarCleanup === "function") {
+      mountEl._featuredBarCleanup();
+      mountEl._featuredBarCleanup = null;
+    }
+    mountEl.innerHTML = "";
+  }
+
+  function escapeHtml(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function isPercentSuffix(suffix) {
+    return String(suffix || "").trim() === "%";
+  }
+
+  function legendRightText(value, total, prefix, suffix) {
+    if (isPercentSuffix(suffix)) {
+      return formatValue(prefix, suffix, value);
+    }
+    return sharePercent(value, total);
+  }
+
+  function sharePercent(value, total) {
+    if (!total || total <= 0) return "0.0%";
+    return ((value / total) * 100).toFixed(1) + "%";
+  }
+
+  function escapeSvgText(text) {
+    return escapeHtml(text);
+  }
+
+  function axisDisplayLabel(label, slotW, n) {
+    var s = shortAxisLabel(label);
+    var fontSize = n > 8 ? 12 : 13;
+    var maxChars = Math.max(2, Math.floor((slotW - 6) / (fontSize * 0.62)));
+    if (s.length > maxChars) return s.slice(0, Math.max(1, maxChars - 1)) + "…";
+    return s;
+  }
+
+  function appendSvgAxisLabels(svg, points, activeIdx, n, padL, slotW, padT, chartH) {
+    var labelCY = padT + chartH + 14;
+    var fontSize = n > 8 ? 12 : 13;
+    var pillH = 22;
+    var i;
+    for (i = 0; i < n; i++) {
+      var cx = padL + i * slotW + slotW / 2;
+      var fullLabel = points[i].label;
+      var displayLabel = axisDisplayLabel(fullLabel, slotW, n);
+      var isActive = i === activeIdx && activeIdx >= 0;
+      svg.push('<g class="bms-featured-bar-axis-g">');
+      svg.push("<title>" + escapeHtml(fullLabel) + "</title>");
+      if (isActive) {
+        var tw = Math.min(slotW - 2, Math.max(displayLabel.length * fontSize * 0.62 + 12, 28));
+        svg.push(
+          '<rect class="bms-featured-bar-axis-pill-bg" x="' + (cx - tw / 2).toFixed(2)
+          + '" y="' + (labelCY - pillH / 2).toFixed(2) + '" width="' + tw.toFixed(2)
+          + '" height="' + pillH + '" rx="9" fill="#eaf5ff"/>'
+        );
+        svg.push(
+          '<text class="bms-featured-bar-axis-pill-text" x="' + cx.toFixed(2) + '" y="' + labelCY
+          + '" text-anchor="middle" dominant-baseline="middle" fill="#1e96e8" font-size="' + fontSize
+          + '" font-weight="600" font-family="system-ui,-apple-system,sans-serif">'
+          + escapeSvgText(displayLabel) + "</text>"
+        );
+      } else {
+        svg.push(
+          '<text class="bms-featured-bar-axis-label" x="' + cx.toFixed(2) + '" y="' + labelCY
+          + '" text-anchor="middle" dominant-baseline="middle" fill="#9ca3af" font-size="' + fontSize
+          + '" font-family="system-ui,-apple-system,sans-serif">'
+          + escapeSvgText(displayLabel) + "</text>"
+        );
+      }
+      svg.push("</g>");
+    }
+  }
+
+  function buildBarSvg(model) {
+    var points = model.points;
+    var n = points.length;
+    var w = 760;
+    var h = 360;
+    var padL = 48;
+    var padR = 24;
+    var padT = 52;
+    var padB = 34;
+    var chartW = w - padL - padR;
+    var chartH = h - padT - padB;
+    var maxVal = Math.max.apply(null, points.map(function (p) { return p.value; }).concat([model.averageValue, 1]));
+    var slotW = chartW / n;
+    var barW = Math.max(44, Math.min(60, slotW * 0.62));
+    var activeIdx = model.activeIndex;
+
+    function barHeight(v) {
+      return Math.max(4, (v / maxVal) * chartH);
+    }
+    function barX(i) {
+      return padL + i * slotW + (slotW - barW) / 2;
+    }
+    function barTop(v) {
+      return padT + chartH - barHeight(v);
+    }
+
+    var svg = [];
+    svg.push('<svg class="bms-featured-bar-svg" viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="xMidYMid meet">');
+    svg.push('<defs>');
+    svg.push('<linearGradient id="fb-inactive-grad" x1="0" y1="0" x2="0" y2="1">');
+    svg.push('<stop offset="0%" stop-color="var(--featured-bar-muted, #f3f6f9)"/>');
+    svg.push('<stop offset="100%" stop-color="var(--featured-bar-grid, #edf2f7)"/>');
+    svg.push('</linearGradient>');
+    svg.push('<linearGradient id="fb-active-grad" x1="0" y1="0" x2="0" y2="1">');
+    svg.push('<stop offset="0%" stop-color="var(--featured-bar-blue, #1e96e8)"/>');
+    svg.push('<stop offset="100%" stop-color="var(--featured-bar-blue-dark, #1570b8)"/>');
+    svg.push('</linearGradient>');
+    svg.push('<pattern id="fb-stripe-inactive" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">');
+    svg.push('<rect width="7" height="7" fill="transparent"/>');
+    svg.push('<line x1="0" y1="0" x2="0" y2="7" stroke="#cbd5e1" stroke-width="2.2" stroke-linecap="round"/>');
+    svg.push('</pattern>');
+    svg.push('<pattern id="fb-stripe-active" patternUnits="userSpaceOnUse" width="7" height="7" patternTransform="rotate(45)">');
+    svg.push('<rect width="7" height="7" fill="transparent"/>');
+    svg.push('<line x1="0" y1="0" x2="0" y2="7" stroke="rgba(255,255,255,0.28)" stroke-width="2.2" stroke-linecap="round"/>');
+    svg.push('</pattern>');
+    svg.push('<filter id="fb-bar-shadow" x="-20%" y="-20%" width="140%" height="140%">');
+    svg.push('<feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="rgba(30,150,232,0.18)"/>');
+    svg.push('</filter>');
+    svg.push('</defs>');
+
+    var barMetas = [];
+    var activeMeta = null;
+    var avgLineYPct = null;
+    if (model.showAverageLine) {
+      var avgY = padT + chartH - (model.averageValue / maxVal) * chartH;
+      avgLineYPct = (avgY / h) * 100;
+      svg.push('<line class="bms-featured-bar-avg" x1="' + padL + '" y1="' + avgY.toFixed(2) + '" x2="' + (w - padR) + '" y2="' + avgY.toFixed(2) + '" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 6"/>');
+    }
+    for (var i = 0; i < n; i++) {
+      var isActive = i === activeIdx && activeIdx >= 0;
+      var barVal = points[i].value;
+      var bh = barHeight(barVal);
+      var bx = barX(i);
+      var by = padT + chartH - bh;
+      var brx = Math.min(18, bh / 2);
+      var centerX = bx + barW / 2;
+      var hasValue = barVal > 0;
+
+      if (!isActive) {
+        svg.push('<rect class="bms-featured-bar-rect bms-featured-bar-rect--inactive" x="' + bx.toFixed(2) + '" y="' + by.toFixed(2) + '" width="' + barW.toFixed(2) + '" height="' + bh.toFixed(2) + '" rx="' + brx.toFixed(2) + '" fill="url(#fb-inactive-grad)" stroke="#e5e7eb" stroke-width="1"/>');
+        if (hasValue) {
+          svg.push('<rect x="' + bx.toFixed(2) + '" y="' + by.toFixed(2) + '" width="' + barW.toFixed(2) + '" height="' + bh.toFixed(2) + '" rx="' + brx.toFixed(2) + '" fill="url(#fb-stripe-inactive)" opacity="0.72"/>');
+        }
+      } else {
+        svg.push('<rect class="bms-featured-bar-rect bms-featured-bar-rect--active" x="' + bx.toFixed(2) + '" y="' + by.toFixed(2) + '" width="' + barW.toFixed(2) + '" height="' + bh.toFixed(2) + '" rx="' + brx.toFixed(2) + '" fill="url(#fb-active-grad)" filter="url(#fb-bar-shadow)"/>');
+        if (hasValue) {
+          svg.push('<rect x="' + bx.toFixed(2) + '" y="' + by.toFixed(2) + '" width="' + barW.toFixed(2) + '" height="' + bh.toFixed(2) + '" rx="' + brx.toFixed(2) + '" fill="url(#fb-stripe-active)" opacity="0.55"/>');
+          svg.push('<circle class="bms-featured-bar-dot" cx="' + centerX.toFixed(2) + '" cy="' + by.toFixed(2) + '" r="7" fill="var(--featured-bar-blue, #1e96e8)" stroke="#fff" stroke-width="3"/>');
+        }
+        activeMeta = {
+          index: i,
+          xPct: (centerX / w) * 100,
+          yPct: (by / h) * 100,
+          value: points[i].value,
+          label: points[i].label,
+          isActive: true,
+        };
+      }
+
+      barMetas.push({
+        index: i,
+        label: points[i].label,
+        value: points[i].value,
+        xPct: (centerX / w) * 100,
+        yPct: (by / h) * 100,
+        isActive: isActive,
+      });
+
+      var hitY = padT;
+      var hitH = chartH;
+      svg.push(
+        '<rect class="bms-featured-bar-hit" data-index="' + i + '" x="' + (padL + i * slotW).toFixed(2)
+        + '" y="' + hitY + '" width="' + slotW.toFixed(2) + '" height="' + hitH
+        + '" fill="transparent" pointer-events="all"/>'
+      );
+    }
+
+    appendSvgAxisLabels(svg, points, activeIdx, n, padL, slotW, padT, chartH);
+
+    svg.push('</svg>');
+    return {
+      html: svg.join(""),
+      activeMeta: activeMeta,
+      barMetas: barMetas,
+      avgLineYPct: avgLineYPct,
+    };
+  }
+
+  function bindBarHoverTips(chartWrap, model, barMetas) {
+    if (!model.showTooltip || !barMetas.length) return function () {};
+
+    var total = 0;
+    model.points.forEach(function (p) { total += p.value; });
+
+    var hoverTip = document.createElement("div");
+    hoverTip.className = "bms-featured-bar-hover-tip";
+    chartWrap.appendChild(hoverTip);
+
+    function showTip(meta) {
+      if (!meta) return;
+      var swatchClass = meta.isActive
+        ? "bms-featured-bar-hover-tip-swatch bms-featured-bar-hover-tip-swatch--active"
+        : "bms-featured-bar-hover-tip-swatch bms-featured-bar-hover-tip-swatch--inactive";
+      var valueText = formatValue(model.valuePrefix, model.valueSuffix, meta.value);
+      var rightText = legendRightText(meta.value, total, model.valuePrefix, model.valueSuffix);
+      var pctSuffix = isPercentSuffix(model.valueSuffix)
+        ? ""
+        : ' <span class="bms-featured-bar-hover-tip-pct">(' + escapeHtml(rightText) + ")</span>";
+      hoverTip.innerHTML =
+        '<div class="bms-featured-bar-hover-tip-title">' + escapeHtml(meta.label) + "</div>"
+        + '<div class="bms-featured-bar-hover-tip-row">'
+        + '<span class="' + swatchClass + '" aria-hidden="true"></span>'
+        + '<span class="bms-featured-bar-hover-tip-value">' + escapeHtml(valueText) + pctSuffix + "</span>"
+        + "</div>";
+      hoverTip.style.left = meta.xPct + "%";
+      hoverTip.style.top = meta.yPct + "%";
+      hoverTip.style.transform = "translate(-50%, calc(-100% - 4px))";
+      if (hoverTip.classList) hoverTip.classList.add("is-visible");
+      else hoverTip.className = "bms-featured-bar-hover-tip is-visible";
+    }
+
+    function hideTip() {
+      if (hoverTip.classList) hoverTip.classList.remove("is-visible");
+      else hoverTip.className = "bms-featured-bar-hover-tip";
+    }
+
+    var handlers = [];
+    var hits = chartWrap.querySelectorAll ? chartWrap.querySelectorAll(".bms-featured-bar-hit") : [];
+    for (var hi = 0; hi < hits.length; hi++) {
+      (function (hit) {
+        var idx = Number(hit.getAttribute && hit.getAttribute("data-index"));
+        var meta = barMetas[idx];
+        if (!meta || !hit.addEventListener) return;
+        function onEnter() { showTip(meta); }
+        function onLeave() { hideTip(); }
+        hit.addEventListener("mouseenter", onEnter);
+        hit.addEventListener("mouseleave", onLeave);
+        handlers.push({ hit: hit, onEnter: onEnter, onLeave: onLeave });
+      })(hits[hi]);
+    }
+
+    return function () {
+      handlers.forEach(function (h) {
+        h.hit.removeEventListener("mouseenter", h.onEnter);
+        h.hit.removeEventListener("mouseleave", h.onLeave);
+      });
+      if (hoverTip.parentNode) hoverTip.parentNode.removeChild(hoverTip);
+    };
+  }
+
+  function buildLegendSummary(model) {
+    if (!model.showSummaryLegend) return null;
+    var points = model.points;
+    if (!points.length || points.length > 5) return null;
+
+    var total = 0;
+    points.forEach(function (p) { total += p.value; });
+
+    var legend = document.createElement("div");
+    legend.className = "bms-featured-legend";
+
+    points.forEach(function (p, idx) {
+      var isActive = idx === model.activeIndex && model.activeIndex >= 0;
+      var row = document.createElement("div");
+      row.className = "bms-featured-legend-row";
+
+      var swatch = document.createElement("span");
+      swatch.className = "bms-featured-legend-swatch" + (isActive ? " is-active" : "");
+      if (typeof swatch.setAttribute === "function") {
+        swatch.setAttribute("aria-hidden", "true");
+      }
+
+      var label = document.createElement("span");
+      label.className = "bms-featured-legend-label";
+      label.textContent = p.label;
+      label.title = p.label;
+
+      var valueEl = document.createElement("span");
+      valueEl.className = "bms-featured-legend-value";
+      valueEl.textContent = legendRightText(p.value, total, model.valuePrefix, model.valueSuffix);
+
+      row.appendChild(swatch);
+      row.appendChild(label);
+      row.appendChild(valueEl);
+      legend.appendChild(row);
+    });
+
+    return legend;
+  }
+
+  function renderFeaturedBarChart(mountEl, widget, apiData) {
+    if (!mountEl) return;
+    destroyFeaturedBarChart(mountEl);
+
+    var model = normalizeFeaturedBarData(widget, apiData);
+    if (model.unsupported) {
+      mountEl.innerHTML = '<p class="state-msg">重点柱状暂不支持负值</p>';
+      return;
+    }
+    if (model.empty) {
+      mountEl.innerHTML = '<p class="state-msg">暂无数据</p>';
+      return;
+    }
+
+    var card = document.createElement("div");
+    card.className = "bms-featured-bar-card";
+
+    var chartWrap = document.createElement("div");
+    chartWrap.className = "bms-featured-bar-chart";
+    var built = buildBarSvg(model);
+    chartWrap.innerHTML = built.html;
+
+    if (model.showAverageLine && built.avgLineYPct != null) {
+      var avgLabel = document.createElement("div");
+      avgLabel.className = "bms-featured-bar-average-label";
+      avgLabel.textContent = model.averageLabel;
+      avgLabel.style.top = built.avgLineYPct + "%";
+      chartWrap.appendChild(avgLabel);
+    }
+
+    var unbindHover = bindBarHoverTips(chartWrap, model, built.barMetas || []);
+    card.appendChild(chartWrap);
+
+    var legendEl = buildLegendSummary(model);
+    if (legendEl) card.appendChild(legendEl);
+
+    mountEl.appendChild(card);
+
+    var ro = null;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(function () { /* responsive via CSS */ });
+      ro.observe(mountEl);
+    }
+    mountEl._featuredBarCleanup = function () {
+      if (typeof unbindHover === "function") unbindHover();
+      if (ro) ro.disconnect();
+    };
+  }
+
+  global.CrmFeaturedBarChartKit = {
+    normalizeFeaturedBarData: normalizeFeaturedBarData,
+    renderFeaturedBarChart: renderFeaturedBarChart,
+    destroyFeaturedBarChart: destroyFeaturedBarChart,
+  };
+})(typeof window !== "undefined" ? window : globalThis);

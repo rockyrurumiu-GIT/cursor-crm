@@ -121,8 +121,163 @@
 .num-sub { font-size: 0.78rem; color: #98a2b3; }
 .chart-area { display: flex; flex-direction: column; width: 100%; min-height: 0; gap: 0.6rem; }
 .dash-card .chart-area { padding: 4px 2px 0; }
-.chart-canvas-wrap { position: relative; flex: 1; min-width: 0; min-height: 260px; }
-.chart-canvas-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+.chart-canvas-wrap { position: relative; flex: 1; min-width: 0; min-height: 260px; display: flex; flex-direction: column; }
+.chart-canvas-wrap canvas { display: block; width: 100% !important; height: 100% !important; flex: 1; min-height: 260px; }
+.chart-canvas-wrap .bms-featured-line-mount { flex: 1; min-height: 260px; width: 100%; }
+.bms-featured-line-mount { width: 100%; height: 100%; min-height: 260px; display: flex; }
+.bms-featured-line-card {
+  display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 220px;
+  background: #fff; border-radius: 16px; padding: 20px 22px 16px; box-sizing: border-box;
+  overflow: visible;
+}
+.bms-featured-line-header { display: flex; align-items: center; gap: 0.45rem; margin-bottom: 0.65rem; color: #6b7280; }
+.bms-featured-line-icon { display: inline-flex; width: 18px; height: 18px; color: #9ca3af; flex-shrink: 0; }
+.bms-featured-line-icon svg { width: 18px; height: 18px; }
+.bms-featured-line-title { font-size: 0.82rem; font-weight: 600; color: #374151; flex: 1; min-width: 0; }
+.bms-featured-line-info { display: inline-flex; width: 16px; height: 16px; color: #c4c9d0; flex-shrink: 0; cursor: help; }
+.bms-featured-line-info svg { width: 16px; height: 16px; }
+.bms-featured-line-metrics { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.55rem 0.75rem; margin-bottom: 0.75rem; }
+.bms-featured-line-value-wrap { display: flex; align-items: baseline; gap: 0.25rem; flex-wrap: wrap; }
+.bms-featured-line-value { font-size: 1.65rem; font-weight: 700; color: #1f2328; line-height: 1.15; letter-spacing: -0.02em; }
+.bms-featured-line-value-note { font-size: 0.72rem; color: #98a2b3; margin-left: 0.25rem; }
+.bms-featured-line-point { fill: #fff; stroke: #1e96e8; stroke-width: 2; }
+.bms-featured-line-point-label {
+  position: absolute; transform: translate(-50%, -100%);
+  font-size: 0.82rem; font-weight: 600; color: #6b7280;
+  pointer-events: none; line-height: 1.2; z-index: 1;
+}
+.bms-featured-line-value--empty { font-size: 1rem; font-weight: 600; color: #98a2b3; }
+.bms-featured-line-delta {
+  display: inline-flex; align-items: center; padding: 0.15rem 0.45rem; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; line-height: 1.3;
+}
+.bms-featured-line-delta--up { color: #15803d; background: #ecfdf3; }
+.bms-featured-line-delta--down { color: #b91c1c; background: #fef2f2; }
+.bms-featured-line-comparison { font-size: 0.72rem; color: #98a2b3; }
+.bms-featured-kpi-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.55rem 0.75rem; margin-bottom: 0.25rem; }
+.bms-featured-main-value { font-size: 1.75rem; font-weight: 700; color: #1f2328; line-height: 1.1; letter-spacing: -0.02em; }
+.bms-featured-main-caption { font-size: 0.82rem; color: #98a2b3; }
+.bms-featured-delta-chip {
+  display: inline-flex; align-items: center; padding: 0.15rem 0.45rem; border-radius: 999px;
+  font-size: 0.78rem; font-weight: 600; line-height: 1.3;
+}
+.bms-featured-delta-chip--up { color: #15803d; background: #ecfdf3; }
+.bms-featured-delta-chip--down { color: #b91c1c; background: #fef2f2; }
+.bms-featured-delta-label { font-size: 0.78rem; color: #98a2b3; }
+.bms-featured-line-chart { position: relative; flex: 1; min-height: 160px; width: 100%; overflow: visible; padding-top: 0.35rem; }
+.bms-featured-line-svg { display: block; width: 100%; height: 100%; min-height: 160px; }
+.bms-featured-line-chart-empty { min-height: 160px; }
+.bms-featured-line-tooltip {
+  position: absolute; transform: translate(-50%, -100%); padding: 0.35rem 0.65rem;
+  background: #fff; border-radius: 8px; box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  font-size: 0.82rem; font-weight: 600; color: #1f2328; white-space: nowrap; pointer-events: none; z-index: 3;
+}
+.bms-featured-line-average-label {
+  position: absolute; left: 0; transform: translateY(-50%);
+  background: #111827; color: #fff; border-radius: 4px;
+  padding: 0.18rem 0.35rem; font-size: 0.72rem; font-weight: 600;
+  pointer-events: none; z-index: 2;
+}
+.bms-featured-line-average-label::after {
+  content: "";
+  position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
+  border-left: 5px solid #111827;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+.bms-featured-line-axis {
+  position: relative; min-height: 1.4rem; margin-top: 0.55rem; overflow: visible; padding-bottom: 0.15rem;
+}
+.bms-featured-line-axis-pill {
+  position: absolute; bottom: 0; transform: translateX(-50%);
+  max-width: var(--fl-axis-pill-max, 5.5rem); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 0.8125rem; color: #6b7280; padding: 0.2rem 0.25rem; border-radius: 999px; text-align: center;
+}
+.bms-featured-line-axis-pill.is-active { color: #1e96e8; background: #eaf5ff; font-weight: 600; }
+.chart-canvas-wrap .bms-featured-bar-mount { flex: 1; min-height: 260px; width: 100%; }
+.bms-featured-bar-mount {
+  --featured-bar-blue: #1e96e8;
+  --featured-bar-blue-dark: #1570b8;
+  --featured-bar-blue-soft: #eaf5ff;
+  --featured-bar-muted: #f3f6f9;
+  --featured-bar-grid: #edf2f7;
+  width: 100%; height: 100%; min-height: 260px; display: flex;
+}
+.bms-featured-bar-card {
+  display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 260px;
+  background: #fff; border-radius: 16px; padding: 16px 18px 14px; box-sizing: border-box;
+}
+.bms-featured-bar-chart { position: relative; flex: 1; min-height: 180px; width: 100%; }
+.bms-featured-bar-svg { display: block; width: 100%; height: 100%; min-height: 180px; }
+.bms-featured-bar-average-label {
+  position: absolute; left: 0; z-index: 3; pointer-events: none;
+  transform: translateY(-50%);
+  display: inline-flex; align-items: center;
+  padding: 0.22rem 0.5rem 0.22rem 0.42rem;
+  background: #1f2328; color: #fff;
+  font-size: 0.68rem; font-weight: 600; line-height: 1.2;
+  border-radius: 6px 2px 2px 6px; white-space: nowrap;
+}
+.bms-featured-bar-average-label::after {
+  content: ""; position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
+  border: 5px solid transparent; border-left-color: #1f2328;
+}
+.bms-featured-bar-hit { cursor: default; }
+.bms-featured-bar-hover-tip {
+  position: absolute;
+  min-width: 108px; max-width: 220px; padding: 0.55rem 0.65rem;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  pointer-events: none; z-index: 4; opacity: 0; visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+.bms-featured-bar-hover-tip.is-visible { opacity: 1; visibility: visible; }
+.bms-featured-bar-hover-tip::after {
+  content: ""; position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: #fff;
+  filter: drop-shadow(0 1px 0 #e5e7eb);
+}
+.bms-featured-bar-hover-tip-title {
+  font-size: 0.78rem; font-weight: 600; color: #374151; margin-bottom: 0.35rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bms-featured-bar-hover-tip-row {
+  display: flex; align-items: center; gap: 0.45rem; font-size: 0.75rem; color: #6b7280;
+}
+.bms-featured-bar-hover-tip-swatch {
+  width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+}
+.bms-featured-bar-hover-tip-swatch--active { background: var(--featured-bar-blue, #1e96e8); }
+.bms-featured-bar-hover-tip-swatch--inactive {
+  background: linear-gradient(135deg, #f3f6f9 25%, #edf2f7 25%, #edf2f7 50%, #f3f6f9 50%, #f3f6f9 75%, #edf2f7 75%, #edf2f7);
+  background-size: 6px 6px;
+  border: 1px solid #e5e7eb;
+}
+.bms-featured-bar-hover-tip-value { font-weight: 500; color: #6b7280; white-space: nowrap; }
+.bms-featured-bar-hover-tip-pct { color: #9ca3af; font-weight: 400; }
+.bms-featured-legend { margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid #eef0f2; }
+.bms-featured-legend-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; }
+.bms-featured-legend-swatch {
+  width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+  background: linear-gradient(135deg, #f3f6f9 25%, #edf2f7 25%, #edf2f7 50%, #f3f6f9 50%, #f3f6f9 75%, #edf2f7 75%, #edf2f7);
+  background-size: 6px 6px;
+  border: 1px solid #e5e7eb;
+}
+.bms-featured-legend-swatch.is-active { background: #1e96e8; border-color: #1e96e8; }
+.bms-featured-legend-label { flex: 1; font-size: 0.82rem; color: #1f2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bms-featured-legend-value { font-size: 0.82rem; font-weight: 600; color: #1f2328; flex-shrink: 0; }
+.bms-grouped-composition { margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid #eef0f2; min-width: 0; }
+.bms-grouped-composition-strip { display: flex; gap: 6px; height: 48px; align-items: stretch; min-width: 0; }
+.bms-grouped-composition-segment { display: block; border-radius: 16px; min-width: 4px; flex-shrink: 1; }
+.bms-grouped-composition-legend { margin-top: 0.55rem; max-height: 140px; overflow-y: auto; min-width: 0; }
+.bms-grouped-composition-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; min-width: 0; }
+.bms-grouped-composition-swatch { width: 16px; height: 16px; border-radius: 5px; flex-shrink: 0; }
+.bms-grouped-composition-label { flex: 1; font-size: 0.82rem; color: #1f2328; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bms-grouped-composition-value { font-size: 0.82rem; font-weight: 600; color: #1f2328; flex-shrink: 0; min-width: 2.5rem; text-align: right; }
+.bms-featured-bar-svg .bms-featured-bar-axis-label,
+.bms-featured-bar-svg .bms-featured-bar-axis-pill-text {
+  user-select: none; pointer-events: none;
+}
 .chart-hint { margin: 0 0 0.35rem; font-size: 0.72rem; color: #98a2b3; flex-shrink: 0; }
 .state-msg { width: 100%; text-align: center; align-self: center; font-size: 0.85rem; color: #98a2b3; }
 .state-forbidden { color: #cf222e; }
@@ -698,7 +853,9 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                         <div class="rms-dash-filter-shell text-sm">
                             <div class="rms-dash-filter-toolbar">
                                 <button type="button"
-                                    class="rms-dash-filter-toggle is-active"
+                                    class="rms-dash-filter-toggle"
+                                    :class="{ 'is-active': filterPanelExpanded }"
+                                    :aria-pressed="filterPanelExpanded ? 'true' : 'false'"
                                     aria-label="筛选"
                                     @click.stop="filterPanelExpanded = !filterPanelExpanded">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
@@ -831,7 +988,9 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             <p v-else-if="item.block === 'chart_client_job_stage_stacked'" class="chart-hint">按岗位展示待客筛、待面试、一面通过、二面通过、放弃面试（横向堆叠）</p>
                             <p v-else-if="item.block === 'chart_client_job_stage_funnel'" class="chart-hint">当前筛选合计：推送 → 内筛 → 客筛 → 一面 → 二面</p>
                             <div class="chart-canvas-wrap">
-                                <canvas :id="chartCanvasId(item.widget)"></canvas>
+                                <canvas v-if="!isRmsFeaturedChartPreset(item.widget)" :key="'cv-' + item.widget.id" :id="chartCanvasId(item.widget)"></canvas>
+                                <div v-else-if="isRmsFeaturedLinePreset(item.widget)" v-once :key="'fl-' + item.widget.id" :id="featuredPresetMountId(item.widget)" class="bms-featured-line-mount"></div>
+                                <div v-else-if="isRmsFeaturedBarPreset(item.widget)" v-once :key="'fb-' + item.widget.id" :id="featuredPresetMountId(item.widget)" class="bms-featured-bar-mount"></div>
                             </div>
                         </div>
                     </template>
@@ -1133,6 +1292,28 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             </div>
                         </div>
                     </template>
+                    <template v-else-if="item.widget.widget_type === 'featured_line'">
+                        <div class="chart-area">
+                            <div class="chart-canvas-wrap">
+                                <div :id="featuredLineMountId(item.widget)" class="bms-featured-line-mount"></div>
+                            </div>
+                        </div>
+                    </template>
+                    <template v-else-if="item.widget.widget_type === 'featured_bar'">
+                        <div class="chart-area">
+                            <div class="chart-canvas-wrap">
+                                <canvas
+                                    :id="cardCanvasId(item)"
+                                    v-show="item.widget.config && item.widget.config.secondary_axis_field"
+                                ></canvas>
+                                <div
+                                    :id="featuredBarMountId(item.widget)"
+                                    class="bms-featured-bar-mount"
+                                    v-show="!(item.widget.config && item.widget.config.secondary_axis_field)"
+                                ></div>
+                            </div>
+                        </div>
+                    </template>
                     <template v-else-if="['bar','horizontal_bar','pie','line'].includes(item.widget.widget_type)">
                         <div class="chart-area">
                             <div class="chart-canvas-wrap">
@@ -1288,7 +1469,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                       @click="selectPresetMetric('pass_rate')">五率通过率</span>
                             </div>
                         </div>
-                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker">
+                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker" v-if="!(widgetForm.config.style && widgetForm.config.style.chart_type === 'featured_bar')">
                             <label>颜色</label>
                             <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
                                 <span class="color-picker-value">
@@ -1310,13 +1491,40 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                 </div>
                             </div>
                         </div>
-                        <div class="field">
+                        <div class="field" v-if="widgetForm.config.block !== 'chart_lifecycle_pass_rate' || !widgetForm.config.style || (widgetForm.config.style.chart_type !== 'featured_line' && widgetForm.config.style.chart_type !== 'featured_bar')">
                             <label>排序</label>
                             <select v-model="widgetForm.config.style.sort">
                                 <option value="value_desc">数值降序</option>
                                 <option value="value_asc">数值升序</option>
                                 <option value="original">原始顺序</option>
                             </select>
+                        </div>
+                        <div v-else class="field">
+                            <label>排序</label>
+                            <span class="inspector-row-value muted" style="display:block;padding:0.35rem 0;font-size:0.83rem;color:#98a2b3">原始顺序（五率重点图固定）</span>
+                        </div>
+                        <template v-if="widgetForm.config.style && widgetForm.config.style.chart_type === 'featured_line'">
+                            <div class="field">
+                                <label>主指标口径</label>
+                                <select v-model="widgetForm.config.style.featured_value_mode">
+                                    <option value="auto">自动</option>
+                                    <option value="sum">总和</option>
+                                    <option value="latest">最新值</option>
+                                    <option value="average">平均值</option>
+                                </select>
+                            </div>
+                            <div class="toggle-row"><span>显示点位数值</span><input type="checkbox" v-model="widgetForm.config.style.show_point_values" /></div>
+                        </template>
+                        <template v-if="widgetForm.config.style && widgetForm.config.style.chart_type === 'featured_bar'">
+                            <div class="field"><label>平均线文案</label><input v-model="widgetForm.config.style.average_label" placeholder="Avg" /></div>
+                            <div class="toggle-row"><span>显示平均线</span><input type="checkbox" v-model="widgetForm.config.style.show_average_line" /></div>
+                            <div class="toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.style.show_tooltip" /></div>
+                            <div class="toggle-row"><span>显示摘要图例</span><input type="checkbox" v-model="widgetForm.config.style.show_summary_legend" /></div>
+                            <div class="toggle-row"><span>高亮最新项</span><input type="checkbox" v-model="widgetForm.config.style.highlight_latest" /></div>
+                        </template>
+                        <div v-if="isRmsPresetGroupedChartBlock(widgetForm.config.block)" class="toggle-row">
+                            <span>显示分组构成</span>
+                            <input type="checkbox" v-model="widgetForm.config.style.show_group_composition" />
                         </div>
                         <div class="toggle-row">
                             <span>显示网格线</span>
@@ -1427,7 +1635,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
 
                     <div v-if="isChart" class="inspector-section">
                         <div class="inspector-section-title">Style</div>
-                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker">
+                        <div v-if="widgetForm.widget_type !== 'featured_bar'" class="field color-picker-wrap" v-click-outside="closeColorPicker">
                             <label>颜色</label>
                             <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
                                 <span class="color-picker-value">
@@ -1453,12 +1661,42 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             <span class="inspector-row-label">轴名称</span>
                             <span class="inspector-row-value">{{ axisNameDisplayLabel(widgetForm.config.axis_name_display) }}</span>
                         </div>
+                        <div class="field"><label>前缀</label><input v-model="widgetForm.config.prefix" placeholder="例如 $" /></div>
+                        <div class="field"><label>后缀</label><input v-model="widgetForm.config.suffix" placeholder="例如 %" /></div>
+                        <template v-if="widgetForm.widget_type === 'featured_line'">
+                            <div class="field">
+                                <label>主指标口径</label>
+                                <select v-model="widgetForm.config.featured_value_mode">
+                                    <option value="auto">自动</option>
+                                    <option value="sum">总和</option>
+                                    <option value="latest">最新值</option>
+                                    <option value="average">平均值</option>
+                                </select>
+                            </div>
+                            <div class="field"><label>对比说明</label><input v-model="widgetForm.config.comparison_label" placeholder="较上期" /></div>
+                            <div class="field"><label>平均线文案</label><input v-model="widgetForm.config.average_label" placeholder="Avg" /></div>
+                            <div class="toggle-row"><span>显示平均线</span><input type="checkbox" v-model="widgetForm.config.show_average_line" /></div>
+                            <div class="toggle-row"><span>显示对比标签</span><input type="checkbox" v-model="widgetForm.config.show_comparison" /></div>
+                            <div class="toggle-row"><span>高亮最新点</span><input type="checkbox" v-model="widgetForm.config.highlight_latest" /></div>
+                            <div class="toggle-row"><span>显示点位数值</span><input type="checkbox" v-model="widgetForm.config.show_point_values" /></div>
+                        </template>
+                        <template v-if="widgetForm.widget_type === 'featured_bar'">
+                            <div class="field"><label>平均线文案</label><input v-model="widgetForm.config.average_label" placeholder="Avg" /></div>
+                            <div class="toggle-row"><span>显示平均线</span><input type="checkbox" v-model="widgetForm.config.show_average_line" /></div>
+                            <div class="toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.show_tooltip" /></div>
+                            <div class="toggle-row"><span>显示摘要图例</span><input type="checkbox" v-model="widgetForm.config.show_summary_legend" /></div>
+                            <div class="toggle-row"><span>高亮最新项</span><input type="checkbox" v-model="widgetForm.config.highlight_latest" /></div>
+                        </template>
                         <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.widget_type !== 'line'" class="toggle-row">
                             <span>堆叠条形图</span>
                             <input type="checkbox" :checked="widgetForm.config.group_mode === 'stacked'" @change="toggleGroupMode" />
                         </div>
-                        <div class="toggle-row"><span>数据标签</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></div>
-                        <div class="toggle-row"><span>Legend</span><input type="checkbox" v-model="widgetForm.config.display_legend" /></div>
+                        <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="toggle-row">
+                            <span>显示分组构成</span>
+                            <input type="checkbox" v-model="widgetForm.config.show_group_composition" />
+                        </div>
+                        <div v-if="widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'featured_bar'" class="toggle-row"><span>数据标签</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></div>
+                        <div v-if="widgetForm.widget_type !== 'featured_bar'" class="toggle-row"><span>Legend</span><input type="checkbox" v-model="widgetForm.config.display_legend" /></div>
                         <div v-if="widgetForm.widget_type === 'pie'" class="toggle-row"><span>中心显示总计</span><input type="checkbox" v-model="widgetForm.config.show_value_center" /></div>
                         <div v-if="widgetForm.widget_type === 'horizontal_bar'" class="field">
                             <label>显示条数</label>
@@ -1466,7 +1704,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                         </div>
                     </div>
 
-                    <details v-if="isChart" class="inspector-collapsible">
+                    <details v-if="isChart && widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'featured_bar'" class="inspector-collapsible">
                         <summary>附加展示</summary>
                         <div v-for="(ev, evIdx) in widgetForm.config.extra_views" :key="'ev-' + evIdx" class="extra-view-row">
                             <div class="field">
@@ -1525,11 +1763,13 @@ body.rms-dashboard-edit-mode #handbook-assistant {
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
+<script src="/static/js/shared/featured-line-chart-kit.js?v=featured-line-20260627"></script>
+<script src="/static/js/shared/featured-bar-chart-kit.js?v=featured-bar-20260627"></script>
 <script src="/static/js/shared/dashboard-widget-kit.js?v=dashboard-widget-kit-twenty-12"></script>
 <script src="/static/js/pages/rms-core.js?v=rms-core-list-pagination-20260627"></script>
-<script src="/static/js/pages/rms-dashboard-core.js?v=dashboard-zero-resume-filter-20260627"></script>
+<script src="/static/js/pages/rms-dashboard-core.js?v=featured-bar-rms-20260627"></script>
 <script src="/static/js/pages/rms-dashboard-metrics.js?v=dashboard-zero-resume-filter-20260627"></script>
-<script src="/static/js/pages/rms-dashboard-charts.js?v=dashboard-five-rates-pct-20260627"></script>
-<script src="/static/js/pages/rms-dashboard-inspector.js?v=dashboard-metric-persist-20260627"></script>
-<script src="/static/js/pages/rms-dashboard.js?v=dashboard-zero-resume-toggle-20260627"></script>
+<script src="/static/js/pages/rms-dashboard-charts.js?v=featured-bar-rms-20260627"></script>
+<script src="/static/js/pages/rms-dashboard-inspector.js?v=featured-bar-rms-20260627"></script>
+<script src="/static/js/pages/rms-dashboard.js?v=featured-bar-rms-20260627"></script>
 {% endblock %}

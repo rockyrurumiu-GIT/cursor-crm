@@ -133,6 +133,18 @@
     return "rms-chart-" + w.id;
   }
 
+  function featuredPresetMountId(w) {
+    return chartCanvasId(w) + "-featured";
+  }
+
+  function featuredLineMountId(w) {
+    return "rms-featured-line-" + w.id;
+  }
+
+  function featuredBarMountId(w) {
+    return "rms-featured-bar-" + w.id;
+  }
+
   function chartsAvailable() {
     return typeof Chart !== "undefined";
   }
@@ -146,6 +158,17 @@
 
   function destroyAllCharts() {
     Object.keys(chartInstances).forEach(destroyChartKey);
+    if (typeof document !== "undefined") {
+      document.querySelectorAll(".bms-featured-line-mount").forEach(function (el) {
+        if (global.CrmFeaturedLineChartKit) global.CrmFeaturedLineChartKit.destroyFeaturedLine(el);
+      });
+      document.querySelectorAll(".bms-featured-bar-mount").forEach(function (el) {
+        if (global.CrmFeaturedBarChartKit) global.CrmFeaturedBarChartKit.destroyFeaturedBarChart(el);
+      });
+      document.querySelectorAll(".chart-canvas-wrap canvas").forEach(function (canvas) {
+        canvas.style.display = "";
+      });
+    }
   }
 
   function whiteTooltip(labelFn) {
@@ -260,6 +283,9 @@
     buildQuery: buildQuery,
     widgetBlock: widgetBlock,
     chartCanvasId: chartCanvasId,
+    featuredPresetMountId: featuredPresetMountId,
+    featuredLineMountId: featuredLineMountId,
+    featuredBarMountId: featuredBarMountId,
     chartsAvailable: chartsAvailable,
     destroyChartKey: destroyChartKey,
     destroyAllCharts: destroyAllCharts,

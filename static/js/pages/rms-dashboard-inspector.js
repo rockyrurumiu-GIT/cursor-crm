@@ -28,9 +28,11 @@
     bar: "柱状",
     pie: "环形",
     line: "折线",
+    featured_line: "重点折线",
+    featured_bar: "重点柱状",
   };
 
-  var RMS_PRESET_CHART_TYPES = ["horizontal_bar", "bar", "pie", "line"];
+  var RMS_PRESET_CHART_TYPES = ["horizontal_bar", "bar", "pie", "line", "featured_line", "featured_bar"];
   var RMS_PRESET_GROUPED_CHART_TYPES = ["horizontal_bar", "bar", "line"];
 
   var RMS_LEGACY_PALETTE_MAP = {
@@ -76,13 +78,38 @@
       style.chart_type = "line";
       style.metric = "pass_rate";
     }
+    if (block === "chart_recruiter_recommend_vs_hired") {
+      style.show_group_composition = true;
+    }
     return style;
+  }
+
+  function isRmsPresetGroupedChartBlock(block) {
+    return !!RMS_PRESET_GROUPED_CHART_BLOCKS[block];
   }
 
   function rmsPresetStyle(config, block) {
     var base = defaultRmsPresetStyle(block);
     var saved = (config && config.style && typeof config.style === "object") ? config.style : {};
     return Object.assign({}, base, migrateLegacyPresetStyle(saved));
+  }
+
+  function isRmsFeaturedLinePreset(widget) {
+    if (!widget || widget.widget_type !== "rms_block") return false;
+    var block = widget.config && widget.config.block;
+    if (!isRmsPresetStyleBlock(block)) return false;
+    return rmsPresetStyle(widget.config, block).chart_type === "featured_line";
+  }
+
+  function isRmsFeaturedBarPreset(widget) {
+    if (!widget || widget.widget_type !== "rms_block") return false;
+    var block = widget.config && widget.config.block;
+    if (!isRmsPresetStyleBlock(block)) return false;
+    return rmsPresetStyle(widget.config, block).chart_type === "featured_bar";
+  }
+
+  function isRmsFeaturedChartPreset(widget) {
+    return isRmsFeaturedLinePreset(widget) || isRmsFeaturedBarPreset(widget);
   }
 
   function presetStyleColorCfg(style) {
@@ -193,10 +220,10 @@
       return KIT.DATA_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
     });
     var chartTypePills = computed(function () {
-      return ["bar", "horizontal_bar", "line", "pie", "number", "rms_block"];
+      return ["bar", "horizontal_bar", "line", "pie", "featured_line", "featured_bar", "number", "rms_block"];
     });
     var supportsSecondary = computed(function () {
-      return ["bar", "horizontal_bar", "line"].indexOf(widgetForm.value.widget_type) >= 0;
+      return ["bar", "horizontal_bar", "line", "featured_bar"].indexOf(widgetForm.value.widget_type) >= 0;
     });
     var needsDataSource = computed(function () {
       return KIT.DATA_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
@@ -386,7 +413,45 @@
         : RMS_PRESET_CHART_TYPES;
       if (allowed.indexOf(chartType) < 0) return;
       widgetForm.value.config.style.chart_type = chartType;
+      if (chartType === "featured_line") {
+        if (block === "chart_lifecycle_pass_rate") {
+          widgetForm.value.config.style.sort = "original";
+        }
+        if (widgetForm.value.config.style.featured_value_mode === undefined
+          || widgetForm.value.config.style.featured_value_mode === "") {
+          widgetForm.value.config.style.featured_value_mode = "auto";
+        }
+        if (widgetForm.value.config.style.show_point_values === undefined) {
+          widgetForm.value.config.style.show_point_values = false;
+        }
+      }
+      if (chartType === "featured_bar") {
+        if (block === "chart_lifecycle_pass_rate") {
+          widgetForm.value.config.style.sort = "original";
+        }
+        if (widgetForm.value.config.style.average_label === undefined
+          || widgetForm.value.config.style.average_label === "") {
+          widgetForm.value.config.style.average_label = "Avg";
+        }
+        if (widgetForm.value.config.style.show_average_line === undefined) {
+          widgetForm.value.config.style.show_average_line = true;
+        }
+        if (widgetForm.value.config.style.show_tooltip === undefined) {
+          widgetForm.value.config.style.show_tooltip = true;
+        }
+        if (widgetForm.value.config.style.show_summary_legend === undefined) {
+          widgetForm.value.config.style.show_summary_legend = true;
+        }
+        if (widgetForm.value.config.style.highlight_latest === undefined) {
+          widgetForm.value.config.style.highlight_latest = true;
+        }
+      }
       panelUserEdited.value = true;
+      syncWidgetFormToTab();
+      var wid = widgetForm.value.id;
+      if (wid != null) {
+        refreshWidgetChart(wid, { animate: false });
+      }
       flushPersistWidget();
     }
     function selectPresetMetric(metric) {
@@ -474,7 +539,7 @@
       selectRmsBlock(block);
     }
 
-    function typeLabel(t) { return KIT.TYPE_LABELS[t] || t; }
+    function typeLabel(t) { return RMS_PRESET_CHART_TYPE_LABELS[t] || KIT.TYPE_LABELS[t] || t; }
     function typeIcon(t) { return KIT.TYPE_ICONS[t] || "▢"; }
     function sourceLabel(key) {
       var s = (metadata.value.sources || []).find(function (x) { return x.key === key; });
@@ -962,6 +1027,7 @@
       }
       panelView.value = "main";
       activePicker.value = null;
+      syncWidgetFormToTab();
       flushPersistWidget();
     }
     function toggleGroupMode(ev) {
@@ -977,12 +1043,18 @@
       if (t === "rms_block" && widgetForm.value.config.block) {
         applyRmsBlockLayout(widgetForm.value.config.block);
       }
+      if (KIT.DATA_WIDGET_TYPES.indexOf(t) >= 0 && !widgetForm.value.source_key) {
+        widgetForm.value.source_key = "rms_applications";
+      }
       if (t === "roster_summary") {
         widgetForm.value.source_key = "roster_entries";
       }
-      if (t === "pie" || t === "number") {
+      if (t === "pie" || t === "number" || t === "featured_line") {
         widgetForm.value.config.secondary_axis_field = "";
         widgetForm.value.config.group_mode = "stacked";
+      }
+      if (t === "featured_bar") {
+        widgetForm.value.config.extra_views = [];
       }
       flushPersistWidget();
     }
@@ -1063,6 +1135,7 @@
       presetStyleColorCfg: presetStyleColorCfg,
       presetRowValue: presetRowValue,
       isRmsPresetStyleBlock: isRmsPresetStyleBlock,
+      isRmsPresetGroupedChartBlock: isRmsPresetGroupedChartBlock,
       panelOpen: panelOpen,
       panelView: panelView,
       activePicker: activePicker,
@@ -1139,6 +1212,10 @@
     presetStyleColorCfg: presetStyleColorCfg,
     presetRowValue: presetRowValue,
     isRmsPresetStyleBlock: isRmsPresetStyleBlock,
+    isRmsPresetGroupedChartBlock: isRmsPresetGroupedChartBlock,
+    isRmsFeaturedLinePreset: isRmsFeaturedLinePreset,
+    isRmsFeaturedBarPreset: isRmsFeaturedBarPreset,
+    isRmsFeaturedChartPreset: isRmsFeaturedChartPreset,
     RMS_PRESET_CHART_TYPES: RMS_PRESET_CHART_TYPES,
   };
 })(typeof window !== "undefined" ? window : globalThis);

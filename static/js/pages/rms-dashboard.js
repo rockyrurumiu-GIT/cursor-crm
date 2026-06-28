@@ -39,6 +39,9 @@
   var buildQuery = Core.buildQuery;
   var widgetBlock = Core.widgetBlock;
   var chartCanvasId = Core.chartCanvasId;
+  var featuredPresetMountId = Core.featuredPresetMountId;
+  var featuredLineMountId = Core.featuredLineMountId;
+  var featuredBarMountId = Core.featuredBarMountId;
   var chartsAvailable = Core.chartsAvailable;
   var destroyChartKey = Core.destroyChartKey;
   var destroyAllCharts = Core.destroyAllCharts;
@@ -82,6 +85,7 @@
   var watch = Vue.watch;
   var onMounted = Vue.onMounted;
   var onUnmounted = Vue.onUnmounted;
+  var onUpdated = Vue.onUpdated;
   var nextTick = Vue.nextTick;
 
   var chartInstances = Core.getChartInstances ? Core.getChartInstances() : {};
@@ -774,6 +778,8 @@
           rmsShadeRamp: rmsShadeRamp,
           parsePassRate: parsePassRate,
           truncateJobLabel: truncateJobLabel,
+          featuredLineMountId: featuredLineMountId,
+          featuredBarMountId: featuredBarMountId,
           RMS_CHART_GRID_COLOR: RMS_CHART_GRID_COLOR,
           RMS_CHART_TICK_COLOR: RMS_CHART_TICK_COLOR,
           RMS_CHART_BAR_RADIUS: RMS_CHART_BAR_RADIUS,
@@ -796,9 +802,22 @@
           recruiterRecommendVsHiredRows: recruiterRecommendVsHiredRows,
           jobStageChartRows: jobStageChartRows,
           jobStageChartTotal: jobStageChartTotal,
+          nextTick: nextTick,
+          isRmsFeaturedLinePreset: Insp.isRmsFeaturedLinePreset,
+          isRmsFeaturedBarPreset: Insp.isRmsFeaturedBarPreset,
         });
         var renderSingleWidget = charts.renderSingleWidget;
         var renderVisibleCharts = charts.renderVisibleCharts;
+        var renderFeaturedPresetWidgets = charts.renderFeaturedPresetWidgets;
+        var featuredPresetRerenderTimer = null;
+
+        function scheduleFeaturedPresetRerender() {
+          if (featuredPresetRerenderTimer) clearTimeout(featuredPresetRerenderTimer);
+          featuredPresetRerenderTimer = setTimeout(function () {
+            featuredPresetRerenderTimer = null;
+            renderFeaturedPresetWidgets();
+          }, 16);
+        }
 
         function toggleIncludeZeroResumeJobs() {
           var next = !appliedFilters.include_zero_resume_jobs;
@@ -1408,6 +1427,10 @@
           jobIdsDraft.value = prune(jobIdsDraft.value);
         });
 
+        onUpdated(function () {
+          scheduleFeaturedPresetRerender();
+        });
+
         onMounted(function () {
           var rootEl = document.getElementById(MOUNT_ID);
           initJobStageLossHintPopovers(rootEl);
@@ -1449,7 +1472,7 @@
           }).catch(function () {
             metadata.value = {
               sources: [],
-              widget_types: ["number", "bar", "horizontal_bar", "pie", "line", "roster_summary", "rms_block", "rich_text"],
+              widget_types: ["number", "bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar", "roster_summary", "rms_block", "rich_text"],
               metrics: [],
               date_groups: [],
               colors: [],
@@ -1477,6 +1500,7 @@
         });
 
         onUnmounted(function () {
+          if (featuredPresetRerenderTimer) clearTimeout(featuredPresetRerenderTimer);
           syncChatbotForEditMode(false);
           document.body.classList.remove("rms-dashboard-edit-mode");
         });
@@ -1562,6 +1586,12 @@
           activeFilterSummary: activeFilterSummary,
           tabNeedsDashboardData: tabNeedsDashboardData,
           chartCanvasId: chartCanvasId,
+          featuredPresetMountId: featuredPresetMountId,
+          featuredLineMountId: featuredLineMountId,
+          featuredBarMountId: featuredBarMountId,
+          isRmsFeaturedLinePreset: Insp.isRmsFeaturedLinePreset,
+          isRmsFeaturedBarPreset: Insp.isRmsFeaturedBarPreset,
+          isRmsFeaturedChartPreset: Insp.isRmsFeaturedChartPreset,
           cardCanvasId: cardCanvasId,
           widgetBlock: widgetBlock,
           cardStyle: cardStyle,

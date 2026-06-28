@@ -20,6 +20,8 @@
     var rmsShadeRamp = deps.rmsShadeRamp;
     var parsePassRate = deps.parsePassRate;
     var truncateJobLabel = deps.truncateJobLabel;
+    var featuredLineMountId = deps.featuredLineMountId;
+    var featuredBarMountId = deps.featuredBarMountId;
 
     var RMS_CHART_GRID_COLOR = deps.RMS_CHART_GRID_COLOR;
     var RMS_CHART_TICK_COLOR = deps.RMS_CHART_TICK_COLOR;
@@ -47,6 +49,9 @@
 
     var jobStageChartRows = deps.jobStageChartRows;
     var jobStageChartTotal = deps.jobStageChartTotal;
+    var nextTick = deps.nextTick;
+    var isRmsFeaturedLinePreset = deps.isRmsFeaturedLinePreset;
+    var isRmsFeaturedBarPreset = deps.isRmsFeaturedBarPreset;
 
     function mergeTooltipLabel(baseOptions, labelFn) {
       if (!labelFn) return baseOptions;
@@ -70,6 +75,33 @@
     function resolvePresetChartType(style) {
       var t = (style && style.chart_type) || "horizontal_bar";
       return RMS_PRESET_CHART_TYPES.indexOf(t) >= 0 ? t : "horizontal_bar";
+    }
+
+    function isLifecyclePassRateFeaturedContext(style, opts) {
+      opts = opts || {};
+      if (opts.blockKey === "chart_lifecycle_pass_rate") return true;
+      if (opts.blockKey === "lifecycle_funnel" && (style.metric || "count") === "pass_rate") return true;
+      return false;
+    }
+
+    function applyPresetStyleRowsForSeries(rows, style, opts) {
+      opts = opts || {};
+      var out = (rows || []).slice();
+      var chartType = resolvePresetChartType(style);
+      var skipValueSort = isLifecyclePassRateFeaturedContext(style, opts)
+        || (chartType === "featured_line"
+          && global.CrmFeaturedLineChartKit
+          && global.CrmFeaturedLineChartKit.isPercentSuffix(opts.suffix));
+      if (!skipValueSort) {
+        if (style.sort === "value_asc") {
+          out.sort(function (a, b) { return presetRowValue(a) - presetRowValue(b); });
+        } else if (style.sort === "value_desc") {
+          out.sort(function (a, b) { return presetRowValue(b) - presetRowValue(a); });
+        }
+      }
+      var max = Number(style.max_items || 0);
+      if (max > 0) out = out.slice(0, max);
+      return out;
     }
 
     function presetTooltipValue(prefix, suffix, parsed) {
@@ -222,11 +254,150 @@
       return base;
     }
 
+    function scheduleFeaturedPresetRender(fn) {
+      var run = function () {
+        if (typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(fn);
+        } else {
+          fn();
+        }
+      };
+      if (typeof nextTick === "function") {
+        nextTick(function () { nextTick(run); });
+      } else {
+        setTimeout(run, 0);
+      }
+    }
+
+    function resetFeaturedMount(canvasId) {
+      var mount = document.getElementById(canvasId + "-featured");
+      if (!mount) return;
+      if (global.CrmFeaturedLineChartKit) {
+        global.CrmFeaturedLineChartKit.destroyFeaturedLine(mount);
+      }
+      if (global.CrmFeaturedBarChartKit) {
+        global.CrmFeaturedBarChartKit.destroyFeaturedBarChart(mount);
+      }
+    }
+
+    function renderFeaturedPresetChart(canvasId, rows, style, opts) {
+      opts = opts || {};
+      if (!global.CrmFeaturedLineChartKit) return;
+
+      function paintFeaturedLine() {
+        var mount = document.getElementById(canvasId + "-featured");
+        if (!mount) return false;
+        destroyChartKey(canvasId);
+        resetFeaturedMount(canvasId);
+        var prefix = opts.prefix != null ? String(opts.prefix) : "";
+        var suffix = opts.suffix != null ? String(opts.suffix) : "";
+        var labels = rows.map(function (r) { return r.label; });
+        var values = rows.map(presetRowValue);
+        var total = values.reduce(function (sum, v) { return sum + v; }, 0);
+        var palette = paletteForStyle(style);
+        var accent = palette[KIT.selectedShade(presetStyleColorCfg(style))];
+        var apiData = {
+          status: "ok",
+          kind: "series",
+          labels: labels,
+          values: values,
+          total: total,
+          prefix: prefix,
+          suffix: suffix,
+        };
+        var widget = {
+          title: opts.title || "",
+          config: {
+            prefix: prefix,
+            suffix: suffix,
+            comparison_label: style.comparison_label || "较上期",
+            average_label: style.average_label || "",
+            show_average_line: style.show_average_line !== false,
+            show_comparison: style.show_comparison !== false,
+            highlight_latest: style.highlight_latest !== false,
+            featured_value_mode: style.featured_value_mode || "auto",
+            show_point_values: style.show_point_values === true,
+            lifecycle_pass_rate: opts.blockKey === "chart_lifecycle_pass_rate"
+              || (opts.blockKey === "lifecycle_funnel" && (style.metric || "count") === "pass_rate"),
+          },
+        };
+        global.CrmFeaturedLineChartKit.renderFeaturedLine(mount, widget, apiData, { lineColor: accent });
+        return true;
+      }
+
+      scheduleFeaturedPresetRender(function () {
+        safeRenderChart(canvasId, function () {
+          if (paintFeaturedLine()) return;
+          scheduleFeaturedPresetRender(function () {
+            safeRenderChart(canvasId, paintFeaturedLine);
+          });
+        });
+      });
+    }
+
+    function renderFeaturedBarPresetChart(canvasId, rows, style, opts) {
+      opts = opts || {};
+      if (!global.CrmFeaturedBarChartKit) return;
+
+      function paintFeaturedBar() {
+        var mount = document.getElementById(canvasId + "-featured");
+        if (!mount) return false;
+        destroyChartKey(canvasId);
+        resetFeaturedMount(canvasId);
+        var prefix = opts.prefix != null ? String(opts.prefix) : "";
+        var suffix = opts.suffix != null ? String(opts.suffix) : "";
+        var labels = rows.map(function (r) { return r.label; });
+        var values = rows.map(presetRowValue);
+        var total = values.reduce(function (sum, v) { return sum + v; }, 0);
+        var apiData = {
+          status: "ok",
+          kind: "series",
+          labels: labels,
+          values: values,
+          total: total,
+          prefix: prefix,
+          suffix: suffix,
+        };
+        var widget = {
+          title: opts.title || "",
+          config: {
+            prefix: prefix,
+            suffix: suffix,
+            average_label: style.average_label || "Avg",
+            show_average_line: style.show_average_line !== false,
+            show_tooltip: style.show_tooltip !== false,
+            show_summary_legend: style.show_summary_legend !== false,
+            highlight_latest: style.highlight_latest !== false,
+          },
+        };
+        global.CrmFeaturedBarChartKit.renderFeaturedBarChart(mount, widget, apiData);
+        return true;
+      }
+
+      scheduleFeaturedPresetRender(function () {
+        safeRenderChart(canvasId, function () {
+          if (paintFeaturedBar()) return;
+          scheduleFeaturedPresetRender(function () {
+            safeRenderChart(canvasId, paintFeaturedBar);
+          });
+        });
+      });
+    }
+
     function renderPresetSeriesChart(canvasId, rows, style, opts) {
       opts = opts || {};
       var prefix = opts.prefix != null ? String(opts.prefix) : "";
       var suffix = opts.suffix != null ? String(opts.suffix) : "";
       var chartType = resolvePresetChartType(style);
+      if (chartType === "featured_line") {
+        renderFeaturedPresetChart(canvasId, rows, style, opts);
+        return;
+      }
+      if (chartType === "featured_bar") {
+        renderFeaturedBarPresetChart(canvasId, rows, style, opts);
+        return;
+      }
+      resetFeaturedMount(canvasId);
       var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
       var palette = paletteForStyle(style);
       var accent = palette[KIT.selectedShade(presetStyleColorCfg(style))];
@@ -396,6 +567,11 @@
       });
     }
 
+    function syncPresetGroupedComposition(canvas, datasets, cfg) {
+      if (!canvas || !KIT || !KIT.syncGroupedComposition) return;
+      KIT.syncGroupedComposition(canvas, { datasets: datasets }, cfg || { show_group_composition: true });
+    }
+
     function renderClientJobStageGroupedChart(canvasId) {
       if (!data.value) return;
       safeRenderChart(canvasId, function () {
@@ -419,6 +595,7 @@
           },
           options: groupedBarOptions(),
         });
+        syncPresetGroupedComposition(canvas, chartInstances[canvasId].data.datasets, { show_group_composition: true });
       });
     }
 
@@ -446,6 +623,7 @@
           },
           options: stackedHorizontalOptions(),
         });
+        syncPresetGroupedComposition(canvas, chartInstances[canvasId].data.datasets, { show_group_composition: true });
       });
     }
 
@@ -509,8 +687,12 @@
       });
     }
 
-    function renderHorizontalCountChart(canvasId, rows, emptyLabel, style) {
-      renderPresetSeriesChart(canvasId, rows, style, { prefix: emptyLabel || "", suffix: "" });
+    function renderHorizontalCountChart(canvasId, rows, emptyLabel, style, w) {
+      renderPresetSeriesChart(canvasId, rows, style, {
+        prefix: emptyLabel || "",
+        suffix: "",
+        title: w && w.title,
+      });
     }
 
     function renderPendingBacklogChart(canvasId, w) {
@@ -520,7 +702,8 @@
         canvasId,
         applyPresetStyleRows(pendingBacklogRows.value, style),
         "人数",
-        style
+        style,
+        w
       );
     }
 
@@ -564,6 +747,7 @@
       renderPresetSeriesChart(canvasId, applyPresetStyleRows(rows, style), style, {
         prefix: "",
         suffix: "",
+        title: w && w.title,
         tooltipLabel: function (c, chartRows) {
           var row = chartRows[c.dataIndex];
           var count = presetTooltipValue("", "", c.parsed);
@@ -578,11 +762,13 @@
       var block = renderOpts.blockKey || "chart_lifecycle_pass_rate";
       var style = renderOpts.style || rmsPresetStyle(w && w.config, block);
       var rows = buildLifecyclePassRateRows();
-      renderPresetSeriesChart(canvasId, applyPresetStyleRows(rows, style), style, {
+      renderPresetSeriesChart(canvasId, applyPresetStyleRowsForSeries(rows, style, { blockKey: block, suffix: "%" }), style, {
         prefix: "",
         suffix: "%",
+        title: w && w.title,
         percentScale: true,
         tooltipLabel: lifecyclePassRateTooltip,
+        blockKey: block,
       });
     }
 
@@ -593,7 +779,8 @@
         canvasId,
         applyPresetStyleRows(jobPendingBacklogRows.value, style),
         "积压",
-        style
+        style,
+        w
       );
     }
 
@@ -604,7 +791,8 @@
         canvasId,
         applyPresetStyleRows(clientHiredRankingRows.value, style),
         "入职",
-        style
+        style,
+        w
       );
     }
 
@@ -613,6 +801,7 @@
       var style = rmsPresetStyle(w && w.config, block);
       var chartType = resolvePresetChartType(style);
       if (chartType === "pie") chartType = "horizontal_bar";
+      var compCfg = { show_group_composition: style.show_group_composition !== false };
       var palette = paletteForStyle(style);
       var si = KIT.selectedShade(presetStyleColorCfg(style));
       var radius = Number(style.bar_radius) || 6;
@@ -669,6 +858,7 @@
             },
             options: lineChartOptionsForStyle("", "", style, true),
           });
+          syncPresetGroupedComposition(canvas, chartInstances[canvasId].data.datasets, compCfg);
           return;
         }
         if (chartType === "horizontal_bar") {
@@ -697,6 +887,7 @@
             },
             options: groupedHorizontalBarOptionsForStyle(style, "", ""),
           });
+          syncPresetGroupedComposition(canvas, chartInstances[canvasId].data.datasets, compCfg);
           return;
         }
         chartInstances[canvasId] = new Chart(canvas, {
@@ -724,6 +915,7 @@
           },
           options: groupedBarOptionsForStyle(style),
         });
+        syncPresetGroupedComposition(canvas, chartInstances[canvasId].data.datasets, compCfg);
       });
     }
 
@@ -785,6 +977,51 @@
       if (KIT.CHART_WIDGET_TYPES.indexOf(w.widget_type) >= 0) {
         var wd = widgetData.value[w.id];
         if (!wd) return;
+        if (w.widget_type === "featured_line" && global.CrmFeaturedLineChartKit) {
+          destroyChartKey(rmsId);
+          var flMount = document.getElementById(featuredLineMountId(w));
+          if (flMount && wd.status === "ok") {
+            var flCfg = KIT.normalizeWidgetConfig(w.config || {});
+            var flPal = KIT.widgetPalette(flCfg);
+            var flAccent = flPal[KIT.selectedShade(flCfg)];
+            global.CrmFeaturedLineChartKit.renderFeaturedLine(flMount, w, wd, { lineColor: flAccent });
+          }
+          return;
+        }
+        if (w.widget_type === "featured_bar") {
+          var secField = (w.config && w.config.secondary_axis_field) || "";
+          if (secField) {
+            var fbGroupedMount = document.getElementById(featuredBarMountId(w));
+            if (fbGroupedMount && global.CrmFeaturedBarChartKit) {
+              global.CrmFeaturedBarChartKit.destroyFeaturedBarChart(fbGroupedMount);
+            }
+            function paintFeaturedBarGrouped() {
+              var canvasId = KIT.chartCanvasId(w);
+              var canvas = document.getElementById(canvasId);
+              if (!canvas || !wd || wd.status !== "ok" || wd.kind !== "grouped_series") return false;
+              KIT.renderGroupedChart(chartInstances, destroyChartKey, w, wd, {
+                viewIndex: null,
+                animate: opts.animate !== false,
+              });
+              var chart = chartInstances[canvasId];
+              if (chart && typeof chart.resize === "function") chart.resize();
+              return !!chart;
+            }
+            scheduleFeaturedPresetRender(function () {
+              if (paintFeaturedBarGrouped()) return;
+              scheduleFeaturedPresetRender(paintFeaturedBarGrouped);
+            });
+            return;
+          }
+          destroyChartKey(KIT.chartCanvasId(w));
+          if (global.CrmFeaturedBarChartKit && wd.status === "ok") {
+            var fbMount = document.getElementById(featuredBarMountId(w));
+            if (fbMount) {
+              global.CrmFeaturedBarChartKit.renderFeaturedBarChart(fbMount, w, wd);
+            }
+          }
+          return;
+        }
         var animate = opts.animate !== false;
         KIT.renderCrmChart(chartInstances, destroyChartKey, w, wd, { viewIndex: null, animate: animate });
         var views = (w.config && w.config.extra_views) || [];
@@ -798,6 +1035,17 @@
           });
         });
       }
+    }
+
+    function renderFeaturedPresetWidgets() {
+      if (!chartsAvailable()) return;
+      var tab = activeTab.value;
+      if (!tab || !tab.widgets) return;
+      tab.widgets.forEach(function (w) {
+        var isLine = typeof isRmsFeaturedLinePreset === "function" && isRmsFeaturedLinePreset(w);
+        var isBar = typeof isRmsFeaturedBarPreset === "function" && isRmsFeaturedBarPreset(w);
+        if (isLine || isBar) renderSingleWidget(w, { animate: false });
+      });
     }
 
     function renderVisibleCharts(opts) {
@@ -814,6 +1062,8 @@
     return {
       renderSingleWidget: renderSingleWidget,
       renderVisibleCharts: renderVisibleCharts,
+      renderFeaturedPresetWidgets: renderFeaturedPresetWidgets,
+      renderFeaturedLineWidgets: renderFeaturedPresetWidgets,
     };
   }
 

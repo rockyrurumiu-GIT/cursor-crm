@@ -23,7 +23,8 @@ FieldKind = Literal["text", "numeric", "datetime"]
 # roster_summary is a dedicated delivery widget (multi-KPI card); it is a data widget
 # but NOT a chart and does not use the generic metric/group path.
 WIDGET_TYPES: FrozenSet[str] = frozenset({
-    "number", "bar", "horizontal_bar", "pie", "line", "rich_text", "iframe", "roster_summary",
+    "number", "bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar",
+    "rich_text", "iframe", "roster_summary",
     "rms_block",
 })
 
@@ -89,12 +90,13 @@ RMS_BLOCK_LABELS: Dict[str, str] = {
 }
 
 RMS_WIDGET_TYPE_DISPLAY_ORDER: Tuple[str, ...] = ("rms_block", "rich_text")
-CHART_WIDGET_TYPES: FrozenSet[str] = frozenset({"bar", "horizontal_bar", "pie", "line"})
+CHART_WIDGET_TYPES: FrozenSet[str] = frozenset({"bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar"})
 CHART_EXTRA_RENDERS: FrozenSet[str] = frozenset({"doughnut", "horizontal_bar"})
-DATA_WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "horizontal_bar", "pie", "line"})
+DATA_WIDGET_TYPES: FrozenSet[str] = frozenset({"number", "bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar"})
 # Config panel type grid order (subset of WIDGET_TYPES).
 WIDGET_TYPE_DISPLAY_ORDER: Tuple[str, ...] = (
-    "number", "bar", "horizontal_bar", "pie", "line", "rich_text", "iframe", "roster_summary",
+    "number", "bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar",
+    "rich_text", "iframe", "roster_summary",
 )
 
 METRICS: FrozenSet[str] = frozenset({"count", "sum", "avg", "min", "max"})

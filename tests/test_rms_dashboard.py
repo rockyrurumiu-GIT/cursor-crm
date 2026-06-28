@@ -354,6 +354,81 @@ def test_rms_preset_style_config_roundtrip(client_rbac, admin_auth, rms_engine, 
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
 
+def test_rms_preset_style_show_group_composition_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    overview = next(t for t in boards[0]["tabs"] if t["name"] == "总览")
+    tab_id = overview["id"]
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab_id}/widgets",
+        json={
+            "title": "推荐入职对比",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "chart_recruiter_recommend_vs_hired",
+                "style": {
+                    "color": "green",
+                    "color_shade": 2,
+                    "sort": "value_desc",
+                    "chart_type": "bar",
+                    "show_group_composition": False,
+                },
+            },
+            "x": 0,
+            "y": 40,
+            "w": 6,
+            "h": 6,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    assert created.json()["config"]["style"]["show_group_composition"] is False
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    overview = next(t for t in boards[0]["tabs"] if t["name"] == "总览")
+    saved = next(w for w in overview["widgets"] if w["id"] == wid)
+    assert saved["config"]["style"]["show_group_composition"] is False
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_widget_show_group_composition_config_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        widget_type="bar",
+        source_key="rms_applications",
+        config={
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "secondary_axis_field": "client_id",
+            "group_mode": "stacked",
+            "show_group_composition": False,
+        },
+    )
+    assert created.status_code == 200, created.text
+    cfg = created.json()["config"]
+    assert cfg.get("show_group_composition") is False
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{created.json()['id']}", cookies=login.cookies)
+
+
+def test_rms_grouped_composition_frontend_assets():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = (root / "static/js/shared/dashboard-widget-kit.js").read_text(encoding="utf-8")
+    inspector = (root / "static/js/pages/rms-dashboard-inspector.js").read_text(encoding="utf-8")
+    html = (root / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
+    assert "bms-grouped-composition" in kit
+    assert "show_group_composition" in inspector
+    assert "显示分组构成" in html
+
+
 def test_rms_preset_style_stripped_for_non_preset_block(client_rbac, admin_auth, rms_engine, uniq):
     user, pwd = admin_auth
     login = _login(client_rbac, user, pwd)
@@ -441,6 +516,140 @@ def test_rms_lifecycle_funnel_preset_style_roundtrip(client_rbac, admin_auth, rm
     assert saved["config"]["style"]["chart_type"] == "line"
     assert saved["config"]["style"]["metric"] == "pass_rate"
     assert saved["config"]["style"]["sort"] == "original"
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_preset_featured_line_chart_type_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    tab = _lifecycle_tab(client_rbac, login.cookies)
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab['id']}/widgets",
+        json={
+            "title": "五率通过率",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "chart_lifecycle_pass_rate",
+                "style": {
+                    "color": "turquoise",
+                    "color_shade": 1,
+                    "sort": "original",
+                    "chart_type": "featured_line",
+                    "metric": "pass_rate",
+                    "max_items": 12,
+                    "featured_value_mode": "auto",
+                    "show_point_values": True,
+                },
+            },
+            "x": 0,
+            "y": 30,
+            "w": 12,
+            "h": 5,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    wid = body["id"]
+    assert body["config"]["style"]["chart_type"] == "featured_line"
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    lifecycle = next(t for t in boards[0]["tabs"] if t["id"] == tab["id"])
+    saved = next(w for w in lifecycle["widgets"] if w["id"] == wid)
+    assert saved["config"]["style"]["chart_type"] == "featured_line"
+    assert saved["config"]["style"]["featured_value_mode"] == "auto"
+    assert saved["config"]["style"]["show_point_values"] is True
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_preset_featured_line_show_point_values_defaults_false(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    tab = _lifecycle_tab(client_rbac, login.cookies)
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab['id']}/widgets",
+        json={
+            "title": "五率默认",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "chart_lifecycle_pass_rate",
+                "style": {
+                    "color": "turquoise",
+                    "color_shade": 1,
+                    "sort": "original",
+                    "chart_type": "featured_line",
+                    "metric": "pass_rate",
+                    "max_items": 12,
+                },
+            },
+            "x": 0,
+            "y": 40,
+            "w": 12,
+            "h": 5,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    lifecycle = next(t for t in boards[0]["tabs"] if t["id"] == tab["id"])
+    saved = next(w for w in lifecycle["widgets"] if w["id"] == wid)
+    assert saved["config"]["style"]["show_point_values"] is False
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_preset_featured_bar_chart_type_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    tab = _lifecycle_tab(client_rbac, login.cookies)
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab['id']}/widgets",
+        json={
+            "title": "五率通过率柱",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "chart_lifecycle_pass_rate",
+                "style": {
+                    "color": "turquoise",
+                    "color_shade": 1,
+                    "sort": "original",
+                    "chart_type": "featured_bar",
+                    "metric": "pass_rate",
+                    "max_items": 12,
+                    "average_label": "均值",
+                    "show_average_line": False,
+                    "show_tooltip": True,
+                    "show_summary_legend": False,
+                    "highlight_latest": True,
+                },
+            },
+            "x": 0,
+            "y": 35,
+            "w": 12,
+            "h": 5,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    wid = body["id"]
+    assert body["config"]["style"]["chart_type"] == "featured_bar"
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    lifecycle = next(t for t in boards[0]["tabs"] if t["id"] == tab["id"])
+    saved = next(w for w in lifecycle["widgets"] if w["id"] == wid)
+    assert saved["config"]["style"]["chart_type"] == "featured_bar"
+    assert saved["config"]["style"]["average_label"] == "均值"
+    assert saved["config"]["style"]["show_average_line"] is False
+    assert saved["config"]["style"]["show_tooltip"] is True
+    assert saved["config"]["style"]["show_summary_legend"] is False
 
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
@@ -1679,6 +1888,48 @@ def test_rms_widget_data_grouped_series(client_rbac, admin_auth, rms_engine, uni
     assert body.get("data")
     assert "xAxisLabel" in body
     assert "yAxisLabel" in body
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_widget_data_grouped_series_featured_bar(client_rbac, admin_auth, rms_engine, uniq):
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"fbgrp_{uniq}")
+    for i in range(2):
+        cand = client_rbac.post(
+            "/api/rms/candidates",
+            cookies=login_del.cookies,
+            json=_candidate_json(job_id, source="内推", name=f"FB Cand {i}"),
+        )
+        assert cand.status_code == 200, cand.text
+        app = client_rbac.post(
+            "/api/rms/applications",
+            cookies=login_del.cookies,
+            json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+        )
+        assert app.status_code == 200, app.text
+
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        widget_type="featured_bar",
+        source_key="rms_applications",
+        config={
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "secondary_axis_field": "client_id",
+            "group_mode": "stacked",
+        },
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["kind"] == "grouped_series"
+    assert body.get("keys")
+    assert body.get("data")
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
 

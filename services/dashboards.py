@@ -46,6 +46,9 @@ from schemas.dashboards import (
 from services.clients import scoped_client_query
 from services import rms_scope as rms_ds
 from services.delivery_roster import sql_roster_employment_active_pool
+
+FEATURED_VALUE_MODES: FrozenSet[str] = frozenset({"auto", "sum", "latest", "average"})
+
 from schemas.rms import (
     APPLICATION_PROGRESS_ORDER,
     RMS_ENUM_GROUP_FIELDS,
@@ -187,7 +190,7 @@ def validate_rich_text(content: str) -> str:
 
 
 _METRIC_LABELS = {"count": "计数", "sum": "求和", "avg": "平均", "min": "最小", "max": "最大"}
-_SECONDARY_CHART_TYPES = frozenset({"bar", "horizontal_bar", "line"})
+_SECONDARY_CHART_TYPES = frozenset({"bar", "horizontal_bar", "line", "featured_bar"})
 
 
 def _primary_sort_to_legacy(sort: str) -> str:
@@ -295,7 +298,20 @@ def _normalize_widget_config(config: dict) -> dict:
         "color_shade": c.get("color_shade", DEFAULT_COLOR_SHADE),
         "show_value_center": bool(c.get("show_value_center", True)),
         "extra_views": c.get("extra_views") if isinstance(c.get("extra_views"), list) else [],
+        "comparison_label": str(c.get("comparison_label") or "较上期"),
+        "average_label": str(c.get("average_label") or "Avg"),
+        "show_average_line": bool(c.get("show_average_line", True)),
+        "show_comparison": bool(c.get("show_comparison", True)),
+        "highlight_latest": bool(c.get("highlight_latest", True)),
+        "show_tooltip": bool(c.get("show_tooltip", True)),
+        "featured_value_mode": str(c.get("featured_value_mode") or "auto"),
+        "show_point_values": bool(c.get("show_point_values", True)),
+        "show_summary_legend": bool(c.get("show_summary_legend", True)),
+        "show_group_composition": bool(c.get("show_group_composition", True)),
     }
+    fvm = out["featured_value_mode"]
+    if fvm not in FEATURED_VALUE_MODES:
+        out["featured_value_mode"] = "auto"
     if "include_left" in c:
         out["include_left"] = bool(c.get("include_left"))
     if "client_id" in c:
@@ -333,9 +349,12 @@ RMS_PRESET_STYLE_BLOCKS: FrozenSet[str] = frozenset({
 })
 RMS_PRESET_STYLE_KEYS: FrozenSet[str] = frozenset({
     "color", "color_shade", "sort", "show_grid", "bar_radius", "max_items", "show_values", "palette",
-    "chart_type",
+    "chart_type", "metric",
+    "comparison_label", "average_label", "show_average_line", "show_comparison", "highlight_latest",
+    "featured_value_mode", "show_point_values", "show_tooltip", "show_summary_legend",
+    "show_group_composition",
 })
-RMS_PRESET_CHART_TYPES: FrozenSet[str] = frozenset({"horizontal_bar", "bar", "pie", "line"})
+RMS_PRESET_CHART_TYPES: FrozenSet[str] = frozenset({"horizontal_bar", "bar", "pie", "line", "featured_line", "featured_bar"})
 RMS_LEGACY_PRESET_PALETTE: Dict[str, str] = {
     "green_3": "green",
     "blue_3": "blue",
@@ -374,6 +393,12 @@ def _sanitize_rms_preset_style(raw: dict) -> dict:
     metric = raw.get("metric", "count")
     if metric not in RMS_PRESET_METRIC_VALUES:
         metric = "count"
+    featured_value_mode = str(raw.get("featured_value_mode") or "auto")
+    if featured_value_mode not in FEATURED_VALUE_MODES:
+        featured_value_mode = "auto"
+    comparison_label = str(raw.get("comparison_label") or "较上期").strip()[:32] or "较上期"
+    average_label_raw = raw.get("average_label")
+    average_label = str(average_label_raw).strip()[:32] if average_label_raw not in (None, "") else ""
     return {
         "color": color,
         "color_shade": color_shade,
@@ -384,6 +409,16 @@ def _sanitize_rms_preset_style(raw: dict) -> dict:
         "show_values": bool(raw.get("show_values", False)),
         "bar_radius": _clamp_int(raw.get("bar_radius"), 4, 16, 8),
         "max_items": _clamp_int(raw.get("max_items"), 3, 20, 8),
+        "comparison_label": comparison_label,
+        "average_label": average_label,
+        "show_average_line": bool(raw.get("show_average_line", True)),
+        "show_comparison": bool(raw.get("show_comparison", True)),
+        "highlight_latest": bool(raw.get("highlight_latest", True)),
+        "featured_value_mode": featured_value_mode,
+        "show_point_values": bool(raw.get("show_point_values", False)),
+        "show_tooltip": bool(raw.get("show_tooltip", True)),
+        "show_summary_legend": bool(raw.get("show_summary_legend", True)),
+        "show_group_composition": bool(raw.get("show_group_composition", True)),
     }
 
 
@@ -473,8 +508,8 @@ def validate_widget_config(
             raise HTTPException(status_code=400, detail="date_group 仅支持 datetime 类型的 primary_axis_field")
 
     if secondary_axis_field:
-        if widget_type in ("pie", "number"):
-            raise HTTPException(status_code=400, detail="pie/number 不支持 secondary_axis_field")
+        if widget_type in ("pie", "number", "featured_line"):
+            raise HTTPException(status_code=400, detail=f"{widget_type} 不支持 secondary_axis_field")
         if widget_type not in _SECONDARY_CHART_TYPES:
             raise HTTPException(status_code=400, detail=f"{widget_type} 不支持 secondary_axis_field")
         sdef = get_field(source_key, secondary_axis_field)
@@ -551,6 +586,14 @@ def validate_widget_config(
             if s:
                 primary_axis_order.append(s)
 
+    if widget_type == "featured_line" and norm.get("extra_views"):
+        raise HTTPException(status_code=400, detail="featured_line 不支持 extra_views")
+
+    if widget_type == "featured_bar" and norm.get("extra_views"):
+        raise HTTPException(status_code=400, detail="featured_bar 不支持 extra_views")
+
+    average_label = str(norm.get("average_label") or "Avg").strip()[:32] or "Avg"
+
     out = {
         "metric": metric,
         "aggregate_field": aggregate_field,
@@ -579,8 +622,20 @@ def validate_widget_config(
         "color": color,
         "color_shade": color_shade,
         "show_value_center": norm["show_value_center"],
+        "comparison_label": norm["comparison_label"],
+        "average_label": average_label,
+        "show_average_line": norm["show_average_line"],
+        "show_comparison": norm["show_comparison"],
+        "highlight_latest": norm["highlight_latest"],
+        "show_tooltip": norm["show_tooltip"],
+        "featured_value_mode": norm["featured_value_mode"],
+        "show_point_values": norm["show_point_values"],
         "extra_views": _validate_extra_views(norm.get("extra_views"), widget_type),
     }
+    if widget_type == "featured_bar":
+        out["show_summary_legend"] = bool(norm.get("show_summary_legend", True))
+    if secondary_axis_field:
+        out["show_group_composition"] = bool(norm.get("show_group_composition", True))
     if date_group:
         out["date_group"] = date_group
     if source_key == "roster_entries":
