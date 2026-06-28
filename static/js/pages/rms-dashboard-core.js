@@ -123,6 +123,16 @@
     return qs ? "?" + qs : "";
   }
 
+  function line1PeriodLabel(filters) {
+    filters = filters || {};
+    var from = String(filters.date_from || "").trim();
+    var to = String(filters.date_to || "").trim();
+    if (from && to) return from + " ~ " + to;
+    if (from) return from + " ~";
+    if (to) return "~ " + to;
+    return "全部";
+  }
+
   function widgetBlock(w) {
     if (!w) return "";
     if (w.widget_type === "rms_block") return (w.config && w.config.block) || "";
@@ -145,6 +155,14 @@
     return "rms-featured-bar-" + w.id;
   }
 
+  function line1MountId(w) {
+    return "rms-line1-" + w.id;
+  }
+
+  function line1PresetMountId(w) {
+    return chartCanvasId(w) + "-line1";
+  }
+
   function chartsAvailable() {
     return typeof Chart !== "undefined";
   }
@@ -164,6 +182,9 @@
       });
       document.querySelectorAll(".bms-featured-bar-mount").forEach(function (el) {
         if (global.CrmFeaturedBarChartKit) global.CrmFeaturedBarChartKit.destroyFeaturedBarChart(el);
+      });
+      document.querySelectorAll(".bms-line1-mount").forEach(function (el) {
+        if (global.CrmLine1ChartKit) global.CrmLine1ChartKit.destroy(el);
       });
       document.querySelectorAll(".chart-canvas-wrap canvas").forEach(function (canvas) {
         canvas.style.display = "";
@@ -281,11 +302,14 @@
     apiGetOptional: apiGetOptional,
     cloneFilters: cloneFilters,
     buildQuery: buildQuery,
+    line1PeriodLabel: line1PeriodLabel,
     widgetBlock: widgetBlock,
     chartCanvasId: chartCanvasId,
     featuredPresetMountId: featuredPresetMountId,
     featuredLineMountId: featuredLineMountId,
     featuredBarMountId: featuredBarMountId,
+    line1MountId: line1MountId,
+    line1PresetMountId: line1PresetMountId,
     chartsAvailable: chartsAvailable,
     destroyChartKey: destroyChartKey,
     destroyAllCharts: destroyAllCharts,

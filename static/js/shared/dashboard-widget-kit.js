@@ -6,16 +6,17 @@
 
   var EXTRA_RENDER_LABELS = { doughnut: "环形图", horizontal_bar: "横向排名（柱图）" };
   var METRIC_LABELS = { count: "计数", sum: "求和", avg: "平均", min: "最小", max: "最大" };
-  var CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar"];
+  var CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "line_1", "featured_bar"];
+  var LINE1_VALUE_MODES = ["sum", "latest", "average", "max"];
   var DATA_WIDGET_TYPES = ["number"].concat(CHART_WIDGET_TYPES);
   var TYPE_LABELS = {
     number: "数字", bar: "柱状", horizontal_bar: "横向排名", pie: "环形", line: "折线",
-    featured_line: "重点折线", featured_bar: "重点柱状",
+    featured_line: "重点折线", line_1: "折线1", featured_bar: "重点柱状",
     rich_text: "文本", iframe: "网页", roster_summary: "花名册概览", rms_block: "招聘预设",
   };
   var TYPE_ICONS = {
     number: "#", bar: "▮", horizontal_bar: "▤", pie: "◔", line: "📈",
-    featured_line: "◉", featured_bar: "▮",
+    featured_line: "◉", line_1: "〽", featured_bar: "▮",
     rich_text: "¶", iframe: "▭", roster_summary: "▦", rms_block: "▦",
   };
 
@@ -118,6 +119,25 @@
       client_id: c.client_id,
       url: c.url, content: c.content, block: c.block,
       show_group_composition: c.show_group_composition !== false,
+      line1_value_mode: (function () {
+        var mode = String(c.line1_value_mode || "sum").trim();
+        return LINE1_VALUE_MODES.indexOf(mode) >= 0 ? mode : "sum";
+      })(),
+      line1_x_axis_mode: String(c.line1_x_axis_mode || "all"),
+      line1_range_label: String(c.line1_range_label || "Last 12 months"),
+      line1_active_index: String(c.line1_active_index || "middle"),
+      show_line1_range: c.show_line1_range !== false,
+      show_line1_fullscreen: c.show_line1_fullscreen !== false,
+      show_line1_grid: c.show_line1_grid !== false,
+      highlight_item: (function () {
+        var item = String(c.highlight_item || "").trim();
+        if (item === "max" || item === "latest") return item;
+        return "latest";
+      })(),
+      average_label: String(c.average_label || "Avg"),
+      show_average_line: c.show_average_line !== false,
+      show_tooltip: c.show_tooltip !== false,
+      show_summary_legend: c.show_summary_legend !== false,
     };
   }
 
@@ -502,6 +522,22 @@
       });
       if (c.secondary_axis_field) {
         out.show_group_composition = c.show_group_composition !== false;
+      }
+      if (f.widget_type === "line_1") {
+        var line1Mode = String(c.line1_value_mode || "sum").trim();
+        out.line1_value_mode = LINE1_VALUE_MODES.indexOf(line1Mode) >= 0 ? line1Mode : "sum";
+        out.line1_x_axis_mode = c.line1_x_axis_mode || "all";
+        out.line1_range_label = c.line1_range_label || "Last 12 months";
+        out.line1_active_index = c.line1_active_index || "middle";
+        out.show_line1_range = c.show_line1_range !== false;
+        out.show_line1_fullscreen = c.show_line1_fullscreen !== false;
+        out.show_line1_grid = c.show_line1_grid !== false;
+      } else if (f.widget_type === "featured_bar") {
+        out.average_label = c.average_label || "Avg";
+        out.show_average_line = c.show_average_line !== false;
+        out.show_tooltip = c.show_tooltip !== false;
+        out.show_summary_legend = c.show_summary_legend !== false;
+        out.highlight_item = c.highlight_item === "max" ? "max" : "latest";
       }
     }
     return out;

@@ -44,10 +44,15 @@ from schemas.dashboards import (
     get_source,
 )
 from services.clients import scoped_client_query
+from services import rms_dashboard as rms_dash
 from services import rms_scope as rms_ds
 from services.delivery_roster import sql_roster_employment_active_pool
 
 FEATURED_VALUE_MODES: FrozenSet[str] = frozenset({"auto", "sum", "latest", "average"})
+LINE1_VALUE_MODES: FrozenSet[str] = frozenset({"sum", "latest", "average", "max"})
+LINE1_X_AXIS_MODES: FrozenSet[str] = frozenset({"all", "snapshot", "historical"})
+LINE1_ACTIVE_INDEX_MODES: FrozenSet[str] = frozenset({"first", "middle", "last"})
+HIGHLIGHT_ITEM_MODES: FrozenSet[str] = frozenset({"max", "latest"})
 
 from schemas.rms import (
     APPLICATION_PROGRESS_ORDER,
@@ -303,15 +308,35 @@ def _normalize_widget_config(config: dict) -> dict:
         "show_average_line": bool(c.get("show_average_line", True)),
         "show_comparison": bool(c.get("show_comparison", True)),
         "highlight_latest": bool(c.get("highlight_latest", True)),
+        "highlight_item": str(c.get("highlight_item") or "latest").strip(),
         "show_tooltip": bool(c.get("show_tooltip", True)),
         "featured_value_mode": str(c.get("featured_value_mode") or "auto"),
         "show_point_values": bool(c.get("show_point_values", True)),
         "show_summary_legend": bool(c.get("show_summary_legend", True)),
         "show_group_composition": bool(c.get("show_group_composition", True)),
+        "line1_value_mode": str(c.get("line1_value_mode") or "sum").strip(),
+        "line1_x_axis_mode": str(c.get("line1_x_axis_mode") or "all"),
+        "line1_range_label": str(c.get("line1_range_label") or "Last 12 months"),
+        "line1_active_index": str(c.get("line1_active_index") or "middle"),
+        "show_line1_range": bool(c.get("show_line1_range", True)),
+        "show_line1_fullscreen": bool(c.get("show_line1_fullscreen", True)),
+        "show_line1_grid": bool(c.get("show_line1_grid", True)),
     }
+    x_mode = out["line1_x_axis_mode"]
+    if x_mode not in LINE1_X_AXIS_MODES:
+        out["line1_x_axis_mode"] = "all"
     fvm = out["featured_value_mode"]
     if fvm not in FEATURED_VALUE_MODES:
         out["featured_value_mode"] = "auto"
+    lvm = out["line1_value_mode"]
+    if lvm not in LINE1_VALUE_MODES:
+        out["line1_value_mode"] = "sum"
+    lai = out["line1_active_index"]
+    if lai not in LINE1_ACTIVE_INDEX_MODES:
+        out["line1_active_index"] = "middle"
+    hi = out["highlight_item"]
+    if hi not in HIGHLIGHT_ITEM_MODES:
+        out["highlight_item"] = "latest"
     if "include_left" in c:
         out["include_left"] = bool(c.get("include_left"))
     if "client_id" in c:
@@ -351,10 +376,13 @@ RMS_PRESET_STYLE_KEYS: FrozenSet[str] = frozenset({
     "color", "color_shade", "sort", "show_grid", "bar_radius", "max_items", "show_values", "palette",
     "chart_type", "metric",
     "comparison_label", "average_label", "show_average_line", "show_comparison", "highlight_latest",
+    "highlight_item",
     "featured_value_mode", "show_point_values", "show_tooltip", "show_summary_legend",
     "show_group_composition",
+    "line1_value_mode", "line1_x_axis_mode", "line1_range_label", "line1_active_index",
+    "show_line1_range", "show_line1_fullscreen", "show_line1_grid",
 })
-RMS_PRESET_CHART_TYPES: FrozenSet[str] = frozenset({"horizontal_bar", "bar", "pie", "line", "featured_line", "featured_bar"})
+RMS_PRESET_CHART_TYPES: FrozenSet[str] = frozenset({"horizontal_bar", "bar", "pie", "line", "featured_line", "line_1", "featured_bar"})
 RMS_LEGACY_PRESET_PALETTE: Dict[str, str] = {
     "green_3": "green",
     "blue_3": "blue",
@@ -399,6 +427,16 @@ def _sanitize_rms_preset_style(raw: dict) -> dict:
     comparison_label = str(raw.get("comparison_label") or "较上期").strip()[:32] or "较上期"
     average_label_raw = raw.get("average_label")
     average_label = str(average_label_raw).strip()[:32] if average_label_raw not in (None, "") else ""
+    line1_value_mode = str(raw.get("line1_value_mode") or "sum").strip()
+    if line1_value_mode not in LINE1_VALUE_MODES:
+        line1_value_mode = "sum"
+    line1_active_index = str(raw.get("line1_active_index") or "middle")
+    if line1_active_index not in LINE1_ACTIVE_INDEX_MODES:
+        line1_active_index = "middle"
+    line1_range_label = str(raw.get("line1_range_label") or "Last 12 months").strip()[:64] or "Last 12 months"
+    highlight_item = str(raw.get("highlight_item") or "latest").strip()
+    if highlight_item not in HIGHLIGHT_ITEM_MODES:
+        highlight_item = "latest"
     return {
         "color": color,
         "color_shade": color_shade,
@@ -414,11 +452,18 @@ def _sanitize_rms_preset_style(raw: dict) -> dict:
         "show_average_line": bool(raw.get("show_average_line", True)),
         "show_comparison": bool(raw.get("show_comparison", True)),
         "highlight_latest": bool(raw.get("highlight_latest", True)),
+        "highlight_item": highlight_item,
         "featured_value_mode": featured_value_mode,
         "show_point_values": bool(raw.get("show_point_values", False)),
         "show_tooltip": bool(raw.get("show_tooltip", True)),
         "show_summary_legend": bool(raw.get("show_summary_legend", True)),
         "show_group_composition": bool(raw.get("show_group_composition", True)),
+        "line1_value_mode": line1_value_mode,
+        "line1_range_label": line1_range_label,
+        "line1_active_index": line1_active_index,
+        "show_line1_range": bool(raw.get("show_line1_range", True)),
+        "show_line1_fullscreen": bool(raw.get("show_line1_fullscreen", True)),
+        "show_line1_grid": bool(raw.get("show_line1_grid", True)),
     }
 
 
@@ -508,6 +553,8 @@ def validate_widget_config(
             raise HTTPException(status_code=400, detail="date_group 仅支持 datetime 类型的 primary_axis_field")
 
     if secondary_axis_field:
+        if widget_type == "line_1":
+            raise HTTPException(status_code=400, detail="折线1暂不支持二级分组")
         if widget_type in ("pie", "number", "featured_line"):
             raise HTTPException(status_code=400, detail=f"{widget_type} 不支持 secondary_axis_field")
         if widget_type not in _SECONDARY_CHART_TYPES:
@@ -589,6 +636,9 @@ def validate_widget_config(
     if widget_type == "featured_line" and norm.get("extra_views"):
         raise HTTPException(status_code=400, detail="featured_line 不支持 extra_views")
 
+    if widget_type == "line_1" and norm.get("extra_views"):
+        raise HTTPException(status_code=400, detail="折线1不支持 extra_views")
+
     if widget_type == "featured_bar" and norm.get("extra_views"):
         raise HTTPException(status_code=400, detail="featured_bar 不支持 extra_views")
 
@@ -632,8 +682,17 @@ def validate_widget_config(
         "show_point_values": norm["show_point_values"],
         "extra_views": _validate_extra_views(norm.get("extra_views"), widget_type),
     }
+    if widget_type == "line_1":
+        out["line1_value_mode"] = norm["line1_value_mode"]
+        out["line1_x_axis_mode"] = norm["line1_x_axis_mode"]
+        out["line1_range_label"] = str(norm["line1_range_label"] or "Last 12 months").strip()[:64] or "Last 12 months"
+        out["line1_active_index"] = norm["line1_active_index"]
+        out["show_line1_range"] = bool(norm.get("show_line1_range", True))
+        out["show_line1_fullscreen"] = bool(norm.get("show_line1_fullscreen", True))
+        out["show_line1_grid"] = bool(norm.get("show_line1_grid", True))
     if widget_type == "featured_bar":
         out["show_summary_legend"] = bool(norm.get("show_summary_legend", True))
+        out["highlight_item"] = norm["highlight_item"]
     if secondary_axis_field:
         out["show_group_composition"] = bool(norm.get("show_group_composition", True))
     if date_group:
@@ -1301,17 +1360,101 @@ def _query_grouped_series(
     )
 
 
+def _apply_rms_dashboard_filters(
+    q,
+    db: Session,
+    ctx: AuthContext,
+    source_key: str,
+    dashboard_filters: Optional[dict],
+    models: dict,
+):
+    """Intersect widget query with RMS dashboard top-bar filters."""
+    if not dashboard_filters or source_key != "rms_applications":
+        return q
+    RmsApplication = models["RmsApplication"]
+    RmsJob = models.get("RmsJob")
+    Client = models.get("Client")
+    if RmsJob is None or Client is None:
+        return q
+    filtered_q = rms_dash._filter_applications_query(
+        db, ctx, RmsApplication, RmsJob, Client, dashboard_filters
+    )
+    ids = [row[0] for row in filtered_q.with_entities(RmsApplication.id).all()]
+    if not ids:
+        return q.filter(RmsApplication.id == -1)
+    return q.filter(RmsApplication.id.in_(ids))
+
+
+def _query_line1_rms_axis_series(
+    db: Session,
+    ctx: AuthContext,
+    source_key: str,
+    config: dict,
+    models: dict,
+    dashboard_filters: Optional[dict],
+) -> dict:
+    config = _normalize_widget_config(config)
+    metric = config.get("metric", "count")
+    if metric != "count":
+        raise HTTPException(status_code=400, detail="折线1时点/历史状态仅支持计数")
+    group_by = config.get("primary_axis_field") or config.get("group_by") or ""
+    if group_by not in ("current_stage", "status"):
+        raise HTTPException(status_code=400, detail="折线1时点/历史状态需要 X 轴字段为当前阶段或状态")
+
+    RmsApplication = models["RmsApplication"]
+    RmsJob = models["RmsJob"]
+    Client = models["Client"]
+    RmsApplicationStatusHistory = models["RmsApplicationStatusHistory"]
+    filters = dict(dashboard_filters or {})
+    apps = rms_dash._scoped_apps(db, ctx, RmsApplication, RmsJob, Client, filters)
+    hist_map = rms_dash._hist_for_apps(db, [a.id for a in apps], RmsApplicationStatusHistory)
+    mode = str(config.get("line1_x_axis_mode") or "all").strip()
+    hide_empty = bool(
+        config.get("omit_null_values")
+        or config.get("hide_empty")
+        or mode in ("snapshot", "historical")
+    )
+    prefix = config.get("prefix", "")
+    suffix = config.get("suffix", "")
+    x_axis_label, y_axis_label = _axis_labels(source_key, config)
+    labels, values = rms_dash.compute_line1_axis_series(
+        apps, hist_map, filters, mode, hide_empty=hide_empty
+    )
+    return _finalize_series(
+        labels,
+        values,
+        hide_empty=False,
+        limit=int(config.get("limit") or 20),
+        prefix=prefix,
+        suffix=suffix,
+        x_axis_label=x_axis_label,
+        y_axis_label=y_axis_label,
+    )
+
+
 def query_widget_data(
     db: Session,
     ctx: AuthContext,
     source_key: str,
     config: dict,
     models: dict,
+    dashboard_filters: Optional[dict] = None,
 ) -> dict:
     if not user_can_read_source(ctx, source_key):
         return {"status": "forbidden", "message": "无权限查看该数据源"}
 
     config = _normalize_widget_config(config)
+    line1_x_mode = str(config.get("line1_x_axis_mode") or "all").strip()
+    group_by = config.get("primary_axis_field") or config.get("group_by") or ""
+    if (
+        source_key == "rms_applications"
+        and group_by in ("current_stage", "status")
+        and line1_x_mode in ("snapshot", "historical")
+    ):
+        return _query_line1_rms_axis_series(
+            db, ctx, source_key, config, models, dashboard_filters
+        )
+
     metric = config.get("metric", "count")
     field_key = config.get("aggregate_field") or config.get("field") or ""
     group_by = config.get("primary_axis_field") or config.get("group_by") or ""
@@ -1329,6 +1472,7 @@ def query_widget_data(
     Model = _get_model(models, source_key)
     q = _scoped_query(db, ctx, source_key, models)
     q = _apply_roster_active_pool(q, source_key, config, Model)
+    q = _apply_rms_dashboard_filters(q, db, ctx, source_key, dashboard_filters, models)
     q = _apply_filters(q, Model, filters)
 
     if secondary:
@@ -1760,6 +1904,7 @@ def get_widget_data(
     widget_id: int,
     models: dict,
     DashboardWidget,
+    dashboard_filters: Optional[dict] = None,
 ) -> dict:
     w = db.query(DashboardWidget).filter(DashboardWidget.id == widget_id).first()
     if not w:
@@ -1777,7 +1922,7 @@ def get_widget_data(
     source_key = w.source_key or ""
     if not source_key:
         return {"status": "error", "message": "未配置数据源"}
-    return query_widget_data(db, ctx, source_key, config, models)
+    return query_widget_data(db, ctx, source_key, config, models, dashboard_filters)
 
 
 def _yuan(value: float) -> str:

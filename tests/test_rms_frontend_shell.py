@@ -1044,6 +1044,20 @@ def test_rms_dashboard_assets_and_nav():
     assert "rms.analytics.read" in nav.read_text(encoding="utf-8")
 
 
+def test_rms_line1_frontend_assets():
+    html = (REPO_ROOT / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
+    inspector = (REPO_ROOT / "static/js/pages/rms-dashboard-inspector.js").read_text(encoding="utf-8")
+    charts = (REPO_ROOT / "static/js/pages/rms-dashboard-charts.js").read_text(encoding="utf-8")
+    assert "line1-chart-kit.js" in html
+    assert "line_1" in html
+    assert "折线1" in inspector
+    assert "line_1" in inspector
+    assert "featured_line" in inspector
+    assert "重点折线" in inspector
+    assert "CrmLine1ChartKit" in charts
+    assert "renderLine1PresetChart" in charts
+
+
 def test_rms_dashboard_twenty_shell():
     html = (REPO_ROOT / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
     js = (REPO_ROOT / "static/js/pages/rms-dashboard.js").read_text(encoding="utf-8")
@@ -1063,7 +1077,7 @@ def test_rms_dashboard_twenty_shell():
     assert "Insp.rmsPresetStyle" in js
     assert "createDashboardInspector" in js
     assert "图表类型" in html
-    assert "STYLE" in html
+    assert "Style" in html
     assert "搜索颜色" in html
     assert "数值降序" in html
 

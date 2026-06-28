@@ -1159,6 +1159,104 @@ def list_delivery_dept_users(
     )
 
 
+LINE1_SNAPSHOT_STATUS_ORDER: Tuple[str, ...] = tuple(_PIPELINE_LABELS.keys())
+
+LINE1_HISTORICAL_STAGE_LABELS: Tuple[Tuple[str, str], ...] = (
+    ("internal_screen", "内筛通过"),
+    ("client_screen", "客筛通过"),
+    ("scheduling", "参面通过"),
+    ("first_interview", "一面通过"),
+    ("second_interview", "二面通过"),
+    ("final_interview", "终面通过"),
+    ("offer", "接offer"),
+)
+
+
+def dashboard_period_label(filters: Dict[str, Any]) -> str:
+    """Human-readable dashboard period for line1 range pill; 全量 → 全部."""
+    label = _period_label(filters)
+    return "全部" if label == "全量" else label
+
+
+def compute_line1_axis_series(
+    apps: List[Any],
+    hist_map: Dict[int, List[Any]],
+    filters: Dict[str, Any],
+    mode: str,
+    *,
+    hide_empty: bool = False,
+) -> tuple[List[str], List[float]]:
+    """Line1 x-axis buckets for snapshot / historical modes."""
+    if mode == "snapshot":
+        snapshot_as_of = _snapshot_as_of(filters)
+        counts = {status: 0 for status in LINE1_SNAPSHOT_STATUS_ORDER}
+        for app in apps:
+            histories = hist_map.get(app.id, [])
+            status = _status_at(app, histories, snapshot_as_of)
+            if status in counts:
+                counts[status] += 1
+        labels = [_PIPELINE_LABELS[s] for s in LINE1_SNAPSHOT_STATUS_ORDER]
+        values = [float(counts[s]) for s in LINE1_SNAPSHOT_STATUS_ORDER]
+    elif mode == "historical":
+        date_from, date_to = _period_bounds(filters)
+        snapshot_as_of = _snapshot_as_of(filters)
+        labels = [label for _, label in LINE1_HISTORICAL_STAGE_LABELS] + ["已入职"]
+        value_map = {label: 0.0 for label in labels}
+        for app in apps:
+            histories = hist_map.get(app.id, [])
+            for stage_key, label in LINE1_HISTORICAL_STAGE_LABELS:
+                pass_status = _STAGE_PASS[stage_key]
+                if _app_counts_as_stage_passed(
+                    app,
+                    histories,
+                    stage_key,
+                    pass_status,
+                    date_from,
+                    date_to,
+                    snapshot_as_of,
+                ):
+                    value_map[label] += 1.0
+            if _app_counts_as_hired(app, histories, date_from, date_to, snapshot_as_of):
+                value_map["已入职"] += 1.0
+        values = [value_map[label] for label in labels]
+    else:
+        return [], []
+
+    if hide_empty:
+        pairs = [(label, val) for label, val in zip(labels, values) if val]
+        labels = [p[0] for p in pairs]
+        values = [p[1] for p in pairs]
+    return labels, values
+
+
+def parse_dashboard_filter_params(
+    *,
+    client_id: Optional[int] = None,
+    job_id: Optional[int] = None,
+    job_ids: Optional[List[int]] = None,
+    priority: Optional[str] = None,
+    city: Optional[str] = None,
+    sales_user_id: Optional[int] = None,
+    delivery_user_id: Optional[int] = None,
+    recruiter_user_id: Optional[int] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> Dict[str, Any]:
+    filters: Dict[str, Any] = {
+        "client_id": client_id,
+        "job_id": job_id if not job_ids else None,
+        "job_ids": job_ids,
+        "priority": priority,
+        "city": city,
+        "sales_user_id": sales_user_id,
+        "delivery_user_id": delivery_user_id,
+        "recruiter_user_id": recruiter_user_id,
+        "date_from": date_from,
+        "date_to": date_to,
+    }
+    return {k: v for k, v in filters.items() if v is not None and v != "" and v != []}
+
+
 def compute_rms_dashboard(
     db: Session,
     ctx: AuthContext,

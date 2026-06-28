@@ -125,7 +125,7 @@
 .dash-card.editing { border-style: dashed; border-color: #d5d9de; }
 .dash-card.editing:hover { border-color: #9aa9bd; box-shadow: 0 2px 10px rgba(16,24,40,0.06); }
 .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; }
-.card-title { font-weight: 500; font-size: 0.875rem; color: #374151; }
+.card-title { font-weight: 700; font-size: 1.125rem; color: #374151; }
 .card-actions { display: flex; gap: 0.25rem; }
 .icon-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; color: #6b7280; cursor: pointer; font-size: 0.85rem; }
 .icon-btn:hover { background: #f2f3f5; color: #1f2328; }
@@ -231,6 +231,108 @@
   font-size: 0.8125rem; color: #6b7280; padding: 0.2rem 0.25rem; border-radius: 999px; text-align: center;
 }
 .bms-featured-line-axis-pill.is-active { color: #1e96e8; background: #eaf5ff; font-weight: 600; }
+.bms-line1-mount { width: 100%; height: 100%; min-height: 0; flex: 1; display: flex; }
+.line1-card {
+  display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 220px;
+  background: #fff; border-radius: 16px; padding: 14px 20px 14px; box-sizing: border-box;
+}
+.line1-top-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  margin-bottom: 0.5rem; min-height: 0;
+}
+.line1-header-actions { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; }
+.line1-range-pill {
+  display: inline-flex; align-items: center; padding: 0.2rem 0.55rem; border-radius: 999px;
+  font-size: 0.72rem; color: #6b7280; background: #f3f4f6; border: 1px solid #e5e7eb;
+}
+.line1-metrics { margin: 0; flex: 1; min-width: 0; }
+.line1-main-value { font-size: 1.35rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+.line1-sub-metric { margin-top: 0.25rem; font-size: 0.78rem; color: #6b7280; }
+.line1-empty { font-size: 1rem; color: #98a2b3; }
+.line1-chart-wrap {
+  position: relative; flex: 1; min-height: 150px; width: 100%;
+  --bms-chart-hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --bms-chart-hover-move: 420ms;
+  --bms-chart-hover-fade: 280ms;
+}
+.line1-chart-wrap.line1-hover-instant .line1-cursor,
+.line1-chart-wrap.line1-hover-instant .line1-active-point,
+.line1-chart-wrap.line1-hover-instant .line1-tooltip { transition: none !important; }
+.line1-chart-wrap .line1-cursor {
+  position: absolute; width: 0; border-left: 1.5px dashed #3e4c7a; background: transparent;
+  transform: translateX(-50%); pointer-events: none; opacity: 0; z-index: 2;
+  transition:
+    left var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    top var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    bottom var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    opacity var(--bms-chart-hover-fade) var(--bms-chart-hover-ease);
+}
+.line1-chart-wrap .line1-cursor.is-active { opacity: 1; }
+.line1-active-point {
+  position: absolute; width: 14px; height: 14px; background: #fff; border: 2.5px solid #3e4c7a;
+  border-radius: 50%; transform: translate(-50%, -50%) scale(0.82); pointer-events: none; opacity: 0;
+  z-index: 3; box-sizing: border-box;
+  transition:
+    left var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    top var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    transform var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    box-shadow var(--bms-chart-hover-fade) var(--bms-chart-hover-ease),
+    opacity var(--bms-chart-hover-fade) var(--bms-chart-hover-ease);
+}
+.line1-active-point.is-active {
+  opacity: 1; transform: translate(-50%, -50%) scale(1);
+}
+.line1-svg { display: block; width: 100%; height: 100%; min-height: 150px; }
+.line1-tooltip {
+  position: absolute; transform: translate(-50%, calc(-100% - 16px)) scale(0.94); z-index: 4;
+  padding: 0.32rem 0.62rem; border-radius: 999px; background: #3e4c7a; color: #fff;
+  font-size: 0.78rem; font-weight: 600; pointer-events: none; white-space: nowrap;
+  opacity: 0;
+  transition:
+    left var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    top var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    transform var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    opacity var(--bms-chart-hover-fade) var(--bms-chart-hover-ease);
+}
+.line1-tooltip.is-active {
+  opacity: 1; transform: translate(-50%, calc(-100% - 20px)) scale(1);
+}
+.line1-inspector-grid { display: grid; gap: 0.35rem; }
+.line1-other-block { margin-top: 0.85rem; margin-bottom: 0.35rem; }
+.line1-other-block .line1-subsection-title { margin-bottom: 0.35rem; }
+.line1-subsection-title {
+  font-size: 0.72rem; font-weight: 600; color: #98a2b3; text-transform: uppercase;
+  letter-spacing: 0.04em; margin: 0;
+}
+.line1-style-color.field { margin-bottom: 0; }
+.line1-inspector-grid .field { margin-bottom: 0; }
+.line1-prefix-suffix-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; }
+.line1-inline-field { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.line1-inline-input {
+  width: 100%; border: 1px solid #e0e2e6; border-radius: 8px; padding: 0.3rem 0.45rem;
+  font-size: 0.83rem; color: #374151; background: #fff; box-sizing: border-box;
+}
+.line1-inline-input:focus { outline: none; border-color: #9aa9bd; }
+.line1-inline-input::placeholder { color: #98a2b3; }
+.line1-metric-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; align-items: end; }
+.line1-metric-field { display: flex; flex-direction: column; gap: 0.25rem; min-width: 0; }
+.line1-metric-select {
+  width: 100%; border: 1px solid #e0e2e6; border-radius: 8px;
+  padding: 0.3rem 0.45rem; font-size: 0.83rem; color: #374151; background: #fff; box-sizing: border-box;
+}
+.line1-metric-select:focus { outline: none; border-color: #9aa9bd; }
+.line1-toggle-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; align-items: center; }
+.line1-toggle-row {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  font-size: 0.83rem; color: #374151; padding: 0.12rem 0; cursor: pointer; user-select: none;
+}
+.line1-toggle-row input[type="checkbox"] { margin: 0; flex-shrink: 0; cursor: pointer; }
+.line1-chart-empty { min-height: 120px; display: flex; align-items: center; justify-content: center; color: #98a2b3; font-size: 0.9rem; }
+.line1-x-axis { position: relative; height: 22px; margin-top: 0.25rem; }
+.line1-x-label {
+  position: absolute; transform: translateX(-50%); font-size: 0.68rem; color: #9ca3af;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 72px;
+}
 .bms-featured-bar-mount {
   --featured-bar-blue: #1e96e8;
   --featured-bar-blue-dark: #1570b8;
@@ -243,7 +345,12 @@
   display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 260px;
   background: #fff; border-radius: 16px; padding: 16px 18px 14px; box-sizing: border-box;
 }
-.bms-featured-bar-chart { position: relative; flex: 1; min-height: 180px; width: 100%; }
+.bms-featured-bar-chart {
+  position: relative; flex: 1; min-height: 180px; width: 100%;
+  --bms-chart-hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --bms-chart-hover-move: 420ms;
+  --bms-chart-hover-fade: 280ms;
+}
 .bms-featured-bar-svg { display: block; width: 100%; height: 100%; min-height: 180px; }
 .bms-featured-bar-average-label {
   position: absolute; left: 0; z-index: 3; pointer-events: none;
@@ -265,9 +372,26 @@
   background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
   pointer-events: none; z-index: 4; opacity: 0; visibility: hidden;
-  transition: opacity 0.12s ease;
+  transform: translate(-50%, calc(-100% - 2px)) scale(0.94);
+  will-change: left, top, transform, opacity;
+  transition:
+    left var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    top var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    transform var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    opacity var(--bms-chart-hover-fade) var(--bms-chart-hover-ease),
+    visibility 0s linear var(--bms-chart-hover-fade);
 }
-.bms-featured-bar-hover-tip.is-visible { opacity: 1; visibility: visible; }
+.bms-featured-bar-hover-tip.is-instant { transition: none !important; }
+.bms-featured-bar-hover-tip.is-visible {
+  opacity: 1; visibility: visible;
+  transform: translate(-50%, calc(-100% - 4px)) scale(1);
+  transition:
+    left var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    top var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    transform var(--bms-chart-hover-move) var(--bms-chart-hover-ease),
+    opacity var(--bms-chart-hover-fade) var(--bms-chart-hover-ease),
+    visibility 0s;
+}
 .bms-featured-bar-hover-tip::after {
   content: ""; position: absolute; left: 50%; bottom: -5px; transform: translateX(-50%);
   border: 5px solid transparent; border-top-color: #fff;
@@ -514,6 +638,9 @@
                     <template v-else-if="item.widget.widget_type === 'featured_line'">
                         <div class="bms-featured-line-mount" :id="featuredChartMountId(item.widget)"></div>
                     </template>
+                    <template v-else-if="item.widget.widget_type === 'line_1'">
+                        <div class="bms-line1-mount" :id="line1MountId(item.widget)"></div>
+                    </template>
                     <template v-else-if="item.widget.widget_type === 'featured_bar'">
                         <div class="chart-area">
                             <div class="chart-canvas-wrap">
@@ -673,7 +800,7 @@
                 <template v-if="isChart">
                     <div class="panel-section">
                         <h4>样式</h4>
-                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker" v-if="widgetForm.widget_type !== 'featured_bar'">
+                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker" v-if="widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'line_1'">
                             <label>颜色</label>
                             <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
                                 <span class="color-picker-value">
@@ -698,6 +825,72 @@
                                 </div>
                             </div>
                         </div>
+                        <template v-if="widgetForm.widget_type === 'line_1'">
+                            <div class="field color-picker-wrap line1-style-color" v-click-outside="closeColorPicker">
+                                <label>颜色</label>
+                                <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
+                                    <span class="color-picker-value">
+                                        <span class="color-picker-preview" :style="{background: widgetPalette(widgetForm.config)[selectedShade(widgetForm.config)]}"></span>
+                                        {{ selectedColorRowLabel }}
+                                    </span>
+                                    <span style="font-size:.7rem;color:#9aa0a6">▾</span>
+                                </button>
+                                <div v-if="colorPickerOpen" class="color-popover">
+                                    <input class="color-popover-search" v-model="colorSearch" placeholder="搜索颜色" />
+                                    <div class="color-popover-list">
+                                        <div v-for="row in filteredColorRows" :key="row.key" class="color-popover-row">
+                                            <span class="color-popover-label">{{ row.label }}</span>
+                                            <div class="color-popover-swatches">
+                                                <span v-for="(shade, si) in row.shades" :key="si"
+                                                      :class="['color-popover-swatch', isColorSwatchActive(row, si) ? 'active' : '']"
+                                                      :style="{background: shade}"
+                                                      :title="row.label + ' ' + (si + 1)"
+                                                      @click="pickColor(row.key, si)"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="line1-other-block">
+                                <div class="line1-subsection-title">其他</div>
+                                <div class="line1-toggle-list">
+                                    <label class="line1-toggle-row"><span>显示时间范围</span><input type="checkbox" v-model="widgetForm.config.show_line1_range" /></label>
+                                    <label class="line1-toggle-row"><span>显示网格线</span><input type="checkbox" v-model="widgetForm.config.show_line1_grid" /></label>
+                                </div>
+                            </div>
+                            <div class="line1-inspector-grid">
+                                <div class="line1-prefix-suffix-row">
+                                    <div class="field line1-inline-field">
+                                        <label>前缀</label>
+                                        <input class="line1-inline-input" v-model="widgetForm.config.prefix" placeholder="例如 $" />
+                                    </div>
+                                    <div class="field line1-inline-field">
+                                        <label>后缀</label>
+                                        <input class="line1-inline-input" v-model="widgetForm.config.suffix" placeholder="例如 %" />
+                                    </div>
+                                </div>
+                                <div class="line1-metric-row">
+                                    <div class="field line1-metric-field">
+                                        <label>主指标口径</label>
+                                        <select class="line1-metric-select" v-model="widgetForm.config.line1_value_mode">
+                                            <option value="sum">总和</option>
+                                            <option value="latest">最新值</option>
+                                            <option value="average">平均值</option>
+                                            <option value="max">最大值</option>
+                                        </select>
+                                    </div>
+                                    <div class="field line1-metric-field">
+                                        <label>X 轴字段</label>
+                                        <select class="line1-metric-select" v-model="widgetForm.config.line1_x_axis_mode">
+                                            <option value="snapshot">时点状态</option>
+                                            <option value="historical">历史状态</option>
+                                            <option value="all">全部</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <template v-else>
                         <div class="field"><label>排序</label>
                             <select v-model="widgetForm.config.sort">
                                 <option value="value_desc">数值降序</option>
@@ -730,11 +923,9 @@
                             <div class="toggle-row"><span>显示点位数值</span><input type="checkbox" v-model="widgetForm.config.show_point_values" /></div>
                         </template>
                         <template v-if="widgetForm.widget_type === 'featured_bar'">
-                            <div class="field"><label>平均线文案</label><input v-model="widgetForm.config.average_label" placeholder="Avg" /></div>
-                            <div class="toggle-row"><span>显示平均线</span><input type="checkbox" v-model="widgetForm.config.show_average_line" /></div>
                             <div class="toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.show_tooltip" /></div>
                             <div class="toggle-row"><span>显示摘要图例</span><input type="checkbox" v-model="widgetForm.config.show_summary_legend" /></div>
-                            <div class="toggle-row"><span>高亮最新项</span><input type="checkbox" v-model="widgetForm.config.highlight_latest" /></div>
+                        </template>
                         </template>
                         <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.widget_type !== 'line'" class="toggle-row">
                             <span>堆叠条形图</span>
@@ -744,12 +935,12 @@
                             <span>显示分组构成</span>
                             <input type="checkbox" v-model="widgetForm.config.show_group_composition" />
                         </div>
-                        <div v-if="widgetForm.widget_type !== 'featured_bar'" class="toggle-row"><span>显示图例</span><input type="checkbox" v-model="widgetForm.config.show_legend" /></div>
+                        <div v-if="widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'line_1'" class="toggle-row"><span>显示图例</span><input type="checkbox" v-model="widgetForm.config.show_legend" /></div>
                         <div v-if="widgetForm.widget_type === 'pie'" class="toggle-row"><span>中心显示总计</span><input type="checkbox" v-model="widgetForm.config.show_value_center" /></div>
-                        <div v-if="widgetForm.widget_type !== 'pie' && widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'featured_bar'" class="toggle-row"><span>显示数值标签</span><input type="checkbox" v-model="widgetForm.config.data_labels" /></div>
-                        <div class="toggle-row"><span>隐藏空值</span><input type="checkbox" v-model="widgetForm.config.hide_empty" /></div>
+                        <div v-if="widgetForm.widget_type !== 'pie' && widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'line_1' && widgetForm.widget_type !== 'featured_bar'" class="toggle-row"><span>显示数值标签</span><input type="checkbox" v-model="widgetForm.config.data_labels" /></div>
+                        <div v-if="widgetForm.widget_type !== 'line_1'" class="toggle-row"><span>隐藏空值</span><input type="checkbox" v-model="widgetForm.config.hide_empty" /></div>
                     </div>
-                    <div v-if="widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'featured_bar'" class="panel-section">
+                    <div v-if="widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'line_1' && widgetForm.widget_type !== 'featured_bar'" class="panel-section">
                         <h4>附加展示（同源数据）</h4>
                         <p style="font-size:0.76rem;color:#98a2b3;margin:0 0 0.5rem">在同一组件数据上，于其它栅格位置再渲染环形图或横向排名。</p>
                         <div v-for="(ev, evIdx) in widgetForm.config.extra_views" :key="'ev-' + evIdx" class="extra-view-row" style="grid-template-columns:1fr 1fr 1fr auto">
@@ -828,6 +1019,7 @@
 {% block page_scripts %}
 <script src="/static/js/shared/dashboard-widget-kit.js?v=grouped-composition-20260628"></script>
 <script src="/static/js/shared/featured-line-chart-kit.js?v=featured-line-20260627"></script>
+<script src="/static/js/shared/line1-chart-kit.js?v=line1-20260628"></script>
 <script src="/static/js/shared/featured-bar-chart-kit.js?v=featured-bar-20260627"></script>
 <script src="/static/js/pages/dashboards.js?v=grouped-composition-20260628"></script>
 {% endblock %}

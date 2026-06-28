@@ -22,6 +22,7 @@
     var truncateJobLabel = deps.truncateJobLabel;
     var featuredLineMountId = deps.featuredLineMountId;
     var featuredBarMountId = deps.featuredBarMountId;
+    var line1MountId = deps.line1MountId;
 
     var RMS_CHART_GRID_COLOR = deps.RMS_CHART_GRID_COLOR;
     var RMS_CHART_TICK_COLOR = deps.RMS_CHART_TICK_COLOR;
@@ -39,6 +40,8 @@
     var data = deps.data;
     var widgetData = deps.widgetData;
     var activeTab = deps.activeTab;
+    var appliedFilters = deps.appliedFilters;
+    var line1PeriodLabel = deps.line1PeriodLabel;
 
     var historicalStages = deps.historicalStages;
     var lifecycleRows = deps.lifecycleRows;
@@ -51,6 +54,7 @@
     var jobStageChartTotal = deps.jobStageChartTotal;
     var nextTick = deps.nextTick;
     var isRmsFeaturedLinePreset = deps.isRmsFeaturedLinePreset;
+    var isRmsLine1Preset = deps.isRmsLine1Preset;
     var isRmsFeaturedBarPreset = deps.isRmsFeaturedBarPreset;
 
     function mergeTooltipLabel(baseOptions, labelFn) {
@@ -77,27 +81,13 @@
       return RMS_PRESET_CHART_TYPES.indexOf(t) >= 0 ? t : "horizontal_bar";
     }
 
-    function isLifecyclePassRateFeaturedContext(style, opts) {
-      opts = opts || {};
-      if (opts.blockKey === "chart_lifecycle_pass_rate") return true;
-      if (opts.blockKey === "lifecycle_funnel" && (style.metric || "count") === "pass_rate") return true;
-      return false;
-    }
-
     function applyPresetStyleRowsForSeries(rows, style, opts) {
       opts = opts || {};
       var out = (rows || []).slice();
-      var chartType = resolvePresetChartType(style);
-      var skipValueSort = isLifecyclePassRateFeaturedContext(style, opts)
-        || (chartType === "featured_line"
-          && global.CrmFeaturedLineChartKit
-          && global.CrmFeaturedLineChartKit.isPercentSuffix(opts.suffix));
-      if (!skipValueSort) {
-        if (style.sort === "value_asc") {
-          out.sort(function (a, b) { return presetRowValue(a) - presetRowValue(b); });
-        } else if (style.sort === "value_desc") {
-          out.sort(function (a, b) { return presetRowValue(b) - presetRowValue(a); });
-        }
+      if (style.sort === "value_asc") {
+        out.sort(function (a, b) { return presetRowValue(a) - presetRowValue(b); });
+      } else if (style.sort === "value_desc") {
+        out.sort(function (a, b) { return presetRowValue(b) - presetRowValue(a); });
       }
       var max = Number(style.max_items || 0);
       if (max > 0) out = out.slice(0, max);
@@ -280,6 +270,83 @@
       }
     }
 
+    function resetLine1Mount(canvasId) {
+      var mount = document.getElementById(canvasId + "-line1");
+      if (!mount) return;
+      if (global.CrmLine1ChartKit) global.CrmLine1ChartKit.destroy(mount);
+    }
+
+    function line1ConfigFromStyle(style, prefix, suffix, periodLabel) {
+      return {
+        prefix: prefix,
+        suffix: suffix,
+        line1_value_mode: style.line1_value_mode || "sum",
+        line1_x_axis_mode: style.line1_x_axis_mode || "all",
+        line1_range_label: periodLabel || style.line1_range_label || "全部",
+        show_line1_range: style.show_line1_range !== false,
+        show_line1_fullscreen: style.show_line1_fullscreen !== false,
+        show_line1_grid: style.show_line1_grid !== false,
+        color: style.color || "green",
+        color_shade: style.color_shade != null ? style.color_shade : 2,
+      };
+    }
+
+    function line1WidgetConfig(w) {
+      var l1Cfg = KIT.normalizeWidgetConfig(w.config || {});
+      if (typeof line1PeriodLabel === "function") {
+        l1Cfg.line1_range_label = line1PeriodLabel(appliedFilters || {});
+      }
+      return l1Cfg;
+    }
+
+    function renderLine1PresetChart(canvasId, rows, style, opts) {
+      opts = opts || {};
+      if (!global.CrmLine1ChartKit) return;
+
+      function paintLine1() {
+        var mount = document.getElementById(canvasId + "-line1");
+        if (!mount) return false;
+        destroyChartKey(canvasId);
+        resetLine1Mount(canvasId);
+        var prefix = opts.prefix != null ? String(opts.prefix) : "";
+        var suffix = opts.suffix != null ? String(opts.suffix) : "";
+        var labels = rows.map(function (r) { return r.label; });
+        var values = rows.map(presetRowValue);
+        var total = values.reduce(function (sum, v) { return sum + v; }, 0);
+        var palette = paletteForStyle(style);
+        var accent = palette[KIT.selectedShade(presetStyleColorCfg(style))];
+        var apiData = {
+          status: rows.length ? "ok" : "empty",
+          kind: "series",
+          labels: labels,
+          values: values,
+          total: total,
+          prefix: prefix,
+          suffix: suffix,
+        };
+        var widget = {
+          title: opts.title || "",
+          config: line1ConfigFromStyle(
+            style,
+            prefix,
+            suffix,
+            typeof line1PeriodLabel === "function" ? line1PeriodLabel(appliedFilters || {}) : ""
+          ),
+        };
+        global.CrmLine1ChartKit.render(mount, widget, apiData, { lineColor: accent });
+        return true;
+      }
+
+      scheduleFeaturedPresetRender(function () {
+        safeRenderChart(canvasId, function () {
+          if (paintLine1()) return;
+          scheduleFeaturedPresetRender(function () {
+            safeRenderChart(canvasId, paintLine1);
+          });
+        });
+      });
+    }
+
     function renderFeaturedPresetChart(canvasId, rows, style, opts) {
       opts = opts || {};
       if (!global.CrmFeaturedLineChartKit) return;
@@ -335,6 +402,18 @@
       });
     }
 
+    function applyFeaturedBarMountTheme(mount, style) {
+      if (!mount || !style) return;
+      var palette = paletteForStyle(style);
+      var si = KIT.selectedShade(presetStyleColorCfg(style));
+      var accent = palette[si];
+      var dark = palette[4] || accent;
+      var soft = palette[0] || accent;
+      mount.style.setProperty("--featured-bar-blue", accent);
+      mount.style.setProperty("--featured-bar-blue-dark", dark);
+      mount.style.setProperty("--featured-bar-blue-soft", soft);
+    }
+
     function renderFeaturedBarPresetChart(canvasId, rows, style, opts) {
       opts = opts || {};
       if (!global.CrmFeaturedBarChartKit) return;
@@ -342,6 +421,7 @@
       function paintFeaturedBar() {
         var mount = document.getElementById(canvasId + "-featured");
         if (!mount) return false;
+        applyFeaturedBarMountTheme(mount, style);
         destroyChartKey(canvasId);
         resetFeaturedMount(canvasId);
         var prefix = opts.prefix != null ? String(opts.prefix) : "";
@@ -367,7 +447,7 @@
             show_average_line: style.show_average_line !== false,
             show_tooltip: style.show_tooltip !== false,
             show_summary_legend: style.show_summary_legend !== false,
-            highlight_latest: style.highlight_latest !== false,
+            highlight_item: style.highlight_item === "max" ? "max" : "latest",
           },
         };
         global.CrmFeaturedBarChartKit.renderFeaturedBarChart(mount, widget, apiData);
@@ -393,11 +473,16 @@
         renderFeaturedPresetChart(canvasId, rows, style, opts);
         return;
       }
+      if (chartType === "line_1") {
+        renderLine1PresetChart(canvasId, rows, style, opts);
+        return;
+      }
       if (chartType === "featured_bar") {
         renderFeaturedBarPresetChart(canvasId, rows, style, opts);
         return;
       }
       resetFeaturedMount(canvasId);
+      resetLine1Mount(canvasId);
       var radius = Number(style.bar_radius) || RMS_CHART_BAR_RADIUS;
       var palette = paletteForStyle(style);
       var accent = palette[KIT.selectedShade(presetStyleColorCfg(style))];
@@ -988,6 +1073,22 @@
           }
           return;
         }
+        if (w.widget_type === "line_1" && global.CrmLine1ChartKit) {
+          destroyChartKey(rmsId);
+          var l1Mount = document.getElementById(line1MountId(w));
+          if (l1Mount) {
+            var l1Cfg = line1WidgetConfig(w);
+            var l1Pal = KIT.widgetPalette(l1Cfg);
+            var l1Accent = l1Pal[KIT.selectedShade(l1Cfg)];
+            global.CrmLine1ChartKit.render(
+              l1Mount,
+              Object.assign({}, w, { config: l1Cfg }),
+              wd || { status: "empty" },
+              { lineColor: l1Accent }
+            );
+          }
+          return;
+        }
         if (w.widget_type === "featured_bar") {
           var secField = (w.config && w.config.secondary_axis_field) || "";
           if (secField) {
@@ -1043,8 +1144,9 @@
       if (!tab || !tab.widgets) return;
       tab.widgets.forEach(function (w) {
         var isLine = typeof isRmsFeaturedLinePreset === "function" && isRmsFeaturedLinePreset(w);
+        var isLine1 = typeof isRmsLine1Preset === "function" && isRmsLine1Preset(w);
         var isBar = typeof isRmsFeaturedBarPreset === "function" && isRmsFeaturedBarPreset(w);
-        if (isLine || isBar) renderSingleWidget(w, { animate: false });
+        if (isLine || isLine1 || isBar) renderSingleWidget(w, { animate: false });
       });
     }
 

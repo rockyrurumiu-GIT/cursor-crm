@@ -41,6 +41,8 @@
   var chartCanvasId = Core.chartCanvasId;
   var featuredPresetMountId = Core.featuredPresetMountId;
   var featuredLineMountId = Core.featuredLineMountId;
+  var line1MountId = Core.line1MountId;
+  var line1PresetMountId = Core.line1PresetMountId;
   var featuredBarMountId = Core.featuredBarMountId;
   var chartsAvailable = Core.chartsAvailable;
   var destroyChartKey = Core.destroyChartKey;
@@ -254,7 +256,7 @@
         var jobFilterDropdownOpen = ref(false);
         var jobFilterRef = ref(null);
         var jobIdsDraft = ref([]);
-        var filterPanelExpanded = ref(true);
+        var filterPanelExpanded = ref(false);
 
         var filters = reactive(cloneFilters());
         var appliedFilters = reactive(cloneFilters());
@@ -470,7 +472,7 @@
           filters.job_ids = jobIdsDraft.value.slice();
           jobFilterDropdownOpen.value = false;
           syncAppliedFromDraft();
-          return loadDashboard();
+          return Promise.all([loadDashboard(), reloadActiveTabData()]);
         }
 
         function cancelFilters() {
@@ -479,7 +481,7 @@
           applyFilterValues(filters, empty);
           applyFilterValues(appliedFilters, empty);
           jobIdsDraft.value = [];
-          return loadDashboard();
+          return Promise.all([loadDashboard(), reloadActiveTabData()]);
         }
 
         function rmsChartHasData(block) {
@@ -804,7 +806,11 @@
           jobStageChartTotal: jobStageChartTotal,
           nextTick: nextTick,
           isRmsFeaturedLinePreset: Insp.isRmsFeaturedLinePreset,
+          isRmsLine1Preset: Insp.isRmsLine1Preset,
           isRmsFeaturedBarPreset: Insp.isRmsFeaturedBarPreset,
+          line1MountId: line1MountId,
+          appliedFilters: appliedFilters,
+          line1PeriodLabel: Core.line1PeriodLabel,
         });
         var renderSingleWidget = charts.renderSingleWidget;
         var renderVisibleCharts = charts.renderVisibleCharts;
@@ -1000,7 +1006,7 @@
                   });
                 }
                 if (KIT.CHART_WIDGET_TYPES.indexOf(w.widget_type) < 0) return Promise.resolve();
-                return api("GET", "/api/rms/dashboard-widgets/" + widgetId + "/data")
+                return api("GET", "/api/rms/dashboard-widgets/" + widgetId + "/data" + buildQuery(appliedFilters))
                   .then(function (d) {
                     widgetData.value[widgetId] = d;
                     return nextTick();
@@ -1016,9 +1022,10 @@
 
         function loadWidgetData(widgets) {
           if (!widgets || !widgets.length) return Promise.resolve();
+          var filterQs = buildQuery(appliedFilters);
           return Promise.all(widgets.map(function (w) {
             if (w.widget_type === "rms_block") return Promise.resolve();
-            return api("GET", "/api/rms/dashboard-widgets/" + w.id + "/data")
+            return api("GET", "/api/rms/dashboard-widgets/" + w.id + "/data" + filterQs)
               .then(function (d) {
                 widgetData.value[w.id] = d;
                 scheduleChartRenderBatch();
@@ -1111,6 +1118,7 @@
           metadata: metadata,
           error: error,
           refreshWidgetChart: refreshWidgetChart,
+          renderSingleWidget: renderSingleWidget,
           loadDashboard: loadDashboard,
           loadBoards: loadBoards,
           reloadActiveTabData: reloadActiveTabData,
@@ -1589,7 +1597,10 @@
           featuredPresetMountId: featuredPresetMountId,
           featuredLineMountId: featuredLineMountId,
           featuredBarMountId: featuredBarMountId,
+          line1MountId: line1MountId,
+          line1PresetMountId: line1PresetMountId,
           isRmsFeaturedLinePreset: Insp.isRmsFeaturedLinePreset,
+          isRmsLine1Preset: Insp.isRmsLine1Preset,
           isRmsFeaturedBarPreset: Insp.isRmsFeaturedBarPreset,
           isRmsFeaturedChartPreset: Insp.isRmsFeaturedChartPreset,
           cardCanvasId: cardCanvasId,

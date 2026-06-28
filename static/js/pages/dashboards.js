@@ -240,17 +240,19 @@
   }
 
   const METRIC_LABELS = { count: "计数", sum: "求和", avg: "平均", min: "最小", max: "最大" };
-  const CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar"];
+  const CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "line_1", "featured_bar"];
   const DATA_WIDGET_TYPES = ["number"].concat(CHART_WIDGET_TYPES);
   const TYPE_LABELS = {
     number: "数字", bar: "柱状", horizontal_bar: "横向排名", pie: "环形", line: "折线",
     featured_line: "重点折线",
+    line_1: "折线1",
     featured_bar: "重点柱状",
     rich_text: "文本", iframe: "网页", roster_summary: "花名册概览",
   };
   const TYPE_ICONS = {
     number: "#", bar: "▮", horizontal_bar: "▤", pie: "◔", line: "📈",
     featured_line: "◉",
+    line_1: "〽",
     featured_bar: "▮",
     rich_text: "¶", iframe: "▭", roster_summary: "▦",
   };
@@ -262,6 +264,10 @@
 
   function featuredChartMountId(w) {
     return "featured-line-" + w.id;
+  }
+
+  function line1MountId(w) {
+    return "line1-" + w.id;
   }
 
   function featuredBarMountId(item) {
@@ -326,6 +332,8 @@
             comparison_label: "较上期", average_label: "Avg",
             show_average_line: true, show_comparison: true, highlight_latest: true,
             featured_value_mode: "auto", show_point_values: false,
+            line1_value_mode: "sum", line1_x_axis_mode: "all", line1_range_label: "Last 12 months",
+            line1_active_index: "middle", show_line1_range: true, show_line1_fullscreen: true, show_line1_grid: true,
             show_tooltip: true,
             show_summary_legend: true,
             client_id: null, include_left: false,
@@ -450,8 +458,34 @@
           && (widgetForm.value.id || panelUserEdited.value);
       }
 
+      function syncWidgetFormToTab() {
+        var f = widgetForm.value;
+        if (!f || !f.id) return;
+        var tab = activeTab.value;
+        if (!tab || !tab.widgets) return;
+        var cfg = buildConfig();
+        tab.widgets.forEach(function (w) {
+          if (w.id !== f.id) return;
+          w.title = f.title;
+          w.widget_type = f.widget_type;
+          w.source_key = f.source_key;
+          w.config = cfg;
+        });
+      }
+
+      function previewWidgetChartFromForm() {
+        if (!widgetForm.value || !widgetForm.value.id || widgetForm.value.widget_type !== "line_1") return;
+        syncWidgetFormToTab();
+        var tab = activeTab.value;
+        if (!tab || !tab.widgets) return;
+        var w = tab.widgets.find(function (x) { return x.id === widgetForm.value.id; });
+        var data = widgetData.value[widgetForm.value.id];
+        if (w && data) renderSingleWidget(w);
+      }
+
       function schedulePersistWidget(delayMs) {
         if (!canAutosaveWidget()) return;
+        previewWidgetChartFromForm();
         clearWidgetAutosaveTimer();
         widgetAutosaveTimer = setTimeout(function () {
           widgetAutosaveTimer = null;
@@ -516,6 +550,19 @@
           if (c.featured_value_mode === undefined || c.featured_value_mode === "") c.featured_value_mode = "auto";
           if (c.show_point_values === undefined) c.show_point_values = false;
         }
+        if (t === "line_1") {
+          var l1 = widgetForm.value;
+          if (!l1.title || l1.title === "新组件") l1.title = "统计趋势";
+          var lc = l1.config;
+          if (lc.line1_value_mode === undefined || lc.line1_value_mode === "") lc.line1_value_mode = "sum";
+          if (lc.line1_x_axis_mode === undefined || lc.line1_x_axis_mode === "") lc.line1_x_axis_mode = "all";
+          if (lc.line1_range_label === undefined || lc.line1_range_label === "") lc.line1_range_label = "Last 12 months";
+          if (lc.line1_active_index === undefined || lc.line1_active_index === "") lc.line1_active_index = "middle";
+          if (lc.show_line1_range === undefined) lc.show_line1_range = true;
+          if (lc.show_line1_fullscreen === undefined) lc.show_line1_fullscreen = true;
+          if (lc.show_line1_grid === undefined) lc.show_line1_grid = true;
+          if (lc.color === undefined || lc.color === "") lc.color = "green";
+        }
         if (t === "featured_bar") {
           var fb = widgetForm.value;
           if (!fb.title || fb.title === "新组件") fb.title = "统计趋势";
@@ -524,10 +571,10 @@
           if (fc.show_average_line === undefined) fc.show_average_line = true;
           if (fc.show_tooltip === undefined) fc.show_tooltip = true;
           if (fc.show_summary_legend === undefined) fc.show_summary_legend = true;
-          if (fc.highlight_latest === undefined) fc.highlight_latest = true;
+          if (fc.highlight_item === undefined || fc.highlight_item === "") fc.highlight_item = "latest";
           fc.extra_views = [];
         }
-        if (t === "pie" || t === "number" || t === "featured_line") {
+        if (t === "pie" || t === "number" || t === "featured_line" || t === "line_1") {
           widgetForm.value.config.secondary_axis_field = "";
           widgetForm.value.config.group_mode = "stacked";
         }
@@ -536,7 +583,7 @@
 
       // Datetime grouping uses date_group; keep line / featured_line / featured_bar on their types.
       watch(function () { return [widgetForm.value.widget_type, widgetForm.value.config.group_by]; }, function () {
-        if (isDateGroup.value && ["line", "featured_line", "featured_bar"].indexOf(widgetForm.value.widget_type) >= 0) {
+        if (isDateGroup.value && ["line", "featured_line", "line_1", "featured_bar"].indexOf(widgetForm.value.widget_type) >= 0) {
           if (!widgetForm.value.config.date_group) widgetForm.value.config.date_group = "month";
         }
       });
@@ -624,6 +671,22 @@
         document.querySelectorAll(".bms-featured-bar-mount").forEach(function (el) {
           if (window.CrmFeaturedBarChartKit) window.CrmFeaturedBarChartKit.destroyFeaturedBarChart(el);
         });
+        document.querySelectorAll(".bms-line1-mount").forEach(function (el) {
+          if (window.CrmLine1ChartKit) window.CrmLine1ChartKit.destroy(el);
+        });
+      }
+
+      function renderLine1Widget(w, data) {
+        var mount = document.getElementById(line1MountId(w));
+        if (!mount || !window.CrmLine1ChartKit) return;
+        var cfg = KIT ? KIT.normalizeWidgetConfig(w.config || {}) : (w.config || {});
+        var accent = themeOf(cfg).base;
+        window.CrmLine1ChartKit.render(
+          mount,
+          Object.assign({}, w, { config: cfg }),
+          data,
+          { lineColor: accent }
+        );
       }
 
       function toggleGroupMode(ev) {
@@ -761,6 +824,10 @@
         if (!data) return;
         if (w.widget_type === "featured_line") {
           renderFeaturedLineWidget(w, data);
+          return;
+        }
+        if (w.widget_type === "line_1") {
+          renderLine1Widget(w, data);
           return;
         }
         if (w.widget_type === "featured_bar") {
@@ -909,6 +976,9 @@
           );
           if (merged.color_shade === undefined || merged.color_shade === null) merged.color_shade = 2;
           if (!merged.color) merged.color = base.config.color;
+          if (w.widget_type === "featured_bar" && (!merged.highlight_item || merged.highlight_item === "")) {
+            merged.highlight_item = "latest";
+          }
           widgetForm.value = {
             id: w.id,
             title: w.title,
@@ -1005,12 +1075,20 @@
             out.show_comparison = c.show_comparison !== false;
             out.highlight_latest = c.highlight_latest !== false;
             out.show_point_values = c.show_point_values === true;
+            out.featured_value_mode = c.featured_value_mode || "auto";
+          } else if (f.widget_type === "line_1") {
+            out.line1_value_mode = c.line1_value_mode || "sum";
+            out.line1_x_axis_mode = c.line1_x_axis_mode || "all";
+            out.line1_range_label = c.line1_range_label || "Last 12 months";
+            out.show_line1_range = c.show_line1_range !== false;
+            out.show_line1_fullscreen = c.show_line1_fullscreen !== false;
+            out.show_line1_grid = c.show_line1_grid !== false;
           } else if (f.widget_type === "featured_bar") {
             out.average_label = c.average_label || "Avg";
             out.show_average_line = c.show_average_line !== false;
             out.show_tooltip = c.show_tooltip !== false;
             out.show_summary_legend = c.show_summary_legend !== false;
-            out.highlight_latest = c.highlight_latest !== false;
+            out.highlight_item = c.highlight_item === "max" ? "max" : "latest";
             out.featured_value_mode = c.featured_value_mode || "auto";
             out.show_point_values = c.show_point_values === true;
           } else {
@@ -1126,7 +1204,7 @@
         colorPickerOpen, colorSearch, filteredColorRows, selectedColorRowLabel,
         isColorSwatchActive, pickColor, closeColorPicker, widgetPalette, selectedShade,
         cardStyle, themeColor, swatchColor, sourceLabel, metricLabel, typeLabel, typeIcon,
-        richTitle, richBody, showLegend, legendOf, featuredChartMountId, featuredBarMountId,
+        richTitle, richBody, showLegend, legendOf, featuredChartMountId, line1MountId, featuredBarMountId,
         rosterTiles, rosterScopeLabel, rosterHeadcount, isRosterClientCard,
         selectDashboard,
         openDashboardModal, saveDashboard, deleteActiveDashboard,

@@ -565,6 +565,59 @@ def test_rms_preset_featured_line_chart_type_roundtrip(client_rbac, admin_auth, 
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
 
+def test_rms_preset_line_1_chart_type_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    tab = _lifecycle_tab(client_rbac, login.cookies)
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab['id']}/widgets",
+        json={
+            "title": "折线1预设",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "chart_pipeline",
+                "style": {
+                    "color": "green",
+                    "color_shade": 2,
+                    "sort": "value_desc",
+                    "chart_type": "line_1",
+                    "metric": "count",
+                    "max_items": 8,
+                    "line1_value_mode": "sum",
+                    "line1_range_label": "Last 12 months",
+                    "show_line1_range": True,
+                    "show_line1_fullscreen": False,
+                    "show_line1_grid": True,
+                },
+            },
+            "x": 0,
+            "y": 30,
+            "w": 12,
+            "h": 5,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    wid = body["id"]
+    style = body["config"]["style"]
+    assert style["chart_type"] == "line_1"
+    assert style["line1_value_mode"] == "sum"
+    assert style["line1_range_label"] == "Last 12 months"
+    assert style["show_line1_range"] is True
+    assert style["show_line1_fullscreen"] is False
+    assert style["show_line1_grid"] is True
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    lifecycle = next(t for t in boards[0]["tabs"] if t["id"] == tab["id"])
+    saved = next(w for w in lifecycle["widgets"] if w["id"] == wid)
+    assert saved["config"]["style"]["chart_type"] == "line_1"
+    assert saved["config"]["style"]["line1_range_label"] == "Last 12 months"
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
 def test_rms_preset_featured_line_show_point_values_defaults_false(client_rbac, admin_auth, rms_engine, uniq):
     user, pwd = admin_auth
     login = _login(client_rbac, user, pwd)
@@ -627,7 +680,7 @@ def test_rms_preset_featured_bar_chart_type_roundtrip(client_rbac, admin_auth, r
                     "show_average_line": False,
                     "show_tooltip": True,
                     "show_summary_legend": False,
-                    "highlight_latest": True,
+                    "highlight_item": "max",
                 },
             },
             "x": 0,
@@ -650,6 +703,7 @@ def test_rms_preset_featured_bar_chart_type_roundtrip(client_rbac, admin_auth, r
     assert saved["config"]["style"]["show_average_line"] is False
     assert saved["config"]["style"]["show_tooltip"] is True
     assert saved["config"]["style"]["show_summary_legend"] is False
+    assert saved["config"]["style"]["highlight_item"] == "max"
 
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
@@ -2005,6 +2059,125 @@ def test_rms_applications_current_stage_pipeline_order(client_rbac, admin_auth, 
     expected = [application_progress_label(s) for s in APPLICATION_PROGRESS_ORDER if application_progress_label(s) in labels]
     assert labels == expected
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_line1_snapshot_axis_mode(client_rbac, admin_auth, rms_engine, uniq):
+    from sqlalchemy import text
+
+    from services.rms_dashboard import _PIPELINE_LABELS
+
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"l1snap_{uniq}")
+    stages = ["pending_first_interview", "first_interview_failed", "onboarding"]
+    for st in stages:
+        cand = client_rbac.post(
+            "/api/rms/candidates",
+            cookies=login_del.cookies,
+            json=_candidate_json(job_id, name=f"Cand {st}"),
+        )
+        assert cand.status_code == 200, cand.text
+        app = client_rbac.post(
+            "/api/rms/applications",
+            cookies=login_del.cookies,
+            json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+        )
+        assert app.status_code == 200, app.text
+        with rms_engine.begin() as conn:
+            conn.execute(
+                text(
+                    "UPDATE rms_applications SET status = :status, current_stage = :status WHERE id = :id"
+                ),
+                {"id": app.json()["id"], "status": st},
+            )
+
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        widget_type="line_1",
+        source_key="rms_applications",
+        config={
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "line1_x_axis_mode": "snapshot",
+        },
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body.get("labels") == [
+        _PIPELINE_LABELS["pending_first_interview"],
+        _PIPELINE_LABELS["onboarding"],
+    ]
+    assert body.get("values") == [1.0, 1.0]
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_rms_line1_historical_axis_mode(client_rbac, admin_auth, rms_engine, uniq):
+    from sqlalchemy import text
+
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"l1hist_{uniq}")
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id, name="Hist Cand"),
+    )
+    assert cand.status_code == 200, cand.text
+    app = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+    )
+    assert app.status_code == 200, app.text
+    app_id = app.json()["id"]
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = :status, current_stage = :status WHERE id = :id"
+            ),
+            {"id": app_id, "status": "hired"},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO rms_application_status_history "
+                "(application_id, from_status, to_status, reason, note, changed_by, changed_at) "
+                "VALUES (:app_id, 'onboarding', 'hired', 'transition', '入职', 1, '2026-06-01')"
+            ),
+            {"app_id": app_id},
+        )
+
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        widget_type="line_1",
+        source_key="rms_applications",
+        config={
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "line1_x_axis_mode": "historical",
+        },
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert "已入职" in (body.get("labels") or [])
+    assert body.get("values")[(body.get("labels") or []).index("已入职")] >= 1.0
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
+def test_dashboard_period_label():
+    from services.rms_dashboard import dashboard_period_label
+
+    assert dashboard_period_label({}) == "全部"
+    assert dashboard_period_label({"date_from": "2026-01-01", "date_to": "2026-06-28"}) == "2026-01-01 ~ 2026-06-28"
 
 
 def test_rms_widget_data_manual_primary_axis_order(client_rbac, admin_auth, rms_engine, uniq):

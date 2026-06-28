@@ -1622,7 +1622,7 @@ def test_featured_bar_config_roundtrip(client, admin_auth):
             "show_average_line": False,
             "show_tooltip": True,
             "show_summary_legend": False,
-            "highlight_latest": False,
+            "highlight_item": "max",
             "color": "blue",
             "color_shade": 3,
         },
@@ -1636,9 +1636,8 @@ def test_featured_bar_config_roundtrip(client, admin_auth):
     assert cfg["show_average_line"] is False
     assert cfg["show_tooltip"] is True
     assert cfg["show_summary_legend"] is False
-    assert cfg["highlight_latest"] is False
-    assert cfg["featured_value_mode"] == "latest"
-    assert cfg["show_point_values"] is True
+    assert cfg["highlight_item"] == "max"
+    assert cfg.get("featured_value_mode", "auto") == "auto"
     assert cfg["prefix"] == "$"
     assert cfg.get("extra_views", []) == []
     client.delete(f"/api/dashboards/{dash_id}", headers=headers)
@@ -1797,4 +1796,235 @@ if (blob.includes("133.3%")) {{ console.error("must not show share-of-total for 
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr or result.stdout
 
+
+def test_dashboard_metadata_includes_line_1(client, admin_auth):
+    headers = _admin_headers(admin_auth)
+    r = client.get("/api/dashboard-metadata", headers=headers)
+    assert r.status_code == 200
+    types = r.json()["widget_types"]
+    assert "line_1" in types
+    assert "featured_line" in types
+    assert types.index("featured_line") < types.index("line_1")
+    assert types.index("line_1") < types.index("featured_bar")
+
+
+def test_line_1_widget_config_roundtrip(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Line1 Dash")
+    payload = {
+        "title": "折线1趋势",
+        "widget_type": "line_1",
+        "source_key": "opportunities",
+        "config": {
+            "metric": "count",
+            "group_by": "stage",
+            "line1_value_mode": "latest",
+            "line1_range_label": "Last 6 months",
+            "show_line1_range": False,
+            "show_line1_fullscreen": True,
+            "show_line1_grid": False,
+            "prefix": "$",
+            "suffix": "",
+            "color": "green",
+            "color_shade": 2,
+        },
+    }
+    r = client.post(f"/api/dashboard-tabs/{tab_id}/widgets", headers=headers, json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["widget_type"] == "line_1"
+    cfg = body["config"]
+    assert cfg["line1_value_mode"] == "latest"
+    assert cfg["line1_range_label"] == "Last 6 months"
+    assert cfg["show_line1_range"] is False
+    assert cfg["show_line1_fullscreen"] is True
+    assert cfg["show_line1_grid"] is False
+    assert cfg.get("extra_views", []) == []
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_line_1_rejects_secondary_axis(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Line1 Secondary")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Bad",
+            "widget_type": "line_1",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "secondary_axis_field": "owner",
+            },
+        },
+    )
+    assert r.status_code == 400
+    assert "折线1暂不支持二级分组" in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_line_1_rejects_extra_views(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Line1 Extra Views")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Bad",
+            "widget_type": "line_1",
+            "source_key": "opportunities",
+            "config": {
+                "metric": "count",
+                "group_by": "stage",
+                "extra_views": [{"render": "doughnut", "x": 0, "y": 0, "w": 4, "h": 4}],
+            },
+        },
+    )
+    assert r.status_code == 400
+    assert "折线1不支持 extra_views" in r.json().get("detail", "")
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_line_1_series_data(client, admin_auth):
+    headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
+    dash_id, tab_id = _make_tab(client, headers, "Line1 Series")
+    r = client.post(
+        f"/api/dashboard-tabs/{tab_id}/widgets",
+        headers=headers,
+        json={
+            "title": "Line1",
+            "widget_type": "line_1",
+            "source_key": "opportunities",
+            "config": {"metric": "count", "group_by": "stage", "limit": 20},
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    r = client.get(f"/api/dashboard-widgets/{body['id']}/data", headers=headers)
+    assert r.status_code == 200
+    assert r.json()["kind"] == "series"
+    client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_line_1_frontend_assets():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    dash_html = (root / "templates/pages/dashboards.html").read_text(encoding="utf-8")
+    rms_html = (root / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
+    js = (root / "static/js/pages/dashboards.js").read_text(encoding="utf-8")
+    assert "line1-chart-kit.js" in dash_html
+    assert "line1-chart-kit.js" in rms_html
+    assert "bms-line1-mount" in dash_html
+    assert "line_1" in js
+    assert "折线1" in js
+    assert "featured_line" in js
+    assert "重点折线" in js
+
+
+def _line1_kit_node_script(extra_body: str, kit_path) -> str:
+    kit_path_str = str(kit_path).replace("\\", "\\\\")
+    return f"""
+const fs = require("fs");
+function makeEl(tag) {{
+  const node = {{
+    tagName: tag.toUpperCase(),
+    className: "",
+    textContent: "",
+    style: {{}},
+    _inner: "",
+    children: [],
+    appendChild(c) {{ this.children.push(c); return c; }},
+    setAttribute() {{}},
+    addEventListener() {{}},
+    removeEventListener() {{}},
+    getBoundingClientRect() {{ return {{ left: 0, width: 400 }}; }},
+  }};
+  Object.defineProperty(node, "innerHTML", {{
+    get() {{ return node._inner; }},
+    set(v) {{ node._inner = String(v); }},
+  }});
+  return node;
+}}
+const document = {{ createElement: makeEl }};
+globalThis.document = document;
+globalThis.ResizeObserver = undefined;
+eval(fs.readFileSync("{kit_path_str}", "utf8"));
+function collectHtml(node) {{
+  let s = (node.className || "") + (node._inner || "") + (node.textContent || "");
+  for (const c of node.children || []) s += collectHtml(c);
+  return s;
+}}
+{extra_body}
+"""
+
+
+def test_line_1_chart_kit_renders_multi_point_series():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/line1-chart-kit.js"
+    body = """
+const mountEl = document.createElement("div");
+const widget = { title: "统计趋势", config: { show_line1_fullscreen: false, show_line1_grid: true } };
+const apiData = {
+  status: "ok", kind: "series",
+  labels: ["Jan", "Feb", "Mar", "Apr"],
+  values: [10, 20, 15, 30],
+  total: 75,
+};
+CrmLine1ChartKit.render(mountEl, widget, apiData, { lineColor: "#63aa82" });
+const blob = collectHtml(mountEl);
+for (const needle of ["line1-card", "line1-tooltip", "line1-cursor", "line1-active-point"]) {
+  if (!blob.includes(needle)) { console.error("missing " + needle); process.exit(1); }
+}
+"""
+    result = subprocess.run(["node", "-e", _line1_kit_node_script(body, kit)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_line_1_chart_kit_latest_mode_ignores_total():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/line1-chart-kit.js"
+    body = """
+const model = CrmLine1ChartKit.normalizeLine1Data(
+  { config: { line1_value_mode: "latest" } },
+  { status: "ok", kind: "series", labels: ["A", "B"], values: [1, 9], total: 999 }
+);
+if (model.mainValue !== 9) { console.error("latest must use last point not total"); process.exit(1); }
+const sumModel = CrmLine1ChartKit.normalizeLine1Data(
+  { config: { line1_value_mode: "sum" } },
+  { status: "ok", kind: "series", labels: ["A", "B"], values: [1, 9], total: 999 }
+);
+if (sumModel.mainValue !== 999) { console.error("sum must prefer total"); process.exit(1); }
+const maxModel = CrmLine1ChartKit.normalizeLine1Data(
+  { config: { line1_value_mode: "max" } },
+  { status: "ok", kind: "series", labels: ["A", "B", "C"], values: [1, 9, 4], total: 999 }
+);
+if (maxModel.mainValue !== 9) { console.error("max must use peak point not total"); process.exit(1); }
+"""
+    result = subprocess.run(["node", "-e", _line1_kit_node_script(body, kit)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
+
+
+def test_line_1_chart_kit_empty_data_safe():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/line1-chart-kit.js"
+    body = """
+const mountEl = document.createElement("div");
+CrmLine1ChartKit.render(mountEl, { title: "空", config: { show_line1_fullscreen: false } }, null);
+const blob = collectHtml(mountEl);
+if (!blob.includes("line1-card")) { console.error("expected card"); process.exit(1); }
+"""
+    result = subprocess.run(["node", "-e", _line1_kit_node_script(body, kit)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr or result.stdout
 

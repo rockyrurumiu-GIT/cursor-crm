@@ -71,6 +71,7 @@ def register_rms_dashboard_routes(
         "RmsJob": RmsJob,
         "RmsCandidate": RmsCandidate,
         "RmsApplication": RmsApplication,
+        "RmsApplicationStatusHistory": RmsApplicationStatusHistory,
     }
     def _assert_rms_tab(db: Session, tab_id: int) -> Any:
         tab = db.query(DashboardTab).filter(DashboardTab.id == tab_id).first()
@@ -234,12 +235,43 @@ def register_rms_dashboard_routes(
     @app.get("/api/rms/dashboard-widgets/{widget_id}/data")
     async def api_rms_widget_data(
         widget_id: int,
+        client_id: Optional[int] = None,
+        job_id: Optional[int] = None,
+        job_ids: Optional[str] = None,
+        priority: Optional[str] = None,
+        city: Optional[str] = None,
+        sales_user_id: Optional[int] = None,
+        delivery_user_id: Optional[int] = None,
+        recruiter_user_id: Optional[int] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
         db: Session = Depends(get_db),
         ctx: AuthContext = Depends(get_current_context),
         _user: str = Depends(require_permission("rms.analytics.read")),
     ):
         _assert_rms_widget(db, widget_id)
-        return board_svc.get_widget_data(db, ctx, widget_id, widget_models, DashboardWidget)
+        parsed_job_ids = None
+        if job_ids is not None and str(job_ids).strip():
+            try:
+                parsed_job_ids = dash_svc.parse_job_ids(job_ids)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        dashboard_filters = dash_svc.parse_dashboard_filter_params(
+            client_id=client_id,
+            job_id=job_id,
+            job_ids=parsed_job_ids,
+            priority=priority,
+            city=city,
+            sales_user_id=sales_user_id,
+            delivery_user_id=delivery_user_id,
+            recruiter_user_id=recruiter_user_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        return board_svc.get_widget_data(
+            db, ctx, widget_id, widget_models, DashboardWidget,
+            dashboard_filters=dashboard_filters or None,
+        )
 
     @app.get("/api/rms/dashboard/roster-clients")
     async def api_rms_roster_clients(

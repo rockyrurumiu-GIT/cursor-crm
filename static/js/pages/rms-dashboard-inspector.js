@@ -29,10 +29,11 @@
     pie: "环形",
     line: "折线",
     featured_line: "重点折线",
+    line_1: "折线1",
     featured_bar: "重点柱状",
   };
 
-  var RMS_PRESET_CHART_TYPES = ["horizontal_bar", "bar", "pie", "line", "featured_line", "featured_bar"];
+  var RMS_PRESET_CHART_TYPES = ["horizontal_bar", "bar", "pie", "line", "featured_line", "line_1", "featured_bar"];
   var RMS_PRESET_GROUPED_CHART_TYPES = ["horizontal_bar", "bar", "line"];
 
   var RMS_LEGACY_PALETTE_MAP = {
@@ -66,6 +67,13 @@
       show_grid: true,
       bar_radius: RMS_CHART_BAR_RADIUS,
       max_items: 8,
+      line1_value_mode: "sum",
+      line1_range_label: "Last 12 months",
+      line1_active_index: "middle",
+      show_line1_range: true,
+      show_line1_fullscreen: true,
+      show_line1_grid: true,
+      highlight_item: "latest",
     };
     if (block === "lifecycle_funnel") {
       style.sort = "original";
@@ -101,6 +109,13 @@
     return rmsPresetStyle(widget.config, block).chart_type === "featured_line";
   }
 
+  function isRmsLine1Preset(widget) {
+    if (!widget || widget.widget_type !== "rms_block") return false;
+    var block = widget.config && widget.config.block;
+    if (!isRmsPresetStyleBlock(block)) return false;
+    return rmsPresetStyle(widget.config, block).chart_type === "line_1";
+  }
+
   function isRmsFeaturedBarPreset(widget) {
     if (!widget || widget.widget_type !== "rms_block") return false;
     var block = widget.config && widget.config.block;
@@ -109,7 +124,7 @@
   }
 
   function isRmsFeaturedChartPreset(widget) {
-    return isRmsFeaturedLinePreset(widget) || isRmsFeaturedBarPreset(widget);
+    return isRmsFeaturedLinePreset(widget) || isRmsLine1Preset(widget) || isRmsFeaturedBarPreset(widget);
   }
 
   function presetStyleColorCfg(style) {
@@ -169,6 +184,7 @@
     var metadata = deps.metadata;
     var error = deps.error;
     var refreshWidgetChart = deps.refreshWidgetChart;
+    var renderSingleWidget = deps.renderSingleWidget;
     var loadDashboard = deps.loadDashboard;
     var loadBoards = deps.loadBoards;
     var reloadActiveTabData = deps.reloadActiveTabData;
@@ -220,7 +236,7 @@
       return KIT.DATA_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
     });
     var chartTypePills = computed(function () {
-      return ["bar", "horizontal_bar", "line", "pie", "featured_line", "featured_bar", "number", "rms_block"];
+      return ["bar", "horizontal_bar", "line", "pie", "featured_line", "line_1", "featured_bar", "number", "rms_block"];
     });
     var supportsSecondary = computed(function () {
       return ["bar", "horizontal_bar", "line", "featured_bar"].indexOf(widgetForm.value.widget_type) >= 0;
@@ -425,6 +441,15 @@
           widgetForm.value.config.style.show_point_values = false;
         }
       }
+      if (chartType === "line_1") {
+        var st = widgetForm.value.config.style;
+        if (st.line1_value_mode === undefined || st.line1_value_mode === "") st.line1_value_mode = "sum";
+        if (st.line1_range_label === undefined || st.line1_range_label === "") st.line1_range_label = "Last 12 months";
+        if (st.line1_active_index === undefined || st.line1_active_index === "") st.line1_active_index = "middle";
+        if (st.show_line1_range === undefined) st.show_line1_range = true;
+        if (st.show_line1_fullscreen === undefined) st.show_line1_fullscreen = true;
+        if (st.show_line1_grid === undefined) st.show_line1_grid = true;
+      }
       if (chartType === "featured_bar") {
         if (block === "chart_lifecycle_pass_rate") {
           widgetForm.value.config.style.sort = "original";
@@ -441,6 +466,10 @@
         }
         if (widgetForm.value.config.style.show_summary_legend === undefined) {
           widgetForm.value.config.style.show_summary_legend = true;
+        }
+        if (widgetForm.value.config.style.highlight_item === undefined
+          || widgetForm.value.config.style.highlight_item === "") {
+          widgetForm.value.config.style.highlight_item = "latest";
         }
         if (widgetForm.value.config.style.highlight_latest === undefined) {
           widgetForm.value.config.style.highlight_latest = true;
@@ -621,30 +650,13 @@
     }
     function schedulePersistWidget(delayMs) {
       if (!canAutosaveWidget()) return;
+      previewWidgetChartFromForm();
       clearWidgetAutosaveTimer();
       widgetAutosaveTimer = setTimeout(function () {
         widgetAutosaveTimer = null;
         flushPersistWidget();
       }, delayMs == null ? 420 : delayMs);
     }
-    function buildConfig() {
-      var f = widgetForm.value;
-      if (f.widget_type === "rms_block") {
-        var block = (f.config && f.config.block) || "kpi_jobs";
-        var cfg = { block: block };
-        if (isRmsPresetStyleBlock(block)) {
-          cfg.style = rmsPresetStyle(f.config, block);
-        }
-        return cfg;
-      }
-      return KIT.buildConfig(
-        f,
-        rosterScope.value,
-        function () { return isDateGroup.value; },
-        function () { return isChart.value; }
-      );
-    }
-
     function syncWidgetFormToTab() {
       var f = widgetForm.value;
       if (!f || f.id == null) return;
@@ -662,6 +674,39 @@
         tab.widgets[i].h = f.h;
         break;
       }
+    }
+
+    function previewWidgetChartFromForm() {
+      if (!widgetForm.value || !widgetForm.value.id) return;
+      if (widgetForm.value.widget_type !== "line_1" && !isRmsLine1Preset(widgetForm.value)) return;
+      syncWidgetFormToTab();
+      var tab = activeTab.value;
+      if (!tab || !tab.widgets) return;
+      var w = tab.widgets.find(function (x) { return x.id === widgetForm.value.id; });
+      var wd = widgetData.value[widgetForm.value.id];
+      if (w && renderSingleWidget && (isRmsLine1Preset(w) || wd)) {
+        renderSingleWidget(w, { animate: false });
+        return;
+      }
+      if (refreshWidgetChart) refreshWidgetChart(widgetForm.value.id, { animate: false });
+    }
+
+    function buildConfig() {
+      var f = widgetForm.value;
+      if (f.widget_type === "rms_block") {
+        var block = (f.config && f.config.block) || "kpi_jobs";
+        var cfg = { block: block };
+        if (isRmsPresetStyleBlock(block)) {
+          cfg.style = rmsPresetStyle(f.config, block);
+        }
+        return cfg;
+      }
+      return KIT.buildConfig(
+        f,
+        rosterScope.value,
+        function () { return isDateGroup.value; },
+        function () { return isChart.value; }
+      );
     }
 
     function flushPersistWidget(force) {
@@ -1049,9 +1094,20 @@
       if (t === "roster_summary") {
         widgetForm.value.source_key = "roster_entries";
       }
-      if (t === "pie" || t === "number" || t === "featured_line") {
+      if (t === "pie" || t === "number" || t === "featured_line" || t === "line_1") {
         widgetForm.value.config.secondary_axis_field = "";
         widgetForm.value.config.group_mode = "stacked";
+      }
+      if (t === "line_1") {
+        var lc = widgetForm.value.config;
+        if (lc.line1_value_mode === undefined || lc.line1_value_mode === "") lc.line1_value_mode = "sum";
+        if (lc.line1_x_axis_mode === undefined || lc.line1_x_axis_mode === "") lc.line1_x_axis_mode = "all";
+        if (lc.line1_range_label === undefined || lc.line1_range_label === "") lc.line1_range_label = "Last 12 months";
+        if (lc.line1_active_index === undefined || lc.line1_active_index === "") lc.line1_active_index = "middle";
+        if (lc.show_line1_range === undefined) lc.show_line1_range = true;
+        if (lc.show_line1_fullscreen === undefined) lc.show_line1_fullscreen = true;
+        if (lc.show_line1_grid === undefined) lc.show_line1_grid = true;
+        if (!widgetForm.value.title || widgetForm.value.title === "新组件") widgetForm.value.title = "统计趋势";
       }
       if (t === "featured_bar") {
         widgetForm.value.config.extra_views = [];
@@ -1214,6 +1270,7 @@
     isRmsPresetStyleBlock: isRmsPresetStyleBlock,
     isRmsPresetGroupedChartBlock: isRmsPresetGroupedChartBlock,
     isRmsFeaturedLinePreset: isRmsFeaturedLinePreset,
+    isRmsLine1Preset: isRmsLine1Preset,
     isRmsFeaturedBarPreset: isRmsFeaturedBarPreset,
     isRmsFeaturedChartPreset: isRmsFeaturedChartPreset,
     RMS_PRESET_CHART_TYPES: RMS_PRESET_CHART_TYPES,

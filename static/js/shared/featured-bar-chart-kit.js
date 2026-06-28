@@ -48,11 +48,24 @@
     return s;
   }
 
+  function resolveHighlightItem(cfg) {
+    var item = cfg && cfg.highlight_item;
+    if (item === "max" || item === "latest") return item;
+    return "latest";
+  }
+
   function resolveActiveIndex(points, cfg) {
-    if (cfg.highlight_latest === false) return -1;
     if (!points.length) return -1;
+    var mode = resolveHighlightItem(cfg);
+    if (mode === "max") {
+      var maxIdx = 0;
+      var i;
+      for (i = 1; i < points.length; i++) {
+        if (points[i].value > points[maxIdx].value) maxIdx = i;
+      }
+      return maxIdx;
+    }
     var current = currentPeriodLabel(cfg.date_group || "month");
-    var i;
     for (i = 0; i < points.length; i++) {
       if (points[i].label === current) return i;
     }
@@ -301,6 +314,8 @@
           index: i,
           xPct: (centerX / w) * 100,
           yPct: (by / h) * 100,
+          svgX: centerX,
+          svgY: by,
           value: points[i].value,
           label: points[i].label,
           isActive: true,
@@ -313,6 +328,8 @@
         value: points[i].value,
         xPct: (centerX / w) * 100,
         yPct: (by / h) * 100,
+        svgX: centerX,
+        svgY: by,
         isActive: isActive,
       });
 
@@ -333,10 +350,52 @@
       activeMeta: activeMeta,
       barMetas: barMetas,
       avgLineYPct: avgLineYPct,
+      geometry: {
+        w: w,
+        h: h,
+        padL: padL,
+        chartW: chartW,
+        n: n,
+        slotW: slotW,
+      },
     };
   }
 
-  function bindBarHoverTips(chartWrap, model, barMetas) {
+  function barIndexAtClientX(clientX, svgEl, geo) {
+    if (!svgEl || !geo || !geo.n) return 0;
+    var rect = svgEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return 0;
+    var scale = Math.min(rect.width / geo.w, rect.height / geo.h);
+    var renderedW = geo.w * scale;
+    var offsetX = rect.left + (rect.width - renderedW) / 2;
+    var svgX = (clientX - offsetX) / scale;
+    var raw = (svgX - geo.padL) / geo.slotW;
+    return Math.max(0, Math.min(geo.n - 1, Math.floor(raw)));
+  }
+
+  function barTipPosition(meta, svgEl, geo, chartWrap) {
+    if (!meta || !svgEl || !geo || !chartWrap) {
+      return { left: (meta && meta.xPct != null ? meta.xPct : 0) + "%", top: (meta && meta.yPct != null ? meta.yPct : 0) + "%" };
+    }
+    var svgRect = svgEl.getBoundingClientRect();
+    var wrapRect = chartWrap.getBoundingClientRect();
+    if (!svgRect.width || !wrapRect.width) {
+      return { left: meta.xPct + "%", top: meta.yPct + "%" };
+    }
+    var scale = Math.min(svgRect.width / geo.w, svgRect.height / geo.h);
+    var renderedW = geo.w * scale;
+    var renderedH = geo.h * scale;
+    var offsetX = svgRect.left + (svgRect.width - renderedW) / 2;
+    var offsetY = svgRect.top + (svgRect.height - renderedH) / 2;
+    var px = offsetX + meta.svgX * scale - wrapRect.left;
+    var py = offsetY + meta.svgY * scale - wrapRect.top;
+    return {
+      left: ((px / wrapRect.width) * 100) + "%",
+      top: ((py / wrapRect.height) * 100) + "%",
+    };
+  }
+
+  function bindBarHoverTips(chartWrap, model, barMetas, geometry) {
     if (!model.showTooltip || !barMetas.length) return function () {};
 
     var total = 0;
@@ -344,56 +403,83 @@
 
     var hoverTip = document.createElement("div");
     hoverTip.className = "bms-featured-bar-hover-tip";
+    var tipTitle = document.createElement("div");
+    tipTitle.className = "bms-featured-bar-hover-tip-title";
+    var tipRow = document.createElement("div");
+    tipRow.className = "bms-featured-bar-hover-tip-row";
+    var tipSwatch = document.createElement("span");
+    tipSwatch.setAttribute("aria-hidden", "true");
+    var tipValue = document.createElement("span");
+    tipValue.className = "bms-featured-bar-hover-tip-value";
+    tipRow.appendChild(tipSwatch);
+    tipRow.appendChild(tipValue);
+    hoverTip.appendChild(tipTitle);
+    hoverTip.appendChild(tipRow);
     chartWrap.appendChild(hoverTip);
 
-    function showTip(meta) {
-      if (!meta) return;
-      var swatchClass = meta.isActive
+    var hoverLive = false;
+    var activeIdx = -1;
+
+    function renderTipContent(meta) {
+      tipTitle.textContent = meta.label;
+      tipSwatch.className = meta.isActive
         ? "bms-featured-bar-hover-tip-swatch bms-featured-bar-hover-tip-swatch--active"
         : "bms-featured-bar-hover-tip-swatch bms-featured-bar-hover-tip-swatch--inactive";
       var valueText = formatValue(model.valuePrefix, model.valueSuffix, meta.value);
       var rightText = legendRightText(meta.value, total, model.valuePrefix, model.valueSuffix);
-      var pctSuffix = isPercentSuffix(model.valueSuffix)
-        ? ""
-        : ' <span class="bms-featured-bar-hover-tip-pct">(' + escapeHtml(rightText) + ")</span>";
-      hoverTip.innerHTML =
-        '<div class="bms-featured-bar-hover-tip-title">' + escapeHtml(meta.label) + "</div>"
-        + '<div class="bms-featured-bar-hover-tip-row">'
-        + '<span class="' + swatchClass + '" aria-hidden="true"></span>'
-        + '<span class="bms-featured-bar-hover-tip-value">' + escapeHtml(valueText) + pctSuffix + "</span>"
-        + "</div>";
-      hoverTip.style.left = meta.xPct + "%";
-      hoverTip.style.top = meta.yPct + "%";
-      hoverTip.style.transform = "translate(-50%, calc(-100% - 4px))";
-      if (hoverTip.classList) hoverTip.classList.add("is-visible");
-      else hoverTip.className = "bms-featured-bar-hover-tip is-visible";
+      if (isPercentSuffix(model.valueSuffix)) {
+        tipValue.textContent = valueText;
+      } else {
+        tipValue.innerHTML = escapeHtml(valueText)
+          + ' <span class="bms-featured-bar-hover-tip-pct">(' + escapeHtml(rightText) + ")</span>";
+      }
+    }
+
+    function showTip(meta) {
+      if (!meta) return;
+      var idx = meta.index;
+      if (hoverLive && idx === activeIdx) return;
+      activeIdx = idx;
+
+      var firstFrame = !hoverLive;
+      if (firstFrame) hoverTip.classList.add("is-instant");
+
+      renderTipContent(meta);
+      var pos = barTipPosition(meta, svgEl, geometry, chartWrap);
+      hoverTip.style.left = pos.left;
+      hoverTip.style.top = pos.top;
+      hoverTip.classList.add("is-visible");
+      hoverLive = true;
+
+      if (firstFrame) {
+        void hoverTip.offsetWidth;
+        hoverTip.classList.remove("is-instant");
+      }
     }
 
     function hideTip() {
-      if (hoverTip.classList) hoverTip.classList.remove("is-visible");
-      else hoverTip.className = "bms-featured-bar-hover-tip";
+      hoverLive = false;
+      activeIdx = -1;
+      hoverTip.classList.remove("is-instant");
+      hoverTip.classList.remove("is-visible");
     }
 
-    var handlers = [];
-    var hits = chartWrap.querySelectorAll ? chartWrap.querySelectorAll(".bms-featured-bar-hit") : [];
-    for (var hi = 0; hi < hits.length; hi++) {
-      (function (hit) {
-        var idx = Number(hit.getAttribute && hit.getAttribute("data-index"));
-        var meta = barMetas[idx];
-        if (!meta || !hit.addEventListener) return;
-        function onEnter() { showTip(meta); }
-        function onLeave() { hideTip(); }
-        hit.addEventListener("mouseenter", onEnter);
-        hit.addEventListener("mouseleave", onLeave);
-        handlers.push({ hit: hit, onEnter: onEnter, onLeave: onLeave });
-      })(hits[hi]);
+    var svgEl = chartWrap.querySelector ? chartWrap.querySelector(".bms-featured-bar-svg") : null;
+
+    function onMove(e) {
+      var idx = barIndexAtClientX(e.clientX, svgEl, geometry);
+      showTip(barMetas[idx]);
     }
+    function onLeave() {
+      hideTip();
+    }
+
+    chartWrap.addEventListener("mousemove", onMove);
+    chartWrap.addEventListener("mouseleave", onLeave);
 
     return function () {
-      handlers.forEach(function (h) {
-        h.hit.removeEventListener("mouseenter", h.onEnter);
-        h.hit.removeEventListener("mouseleave", h.onLeave);
-      });
+      chartWrap.removeEventListener("mousemove", onMove);
+      chartWrap.removeEventListener("mouseleave", onLeave);
       if (hoverTip.parentNode) hoverTip.parentNode.removeChild(hoverTip);
     };
   }
@@ -468,7 +554,7 @@
       chartWrap.appendChild(avgLabel);
     }
 
-    var unbindHover = bindBarHoverTips(chartWrap, model, built.barMetas || []);
+    var unbindHover = bindBarHoverTips(chartWrap, model, built.barMetas || [], built.geometry);
     card.appendChild(chartWrap);
 
     var legendEl = buildLegendSummary(model);
