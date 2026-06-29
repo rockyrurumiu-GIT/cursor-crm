@@ -237,10 +237,17 @@
   background: #fff; border-radius: 16px; padding: 14px 20px 14px; box-sizing: border-box;
 }
 .line1-top-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  display: flex; align-items: center; justify-content: flex-start; gap: 0.75rem;
   margin-bottom: 0.5rem; min-height: 0;
 }
-.line1-header-actions { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; }
+.line1-head-range-slot {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  align-self: center;
+}
+.line1-header-actions { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; margin-left: auto; }
 .line1-range-pill {
   display: inline-flex; align-items: center; padding: 0.2rem 0.55rem; border-radius: 999px;
   font-size: 0.72rem; color: #6b7280; background: #f3f4f6; border: 1px solid #e5e7eb;
@@ -250,7 +257,7 @@
 .line1-sub-metric { margin-top: 0.25rem; font-size: 0.78rem; color: #6b7280; }
 .line1-empty { font-size: 1rem; color: #98a2b3; }
 .line1-chart-wrap {
-  position: relative; flex: 1; min-height: 150px; width: 100%;
+  position: relative; flex: 1; min-height: 150px; width: 100%; overflow: visible;
   --bms-chart-hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
   --bms-chart-hover-move: 420ms;
   --bms-chart-hover-fade: 280ms;
@@ -328,9 +335,16 @@
 }
 .line1-toggle-row input[type="checkbox"] { margin: 0; flex-shrink: 0; cursor: pointer; }
 .line1-chart-empty { min-height: 120px; display: flex; align-items: center; justify-content: center; color: #98a2b3; font-size: 0.9rem; }
-.line1-x-axis { position: relative; height: 22px; margin-top: 0.25rem; }
+.line1-x-axis {
+  position: relative;
+  height: 28px;
+  margin-top: 0.25rem;
+  flex-shrink: 0;
+  width: 100%;
+  overflow: visible;
+}
 .line1-x-label {
-  position: absolute; transform: translateX(-50%); font-size: 0.68rem; color: #9ca3af;
+  position: absolute; top: 0; transform: translateX(-50%); font-size: 0.68rem; color: #9ca3af;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 72px;
 }
 .bms-featured-bar-mount {
@@ -553,6 +567,11 @@
 /* simple modal (dashboard/tab) */
 .modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 60; display: flex; align-items: center; justify-content: center; }
 .modal-panel { background: #fff; border-radius: 14px; padding: 1.25rem; width: 90%; max-width: 420px; }
+.modal-form-title { font-size: 1rem; font-weight: 700; color: #1f2328; margin: 0 0 1rem; }
+.modal-form-body { display: flex; flex-direction: column; gap: 0.85rem; }
+.modal-form-body .field { margin-bottom: 0; }
+.modal-form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid #eceef1; }
+.modal-form-body textarea.crm-form-control { height: auto; min-height: 4.5rem; resize: vertical; }
 
 .extra-view-tag {
   font-size: 0.65rem;
@@ -611,6 +630,10 @@
         </nav>
         <div v-if="editMode && canWrite" class="dash-page-tabs-actions">
             <button class="tbtn" @click="openWidgetPanel()" :disabled="!activeTabId">+ 组件</button>
+            <button v-if="canDelete" class="tbtn tbtn-danger"
+                :disabled="!activeTabId || !activeDashboard || activeDashboard.tabs.length <= 1"
+                :title="activeDashboard && activeDashboard.tabs.length <= 1 ? '至少保留一个标签页' : '删除当前标签页'"
+                @click="deleteActiveTab()">删除标签页</button>
             <button v-if="canDelete" class="tbtn tbtn-danger" @click="deleteActiveDashboard()">删除看板</button>
         </div>
     </div>
@@ -894,6 +917,7 @@
                                 <div class="line1-toggle-list">
                                     <label class="line1-toggle-row"><span>显示时间范围</span><input type="checkbox" v-model="widgetForm.config.show_line1_range" /></label>
                                     <label class="line1-toggle-row"><span>显示网格线</span><input type="checkbox" v-model="widgetForm.config.show_line1_grid" /></label>
+                                    <label class="line1-toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.show_tooltip" /></label>
                                 </div>
                             </div>
                             <div class="line1-inspector-grid">
@@ -963,6 +987,7 @@
                         <template v-if="widgetForm.widget_type === 'featured_bar'">
                             <div class="toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.show_tooltip" /></div>
                             <div class="toggle-row"><span>显示摘要图例</span><input type="checkbox" v-model="widgetForm.config.show_summary_legend" /></div>
+                            <div class="toggle-row"><span>高亮最大值</span><input type="checkbox" :checked="(widgetForm.config.highlight_item || 'latest') === 'max'" @change="widgetForm.config.highlight_item = $event.target.checked ? 'max' : 'latest'" /></div>
                         </template>
                         </template>
                         <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.widget_type !== 'line'" class="toggle-row">
@@ -1041,12 +1066,17 @@
 
     <!-- Tab modal -->
     <div v-if="showTabModal" class="modal-overlay" @click.self="showTabModal = false">
-        <div class="modal-panel">
-            <h3 class="font-bold mb-3">新建标签页</h3>
-            <div class="field"><label>名称</label><input v-model="tabForm.name" /></div>
-            <div class="flex justify-end gap-2 mt-2">
-                <button class="tbtn" @click="showTabModal = false">取消</button>
-                <button class="tbtn tbtn-primary" @click="saveTab()">保存</button>
+        <div class="modal-panel" @click.stop>
+            <h3 class="modal-form-title">新建标签页</h3>
+            <div class="modal-form-body">
+                <div class="field">
+                    <label class="crm-field-label" for="dash-tab-name-input">名称</label>
+                    <input id="dash-tab-name-input" type="text" v-model.trim="tabForm.name" class="crm-form-control text-sm" placeholder="请输入标签页名称" @keydown.enter.prevent="saveTab()" />
+                </div>
+            </div>
+            <div class="modal-form-actions">
+                <button type="button" class="tbtn" @click="showTabModal = false">取消</button>
+                <button type="button" class="tbtn tbtn-primary" @click="saveTab()">保存</button>
             </div>
         </div>
     </div>

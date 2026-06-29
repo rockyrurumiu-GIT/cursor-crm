@@ -337,6 +337,7 @@
         show_line1_range: style.show_line1_range !== false,
         show_line1_fullscreen: style.show_line1_fullscreen !== false,
         show_line1_grid: style.show_line1_grid !== false,
+        show_tooltip: style.show_tooltip !== false,
         color: style.color || "green",
         color_shade: style.color_shade != null ? style.color_shade : 2,
       };
@@ -363,6 +364,9 @@
         var suffix = opts.suffix != null ? String(opts.suffix) : "";
         var labels = rows.map(function (r) { return r.label; });
         var values = rows.map(presetRowValue);
+        var passRates = rows.map(function (r) {
+          return line1TooltipPassRate(r, r.label);
+        });
         var total = values.reduce(function (sum, v) { return sum + v; }, 0);
         var palette = paletteForStyle(style);
         var accent = palette[KIT.selectedShade(presetStyleColorCfg(style))];
@@ -371,6 +375,7 @@
           kind: "series",
           labels: labels,
           values: values,
+          pass_rates: passRates,
           total: total,
           prefix: prefix,
           suffix: suffix,
@@ -384,7 +389,10 @@
             typeof line1PeriodLabel === "function" ? line1PeriodLabel(appliedFilters || {}) : ""
           ),
         };
-        global.CrmLine1ChartKit.render(mount, widget, apiData, { lineColor: accent });
+        global.CrmLine1ChartKit.render(mount, widget, apiData, {
+          lineColor: accent,
+          rangeLabel: typeof line1PeriodLabel === "function" ? line1PeriodLabel(appliedFilters || {}) : "",
+        });
         return true;
       }
 
@@ -848,8 +856,10 @@
         .filter(function (r) { return r.key !== "resume" && r.pass_rate_value != null; })
         .map(function (r) {
           return {
+            key: r.key,
             label: r.label,
             value: r.pass_rate_value != null ? r.pass_rate_value : 0,
+            pass_rate: r.pass_rate,
             passed: r.passed,
             processed: r.processed,
           };
@@ -866,6 +876,71 @@
       return row.label + ": " + pct;
     }
 
+    var LINE1_LABEL_LIFECYCLE_KEYS = {
+      "内筛通过": "internal_screen",
+      "客筛通过": "client_screen",
+      "约面成功": "scheduling",
+      "参面通过": "scheduling",
+      "一面通过": "first_interview",
+      "二面通过": "second_interview",
+      "终面通过": "final_interview",
+      "接offer": "offer",
+      "已入职": "hired_summary",
+    };
+
+    var LINE1_LABEL_JOB_STAGE_RATE_KEYS = {
+      "内筛通过": "internal_screen_passed_rate",
+      "客筛通过": "client_screen_passed_rate",
+      "约面成功": "scheduling_passed_rate",
+      "一面通过": "first_interview_passed_rate",
+      "二面通过": "second_interview_passed_rate",
+    };
+
+    function lifecyclePassRateForLine1(stageKey, label) {
+      var rows = lifecycleRows.value || [];
+      var key = stageKey;
+      if (!key && label) key = LINE1_LABEL_LIFECYCLE_KEYS[label];
+      if (!key) return null;
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].key !== key) continue;
+        var pr = rows[i].pass_rate;
+        return pr != null && String(pr).trim() && pr !== "—" ? pr : null;
+      }
+      return null;
+    }
+
+    function jobStagePassRateForLine1(stageKey, label) {
+      var total = typeof jobStageChartTotal === "function" ? jobStageChartTotal() : null;
+      if (!total) return null;
+      var rateKey = label && LINE1_LABEL_JOB_STAGE_RATE_KEYS[label];
+      if (!rateKey) return null;
+      var rate = total[rateKey];
+      return rate != null && String(rate).trim() && rate !== "—" ? rate : null;
+    }
+
+    function line1TooltipPassRate(row, label) {
+      if (row && row.pass_rate != null && row.pass_rate !== "—") return row.pass_rate;
+      var lab = label || (row && row.label);
+      var lc = lifecyclePassRateForLine1(row && row.key, lab);
+      if (lc) return lc;
+      return jobStagePassRateForLine1(row && row.key, lab);
+    }
+
+    function enrichLine1ApiData(apiData, rows) {
+      if (!apiData || apiData.status !== "ok" || apiData.kind !== "series") {
+        return apiData || { status: "empty" };
+      }
+      var labels = apiData.labels || [];
+      var passRates = apiData.pass_rates || [];
+      var enriched = labels.map(function (label, idx) {
+        var existing = passRates[idx];
+        if (existing != null && String(existing).trim() && existing !== "—") return existing;
+        var row = rows && rows[idx] ? rows[idx] : null;
+        return line1TooltipPassRate(row, label);
+      });
+      return Object.assign({}, apiData, { pass_rates: enriched });
+    }
+
     function renderLifecycleFunnelChart(canvasId, w) {
       var block = "lifecycle_funnel";
       var style = rmsPresetStyle(w && w.config, block);
@@ -875,6 +950,7 @@
       }
       var rows = lifecycleRows.value.map(function (r) {
           return {
+            key: r.key,
             label: r.label,
             value: r.funnel_count != null ? r.funnel_count : 0,
             pass_rate: r.pass_rate,
@@ -1184,8 +1260,11 @@
             global.CrmLine1ChartKit.render(
               l1Mount,
               Object.assign({}, w, { config: l1Cfg }),
-              wd || { status: "empty" },
-              { lineColor: l1Accent }
+              enrichLine1ApiData(wd || { status: "empty" }),
+              {
+                lineColor: l1Accent,
+                rangeLabel: typeof line1PeriodLabel === "function" ? line1PeriodLabel(appliedFilters || {}) : "",
+              }
             );
           }
           return;

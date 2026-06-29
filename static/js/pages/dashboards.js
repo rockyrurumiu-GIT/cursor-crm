@@ -1023,10 +1023,54 @@
         }).catch(function (e) { alert(e.message); });
       }
 
-      function openTabModal() { tabForm.value = { name: "" }; showTabModal.value = true; }
+      async function deleteActiveTab() {
+        if (!activeTabId.value || !activeDashboard.value) return;
+        const tabs = activeDashboard.value.tabs || [];
+        if (tabs.length <= 1) {
+          alert("至少保留一个标签页");
+          return;
+        }
+        const tab = tabs.find(function (t) { return t.id === activeTabId.value; });
+        const tabName = tab ? String(tab.name || "").trim() || "未命名" : "当前标签页";
+        const ok = await window.crmConfirmDeleteDialog({
+          title: "确认删除",
+          targetText: "将删除标签页「" + tabName + "」",
+          hint: "该标签页下的组件也会一并删除，且不可恢复。",
+        });
+        if (!ok) return;
+        const deletedId = activeTabId.value;
+        const idx = tabs.findIndex(function (t) { return t.id === deletedId; });
+        const fallbackTab = tabs[idx > 0 ? idx - 1 : idx + 1];
+        api("DELETE", "/api/dashboard-tabs/" + deletedId).then(function () {
+          destroyCharts();
+          widgetData.value = {};
+          showTabModal.value = false;
+          return loadDashboards();
+        }).then(function () {
+          activeTabId.value = fallbackTab ? fallbackTab.id : null;
+        }).catch(function (e) { alert(e.message); });
+      }
+
+      function openTabModal() {
+        tabForm.value = { name: "" };
+        showTabModal.value = true;
+        nextTick(function () {
+          var el = document.getElementById("dash-tab-name-input");
+          if (el) el.focus();
+        });
+      }
       function saveTab() {
         if (!activeDashboardId.value) return;
-        api("POST", "/api/dashboards/" + activeDashboardId.value + "/tabs", tabForm.value)
+        var name = String(tabForm.value.name || "").trim();
+        if (!name) {
+          alert("请输入标签页名称");
+          nextTick(function () {
+            var el = document.getElementById("dash-tab-name-input");
+            if (el) el.focus();
+          });
+          return;
+        }
+        api("POST", "/api/dashboards/" + activeDashboardId.value + "/tabs", { name: name })
           .then(function () { showTabModal.value = false; return loadDashboards(); })
           .then(function () {
             const d = dashboards.value.find(function (x) { return x.id === activeDashboardId.value; });
@@ -1290,7 +1334,7 @@
         richTitle, richBody, showLegend, legendOf, featuredChartMountId, line1MountId, featuredBarMountId,
         rosterTiles, rosterScopeLabel, rosterHeadcount, isRosterClientCard,
         selectDashboard,
-        openDashboardModal, saveDashboard, deleteActiveDashboard,
+        openDashboardModal, saveDashboard, deleteActiveDashboard, deleteActiveTab,
         openTabModal, saveTab, openWidgetPanel, closePanel, selectWidgetType,
         addFilter, removeFilter, filterValuePlaceholder, addExtraView, removeExtraView, deleteWidget,
         duplicateWidget, changeRosterClient,

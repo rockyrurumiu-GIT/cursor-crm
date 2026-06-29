@@ -18,6 +18,27 @@
     return (prefix || "") + fmtNum(value) + (suffix || "");
   }
 
+  function parseRateNumber(raw) {
+    var s = String(raw || "").trim().replace(/%$/, "");
+    if (!s) return null;
+    var n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function formatHoverTooltip(prefix, suffix, point) {
+    var text = formatValue(prefix, suffix, point.value);
+    var passRate = point && point.passRate != null ? String(point.passRate).trim() : "";
+    if (!passRate || passRate === "—") return text;
+    if (String(suffix || "").trim() === "%") {
+      var valueRate = parseRateNumber(point.value);
+      var passRateNum = parseRateNumber(passRate);
+      if (valueRate != null && passRateNum != null && Math.abs(valueRate - passRateNum) < 0.05) {
+        return text;
+      }
+    }
+    return text + " (" + passRate + ")";
+  }
+
   function resolveMainValue(points, apiData, cfg) {
     var mode = String(cfg.line1_value_mode || "sum").trim();
     if (VALUE_MODES.indexOf(mode) < 0) mode = "sum";
@@ -226,7 +247,7 @@
       activePoint.style.left = xPct + "%";
       activePoint.style.top = yPct + "%";
       activePoint.style.boxShadow = accentHaloShadow(accent);
-      tip.textContent = formatValue(prefix, suffix, model.points[idx].value);
+      tip.textContent = formatHoverTooltip(prefix, suffix, model.points[idx]);
       tip.style.left = xPct + "%";
       tip.style.top = yPct + "%";
 
@@ -266,12 +287,17 @@
     }
     var labels = apiData.labels || [];
     var values = apiData.values || [];
+    var passRates = apiData.pass_rates || [];
     var points = [];
     var i;
     for (i = 0; i < labels.length; i++) {
       var val = Number(values[i]);
       if (!Number.isFinite(val)) continue;
-      points.push({ label: String(labels[i]), value: val });
+      points.push({
+        label: String(labels[i]),
+        value: val,
+        passRate: passRates[i] != null ? passRates[i] : null,
+      });
     }
     var prefix = cfg.prefix != null && cfg.prefix !== "" ? cfg.prefix : (apiData.prefix || "");
     var suffix = cfg.suffix != null && cfg.suffix !== "" ? cfg.suffix : (apiData.suffix || "");
@@ -284,16 +310,38 @@
       suffix: suffix,
       mainValue: resolveMainValue(points, apiData, cfg),
       deltaText: resolveDeltaText(apiData, cfg),
+      total: apiData.total != null && Number.isFinite(Number(apiData.total))
+        ? Number(apiData.total)
+        : points.reduce(function (s, p) { return s + p.value; }, 0),
     };
   }
 
   function destroy(container) {
     if (!container) return;
+    if (container._line1RangeSlot && container._line1RangeSlot.parentNode) {
+      container._line1RangeSlot.parentNode.removeChild(container._line1RangeSlot);
+      container._line1RangeSlot = null;
+    }
     if (typeof container._line1Cleanup === "function") {
       container._line1Cleanup();
       container._line1Cleanup = null;
     }
     container.innerHTML = "";
+  }
+
+  function mountRangePill(container, pillText) {
+    var dashCard = container.closest ? container.closest(".dash-card") : null;
+    var head = dashCard ? dashCard.querySelector(".card-head") : null;
+    if (!head) return null;
+    var slot = document.createElement("div");
+    slot.className = "line1-head-range-slot";
+    var pill = document.createElement("span");
+    pill.className = "line1-range-pill";
+    pill.textContent = pillText;
+    slot.appendChild(pill);
+    head.appendChild(slot);
+    container._line1RangeSlot = slot;
+    return slot;
   }
 
   function render(container, widget, apiData, options) {
@@ -304,6 +352,7 @@
     var cfg = model.cfg || {};
     var accent = options.lineColor || DEFAULT_LINE_COLOR;
     var showGrid = cfg.show_line1_grid !== false;
+    var showTooltip = cfg.show_tooltip !== false;
     var card = document.createElement("div");
     card.className = "line1-card";
 
@@ -327,13 +376,16 @@
     topRow.appendChild(metrics);
 
     if (cfg.show_line1_range !== false) {
-      var actions = document.createElement("div");
-      actions.className = "line1-header-actions";
-      var pill = document.createElement("span");
-      pill.className = "line1-range-pill";
-      pill.textContent = options.rangeLabel || cfg.line1_range_label || "全部";
-      actions.appendChild(pill);
-      topRow.appendChild(actions);
+      var rangeText = options.rangeLabel || cfg.line1_range_label || "全部";
+      if (!mountRangePill(container, rangeText)) {
+        var actions = document.createElement("div");
+        actions.className = "line1-header-actions";
+        var pill = document.createElement("span");
+        pill.className = "line1-range-pill";
+        pill.textContent = rangeText;
+        actions.appendChild(pill);
+        topRow.appendChild(actions);
+      }
     }
 
     card.appendChild(topRow);
@@ -344,9 +396,14 @@
     if (!model.empty) {
       var built = buildStaticSvg(model.points, accent, showGrid);
       chartWrap.innerHTML = built.html;
-      hoverCleanup = setupHoverInteraction(chartWrap, model, accent, built.geometry, model.prefix, model.suffix);
+      var geo = built.geometry;
+      if (showTooltip) {
+        hoverCleanup = setupHoverInteraction(chartWrap, model, accent, geo, model.prefix, model.suffix);
+      }
+      card.appendChild(chartWrap);
       var axis = document.createElement("div");
       axis.className = "line1-x-axis";
+      axis.setAttribute("aria-hidden", "true");
       var thinned = thinAxisLabels(model.points.map(function (p) { return p.label; }));
       thinned.forEach(function (item) {
         if (!item.show) return;
@@ -354,10 +411,9 @@
         lbl.className = "line1-x-label";
         lbl.textContent = item.label;
         lbl.title = item.label;
-        lbl.style.left = built.geometry.xPctAt(item.index) + "%";
+        lbl.style.left = geo.xPctAt(item.index) + "%";
         axis.appendChild(lbl);
       });
-      card.appendChild(chartWrap);
       card.appendChild(axis);
     } else {
       chartWrap.innerHTML = '<div class="line1-chart-empty">暂无数据</div>';

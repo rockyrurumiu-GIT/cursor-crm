@@ -1253,9 +1253,45 @@
           });
         }
 
+        function deleteActiveTab() {
+          if (!activeTabId.value || !activeDashboard.value) return;
+          var tabs = activeDashboard.value.tabs || [];
+          if (tabs.length <= 1) {
+            error.value = "至少保留一个标签页";
+            return;
+          }
+          var tab = tabs.find(function (t) { return t.id === activeTabId.value; });
+          var tabName = tab ? String(tab.name || "").trim() || "未命名" : "当前标签页";
+          window.crmConfirmDeleteDialog({
+            title: "确认删除",
+            targetText: "将删除标签页「" + tabName + "」",
+            hint: "该标签页下的组件也会一并删除，且不可恢复。",
+          }).then(function (ok) {
+            if (!ok) return;
+            var deletedId = activeTabId.value;
+            var idx = tabs.findIndex(function (t) { return t.id === deletedId; });
+            var fallbackTab = tabs[idx > 0 ? idx - 1 : idx + 1];
+            return api("DELETE", "/api/rms/dashboard-tabs/" + deletedId).then(function () {
+              destroyAllCharts();
+              widgetData.value = {};
+              showTabModal.value = false;
+              return loadBoards();
+            }).then(function () {
+              activeTabId.value = fallbackTab ? fallbackTab.id : null;
+              return reloadActiveTabData();
+            });
+          }).catch(function (e) {
+            if (e) error.value = e.message || String(e);
+          });
+        }
+
         function openTabModal() {
-          tabForm.value = { name: "", rms_template: "overview" };
+          tabForm.value = { name: "", rms_template: "empty" };
           showTabModal.value = true;
+          nextTick(function () {
+            var el = document.getElementById("rms-tab-name-input");
+            if (el) el.focus();
+          });
         }
         function syncTabNameDraftsFromDashboard() {
           var d = activeDashboard.value;
@@ -1338,8 +1374,17 @@
         }
         function saveTab() {
           if (!activeDashboardId.value) return;
+          var name = String(tabForm.value.name || "").trim();
+          if (!name) {
+            error.value = "请输入标签页名称";
+            nextTick(function () {
+              var el = document.getElementById("rms-tab-name-input");
+              if (el) el.focus();
+            });
+            return;
+          }
           api("POST", "/api/rms/dashboard-boards/" + activeDashboardId.value + "/tabs", {
-            name: tabForm.value.name,
+            name: name,
             rms_template: tabForm.value.rms_template,
           }).then(function () {
             showTabModal.value = false;
@@ -1652,6 +1697,7 @@
           openDashboardModal: openDashboardModal,
           saveDashboard: saveDashboard,
           deleteActiveDashboard: deleteActiveDashboard,
+          deleteActiveTab: deleteActiveTab,
           openTabModal: openTabModal,
           saveTabNameInline: saveTabNameInline,
           bindTabLabelEl: bindTabLabelEl,

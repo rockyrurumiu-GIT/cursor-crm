@@ -200,10 +200,17 @@
   background: #fff; border-radius: 16px; padding: 14px 20px 14px; box-sizing: border-box;
 }
 .line1-top-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  display: flex; align-items: center; justify-content: flex-start; gap: 0.75rem;
   margin-bottom: 0.5rem; min-height: 0;
 }
-.line1-header-actions { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; }
+.line1-head-range-slot {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  align-self: center;
+}
+.line1-header-actions { display: flex; align-items: center; gap: 0.45rem; flex-shrink: 0; margin-left: auto; }
 .line1-range-pill {
   display: inline-flex; align-items: center; padding: 0.2rem 0.55rem; border-radius: 999px;
   font-size: 0.72rem; color: #6b7280; background: #f3f4f6; border: 1px solid #e5e7eb;
@@ -213,7 +220,7 @@
 .line1-sub-metric { margin-top: 0.25rem; font-size: 0.78rem; color: #6b7280; }
 .line1-empty { font-size: 1rem; color: #98a2b3; }
 .line1-chart-wrap {
-  position: relative; flex: 1; min-height: 150px; width: 100%;
+  position: relative; flex: 1; min-height: 150px; width: 100%; overflow: visible;
   --bms-chart-hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
   --bms-chart-hover-move: 420ms;
   --bms-chart-hover-fade: 280ms;
@@ -290,9 +297,16 @@
 .line1-toggle-row input[type="checkbox"] { margin: 0; flex-shrink: 0; cursor: pointer; }
 .inspector-section > .line1-other-block:first-child { margin-top: 0; }
 .line1-chart-empty { min-height: 120px; display: flex; align-items: center; justify-content: center; color: #98a2b3; font-size: 0.9rem; }
-.line1-x-axis { position: relative; height: 22px; margin-top: 0.25rem; }
+.line1-x-axis {
+  position: relative;
+  height: 28px;
+  margin-top: 0.25rem;
+  flex-shrink: 0;
+  width: 100%;
+  overflow: visible;
+}
 .line1-x-label {
-  position: absolute; transform: translateX(-50%); font-size: 0.68rem; color: #9ca3af;
+  position: absolute; top: 0; transform: translateX(-50%); font-size: 0.68rem; color: #9ca3af;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 72px;
 }
 .chart-canvas-wrap .bms-flow-bar-mount { flex: 1; min-height: 260px; width: 100%; }
@@ -466,8 +480,18 @@
 .chart-hint { margin: 0 0 0.35rem; font-size: 0.72rem; color: #98a2b3; flex-shrink: 0; }
 .state-msg { width: 100%; text-align: center; align-self: center; font-size: 0.85rem; color: #98a2b3; }
 .state-forbidden { color: #cf222e; }
-.field { margin-bottom: 0; }
+.field { margin-bottom: 0.75rem; }
 .field > label { display: block; font-size: 0.78rem; color: #5b6370; margin-bottom: 0.25rem; }
+.field input, .field select, .field textarea {
+  width: 100%; box-sizing: border-box;
+  border: 1px solid #d8dce0; border-radius: 8px;
+  padding: 0.4rem 0.55rem; font-size: 0.85rem;
+  color: #374151; background: #fff;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none; border-color: #456595;
+  box-shadow: 0 0 0 2px rgba(69, 101, 149, 0.18);
+}
 .inspector-style-stack { display: flex; flex-direction: column; gap: 0.75rem; }
 .inspector-style-stack .field { margin-bottom: 0; }
 .inspector-style-stack .field select,
@@ -794,6 +818,11 @@
 .tbtn-danger:hover { background: #fdf0f0; }
 .modal-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.32); z-index: 200; display: flex; align-items: center; justify-content: center; }
 .modal-panel { background: #fff; border-radius: 14px; padding: 1.25rem; width: 90%; max-width: 420px; }
+.modal-form-title { font-size: 1rem; font-weight: 700; color: #1f2328; margin: 0 0 1rem; }
+.modal-form-body { display: flex; flex-direction: column; gap: 0.85rem; }
+.modal-form-body .field { margin-bottom: 0; }
+.modal-form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid #eceef1; }
+.modal-form-body textarea.crm-form-control { height: auto; min-height: 4.5rem; resize: vertical; }
 .dash-card.editing { border-style: dashed; border-color: #d5d9de; position: relative; }
 .dash-card.editing:hover { border-color: #9aa9bd; box-shadow: 0 2px 10px rgba(16,24,40,0.06); }
 .dash-card.editing.is-active { border-color: #7B96B8; box-shadow: 0 2px 12px rgba(16,24,40,0.08); }
@@ -976,6 +1005,10 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                     <option v-for="w in editableWidgets" :key="w.id" :value="w.id">{{ w.title || '未命名组件' }}</option>
                 </select>
                 <button type="button" class="tbtn" :disabled="!activeTabId" @click="openWidgetPanel()">+ 组件</button>
+                <button v-if="canDelete" type="button" class="tbtn tbtn-danger"
+                    :disabled="!activeTabId || !activeDashboard || activeDashboard.tabs.length <= 1"
+                    :title="activeDashboard && activeDashboard.tabs.length <= 1 ? '至少保留一个标签页' : '删除当前标签页'"
+                    @click="deleteActiveTab()">删除标签页</button>
             </div>
             <div class="dash-toolbar-right">
                 <span class="group relative inline-flex">
@@ -1122,10 +1155,10 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                     <span class="group relative inline-flex">
                                         <button type="button"
                                             class="rms-dash-filter-toggle"
-                                            :class="{ 'is-active': appliedFilters.include_zero_resume_jobs }"
+                                            :class="{ 'is-active': !appliedFilters.include_zero_resume_jobs }"
                                             :disabled="loading"
-                                            :aria-pressed="appliedFilters.include_zero_resume_jobs ? 'true' : 'false'"
-                                            aria-label="0简历岗位不隐藏"
+                                            :aria-pressed="appliedFilters.include_zero_resume_jobs ? 'false' : 'true'"
+                                            :aria-label="appliedFilters.include_zero_resume_jobs ? '隐藏0简历岗位(点击&quot;开&quot;)' : '隐藏0简历岗位(点击&quot;关&quot;)'"
                                             @click.stop="toggleIncludeZeroResumeJobs">
                                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -1133,7 +1166,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6"/>
                                             </svg>
                                         </button>
-                                        <span class="pointer-events-none absolute left-1/2 bottom-full z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">0简历岗位不隐藏</span>
+                                        <span class="pointer-events-none absolute left-1/2 bottom-full z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">{{ appliedFilters.include_zero_resume_jobs ? '隐藏0简历岗位(点击"开")' : '隐藏0简历岗位(点击"关")' }}</span>
                                     </span>
                                     <button type="button" class="tbtn" :disabled="loading" @click.stop="cancelFilters">取消</button>
                                     <button type="button" class="tbtn tbtn-primary" :disabled="loading" @click.stop="applyFilters">应用</button>
@@ -1727,6 +1760,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                 <div class="line1-toggle-list">
                                     <label class="line1-toggle-row"><span>显示时间范围</span><input type="checkbox" v-model="widgetForm.config.style.show_line1_range" /></label>
                                     <label class="line1-toggle-row"><span>显示网格线</span><input type="checkbox" v-model="widgetForm.config.style.show_line1_grid" /></label>
+                                    <label class="line1-toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.style.show_tooltip" /></label>
                                 </div>
                             </div>
                             <div class="line1-inspector-grid">
@@ -1744,6 +1778,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                         <template v-if="widgetForm.config.style && widgetForm.config.style.chart_type === 'featured_bar'">
                             <div class="toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.style.show_tooltip" /></div>
                             <div class="toggle-row"><span>显示摘要图例</span><input type="checkbox" v-model="widgetForm.config.style.show_summary_legend" /></div>
+                            <div class="toggle-row"><span>高亮最大值</span><input type="checkbox" :checked="(widgetForm.config.style.highlight_item || 'latest') === 'max'" @change="widgetForm.config.style.highlight_item = $event.target.checked ? 'max' : 'latest'" /></div>
                         </template>
                         <div v-if="isRmsPresetGroupedChartBlock(widgetForm.config.block)" class="toggle-row">
                             <span>显示分组构成</span>
@@ -1898,6 +1933,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                 <div class="line1-toggle-list">
                                     <label class="line1-toggle-row"><span>显示时间范围</span><input type="checkbox" v-model="widgetForm.config.show_line1_range" /></label>
                                     <label class="line1-toggle-row"><span>显示网格线</span><input type="checkbox" v-model="widgetForm.config.show_line1_grid" /></label>
+                                    <label class="line1-toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.show_tooltip" /></label>
                                 </div>
                             </div>
                             <div class="line1-inspector-grid">
@@ -1960,6 +1996,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                 <div class="line1-toggle-list">
                                     <label class="line1-toggle-row"><span>显示 tooltip</span><input type="checkbox" v-model="widgetForm.config.show_tooltip" /></label>
                                     <label class="line1-toggle-row"><span>显示摘要图例</span><input type="checkbox" v-model="widgetForm.config.show_summary_legend" /></label>
+                                    <label v-if="widgetForm.widget_type === 'featured_bar'" class="line1-toggle-row"><span>高亮最大值</span><input type="checkbox" :checked="(widgetForm.config.highlight_item || 'latest') === 'max'" @change="widgetForm.config.highlight_item = $event.target.checked ? 'max' : 'latest'" /></label>
                                     <label v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="line1-toggle-row"><span>显示标签数据</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></label>
                                     <label v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="line1-toggle-row"><span>堆叠条形图</span><input type="checkbox" :checked="widgetForm.config.group_mode === 'stacked'" @change="toggleGroupMode" /></label>
                                     <label v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="line1-toggle-row"><span>显示分组构成</span><input type="checkbox" v-model="widgetForm.config.show_group_composition" /></label>
@@ -2109,12 +2146,20 @@ body.rms-dashboard-edit-mode #handbook-assistant {
     </div>
 
     <div v-if="showDashboardModal" class="modal-overlay" @click.self="showDashboardModal = false">
-        <div class="modal-panel">
-            <h3 class="font-bold mb-3">新建看板</h3>
-            <div class="field"><label>名称</label><input v-model="dashboardForm.name" /></div>
-            <div class="field"><label>描述</label><textarea v-model="dashboardForm.description" rows="2"></textarea></div>
-            <p class="text-xs text-[#98a2b3] mt-1">将自动创建总览 / 生命周期转化 / 客户岗位分析 / 招聘人效 / 花名册核对五个标签页。</p>
-            <div class="flex justify-end gap-2 mt-3">
+        <div class="modal-panel" @click.stop>
+            <h3 class="modal-form-title">新建看板</h3>
+            <div class="modal-form-body">
+                <div class="field">
+                    <label class="crm-field-label" for="rms-dashboard-name-input">名称</label>
+                    <input id="rms-dashboard-name-input" type="text" v-model.trim="dashboardForm.name" class="crm-form-control text-sm" placeholder="请输入看板名称" />
+                </div>
+                <div class="field">
+                    <label class="crm-field-label" for="rms-dashboard-desc-input">描述</label>
+                    <textarea id="rms-dashboard-desc-input" v-model="dashboardForm.description" class="crm-form-control text-sm" rows="2" placeholder="可选"></textarea>
+                </div>
+                <p class="text-xs text-[#98a2b3]">将自动创建总览 / 生命周期转化 / 客户岗位分析 / 招聘人效 / 花名册核对五个标签页。</p>
+            </div>
+            <div class="modal-form-actions">
                 <button type="button" class="tbtn" @click="showDashboardModal = false">取消</button>
                 <button type="button" class="tbtn tbtn-primary" @click="saveDashboard">保存</button>
             </div>
@@ -2122,20 +2167,26 @@ body.rms-dashboard-edit-mode #handbook-assistant {
     </div>
 
     <div v-if="showTabModal" class="modal-overlay" @click.self="showTabModal = false">
-        <div class="modal-panel">
-            <h3 class="font-bold mb-3">新建标签页</h3>
-            <div class="field"><label>名称</label><input v-model="tabForm.name" /></div>
-            <div class="field"><label>内容类型</label>
-                <select v-model="tabForm.rms_template">
-                    <option value="overview">总览</option>
-                    <option value="lifecycle">生命周期转化</option>
-                    <option value="client_job">客户岗位分析</option>
-                    <option value="recruiter">招聘人效</option>
-                    <option value="roster">花名册核对</option>
-                    <option value="empty">空白</option>
-                </select>
+        <div class="modal-panel" @click.stop>
+            <h3 class="modal-form-title">新建标签页</h3>
+            <div class="modal-form-body">
+                <div class="field">
+                    <label class="crm-field-label" for="rms-tab-name-input">名称</label>
+                    <input id="rms-tab-name-input" type="text" v-model.trim="tabForm.name" class="crm-form-control text-sm" placeholder="请输入标签页名称" @keydown.enter.prevent="saveTab" />
+                </div>
+                <div class="field">
+                    <label class="crm-field-label" for="rms-tab-template-select">内容类型</label>
+                    <select id="rms-tab-template-select" v-model="tabForm.rms_template" class="crm-form-control text-sm">
+                        <option value="overview">总览</option>
+                        <option value="lifecycle">生命周期转化</option>
+                        <option value="client_job">客户岗位分析</option>
+                        <option value="recruiter">招聘人效</option>
+                        <option value="roster">花名册核对</option>
+                        <option value="empty">空白</option>
+                    </select>
+                </div>
             </div>
-            <div class="flex justify-end gap-2 mt-3">
+            <div class="modal-form-actions">
                 <button type="button" class="tbtn" @click="showTabModal = false">取消</button>
                 <button type="button" class="tbtn tbtn-primary" @click="saveTab">保存</button>
             </div>

@@ -463,6 +463,7 @@
         if (st.show_line1_range === undefined) st.show_line1_range = true;
         if (st.show_line1_fullscreen === undefined) st.show_line1_fullscreen = true;
         if (st.show_line1_grid === undefined) st.show_line1_grid = true;
+        if (st.show_tooltip === undefined) st.show_tooltip = true;
       }
       if (chartType === "featured_bar") {
         if (block === "chart_lifecycle_pass_rate") {
@@ -704,7 +705,7 @@
         renderSingleWidget(w, { animate: false });
         return;
       }
-      if (isRmsLine1Preset(w) || w.widget_type === "line_1") {
+      if (isRmsLine1Preset(w) || w.widget_type === "line_1" || isRmsFeaturedBarPreset(w)) {
         renderSingleWidget(w, { animate: false });
         return;
       }

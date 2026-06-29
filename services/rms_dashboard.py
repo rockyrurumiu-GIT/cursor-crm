@@ -598,6 +598,7 @@ def _historical_overview(
         "pass_rate": _rate(hired, hired_denom),
     })
 
+    _patch_scheduling_pass_rate(rows_out, apps, hist_map, filters, stage_key_field="stage")
     return [{"resume_count": resume_count, "stages": rows_out}]
 
 
@@ -891,6 +892,40 @@ _JOB_STAGE_RATE_SPECS = (
 )
 
 
+def _scheduling_pass_rate_parts(metrics: Dict[str, Any]) -> tuple[int, int, str]:
+    """约面成功率 = (待面试 + 一面数) / (客筛通过 - 约面中)。"""
+    numerator = int(metrics.get("pending_interview") or 0) + int(
+        metrics.get("first_interview_count") or 0
+    )
+    denominator = int(metrics.get("client_screen_passed") or 0) - int(
+        metrics.get("scheduling_interview_count") or 0
+    )
+    return numerator, denominator, _rate(numerator, denominator, decimals=0)
+
+
+def _patch_scheduling_pass_rate(
+    stage_rows: List[Dict[str, Any]],
+    apps: List[Any],
+    hist_map: Dict[int, List[Any]],
+    filters: Dict[str, Any],
+    *,
+    stage_key_field: str = "stage",
+) -> None:
+    _, denominator, rate = _scheduling_pass_rate_parts(
+        _metrics_for_apps(apps, hist_map, filters)
+    )
+    for row in stage_rows:
+        if row.get(stage_key_field) != "scheduling":
+            continue
+        row["pass_rate"] = rate
+        row["denominator"] = denominator
+        if "pass_rate_value" in row:
+            row["pass_rate_value"] = _parse_rate_value(rate)
+        if "processed" in row:
+            row["processed"] = denominator
+        break
+
+
 def _attach_job_stage_rates(metrics: Dict[str, int]) -> Dict[str, Any]:
     out: Dict[str, Any] = dict(metrics)
     for num_key, rate_key, denom_key in _JOB_STAGE_RATE_SPECS:
@@ -899,6 +934,7 @@ def _attach_job_stage_rates(metrics: Dict[str, int]) -> Dict[str, Any]:
             int(metrics.get(denom_key, 0)),
             decimals=0,
         )
+    _, _, out["scheduling_passed_rate"] = _scheduling_pass_rate_parts(out)
     return out
 
 
@@ -976,6 +1012,7 @@ def _lifecycle_funnel(
         })
         prev_entered = passed
 
+    _patch_scheduling_pass_rate(rows, apps, hist_map, filters, stage_key_field="key")
     hired_stage = stage_by_key.get("hired_summary") or {}
     hired_count = int(hired_stage.get("passed") or 0)
     return {
@@ -1413,12 +1450,56 @@ LINE1_SNAPSHOT_STATUS_ORDER: Tuple[str, ...] = tuple(_PIPELINE_LABELS.keys())
 LINE1_HISTORICAL_STAGE_LABELS: Tuple[Tuple[str, str], ...] = (
     ("internal_screen", "内筛通过"),
     ("client_screen", "客筛通过"),
-    ("scheduling", "参面通过"),
+    ("scheduling", "约面成功"),
     ("first_interview", "一面通过"),
     ("second_interview", "二面通过"),
     ("final_interview", "终面通过"),
     ("offer", "接offer"),
 )
+
+LINE1_LABEL_LIFECYCLE_KEYS: Dict[str, str] = {
+    label: key for key, label in LINE1_HISTORICAL_STAGE_LABELS
+}
+LINE1_LABEL_LIFECYCLE_KEYS["已入职"] = "hired_summary"
+
+# Job-stage table rates only where columns align; 终面/接offer use lifecycle 五率.
+LINE1_LABEL_JOB_STAGE_RATE_KEYS: Dict[str, str] = {
+    "内筛通过": "internal_screen_passed_rate",
+    "客筛通过": "client_screen_passed_rate",
+    "约面成功": "scheduling_passed_rate",
+    "一面通过": "first_interview_passed_rate",
+    "二面通过": "second_interview_passed_rate",
+}
+
+
+def line1_pass_rates_for_labels(
+    labels: List[str],
+    job_stage_total: Optional[Dict[str, Any]] = None,
+    lifecycle_rows: Optional[List[Dict[str, Any]]] = None,
+) -> List[Optional[str]]:
+    total = job_stage_total or {}
+    by_key = {str(r.get("key") or ""): r for r in (lifecycle_rows or [])}
+    out: List[Optional[str]] = []
+    for label in labels:
+        lab = str(label or "").strip()
+        lc_key = LINE1_LABEL_LIFECYCLE_KEYS.get(lab)
+        if lc_key:
+            lc_row = by_key.get(lc_key)
+            if lc_row:
+                lc_rate = lc_row.get("pass_rate")
+                if lc_rate is not None and str(lc_rate).strip() not in ("", "—"):
+                    out.append(str(lc_rate))
+                    continue
+        rate_key = LINE1_LABEL_JOB_STAGE_RATE_KEYS.get(lab)
+        if not rate_key:
+            out.append(None)
+            continue
+        rate = total.get(rate_key)
+        if rate is None or str(rate).strip() in ("", "—"):
+            out.append(None)
+        else:
+            out.append(str(rate))
+    return out
 
 
 def dashboard_period_label(filters: Dict[str, Any]) -> str:

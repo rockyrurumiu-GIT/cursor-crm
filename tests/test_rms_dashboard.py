@@ -1457,6 +1457,7 @@ def test_client_job_stage_snapshot_scheduling_and_onboarding(
     row = dash_row()
     assert row["scheduling_interview_count"] == 1
     assert row["pending_client_screen"] == 0
+    assert row["scheduling_passed_rate"] == "—"
 
     for to_status in (
         "pending_first_interview",
@@ -1479,6 +1480,66 @@ def test_client_job_stage_snapshot_scheduling_and_onboarding(
     assert row["interview_passed"] == 1
     assert row["pending_offer_count"] == 0
     assert row["onboarding_count"] == 1
+    assert row["scheduling_passed_rate"] == "100%"
+
+
+def test_scheduling_passed_rate_uses_pending_interview_and_first_interview_over_client_minus_scheduling(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """约面成功率 = (待面试 + 一面数) / (客筛通过 - 约面中)。"""
+    from tests.test_rms_phase2_mvp import _app_for_status
+
+    login, app_id = _app_for_status(client_rbac, rms_engine, admin_auth, f"spr_{uniq}")
+    job_id = client_rbac.get(f"/api/rms/applications/{app_id}", cookies=login.cookies).json()["job_id"]
+
+    for to_status in ("scheduling_interview", "pending_first_interview"):
+        tr = client_rbac.post(
+            f"/api/rms/applications/{app_id}/status",
+            cookies=login.cookies,
+            json=_status_transition_body(to_status, reason="ok"),
+        )
+        assert tr.status_code == 200, tr.text
+
+    dash = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert dash.status_code == 200, dash.text
+    body = dash.json()
+    row = _job_row(body["client_job_stage_summary"], job_id)
+    assert row["client_screen_passed"] == 1
+    assert row["scheduling_interview_count"] == 0
+    assert row["pending_interview"] == 1
+    assert row["first_interview_count"] == 0
+    assert row["scheduling_passed_rate"] == "100%"
+
+    tr = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json=_status_transition_body("first_interview_passed", reason="ok"),
+    )
+    assert tr.status_code == 200, tr.text
+    dash_after = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert dash_after.status_code == 200, dash_after.text
+    row_after = _job_row(dash_after.json()["client_job_stage_summary"], job_id)
+    assert row_after["pending_interview"] == 0
+    assert row_after["first_interview_count"] == 1
+    assert row_after["scheduling_passed_rate"] == "100%"
+
+    scheduling = next(
+        r for r in body["lifecycle_funnel"]["rows"] if r["key"] == "scheduling"
+    )
+    assert scheduling["label"] == "约面成功"
+    assert scheduling["pass_rate"] == "100%"
+    assert scheduling["processed"] == 1
+
+    from services import rms_dashboard as rms_dash
+
+    labels, _values = rms_dash.compute_line1_axis_series(
+        [],
+        {},
+        {},
+        "historical",
+    )
+    assert "约面成功" in labels
+    assert "参面通过" not in labels
 
 
 def test_dashboard_client_job_stage_city_filter(client_rbac, admin_auth, rms_engine, uniq):
@@ -2627,6 +2688,8 @@ def test_rms_dashboard_lifecycle_funnel_rates(client_rbac, admin_auth, rms_engin
     }
     for row in lf["rows"]:
         assert required.issubset(row.keys())
+        if row["key"] == "scheduling":
+            continue
         assert row["processed"] == row["entered"] - row["pending"]
 
 

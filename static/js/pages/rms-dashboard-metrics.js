@@ -73,6 +73,10 @@
     JOB_STAGE_RATE_SPECS.forEach(function (spec) {
       total[spec[1]] = jobStageRate(total[spec[0]] || 0, total[spec[2]] || 0);
     });
+    total.scheduling_passed_rate = jobStageRate(
+      (total.pending_interview || 0) + (total.first_interview_count || 0),
+      (total.client_screen_passed || 0) - (total.scheduling_interview_count || 0)
+    );
     return total;
   }
 

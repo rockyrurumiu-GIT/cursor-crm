@@ -1562,7 +1562,16 @@ def _query_line1_rms_axis_series(
     labels, values = rms_dash.compute_line1_axis_series(
         apps, hist_map, filters, mode, hide_empty=hide_empty
     )
-    return _finalize_series(
+    job_stage_summary = rms_dash._client_job_stage_summary(
+        db, ctx, apps, hist_map, RmsJob, Client, filters
+    )
+    lifecycle_rows = rms_dash._lifecycle_funnel(apps, hist_map, filters).get("rows") or []
+    pass_rates = rms_dash.line1_pass_rates_for_labels(
+        labels,
+        job_stage_summary.get("total"),
+        lifecycle_rows,
+    )
+    result = _finalize_series(
         labels,
         values,
         hide_empty=False,
@@ -1572,6 +1581,8 @@ def _query_line1_rms_axis_series(
         x_axis_label=x_axis_label,
         y_axis_label=y_axis_label,
     )
+    result["pass_rates"] = pass_rates
+    return result
 
 
 def _query_rms_pipeline_grouped_series(
