@@ -51,7 +51,8 @@ from services.delivery_roster import sql_roster_employment_active_pool
 FEATURED_VALUE_MODES: FrozenSet[str] = frozenset({"auto", "sum", "latest", "average"})
 LINE1_VALUE_MODES: FrozenSet[str] = frozenset({"sum", "latest", "average", "max"})
 LINE1_X_AXIS_MODES: FrozenSet[str] = frozenset({"all", "snapshot", "historical"})
-PIPELINE_DATA_MODES: FrozenSet[str] = frozenset({"active", "loss"})
+PIPELINE_DATA_MODES: FrozenSet[str] = frozenset({"active", "loss", "total"})
+PIPELINE_BUCKET_MODES: FrozenSet[str] = frozenset({"active", "loss"})
 LINE1_ACTIVE_INDEX_MODES: FrozenSet[str] = frozenset({"first", "middle", "last"})
 HIGHLIGHT_ITEM_MODES: FrozenSet[str] = frozenset({"max", "latest"})
 
@@ -196,7 +197,7 @@ def validate_rich_text(content: str) -> str:
 
 
 _METRIC_LABELS = {"count": "计数", "sum": "求和", "avg": "平均", "min": "最小", "max": "最大"}
-_SECONDARY_CHART_TYPES = frozenset({"bar", "horizontal_bar", "line", "featured_bar"})
+_SECONDARY_CHART_TYPES = frozenset({"bar", "horizontal_bar", "line", "featured_bar", "grouped_1"})
 
 
 def _primary_sort_to_legacy(sort: str) -> str:
@@ -659,6 +660,9 @@ def validate_widget_config(
     if widget_type == "featured_bar" and norm.get("extra_views"):
         raise HTTPException(status_code=400, detail="featured_bar 不支持 extra_views")
 
+    if widget_type == "grouped_1" and norm.get("extra_views"):
+        raise HTTPException(status_code=400, detail="grouped_1 不支持 extra_views")
+
     average_label = str(norm.get("average_label") or "Avg").strip()[:32] or "Avg"
 
     out = {
@@ -711,6 +715,9 @@ def validate_widget_config(
         out["show_summary_legend"] = bool(norm.get("show_summary_legend", True))
         out["show_grid"] = bool(norm.get("show_grid", True))
         out["highlight_item"] = norm["highlight_item"]
+    if widget_type == "grouped_1":
+        out["show_summary_legend"] = bool(norm.get("show_summary_legend", True))
+        out["show_grid"] = bool(norm.get("show_grid", True))
     if secondary_axis_field:
         out["show_group_composition"] = bool(norm.get("show_group_composition", True))
         out["pipeline_data_mode"] = norm["pipeline_data_mode"]
@@ -1467,7 +1474,7 @@ def _query_rms_pipeline_grouped_series(
     if not secondary:
         raise HTTPException(status_code=400, detail="管道活跃/损耗数据需要分组依据")
     mode = str(config.get("pipeline_data_mode") or "active").strip()
-    if mode not in PIPELINE_DATA_MODES:
+    if mode not in PIPELINE_BUCKET_MODES:
         mode = "active"
 
     RmsApplication = models["RmsApplication"]
@@ -1494,6 +1501,7 @@ def _query_rms_pipeline_grouped_series(
         secondary,
         db,
         Client,
+        RmsJob=RmsJob,
         hide_empty=hide_empty,
     )
     primary_labels = primary_labels[:limit]
@@ -1544,7 +1552,7 @@ def query_widget_data(
         source_key == "rms_applications"
         and secondary
         and group_by in ("current_stage", "status")
-        and pipeline_mode in PIPELINE_DATA_MODES
+        and pipeline_mode in PIPELINE_BUCKET_MODES
     ):
         return _query_rms_pipeline_grouped_series(
             db, ctx, source_key, config, models, dashboard_filters

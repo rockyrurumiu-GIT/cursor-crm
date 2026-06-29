@@ -33,6 +33,7 @@
     featured_line: "重点折线",
     line_1: "折线1",
     featured_bar: "重点柱状",
+    grouped_1: "分组1",
   };
 
   var RMS_PRESET_CHART_TYPES = ["horizontal_bar", "bar", "pie", "line", "featured_line", "line_1", "featured_bar"];
@@ -249,10 +250,10 @@
       return KIT.DATA_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
     });
     var chartTypePills = computed(function () {
-      return ["bar", "horizontal_bar", "line", "pie", "featured_line", "line_1", "featured_bar", "number", "rms_block"];
+      return ["bar", "horizontal_bar", "line", "pie", "featured_line", "line_1", "featured_bar", "grouped_1", "number", "rms_block"];
     });
     var supportsSecondary = computed(function () {
-      return ["bar", "horizontal_bar", "line", "featured_bar"].indexOf(widgetForm.value.widget_type) >= 0;
+      return ["bar", "horizontal_bar", "line", "featured_bar", "grouped_1"].indexOf(widgetForm.value.widget_type) >= 0;
     });
     var needsDataSource = computed(function () {
       return KIT.DATA_WIDGET_TYPES.indexOf(widgetForm.value.widget_type) >= 0;
@@ -1133,9 +1134,11 @@
         if (lc.show_line1_grid === undefined) lc.show_line1_grid = true;
         if (!widgetForm.value.title || widgetForm.value.title === "新组件") widgetForm.value.title = "统计趋势";
       }
-      if (t === "featured_bar") {
+      if (t === "featured_bar" || t === "grouped_1") {
         widgetForm.value.config.extra_views = [];
         if (widgetForm.value.config.show_grid === undefined) widgetForm.value.config.show_grid = true;
+        if (widgetForm.value.config.show_tooltip === undefined) widgetForm.value.config.show_tooltip = true;
+        if (widgetForm.value.config.show_summary_legend === undefined) widgetForm.value.config.show_summary_legend = true;
       }
       flushPersistWidget();
     }

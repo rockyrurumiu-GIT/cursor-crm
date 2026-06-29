@@ -22,6 +22,7 @@
     var truncateJobLabel = deps.truncateJobLabel;
     var featuredLineMountId = deps.featuredLineMountId;
     var featuredBarMountId = deps.featuredBarMountId;
+    var flowBarMountId = deps.flowBarMountId;
     var line1MountId = deps.line1MountId;
 
     var RMS_CHART_GRID_COLOR = deps.RMS_CHART_GRID_COLOR;
@@ -1037,34 +1038,17 @@
       if (!slice || !slice.data || !slice.data.length) return;
       var rows = pipelineDialysisGroupedRows(slice, style);
       if (!rows.length) return;
-      var groupedData = {
-        status: "ok",
-        kind: "grouped_series",
+      if (!global.CrmFlowBarChartKit) return;
+      destroyChartKey(canvasId);
+      var mount = document.getElementById(flowBarMountId(w));
+      if (!mount) return;
+      var palette = KIT.widgetPalette({ color: style.color, color_shade: style.color_shade });
+      global.CrmFlowBarChartKit.render(mount, {
         keys: slice.keys || [],
-        data: rows,
+        rows: rows,
+        palette: palette,
         prefix: "",
         suffix: "",
-      };
-      var chartType = resolvePresetChartType(style);
-      if (chartType === "pie") chartType = "bar";
-      var pseudoWidget = {
-        widget_type: chartType === "horizontal_bar" ? "horizontal_bar" : "bar",
-        title: w && w.title,
-        config: {
-          color: style.color,
-          color_shade: style.color_shade,
-          group_mode: style.group_mode || "grouped",
-          display_data_label: style.show_data_labels !== false,
-          display_legend: true,
-          show_group_composition: style.show_group_composition !== false,
-          show_grid: style.show_grid !== false,
-          pipeline_data_mode: mode,
-        },
-      };
-      safeRenderChart(canvasId, function () {
-        KIT.renderGroupedChart(chartInstances, destroyChartKey, pseudoWidget, groupedData, {
-          animate: true,
-        });
       });
     }
 

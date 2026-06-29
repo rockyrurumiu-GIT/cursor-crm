@@ -892,9 +892,11 @@ def test_dashboard_metadata_includes_featured_line(client, admin_auth):
     types = r.json()["widget_types"]
     assert "featured_line" in types
     assert "featured_bar" in types
+    assert "grouped_1" in types
     assert types.index("line") < types.index("featured_line")
     assert types.index("featured_line") < types.index("featured_bar")
-    assert types.index("featured_bar") < types.index("rich_text")
+    assert types.index("featured_bar") < types.index("grouped_1")
+    assert types.index("grouped_1") < types.index("rich_text")
 
 
 def test_featured_line_widget_config_roundtrip(client, admin_auth):
@@ -1052,6 +1054,7 @@ def test_featured_bar_frontend_assets():
     assert "featured_bar" in html
     assert "featured_bar" in js
     assert "重点柱状" in js
+    assert "分组1" in js
     assert "CrmFeaturedBarChartKit" in js
     assert "normalizeFeaturedBarData" in kit
     assert "renderFeaturedBarChart" in kit
@@ -1062,7 +1065,7 @@ def test_featured_bar_frontend_assets():
     assert "show_summary_legend" in kit
     assert "#cbd5e1" in kit
     assert 'opacity="0.72"' in kit
-    assert "['bar','horizontal_bar','pie','line'].includes" in html
+    assert "['bar','horizontal_bar','pie','line','grouped_1'].includes" in html
 
 
 def test_dashboard_metadata_includes_featured_line(client, admin_auth):
@@ -1242,7 +1245,7 @@ def test_featured_bar_frontend_assets():
     assert "show_summary_legend" in kit
     assert "#cbd5e1" in kit
     assert 'opacity="0.72"' in kit
-    assert "['bar','horizontal_bar','pie','line'].includes" in html
+    assert "['bar','horizontal_bar','pie','line','grouped_1'].includes" in html
 
 
 def test_featured_line_chart_kit_renders_multi_point_series():
@@ -1458,6 +1461,19 @@ def test_grouped_series_show_group_composition_config_roundtrip(client, admin_au
     assert cfg.get("secondary_axis_field") == "probability"
     assert cfg.get("show_group_composition") is False
     client.delete(f"/api/dashboards/{dash_id}", headers=headers)
+
+
+def test_grouped_1_pipeline_data_mode_total_option():
+    from pathlib import Path
+
+    from services.dashboards import PIPELINE_BUCKET_MODES, PIPELINE_DATA_MODES, _normalize_widget_config
+
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
+    assert "total" in PIPELINE_DATA_MODES
+    assert "total" not in PIPELINE_BUCKET_MODES
+    assert _normalize_widget_config({"pipeline_data_mode": "total"})["pipeline_data_mode"] == "total"
+    assert 'value="total">总计</option>' in html
 
 
 def test_bms_widget_data_grouped_series(client, admin_auth):

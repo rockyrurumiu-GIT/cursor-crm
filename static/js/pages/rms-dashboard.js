@@ -45,6 +45,7 @@
   var line1MountId = Core.line1MountId;
   var line1PresetMountId = Core.line1PresetMountId;
   var featuredBarMountId = Core.featuredBarMountId;
+  var flowBarMountId = Core.flowBarMountId;
   var chartsAvailable = Core.chartsAvailable;
   var destroyChartKey = Core.destroyChartKey;
   var destroyAllCharts = Core.destroyAllCharts;
@@ -789,6 +790,7 @@
           truncateJobLabel: truncateJobLabel,
           featuredLineMountId: featuredLineMountId,
           featuredBarMountId: featuredBarMountId,
+          flowBarMountId: flowBarMountId,
           RMS_CHART_GRID_COLOR: RMS_CHART_GRID_COLOR,
           RMS_CHART_TICK_COLOR: RMS_CHART_TICK_COLOR,
           RMS_CHART_BAR_RADIUS: RMS_CHART_BAR_RADIUS,
@@ -1488,7 +1490,7 @@
           }).catch(function () {
             metadata.value = {
               sources: [],
-              widget_types: ["number", "bar", "horizontal_bar", "pie", "line", "featured_line", "featured_bar", "roster_summary", "rms_block", "rich_text"],
+              widget_types: ["number", "bar", "horizontal_bar", "pie", "line", "featured_line", "line_1", "featured_bar", "grouped_1", "roster_summary", "rms_block", "rich_text"],
               metrics: [],
               date_groups: [],
               colors: [],
@@ -1607,6 +1609,7 @@
           featuredBarMountId: featuredBarMountId,
           line1MountId: line1MountId,
           line1PresetMountId: line1PresetMountId,
+          flowBarMountId: flowBarMountId,
           isRmsFeaturedLinePreset: Insp.isRmsFeaturedLinePreset,
           isRmsLine1Preset: Insp.isRmsLine1Preset,
           isRmsFeaturedBarPreset: Insp.isRmsFeaturedBarPreset,

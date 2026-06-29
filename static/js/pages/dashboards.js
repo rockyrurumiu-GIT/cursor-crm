@@ -240,13 +240,14 @@
   }
 
   const METRIC_LABELS = { count: "计数", sum: "求和", avg: "平均", min: "最小", max: "最大" };
-  const CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "line_1", "featured_bar"];
+  const CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "line_1", "featured_bar", "grouped_1"];
   const DATA_WIDGET_TYPES = ["number"].concat(CHART_WIDGET_TYPES);
   const TYPE_LABELS = {
     number: "数字", bar: "柱状", horizontal_bar: "横向排名", pie: "环形", line: "折线",
     featured_line: "重点折线",
     line_1: "折线1",
     featured_bar: "重点柱状",
+    grouped_1: "分组1",
     rich_text: "文本", iframe: "网页", roster_summary: "花名册概览",
   };
   const TYPE_ICONS = {
@@ -254,6 +255,7 @@
     featured_line: "◉",
     line_1: "〽",
     featured_bar: "▮",
+    grouped_1: "▥",
     rich_text: "¶", iframe: "▭", roster_summary: "▦",
   };
 
@@ -410,7 +412,7 @@
       });
       const supportsSecondary = computed(function () {
         var t = widgetForm.value.widget_type;
-        return ["bar", "horizontal_bar", "line", "featured_bar"].indexOf(t) >= 0;
+        return ["bar", "horizontal_bar", "line", "featured_bar", "grouped_1"].indexOf(t) >= 0;
       });
       const secondaryAxisFields = computed(function () {
         return sourceFields.value.filter(function (f) { return f.kind === "text"; });

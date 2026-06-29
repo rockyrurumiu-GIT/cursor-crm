@@ -293,6 +293,29 @@
   position: absolute; transform: translateX(-50%); font-size: 0.68rem; color: #9ca3af;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 72px;
 }
+.chart-canvas-wrap .bms-flow-bar-mount { flex: 1; min-height: 260px; width: 100%; }
+.bms-flow-bar-mount { width: 100%; height: 100%; min-height: 260px; display: flex; }
+.bms-flow-bar-card {
+  display: flex; width: 100%; height: 100%; min-height: 260px;
+  background: linear-gradient(180deg, #fff 0%, #fff 62%, #fdfbff 100%);
+  border-radius: 18px; padding: 8px 12px 2px; box-sizing: border-box;
+  overflow: visible;
+}
+.bms-flow-bar-chart { position: relative; flex: 1; min-height: 220px; width: 100%; overflow: visible; }
+.bms-flow-bar-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.bms-flow-bar-value {
+  font-size: 19px; font-weight: 650; fill: #050505;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.bms-flow-bar-label {
+  font-size: 18px; font-weight: 520; fill: #7f8491;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.bms-flow-bar-label.is-active { fill: #fff; font-weight: 750; }
+.bms-flow-bar-pill-bg { fill: #050505; }
+.bms-flow-bar-rect { opacity: 1; }
+.bms-flow-bar-sheen { pointer-events: none; }
+
 .chart-canvas-wrap .bms-featured-bar-mount { flex: 1; min-height: 260px; width: 100%; }
 .bms-featured-bar-mount {
   --featured-bar-blue: #1e96e8;
@@ -313,6 +336,40 @@
   --bms-chart-hover-fade: 280ms;
 }
 .bms-featured-bar-svg { display: block; width: 100%; height: 100%; min-height: 180px; }
+
+.bms-featured-bar-flow-card {
+  width: 100%; height: 100%; min-height: 260px; display: flex; flex-direction: column;
+  background: #fff; border-radius: 16px; box-sizing: border-box; padding: 8px 10px 4px;
+}
+.bms-grouped-series-html-legend { flex-shrink: 0; margin-bottom: 0.15rem; }
+.bms-featured-bar-flow-legend {
+  display: flex; align-items: center; gap: 1.05rem; flex-wrap: wrap;
+  color: #6b7280; font-size: 0.82rem; line-height: 1.2; padding: 0.15rem 0.2rem 0.1rem;
+}
+.bms-featured-bar-flow-legend-item { display: inline-flex; align-items: center; gap: 0.38rem; white-space: nowrap; }
+.bms-featured-bar-flow-legend-swatch {
+  display: inline-block; flex-shrink: 0; width: 10px; height: 10px;
+  border-radius: 3px; box-shadow: 0 2px 6px rgba(80, 72, 180, 0.18);
+}
+.bms-featured-bar-flow-chart {
+  flex: 1; min-height: 210px; width: 100%; overflow: visible; position: relative;
+  --bms-chart-hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --bms-chart-hover-move: 420ms;
+  --bms-chart-hover-fade: 280ms;
+}
+.bms-featured-bar-flow-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.bms-featured-bar-flow-band { filter: saturate(1.05); pointer-events: none; }
+.bms-featured-bar-flow-segment { stroke: rgba(255,255,255,0.72); stroke-width: 1.4; pointer-events: none; }
+.bms-featured-bar-flow-seg-label,
+.bms-featured-bar-flow-total,
+.bms-featured-bar-flow-xlabel { pointer-events: none; }
+.bms-featured-bar-flow-hit { pointer-events: all; cursor: default; }
+.bms-featured-bar-flow-total { fill: #111827; font-size: 15px; font-weight: 650; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.bms-featured-bar-flow-seg-label { fill: rgba(255,255,255,0.82); font-size: 12px; font-weight: 700; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.bms-featured-bar-flow-bottom-total { fill: #8b95a5; font-size: 14px; font-weight: 520; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.bms-featured-bar-flow-xlabel { fill: #7f8795; font-size: 18px; font-weight: 540; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.bms-featured-bar-flow-pill { fill: #050505; }
+.bms-featured-bar-flow-pill-text { fill: #fff; font-size: 14px; font-weight: 720; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
 .bms-featured-bar-average-label {
   position: absolute; left: 0; z-index: 3; pointer-events: none;
   transform: translateY(-50%);
@@ -1126,7 +1183,8 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             <p v-else-if="item.block === 'chart_client_job_stage_stacked'" class="chart-hint">按岗位展示待客筛、待面试、一面通过、二面通过、放弃面试（横向堆叠）</p>
                             <p v-else-if="item.block === 'chart_client_job_stage_funnel'" class="chart-hint">当前筛选合计：推送 → 内筛 → 客筛 → 一面 → 二面</p>
                             <div class="chart-canvas-wrap">
-                                <canvas v-if="!isRmsFeaturedChartPreset(item.widget)" :key="'cv-' + item.widget.id" :id="chartCanvasId(item.widget)"></canvas>
+                                <canvas v-if="!isRmsFeaturedChartPreset(item.widget) && item.block !== 'chart_pipeline_dialysis'" :key="'cv-' + item.widget.id" :id="chartCanvasId(item.widget)"></canvas>
+                                <div v-else-if="item.block === 'chart_pipeline_dialysis'" v-once :key="'flow-' + item.widget.id" :id="flowBarMountId(item.widget)" class="bms-flow-bar-mount"></div>
                                 <div v-else-if="isRmsFeaturedLinePreset(item.widget)" v-once :key="'fl-' + item.widget.id" :id="featuredPresetMountId(item.widget)" class="bms-featured-line-mount"></div>
                                 <div v-else-if="isRmsLine1Preset(item.widget)" v-once :key="'l1-' + item.widget.id" :id="line1PresetMountId(item.widget)" class="bms-line1-mount"></div>
                                 <div v-else-if="isRmsFeaturedBarPreset(item.widget)" v-once :key="'fb-' + item.widget.id" :id="featuredPresetMountId(item.widget)" class="bms-featured-bar-mount"></div>
@@ -1460,7 +1518,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             </div>
                         </div>
                     </template>
-                    <template v-else-if="['bar','horizontal_bar','pie','line'].includes(item.widget.widget_type)">
+                    <template v-else-if="['bar','horizontal_bar','pie','line','grouped_1'].includes(item.widget.widget_type)">
                         <div class="chart-area">
                             <div class="chart-canvas-wrap">
                                 <canvas :id="cardCanvasId(item)"></canvas>
@@ -1868,7 +1926,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                 </div>
                             </div>
                         </template>
-                        <template v-else-if="widgetForm.widget_type === 'featured_bar'">
+                        <template v-else-if="widgetForm.widget_type === 'featured_bar' || widgetForm.widget_type === 'grouped_1'">
                             <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="field color-picker-wrap" v-click-outside="closeColorPicker">
                                 <label>颜色</label>
                                 <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
@@ -1908,6 +1966,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                     <select class="line1-metric-select" v-model="widgetForm.config.pipeline_data_mode">
                                         <option value="active">活跃数据</option>
                                         <option value="loss">损耗数据</option>
+                                        <option value="total">总计</option>
                                     </select>
                                 </div>
                             </div>
@@ -1976,16 +2035,16 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             <div class="toggle-row"><span>高亮最新点</span><input type="checkbox" v-model="widgetForm.config.highlight_latest" /></div>
                             <div class="toggle-row"><span>显示点位数值</span><input type="checkbox" v-model="widgetForm.config.show_point_values" /></div>
                         </template>
-                        <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.widget_type !== 'line' && widgetForm.widget_type !== 'featured_bar'" class="toggle-row">
+                        <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.widget_type !== 'line' && widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'grouped_1'" class="toggle-row">
                             <span>堆叠条形图</span>
                             <input type="checkbox" :checked="widgetForm.config.group_mode === 'stacked'" @change="toggleGroupMode" />
                         </div>
-                        <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.widget_type !== 'featured_bar'" class="toggle-row">
+                        <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'grouped_1'" class="toggle-row">
                             <span>显示分组构成</span>
                             <input type="checkbox" v-model="widgetForm.config.show_group_composition" />
                         </div>
-                        <div v-if="widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'line_1' && widgetForm.widget_type !== 'featured_bar'" class="toggle-row"><span>数据标签</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></div>
-                        <div v-if="widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'line_1'" class="toggle-row"><span>Legend</span><input type="checkbox" v-model="widgetForm.config.display_legend" /></div>
+                        <div v-if="widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'line_1' && widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'grouped_1'" class="toggle-row"><span>数据标签</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></div>
+                        <div v-if="widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'grouped_1' && widgetForm.widget_type !== 'line_1'" class="toggle-row"><span>Legend</span><input type="checkbox" v-model="widgetForm.config.display_legend" /></div>
                         <div v-if="widgetForm.widget_type === 'pie'" class="toggle-row"><span>中心显示总计</span><input type="checkbox" v-model="widgetForm.config.show_value_center" /></div>
                         <div v-if="widgetForm.widget_type === 'horizontal_bar'" class="field">
                             <label>显示条数</label>
@@ -1994,7 +2053,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                         </template>
                     </div>
 
-                    <details v-if="isChart && widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'line_1' && widgetForm.widget_type !== 'featured_bar'" class="inspector-collapsible">
+                    <details v-if="isChart && widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'line_1' && widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'grouped_1'" class="inspector-collapsible">
                         <summary>附加展示</summary>
                         <div v-for="(ev, evIdx) in widgetForm.config.extra_views" :key="'ev-' + evIdx" class="extra-view-row">
                             <div class="field">
@@ -2056,11 +2115,12 @@ body.rms-dashboard-edit-mode #handbook-assistant {
 <script src="/static/js/shared/featured-line-chart-kit.js?v=featured-line-20260627"></script>
 <script src="/static/js/shared/line1-chart-kit.js?v=line1-20260628"></script>
 <script src="/static/js/shared/featured-bar-chart-kit.js?v=featured-bar-20260627"></script>
-<script src="/static/js/shared/dashboard-widget-kit.js?v=dashboard-widget-kit-twenty-12"></script>
+<script src="/static/js/shared/flow-bar-chart-kit.js?v=flow-bar-polished-20260629"></script>
+<script src="/static/js/shared/dashboard-widget-kit.js?v=grouped-html-legend-20260629"></script>
 <script src="/static/js/pages/rms-core.js?v=rms-core-list-pagination-20260627"></script>
 <script src="/static/js/pages/rms-dashboard-core.js?v=featured-bar-rms-20260627"></script>
 <script src="/static/js/pages/rms-dashboard-metrics.js?v=dashboard-zero-resume-filter-20260627"></script>
-<script src="/static/js/pages/rms-dashboard-charts.js?v=featured-bar-rms-20260627"></script>
-<script src="/static/js/pages/rms-dashboard-inspector.js?v=featured-bar-rms-20260627"></script>
+<script src="/static/js/pages/rms-dashboard-charts.js?v=pipeline-dialysis-ui-20260629"></script>
+<script src="/static/js/pages/rms-dashboard-inspector.js?v=grouped1-inspector-20260629"></script>
 <script src="/static/js/pages/rms-dashboard.js?v=featured-bar-rms-20260627"></script>
 {% endblock %}

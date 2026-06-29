@@ -2077,6 +2077,61 @@ def test_rms_widget_pipeline_active_grouped_series(client_rbac, admin_auth, rms_
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
 
+def test_rms_widget_pipeline_active_grouped_job_labels(client_rbac, admin_auth, rms_engine, uniq):
+    from sqlalchemy import text
+
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"pipejob_{uniq}")
+    job_title = f"Job pipejob_{uniq}"
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id, source="内推", name="Pipe Job Cand"),
+    )
+    assert cand.status_code == 200, cand.text
+    app = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+    )
+    assert app.status_code == 200, app.text
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = :status, current_stage = :status WHERE id = :id"
+            ),
+            {"id": app.json()["id"], "status": "pending_first_interview"},
+        )
+
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        widget_type="featured_bar",
+        source_key="rms_applications",
+        config={
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "secondary_axis_field": "job_id",
+            "group_mode": "stacked",
+            "pipeline_data_mode": "active",
+            "display_data_label": True,
+        },
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["kind"] == "grouped_series"
+    keys = body.get("keys") or []
+    assert keys
+    assert job_title in keys
+    assert str(job_id) not in keys
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
 def test_rms_pie_rejects_secondary_axis_400(client_rbac, admin_auth, rms_engine, uniq):
     login = _admin_login(client_rbac, admin_auth)
     overview = _rms_overview_tab(client_rbac, login.cookies)

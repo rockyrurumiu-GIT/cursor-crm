@@ -1261,6 +1261,10 @@ def _is_client_secondary_field(field: str) -> bool:
     return (field or "").strip() in ("client", "client_id")
 
 
+def _is_job_secondary_field(field: str) -> bool:
+    return (field or "").strip() in ("job", "job_id")
+
+
 def compute_pipeline_grouped_series(
     apps: List[Any],
     hist_map: Dict[int, List[Any]],
@@ -1270,6 +1274,7 @@ def compute_pipeline_grouped_series(
     db: Session,
     Client: Type[Any],
     *,
+    RmsJob: Optional[Type[Any]] = None,
     hide_empty: bool = False,
 ) -> tuple[List[str], List[str], Dict[str, Dict[str, float]]]:
     """Grouped pipeline buckets (active snapshot / loss historical) by secondary axis."""
@@ -1306,6 +1311,22 @@ def compute_pipeline_grouped_series(
             ):
                 name_map[int(cid)] = (cname or "").strip() or f"客户#{cid}"
 
+    job_name_map: Dict[int, str] = {}
+    if _is_job_secondary_field(secondary_field) and RmsJob is not None:
+        jids = []
+        for key in groups:
+            if key == "(空)":
+                continue
+            try:
+                jids.append(int(key))
+            except (TypeError, ValueError):
+                pass
+        if jids:
+            for jid, title in (
+                db.query(RmsJob.id, RmsJob.title).filter(RmsJob.id.in_(jids)).all()
+            ):
+                job_name_map[int(jid)] = (title or "").strip() or f"岗位#{jid}"
+
     def _secondary_label(raw_key: Any) -> str:
         if _is_client_secondary_field(secondary_field):
             if raw_key == "(空)":
@@ -1315,6 +1336,14 @@ def compute_pipeline_grouped_series(
             except (TypeError, ValueError):
                 return str(raw_key)
             return name_map.get(cid, f"客户#{cid}")
+        if _is_job_secondary_field(secondary_field):
+            if raw_key == "(空)":
+                return "(空)"
+            try:
+                jid = int(raw_key)
+            except (TypeError, ValueError):
+                return str(raw_key)
+            return job_name_map.get(jid, f"岗位#{jid}")
         return str(raw_key) if raw_key != "(空)" else "(空)"
 
     secondary_raw_keys = sorted(groups.keys(), key=lambda k: _secondary_label(k))

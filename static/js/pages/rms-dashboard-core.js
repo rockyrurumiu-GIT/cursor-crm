@@ -163,6 +163,10 @@
     return chartCanvasId(w) + "-line1";
   }
 
+  function flowBarMountId(w) {
+    return chartCanvasId(w) + "-flowbar";
+  }
+
   function chartsAvailable() {
     return typeof Chart !== "undefined";
   }
@@ -310,6 +314,7 @@
     featuredBarMountId: featuredBarMountId,
     line1MountId: line1MountId,
     line1PresetMountId: line1PresetMountId,
+    flowBarMountId: flowBarMountId,
     chartsAvailable: chartsAvailable,
     destroyChartKey: destroyChartKey,
     destroyAllCharts: destroyAllCharts,

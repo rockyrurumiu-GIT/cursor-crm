@@ -6,17 +6,17 @@
 
   var EXTRA_RENDER_LABELS = { doughnut: "环形图", horizontal_bar: "横向排名（柱图）" };
   var METRIC_LABELS = { count: "计数", sum: "求和", avg: "平均", min: "最小", max: "最大" };
-  var CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "line_1", "featured_bar"];
+  var CHART_WIDGET_TYPES = ["bar", "horizontal_bar", "pie", "line", "featured_line", "line_1", "featured_bar", "grouped_1"];
   var LINE1_VALUE_MODES = ["sum", "latest", "average", "max"];
   var DATA_WIDGET_TYPES = ["number"].concat(CHART_WIDGET_TYPES);
   var TYPE_LABELS = {
     number: "数字", bar: "柱状", horizontal_bar: "横向排名", pie: "环形", line: "折线",
-    featured_line: "重点折线", line_1: "折线1", featured_bar: "重点柱状",
+    featured_line: "重点折线", line_1: "折线1", featured_bar: "重点柱状", grouped_1: "分组1",
     rich_text: "文本", iframe: "网页", roster_summary: "花名册概览", rms_block: "招聘预设",
   };
   var TYPE_ICONS = {
     number: "#", bar: "▮", horizontal_bar: "▤", pie: "◔", line: "📈",
-    featured_line: "◉", line_1: "〽", featured_bar: "▮",
+    featured_line: "◉", line_1: "〽", featured_bar: "▮", grouped_1: "▥",
     rich_text: "¶", iframe: "▭", roster_summary: "▦", rms_block: "▦",
   };
 
@@ -141,6 +141,7 @@
       show_tooltip: c.show_tooltip !== false,
       show_summary_legend: c.show_summary_legend !== false,
       show_grid: c.show_grid !== false,
+      bar_gradient: !!c.bar_gradient,
     };
   }
 
@@ -242,7 +243,7 @@
     var render = opts && opts.render ? opts.render : null;
     if (render === "doughnut" || (!render && w.widget_type === "pie")) return "doughnut";
     if (render === "horizontal_bar" || (!render && w.widget_type === "horizontal_bar")) return "bar";
-    if (!render && w.widget_type === "bar") return "bar";
+    if (!render && (w.widget_type === "bar" || w.widget_type === "grouped_1")) return "bar";
     if (!render && w.widget_type === "line") return "line";
     return null;
   }
@@ -256,7 +257,7 @@
     if (!chart || !chart.config || !data || data.status !== "ok") return false;
     if (opts && opts.forceRecreate) return false;
     if (data.kind === "grouped_series") {
-      if (w.widget_type !== "bar" && w.widget_type !== "line" && w.widget_type !== "horizontal_bar") return false;
+      if (w.widget_type !== "bar" && w.widget_type !== "line" && w.widget_type !== "horizontal_bar" && w.widget_type !== "grouped_1") return false;
       if (chart.config.type !== "bar" && chart.config.type !== "line") return false;
       var gCfg = normalizeWidgetConfig(w.config || {});
       // 切换堆叠/分组或改配色时样式不同，强制重建而非动画更新。
@@ -563,6 +564,10 @@
         out.show_summary_legend = c.show_summary_legend !== false;
         out.show_grid = c.show_grid !== false;
         out.highlight_item = c.highlight_item === "max" ? "max" : "latest";
+      } else if (f.widget_type === "grouped_1") {
+        out.show_tooltip = c.show_tooltip !== false;
+        out.show_summary_legend = c.show_summary_legend !== false;
+        out.show_grid = c.show_grid !== false;
       }
     }
     return out;
@@ -690,12 +695,447 @@
     return { topLeft: 8, topRight: 8, bottomLeft: 0, bottomRight: 0 };
   }
 
+
+  function clearFeaturedBarFlow(canvas) {
+    if (!canvas) return;
+    var mount = canvas.closest(".chart-canvas-wrap") || canvas.parentElement;
+    if (!mount) return;
+    var existing = mount.querySelector(".bms-featured-bar-flow-card");
+    if (existing) {
+      if (typeof existing._flowHoverCleanup === "function") {
+        existing._flowHoverCleanup();
+        existing._flowHoverCleanup = null;
+      }
+      if (existing.parentNode) existing.parentNode.removeChild(existing);
+    }
+    canvas.style.display = "";
+  }
+
+  function flowSegTipPosition(meta, svgEl, geo, chartWrap) {
+    if (!meta || !svgEl || !geo || !chartWrap) {
+      return { left: "50%", top: "50%" };
+    }
+    var svgRect = svgEl.getBoundingClientRect();
+    var wrapRect = chartWrap.getBoundingClientRect();
+    if (!svgRect.width || !wrapRect.width) {
+      return { left: ((meta.tipX / geo.w) * 100) + "%", top: ((meta.tipY / geo.h) * 100) + "%" };
+    }
+    var scale = Math.min(svgRect.width / geo.w, svgRect.height / geo.h);
+    var renderedW = geo.w * scale;
+    var renderedH = geo.h * scale;
+    var offsetX = svgRect.left + (svgRect.width - renderedW) / 2;
+    var offsetY = svgRect.top + (svgRect.height - renderedH) / 2;
+    var px = offsetX + meta.tipX * scale - wrapRect.left;
+    var py = offsetY + meta.tipY * scale - wrapRect.top;
+    return {
+      left: ((px / wrapRect.width) * 100) + "%",
+      top: ((py / wrapRect.height) * 100) + "%",
+    };
+  }
+
+  function bindFeaturedBarFlowHover(chartWrap, cfg, prefix, suffix, segMetas, geo) {
+    if (cfg.show_tooltip === false || !segMetas.length) return function () {};
+
+    var hoverTip = document.createElement("div");
+    hoverTip.className = "bms-featured-bar-hover-tip";
+    var tipTitle = document.createElement("div");
+    tipTitle.className = "bms-featured-bar-hover-tip-title";
+    var tipRow = document.createElement("div");
+    tipRow.className = "bms-featured-bar-hover-tip-row";
+    var tipSwatch = document.createElement("span");
+    tipSwatch.setAttribute("aria-hidden", "true");
+    var tipValue = document.createElement("span");
+    tipValue.className = "bms-featured-bar-hover-tip-value";
+    tipRow.appendChild(tipSwatch);
+    tipRow.appendChild(tipValue);
+    hoverTip.appendChild(tipTitle);
+    hoverTip.appendChild(tipRow);
+    chartWrap.appendChild(hoverTip);
+
+    var svgEl = chartWrap.querySelector(".bms-featured-bar-flow-svg");
+    var hoverLive = false;
+    var activeId = null;
+
+    function sharePct(value, total) {
+      if (!total || total <= 0) return "0.0%";
+      return ((value / total) * 100).toFixed(1) + "%";
+    }
+
+    function renderTipContent(meta) {
+      tipTitle.textContent = meta.rowLabel;
+      tipSwatch.className = "bms-featured-bar-hover-tip-swatch bms-featured-bar-hover-tip-swatch--active";
+      tipSwatch.style.background = meta.color;
+      var valueText = prefix + fmtNum(meta.value) + suffix;
+      tipValue.innerHTML = escapeFlowHtml(meta.key) + ": " + escapeFlowHtml(valueText)
+        + ' <span class="bms-featured-bar-hover-tip-pct">(' + escapeFlowHtml(sharePct(meta.value, meta.colTotal)) + ")</span>";
+    }
+
+    function showSeg(meta) {
+      if (!meta) return;
+      var segId = meta.col + ":" + meta.seg;
+      var firstFrame = !hoverLive;
+      if (firstFrame) hoverTip.classList.add("is-instant");
+
+      if (activeId !== segId) {
+        renderTipContent(meta);
+        activeId = segId;
+      }
+
+      var pos = flowSegTipPosition(meta, svgEl, geo, chartWrap);
+      hoverTip.style.left = pos.left;
+      hoverTip.style.top = pos.top;
+      hoverTip.classList.add("is-visible");
+      hoverLive = true;
+
+      if (firstFrame) {
+        void hoverTip.offsetWidth;
+        hoverTip.classList.remove("is-instant");
+      }
+    }
+
+    function hideTip() {
+      hoverLive = false;
+      activeId = null;
+      hoverTip.classList.remove("is-instant");
+      hoverTip.classList.remove("is-visible");
+    }
+
+    function metaFromHitEl(hitEl) {
+      if (!hitEl) return null;
+      var col = Number(hitEl.getAttribute("data-col"));
+      var seg = Number(hitEl.getAttribute("data-seg"));
+      for (var i = 0; i < segMetas.length; i++) {
+        if (segMetas[i].col === col && segMetas[i].seg === seg) return segMetas[i];
+      }
+      return null;
+    }
+
+    function onMove(e) {
+      var hitEl = null;
+      if (typeof document.elementFromPoint === "function") {
+        var under = document.elementFromPoint(e.clientX, e.clientY);
+        if (under && under.closest) hitEl = under.closest(".bms-featured-bar-flow-hit");
+      }
+      if (hitEl && chartWrap.contains(hitEl)) {
+        showSeg(metaFromHitEl(hitEl));
+        return;
+      }
+      if (hoverLive) hideTip();
+    }
+    function onLeave() {
+      hideTip();
+    }
+
+    chartWrap.addEventListener("mousemove", onMove);
+    chartWrap.addEventListener("mouseleave", onLeave);
+
+    return function () {
+      chartWrap.removeEventListener("mousemove", onMove);
+      chartWrap.removeEventListener("mouseleave", onLeave);
+      if (hoverTip.parentNode) hoverTip.parentNode.removeChild(hoverTip);
+    };
+  }
+
+  function escapeFlowHtml(text) {
+    return String(text == null ? "" : text)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function featuredStackPalette(cfg, count) {
+    var fixed = ["#5367f5", "#8b5cf6", "#d946d7", "#ef6b5c", "#f6b743", "#35cfe8"];
+    if (count <= fixed.length) return fixed.slice(0, count);
+    var pal = widgetPalette(cfg);
+    var out = fixed.slice();
+    for (var i = fixed.length; i < count; i++) out.push(pal[i % pal.length]);
+    return out;
+  }
+
+  function shortFlowLabel(label) {
+    var s = String(label == null ? "" : label);
+    if (s.length <= 8) return s;
+    return s.slice(0, 7) + "…";
+  }
+
+  function featuredStackTotal(row, keys) {
+    return keys.reduce(function (sum, key) {
+      return sum + (Number(row && row[key]) || 0);
+    }, 0);
+  }
+
+  function groupedLegendVisible(cfg) {
+    return !!(cfg.display_legend || cfg.show_legend || cfg.show_summary_legend);
+  }
+
+  function createGroupedLegendSwatch(color) {
+    var swatch = document.createElement("span");
+    swatch.className = "bms-featured-bar-flow-legend-swatch";
+    swatch.setAttribute("aria-hidden", "true");
+    swatch.style.background = color;
+    swatch.style.display = "inline-block";
+    swatch.style.width = "10px";
+    swatch.style.height = "10px";
+    swatch.style.flexShrink = "0";
+    swatch.style.borderRadius = "3px";
+    swatch.style.boxShadow = "0 2px 6px rgba(80, 72, 180, 0.18)";
+    return swatch;
+  }
+
+  function buildGroupedSeriesHtmlLegend(keys, colors, cfg) {
+    if (!groupedLegendVisible(cfg) || !keys.length) return null;
+    var legend = document.createElement("div");
+    legend.className = "bms-grouped-series-html-legend bms-featured-bar-flow-legend";
+    keys.forEach(function (key, ki) {
+      var item = document.createElement("span");
+      item.className = "bms-featured-bar-flow-legend-item";
+      item.appendChild(createGroupedLegendSwatch(colors[ki % colors.length]));
+      var text = document.createElement("span");
+      text.textContent = key;
+      item.appendChild(text);
+      legend.appendChild(item);
+    });
+    return legend;
+  }
+
+  function clearGroupedSeriesHtmlLegend(containerEl) {
+    if (!containerEl) return;
+    var existing = containerEl.querySelector(".bms-grouped-series-html-legend");
+    if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+  }
+
+  function syncGroupedSeriesHtmlLegend(canvas, keys, colors, cfg) {
+    if (!canvas) return;
+    var chartArea = canvas.closest(".chart-area") || canvas.parentElement;
+    if (!chartArea) return;
+    clearGroupedSeriesHtmlLegend(chartArea);
+    var legend = buildGroupedSeriesHtmlLegend(keys, colors, cfg);
+    if (!legend) return;
+    var wrap = chartArea.querySelector(".chart-canvas-wrap") || canvas.parentElement;
+    if (wrap && wrap.parentNode === chartArea) chartArea.insertBefore(legend, wrap);
+    else chartArea.insertBefore(legend, chartArea.firstChild);
+  }
+
+  function groupedSeriesLegendColors(keys, datasets, stacked, pal) {
+    if (stacked) return spacedShadeColors(pal, keys.length);
+    return keys.map(function (_key, i) {
+      return (datasets[i] && datasets[i].backgroundColor) || pal[(i + 2) % pal.length];
+    });
+  }
+
+  function renderFeaturedBarFlowStack(canvas, canvasId, destroyChartKey, w, data, cfg) {
+    if (!canvas || !data || data.status !== "ok" || data.kind !== "grouped_series") return false;
+    var keys = (data.keys || []).slice(0, 6);
+    var rows = (data.data || []).slice(0, Math.max(1, Number(cfg.limit || 20)));
+    rows = rows.filter(function (row) { return featuredStackTotal(row, keys) > 0; }).slice(0, 8);
+    if (!keys.length || !rows.length) return false;
+
+    destroyChartKey(canvasId);
+    clearGroupedComposition(canvas.closest(".chart-area") || canvas.parentElement);
+    clearGroupedSeriesHtmlLegend(canvas.closest(".chart-area") || canvas.parentElement);
+    clearFeaturedBarFlow(canvas);
+    canvas.style.display = "none";
+
+    var mount = canvas.closest(".chart-canvas-wrap") || canvas.parentElement;
+    if (!mount) return false;
+
+    var colors = featuredStackPalette(cfg, keys.length);
+    var totals = rows.map(function (row) { return featuredStackTotal(row, keys); });
+    var maxTotal = Math.max.apply(null, totals.concat([1]));
+    var maxIdx = 0;
+    totals.forEach(function (v, i) { if (v > totals[maxIdx]) maxIdx = i; });
+
+    var uid = "fbstack-" + Math.random().toString(36).slice(2);
+    var W = 920;
+    var H = 360;
+    var padL = 38;
+    var padR = 34;
+    var legendH = (cfg.display_legend || cfg.show_legend || cfg.show_summary_legend) ? 42 : 8;
+    var padT = 58 + legendH;
+    var padB = 28;
+    var chartH = H - padT - padB;
+    var chartW = W - padL - padR;
+    var n = rows.length;
+    var slot = chartW / n;
+    var colW = Math.max(62, Math.min(94, slot * 0.48));
+    var gap = 5;
+    var prefix = data.prefix || cfg.prefix || "";
+    var suffix = data.suffix || cfg.suffix || "";
+
+    function xLeft(i) { return padL + i * slot + (slot - colW) / 2; }
+    function xRight(i) { return xLeft(i) + colW; }
+    function yForTotal(total) { return padT + chartH - (total / maxTotal) * chartH; }
+    function bandTop(seg) { return seg.y0 + gap / 2; }
+    function bandBottom(seg) { return seg.y1 - gap / 2; }
+    function rowSegments(row) {
+      var base = padT + chartH;
+      return keys.map(function (key, ki) {
+        var v = Number(row[key]) || 0;
+        var h = (v / maxTotal) * chartH;
+        var y1 = base;
+        var y0 = base - h;
+        base = y0;
+        return { key: key, value: v, y0: y0, y1: y1, color: colors[ki] };
+      });
+    }
+    var segments = rows.map(rowSegments);
+    var segMetas = [];
+    var svg = [];
+    svg.push('<svg class="bms-featured-bar-flow-svg" viewBox="0 0 ' + W + " " + H + '" preserveAspectRatio="xMidYMid meet" role="img" aria-hidden="true">');
+    svg.push("<defs>");
+    colors.forEach(function (c, i) {
+      svg.push('<linearGradient id="' + uid + '-g-' + i + '" x1="0" y1="0" x2="0" y2="1">');
+      svg.push('<stop offset="0%" stop-color="' + mixHex(c, "#ffffff", 0.25) + '"/>');
+      svg.push('<stop offset="100%" stop-color="' + mixHex(c, "#000000", 0.05) + '"/>');
+      svg.push("</linearGradient>");
+    });
+    svg.push('<filter id="' + uid + '-shadow" x="-18%" y="-20%" width="136%" height="145%">');
+    svg.push('<feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#7260dd" flood-opacity="0.14"/>');
+    svg.push("</filter>");
+    svg.push("</defs>");
+
+    for (var i = 0; i < rows.length - 1; i++) {
+      keys.forEach(function (key, ki) {
+        var a = segments[i][ki];
+        var b = segments[i + 1][ki];
+        if (!a || !b || a.value <= 0 || b.value <= 0) return;
+        var aTop = bandTop(a);
+        var aBottom = bandBottom(a);
+        var bTop = bandTop(b);
+        var bBottom = bandBottom(b);
+        if (aBottom - aTop < 1 || bBottom - bTop < 1) return;
+        var path = [
+          "M", xRight(i).toFixed(1), aTop.toFixed(1),
+          "C", (xRight(i) + slot * 0.35).toFixed(1), aTop.toFixed(1),
+          (xLeft(i + 1) - slot * 0.35).toFixed(1), bTop.toFixed(1),
+          xLeft(i + 1).toFixed(1), bTop.toFixed(1),
+          "L", xLeft(i + 1).toFixed(1), bBottom.toFixed(1),
+          "C", (xLeft(i + 1) - slot * 0.35).toFixed(1), bBottom.toFixed(1),
+          (xRight(i) + slot * 0.35).toFixed(1), aBottom.toFixed(1),
+          xRight(i).toFixed(1), aBottom.toFixed(1),
+          "Z",
+        ].join(" ");
+        svg.push('<path class="bms-featured-bar-flow-band" data-seg="' + ki + '" d="' + path + '" fill="' + colors[ki] + '" opacity="' + (ki === 0 ? "0.16" : "0.20") + '"/>');
+      });
+    }
+
+    rows.forEach(function (row, ri) {
+      var x = xLeft(ri);
+      var total = totals[ri];
+      var label = String(row.label || "");
+      var isActive = ri === maxIdx;
+      svg.push('<g class="bms-featured-bar-flow-col' + (isActive ? " is-active" : "") + '">');
+      var visibleSegCount = segments[ri].filter(function (s) { return s.value > 0; }).length;
+      var visibleSegIdx = 0;
+      segments[ri].forEach(function (seg, si) {
+        if (seg.value <= 0) return;
+        var y = seg.y0 + gap / 2;
+        var h = Math.max(2, seg.y1 - seg.y0 - gap);
+        var rx = Math.min(8, h / 2);
+        var hitY = y - (visibleSegIdx > 0 ? gap / 2 : 0);
+        var hitH = h + (visibleSegIdx > 0 ? gap / 2 : 0)
+          + (visibleSegIdx < visibleSegCount - 1 ? gap / 2 : 0);
+        visibleSegIdx += 1;
+        svg.push(
+          '<rect class="bms-featured-bar-flow-segment" data-col="' + ri + '" data-seg="' + si + '" x="' + x.toFixed(1)
+          + '" y="' + y.toFixed(1) + '" width="' + colW.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + rx.toFixed(1)
+          + '" fill="url(#' + uid + "-g-" + si + ')"' + (isActive ? ' filter="url(#' + uid + '-shadow)"' : "") + "/>"
+        );
+        if ((cfg.display_data_label || cfg.data_labels) && h >= 20) {
+          svg.push('<text class="bms-featured-bar-flow-seg-label" x="' + (x + colW / 2).toFixed(1) + '" y="' + (y + h / 2 + 4).toFixed(1) + '" text-anchor="middle">' + fmtNum(seg.value) + "</text>");
+        }
+        segMetas.push({
+          col: ri,
+          seg: si,
+          key: seg.key,
+          rowLabel: String(row.label || ""),
+          value: seg.value,
+          colTotal: total,
+          color: colors[si],
+          x: x,
+          y: y,
+          h: h,
+          hitY: hitY,
+          hitH: hitH,
+          tipX: x + colW / 2,
+          tipY: y,
+        });
+      });
+      if (cfg.display_data_label || cfg.data_labels) {
+        svg.push('<text class="bms-featured-bar-flow-total" x="' + (x + colW / 2).toFixed(1) + '" y="' + (yForTotal(total) - 12).toFixed(1) + '" text-anchor="middle">' + prefix + fmtNum(total) + suffix + "</text>");
+      }
+      svg.push('<text class="bms-featured-bar-flow-xlabel" font-size="18" x="' + (x + colW / 2).toFixed(1) + '" y="' + (H - 2).toFixed(1) + '" text-anchor="middle">' + escapeFlowHtml(label) + "</text>");
+      svg.push("</g>");
+    });
+    if (segMetas.length) {
+      svg.push('<g class="bms-featured-bar-flow-hits">');
+      segMetas.forEach(function (m) {
+        svg.push(
+          '<rect class="bms-featured-bar-flow-hit" data-col="' + m.col + '" data-seg="' + m.seg
+          + '" x="' + m.x.toFixed(1) + '" y="' + m.hitY.toFixed(1) + '" width="' + colW.toFixed(1)
+          + '" height="' + m.hitH.toFixed(1) + '" fill="transparent" pointer-events="all"/>'
+        );
+      });
+      svg.push("</g>");
+    }
+    svg.push("</svg>");
+
+    var card = document.createElement("div");
+    card.className = "bms-featured-bar-flow-card";
+    var flowLegend = buildGroupedSeriesHtmlLegend(keys, colors, cfg);
+    if (flowLegend) card.appendChild(flowLegend);
+    var chart = document.createElement("div");
+    chart.className = "bms-featured-bar-flow-chart";
+    chart.innerHTML = svg.join("");
+    card.appendChild(chart);
+    mount.appendChild(card);
+    card._flowHoverCleanup = bindFeaturedBarFlowHover(
+      chart,
+      cfg,
+      prefix,
+      suffix,
+      segMetas,
+      { w: W, h: H, padL: padL, chartW: chartW, n: n, slot: slot, colW: colW }
+    );
+    return true;
+  }
+
+  // 每根柱子自身从顶部（饱和）到底部（接近白）的纵向渐变。
+  // 渐变作用于每根柱子自己的高度，使矮柱也保留同样的渐变观感。
+  var verticalBarGradientPlugin = {
+    id: "crmVerticalBarGradient",
+    beforeDatasetsDraw: function (chart) {
+      var specs = chart.$crmBarGradient;
+      if (!specs || chart.options.indexAxis === "y") return;
+      chart.data.datasets.forEach(function (ds, di) {
+        var spec = specs[di];
+        if (!spec) return;
+        var meta = chart.getDatasetMeta(di);
+        if (!meta || !meta.data) return;
+        meta.data.forEach(function (bar) {
+          if (!bar || bar.base == null || bar.y == null || bar.base === bar.y) return;
+          var g = chart.ctx.createLinearGradient(0, bar.y, 0, bar.base);
+          g.addColorStop(0, spec.top);
+          g.addColorStop(1, spec.bottom);
+          bar.options.backgroundColor = g;
+        });
+      });
+    },
+  };
+
   function renderGroupedChart(chartInstances, destroyChartKey, w, data, opts) {
     opts = opts || {};
     var canvasId = opts.canvasId || chartCanvasId(w, opts.viewIndex);
     var canvas = document.getElementById(canvasId);
-    if (!canvas || typeof Chart === "undefined") return;
+    if (!canvas) return;
     var cfg = normalizeWidgetConfig(w.config || {});
+    if (w.widget_type === "grouped_1" && cfg.group_mode === "stacked") {
+      if (renderFeaturedBarFlowStack(canvas, canvasId, destroyChartKey, w, data, cfg)) return;
+      clearFeaturedBarFlow(canvas);
+    }
+    clearFeaturedBarFlow(canvas);
+    if (typeof Chart === "undefined") return;
     var existing = chartInstances[canvasId];
     if (opts.animate !== false && existing && canAnimateChartUpdate(existing, w, data, opts)) {
       if (applyGroupedChartData(existing, w, data)) {
@@ -704,13 +1144,25 @@
           if (existing.options.scales.x) existing.options.scales.x.stacked = stacked;
           if (existing.options.scales.y) existing.options.scales.y.stacked = stacked;
         }
+        if (existing.options.plugins) {
+          existing.options.plugins.legend = { display: false };
+        }
         existing.update("active");
+        var animKeys = data.keys || [];
+        var animPal = widgetPalette(cfg);
+        syncGroupedSeriesHtmlLegend(
+          canvas,
+          animKeys,
+          groupedSeriesLegendColors(animKeys, existing.data.datasets || [], stacked, animPal),
+          cfg
+        );
         syncGroupedComposition(canvas, data, cfg);
         return;
       }
     }
     destroyChartKey(canvasId);
     clearGroupedComposition(canvas.closest(".chart-area") || canvas.parentElement);
+    clearGroupedSeriesHtmlLegend(canvas.closest(".chart-area") || canvas.parentElement);
 
     var prefix = data.prefix || "";
     var keys = data.keys || [];
@@ -726,7 +1178,7 @@
         data: rows.map(function (r) { return r[key] || 0; }),
         backgroundColor: pal[(i + 2) % pal.length],
         borderColor: w.widget_type === "line" ? pal[(i + 2) % pal.length] : undefined,
-        borderRadius: w.widget_type === "bar" || w.widget_type === "horizontal_bar" || w.widget_type === "featured_bar" ? 6 : undefined,
+        borderRadius: w.widget_type === "bar" || w.widget_type === "horizontal_bar" || w.widget_type === "featured_bar" || w.widget_type === "grouped_1" ? 6 : undefined,
         fill: w.widget_type === "line" ? false : undefined,
         tension: w.widget_type === "line" ? 0.25 : undefined,
         pointRadius: w.widget_type === "line" ? 2 : undefined,
@@ -750,13 +1202,22 @@
         options: chartMotionOptions({
           responsive: true, maintainAspectRatio: false, indexAxis: "y",
           plugins: {
-            legend: { display: !!(cfg.display_legend || cfg.show_legend) },
+            legend: { display: false },
             datalabels: (cfg.display_data_label || cfg.data_labels) ? { display: true, anchor: "end", align: "end", color: "#98a2b3", font: { size: 10 }, formatter: dataLabel(prefix) } : { display: false },
             tooltip: whiteTooltip(function (c) { return (c.dataset.label ? c.dataset.label + ": " : "") + prefix + fmtNum(c.parsed.x); }),
           },
           scales: scales,
         }),
       });
+      chartInstances[canvasId].$crmGroupMode = cfg.group_mode;
+      chartInstances[canvasId].$crmColorKey = cfg.color + "/" + cfg.color_shade;
+      chartInstances[canvasId].$crmPipelineMode = cfg.pipeline_data_mode;
+      syncGroupedSeriesHtmlLegend(
+        canvas,
+        keys,
+        groupedSeriesLegendColors(keys, datasets, stacked, pal),
+        cfg
+      );
       syncGroupedComposition(canvas, data, cfg);
       return;
     }
@@ -766,6 +1227,9 @@
         data: { labels: labels, datasets: datasets },
         options: lineChartOptions(cfg, prefix, data, false),
       });
+      chartInstances[canvasId].$crmGroupMode = cfg.group_mode;
+      chartInstances[canvasId].$crmColorKey = cfg.color + "/" + cfg.color_shade;
+      chartInstances[canvasId].$crmPipelineMode = cfg.pipeline_data_mode;
       syncGroupedComposition(canvas, data, cfg);
       return;
     }
@@ -778,6 +1242,8 @@
     var segN = datasets.length;
     var segColors = spacedShadeColors(pal, segN); // 由浅到深
     var groupedColors = segColors.slice().reverse(); // 分组：由深到浅
+    var gradientMode = !stacked && cfg.bar_gradient;
+    var gradientSpecs = gradientMode ? [] : null;
     datasets.forEach(function (ds, i) {
       if (stacked) {
         ds.backgroundColor = segColors[i]; // 自底向上由浅到深
@@ -786,6 +1252,14 @@
         ds.maxBarThickness = 44;
         ds.categoryPercentage = 0.58;
         ds.barPercentage = 0.7;
+      } else if (gradientMode) {
+        ds.backgroundColor = groupedColors[i]; // 实色用于图例与首帧回退
+        ds.borderRadius = 8;
+        ds.borderSkipped = false;
+        ds.maxBarThickness = 40;
+        ds.categoryPercentage = 0.6;
+        ds.barPercentage = 0.72;
+        gradientSpecs.push({ top: groupedColors[i], bottom: mixHex(groupedColors[i], "#ffffff", 0.85) });
       } else {
         ds.backgroundColor = groupedColors[i];
         ds.borderRadius = 999;
@@ -798,16 +1272,28 @@
     var barOptions = chartMotionOptions({
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: !!(cfg.display_legend || cfg.show_legend) },
+        legend: { display: false },
         datalabels: (cfg.display_data_label || cfg.data_labels) ? { display: true, anchor: "end", align: "end", clip: false, color: "#98a2b3", font: { size: 10, weight: "500" }, formatter: dataLabel(prefix) } : { display: false },
         tooltip: whiteTooltip(function (c) { return (c.dataset.label ? c.dataset.label + ": " : "") + prefix + fmtNum(c.parsed.y); }),
       },
       scales: barScales,
     });
-    chartInstances[canvasId] = new Chart(canvas, { type: "bar", data: { labels: labels, datasets: datasets }, options: barOptions });
+    chartInstances[canvasId] = new Chart(canvas, {
+      type: "bar",
+      data: { labels: labels, datasets: datasets },
+      options: barOptions,
+      plugins: gradientMode ? [verticalBarGradientPlugin] : [],
+    });
+    if (gradientMode) chartInstances[canvasId].$crmBarGradient = gradientSpecs;
     chartInstances[canvasId].$crmGroupMode = cfg.group_mode;
     chartInstances[canvasId].$crmColorKey = cfg.color + "/" + cfg.color_shade;
     chartInstances[canvasId].$crmPipelineMode = cfg.pipeline_data_mode;
+    syncGroupedSeriesHtmlLegend(
+      canvas,
+      keys,
+      groupedSeriesLegendColors(keys, datasets, stacked, pal),
+      cfg
+    );
     syncGroupedComposition(canvas, data, cfg);
   }
 

@@ -352,6 +352,40 @@
   --bms-chart-hover-fade: 280ms;
 }
 .bms-featured-bar-svg { display: block; width: 100%; height: 100%; min-height: 180px; }
+
+.bms-featured-bar-flow-card {
+  width: 100%; height: 100%; min-height: 260px; display: flex; flex-direction: column;
+  background: #fff; border-radius: 16px; box-sizing: border-box; padding: 8px 10px 4px;
+}
+.bms-grouped-series-html-legend { flex-shrink: 0; margin-bottom: 0.15rem; }
+.bms-featured-bar-flow-legend {
+  display: flex; align-items: center; gap: 1.05rem; flex-wrap: wrap;
+  color: #6b7280; font-size: 0.82rem; line-height: 1.2; padding: 0.15rem 0.2rem 0.1rem;
+}
+.bms-featured-bar-flow-legend-item { display: inline-flex; align-items: center; gap: 0.38rem; white-space: nowrap; }
+.bms-featured-bar-flow-legend-swatch {
+  display: inline-block; flex-shrink: 0; width: 10px; height: 10px;
+  border-radius: 3px; box-shadow: 0 2px 6px rgba(80, 72, 180, 0.18);
+}
+.bms-featured-bar-flow-chart {
+  flex: 1; min-height: 210px; width: 100%; overflow: visible; position: relative;
+  --bms-chart-hover-ease: cubic-bezier(0.25, 1, 0.5, 1);
+  --bms-chart-hover-move: 420ms;
+  --bms-chart-hover-fade: 280ms;
+}
+.bms-featured-bar-flow-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.bms-featured-bar-flow-band { filter: saturate(1.05); pointer-events: none; }
+.bms-featured-bar-flow-segment { stroke: rgba(255,255,255,0.72); stroke-width: 1.4; pointer-events: none; }
+.bms-featured-bar-flow-seg-label,
+.bms-featured-bar-flow-total,
+.bms-featured-bar-flow-xlabel { pointer-events: none; }
+.bms-featured-bar-flow-hit { pointer-events: all; cursor: default; }
+.bms-featured-bar-flow-total { fill: #111827; font-size: 15px; font-weight: 650; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.bms-featured-bar-flow-seg-label { fill: rgba(255,255,255,0.82); font-size: 12px; font-weight: 700; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.bms-featured-bar-flow-bottom-total { fill: #8b95a5; font-size: 14px; font-weight: 520; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.bms-featured-bar-flow-xlabel { fill: #7f8795; font-size: 18px; font-weight: 540; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+.bms-featured-bar-flow-pill { fill: #050505; }
+.bms-featured-bar-flow-pill-text { fill: #fff; font-size: 14px; font-weight: 720; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
 .bms-featured-bar-average-label {
   position: absolute; left: 0; z-index: 3; pointer-events: none;
   transform: translateY(-50%);
@@ -649,7 +683,7 @@
                             </div>
                         </div>
                     </template>
-                    <template v-else-if="['bar','horizontal_bar','pie','line'].includes(item.widget.widget_type)">
+                    <template v-else-if="['bar','horizontal_bar','pie','line','grouped_1'].includes(item.widget.widget_type)">
                         <div class="chart-area">
                             <div class="chart-canvas-wrap">
                                 <canvas :id="cardCanvasId(item)"></canvas>
@@ -1017,7 +1051,7 @@
 {% endblock %}
 {% block handbook_assistant %}{% endblock %}
 {% block page_scripts %}
-<script src="/static/js/shared/dashboard-widget-kit.js?v=grouped-composition-20260628"></script>
+<script src="/static/js/shared/dashboard-widget-kit.js?v=grouped-html-legend-20260629"></script>
 <script src="/static/js/shared/featured-line-chart-kit.js?v=featured-line-20260627"></script>
 <script src="/static/js/shared/line1-chart-kit.js?v=line1-20260628"></script>
 <script src="/static/js/shared/featured-bar-chart-kit.js?v=featured-bar-20260627"></script>

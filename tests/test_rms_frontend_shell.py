@@ -1052,6 +1052,7 @@ def test_rms_line1_frontend_assets():
     assert "line_1" in html
     assert "折线1" in inspector
     assert "line_1" in inspector
+    assert "grouped_1" in inspector
     assert "featured_line" in inspector
     assert "重点折线" in inspector
     assert "CrmLine1ChartKit" in charts
