@@ -225,8 +225,18 @@ def view_offer_quote_attachment(
         int(a.id)
         for a in scoped.filter(RmsApplication.id == int(record.application_id)).all()
     }
+    client = (
+        db.query(Client).filter(Client.id == int(record.client_id)).first()
+        if record.client_id is not None
+        else None
+    )
     if not _can_view_offer_record(
-        ctx, record, allowed_app_ids=allowed_app_ids, approver_offer_ids=approver_offer_ids
+        ctx,
+        record,
+        allowed_app_ids=allowed_app_ids,
+        approver_offer_ids=approver_offer_ids,
+        db=db,
+        client=client,
     ):
         raise HTTPException(status_code=403, detail="无权查看该附件")
     rel = _offer_quote_attachment_path(record)
@@ -510,8 +520,12 @@ def _can_view_offer_record(
     *,
     allowed_app_ids: Set[int],
     approver_offer_ids: Set[int],
+    db: Optional[Session] = None,
+    client: Any = None,
 ) -> bool:
     if ctx.is_super:
+        return True
+    if db is not None and client is not None and rms_ds.can_view_offer_detail(db, ctx, client):
         return True
     record_id = int(record.id)
     app_id = int(record.application_id)
@@ -523,6 +537,27 @@ def _can_view_offer_record(
             return True
         return False
     return app_id in allowed_app_ids
+
+
+def _can_view_offer_detail_row(
+    ctx: AuthContext,
+    record: Any,
+    *,
+    approver_offer_ids: Set[int],
+    db: Session,
+    client: Any,
+    can_approve: bool,
+) -> bool:
+    if can_approve:
+        return True
+    if rms_ds.can_view_offer_detail(db, ctx, client):
+        return True
+    status = (record.status or "").strip()
+    return (
+        status == "pending"
+        and ctx.user_id is not None
+        and int(record.created_by or 0) == int(ctx.user_id)
+    )
 
 
 def _can_approve_offer_record(
@@ -1110,6 +1145,12 @@ def list_offer_records(
         int(a.id)
         for a in scoped.filter(RmsApplication.id.in_(app_ids)).all()
     }
+    client_ids = {int(r.client_id) for r in rows if r.client_id is not None}
+    clients_by_id: Dict[int, Any] = {}
+    if client_ids:
+        clients_by_id = {
+            int(c.id): c for c in db.query(Client).filter(Client.id.in_(client_ids)).all()
+        }
     approver_offer_ids = _pending_approver_offer_record_ids(
         db,
         ctx,
@@ -1120,11 +1161,14 @@ def list_offer_records(
     out: List[Dict[str, Any]] = []
     for record in rows:
         record_id = int(record.id)
+        client = clients_by_id.get(int(record.client_id)) if record.client_id is not None else None
         if not _can_view_offer_record(
             ctx,
             record,
             allowed_app_ids=allowed_app_ids,
             approver_offer_ids=approver_offer_ids,
+            db=db,
+            client=client,
         ):
             continue
         item = offer_record_to_dict(db, record, RmsOfferApprovalStep=RmsOfferApprovalStep)
@@ -1133,6 +1177,14 @@ def list_offer_records(
             record,
             approver_offer_ids=approver_offer_ids,
         )
+        item["can_view_detail"] = _can_view_offer_detail_row(
+            ctx,
+            record,
+            approver_offer_ids=approver_offer_ids,
+            db=db,
+            client=client,
+            can_approve=bool(item["can_approve"]),
+        )
         app = db.query(RmsApplication).filter(RmsApplication.id == record.application_id).first()
         candidate = (
             db.query(RmsCandidate).filter(RmsCandidate.id == record.candidate_id).first()
@@ -1140,7 +1192,8 @@ def list_offer_records(
             else None
         )
         job = db.query(RmsJob).filter(RmsJob.id == record.job_id).first() if record.job_id else None
-        client = db.query(Client).filter(Client.id == record.client_id).first() if record.client_id else None
+        if client is None and record.client_id is not None:
+            client = db.query(Client).filter(Client.id == record.client_id).first()
         item["candidate_name"] = (candidate.name or "").strip() if candidate else ""
         item["job_title"] = (job.title or "").strip() if job else ""
         item["client_name"] = (client.name or "").strip() if client else ""

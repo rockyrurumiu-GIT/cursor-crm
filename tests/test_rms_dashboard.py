@@ -2770,6 +2770,72 @@ def test_lifecycle_funnel_internal_screen_entered_matches_resume_count(
     assert hist_internal["entered"] == 0
 
 
+def test_internal_screen_pass_rate_excludes_pending_delivery_review(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """内筛通过率分母 = 推送简历数 - 待内审（快照仍为 recommended）。"""
+    from sqlalchemy import text
+
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"ispr_{uniq}")
+    app_ids: list[int] = []
+    for i in range(4):
+        cand = client_rbac.post(
+            "/api/rms/candidates",
+            cookies=login.cookies,
+            json=_candidate_json(job_id, name=f"Ispr {i} {uniq}"),
+        )
+        assert cand.status_code == 200, cand.text
+        app = client_rbac.post(
+            "/api/rms/applications",
+            cookies=login.cookies,
+            json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+        )
+        assert app.status_code == 200, app.text
+        app_ids.append(int(app.json()["id"]))
+
+    period_day = "2026-06-15"
+    with rms_engine.begin() as conn:
+        for app_id in app_ids:
+            conn.execute(
+                text("UPDATE rms_applications SET recommended_at = :d WHERE id = :id"),
+                {"d": period_day, "id": app_id},
+            )
+
+    for app_id in app_ids[:2]:
+        r = client_rbac.post(
+            f"/api/rms/applications/{app_id}/delivery-review",
+            cookies=login.cookies,
+            json={"result": "passed", "note": ""},
+        )
+        assert r.status_code == 200, r.text
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_ids[2]}/delivery-review",
+        cookies=login.cookies,
+        json={"result": "failed", "note": "不符"},
+    )
+    assert r.status_code == 200, r.text
+    # app_ids[3] 仍为待内审
+
+    dash = client_rbac.get(
+        f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",
+        cookies=login.cookies,
+    )
+    assert dash.status_code == 200, dash.text
+    row = _job_row(dash.json()["client_job_stage_summary"], job_id)
+    assert row["pushed_resume_count"] == 4
+    assert row["pending_delivery_review_count"] == 1
+    assert row["internal_screen_passed"] == 2
+    assert row["internal_screen_passed_denom"] == 3
+    assert row["internal_screen_passed_rate"] == "67%"
+
+    internal = next(
+        row for row in dash.json()["lifecycle_funnel"]["rows"] if row["key"] == "internal_screen"
+    )
+    assert internal["pending"] == 1
+    assert internal["processed"] == 3
+    assert internal["pass_rate"] == "66.7%"
+
+
 def test_rms_dashboard_recruiter_recommended_count(client_rbac, admin_auth, rms_engine, uniq):
     login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"rec_{uniq}")
     cand = client_rbac.post(

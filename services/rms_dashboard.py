@@ -91,6 +91,7 @@ _HIRED_STATUSES = frozenset({"hired"})
 
 _SUMMARY_METRIC_KEYS = (
     "pushed_resume_count",
+    "pending_delivery_review_count",
     "internal_screen_passed",
     "duplicate_count",
     "pending_internal_screen",
@@ -252,6 +253,24 @@ def _recommended_in_period(app: Any, date_from: str, date_to: str) -> bool:
     if not _has_period_filter({"date_from": date_from, "date_to": date_to}):
         return True
     return _event_in_period(_date_only(app.recommended_at), date_from, date_to)
+
+
+def _pending_delivery_review_count(
+    apps: List[Any],
+    hist_map: Dict[int, List[Any]],
+    filters: Dict[str, Any],
+) -> int:
+    """周期内推送且快照仍为 recommended（待内审）的推荐数。"""
+    date_from, date_to = _period_bounds(filters)
+    snapshot_as_of = _snapshot_as_of(filters)
+    count = 0
+    for app in apps:
+        if not _recommended_in_period(app, date_from, date_to):
+            continue
+        histories = hist_map.get(app.id, [])
+        if _status_at(app, histories, snapshot_as_of) == "recommended":
+            count += 1
+    return count
 
 
 def _snapshot_as_of(filters: Dict[str, Any]) -> Optional[str]:
@@ -765,6 +784,8 @@ def _metrics_for_apps(
         status_snapshot = _status_at(app, histories, snapshot_as_of)
         if _recommended_in_period(app, date_from, date_to):
             metrics["pushed_resume_count"] += 1
+            if status_snapshot == "recommended":
+                metrics["pending_delivery_review_count"] += 1
         if _app_counts_as_stage_passed(
             app,
             histories,
@@ -879,7 +900,6 @@ def _metrics_for_apps(
 
 
 _JOB_STAGE_RATE_SPECS = (
-    ("internal_screen_passed", "internal_screen_passed_rate", "pushed_resume_count"),
     ("duplicate_count", "duplicate_count_rate", "pushed_resume_count"),
     ("client_screen_passed", "client_screen_passed_rate", "internal_screen_passed"),
     ("interview_abandoned", "interview_abandoned_rate", "internal_screen_passed"),
@@ -890,6 +910,15 @@ _JOB_STAGE_RATE_SPECS = (
     ("offer_dropped_count", "offer_dropped_count_rate", "second_interview_passed_count"),
     ("onboarding_lost_count", "onboarding_lost_count_rate", "onboarding_count"),
 )
+
+
+def _internal_screen_pass_rate_parts(metrics: Dict[str, Any]) -> tuple[int, int, str]:
+    """内筛通过率 = 内筛通过 / (推送简历数 - 待内审)。"""
+    numerator = int(metrics.get("internal_screen_passed") or 0)
+    denominator = int(metrics.get("pushed_resume_count") or 0) - int(
+        metrics.get("pending_delivery_review_count") or 0
+    )
+    return numerator, denominator, _rate(numerator, denominator, decimals=0)
 
 
 def _scheduling_pass_rate_parts(metrics: Dict[str, Any]) -> tuple[int, int, str]:
@@ -934,6 +963,10 @@ def _attach_job_stage_rates(metrics: Dict[str, int]) -> Dict[str, Any]:
             int(metrics.get(denom_key, 0)),
             decimals=0,
         )
+    _, internal_denom, out["internal_screen_passed_rate"] = _internal_screen_pass_rate_parts(
+        out
+    )
+    out["internal_screen_passed_denom"] = internal_denom
     _, _, out["scheduling_passed_rate"] = _scheduling_pass_rate_parts(out)
     return out
 
@@ -994,7 +1027,10 @@ def _lifecycle_funnel(
         stage = stage_by_key.get(stage_key) or {}
         passed = int(stage.get("passed") or 0)
         failed = int(stage.get("failed") or 0)
-        pending = int(stage.get("pending_count") or 0)
+        if stage_key == "internal_screen":
+            pending = _pending_delivery_review_count(apps, hist_map, filters)
+        else:
+            pending = int(stage.get("pending_count") or 0)
         entered = prev_entered
         processed = entered - pending
         pass_rate = _rate(passed, processed)

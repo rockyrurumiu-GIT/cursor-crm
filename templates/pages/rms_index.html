@@ -2048,7 +2048,7 @@
                     <tr v-for="row in pagedOfferRecords" :key="'offer'+row.id">
                         <td class="crm-td rms-offer-sticky-status"><div class="crm-cell-clip">{{ row.status_label }}</div></td>
                         <td class="crm-td crm-name-cell rms-offer-sticky-candidate">
-                            <button v-if="row.status === 'pending' && canApproveOfferRow(row)" type="button" class="crm-name-link" @click="openOfferDetailModal(row)"><span class="crm-cell-clip">{{ row.candidate_name || '—' }}</span></button>
+                            <button v-if="canViewOfferDetailRow(row)" type="button" class="crm-name-link" @click="openOfferDetailModal(row)"><span class="crm-cell-clip">{{ row.candidate_name || '—' }}</span></button>
                             <span v-else class="crm-cell-clip">{{ row.candidate_name || '—' }}</span>
                         </td>
                         <td class="crm-td"><div class="crm-cell-clip">{{ row.current_approval_node_label || '—' }}</div></td>
@@ -2067,10 +2067,10 @@
                         <td class="crm-td" :class="{ 'rms-offer-reason-loss': row.status === 'offer_dropped' || row.status === 'onboarding_lost' }"><div class="crm-cell-clip crm-cell-clip--wrap">{{ row.reason || '—' }}</div></td>
                         <td class="crm-td">{{ formatRmsDate(row.created_at) }}</td>
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
-                            <div v-if="row.status === 'pending' && canApproveOfferRow(row)" class="crm-op-actions">
+                            <div v-if="canViewOfferDetailRow(row)" class="crm-op-actions">
                                 <span class="group relative inline-flex">
-                                    <button type="button" class="crm-op-btn-detail" :disabled="offerActionSaving" @click="openOfferDetailModal(row)" aria-label="审批"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6a1 1 0 0 1 1 1v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v0a1 1 0 0 1 1-1Z"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></button>
-                                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">审批</span>
+                                    <button type="button" class="crm-op-btn-detail" :disabled="offerActionSaving" @click="openOfferDetailModal(row)" :aria-label="canApproveOfferRow(row) ? '审批' : '详情'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6a1 1 0 0 1 1 1v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v0a1 1 0 0 1 1-1Z"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></button>
+                                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">{{ canApproveOfferRow(row) ? '审批' : '详情' }}</span>
                                 </span>
                             </div>
                             <span v-else class="rms-offer-muted">—</span>
@@ -2426,7 +2426,7 @@
     <div v-if="offerDetailModal" class="crm-esc-modal crm-form-modal-overlay z-[200]">
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">Offer 审批详情</h3>
+                <h3 class="font-bold text-lg">{{ offerDetailReadOnly() ? 'Offer 详情' : 'Offer 审批详情' }}</h3>
                 <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeOfferDetailModal">&times;</button>
             </div>
             <div class="flex-1 min-h-0 overflow-y-auto p-5">
@@ -2511,16 +2511,18 @@
                             </article>
                         </div>
                     </div>
-                    <label class="sm:col-span-3 lg:col-span-6 flex flex-col gap-1">
+                    <label v-if="!offerDetailReadOnly()" class="sm:col-span-3 lg:col-span-6 flex flex-col gap-1">
                         <span class="text-[#57606a]">评审意见<span class="text-red-500">*</span></span>
                         <textarea v-model.trim="offerDetailComment" rows="2" class="crm-form-control" placeholder="请输入评审意见（必填）"></textarea>
                     </label>
                 </div>
             </div>
             <div class="px-5 py-4 border-t border-[#d0d7de] flex gap-2 justify-end shrink-0">
-                <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de]" @click="closeOfferDetailModal">取消</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-[#4C6491] text-white hover:bg-[#3D5176] disabled:opacity-50" :disabled="offerActionSaving" @click="submitOfferDetailDecision('approve')">通过</button>
-                <button type="button" class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50" :disabled="offerActionSaving" @click="submitOfferDetailDecision('reject')">驳回</button>
+                <button type="button" class="px-4 py-2 rounded-lg border border-[#d0d7de]" @click="closeOfferDetailModal">{{ offerDetailReadOnly() ? '关闭' : '取消' }}</button>
+                <template v-if="!offerDetailReadOnly()">
+                    <button type="button" class="px-4 py-2 rounded-lg bg-[#4C6491] text-white hover:bg-[#3D5176] disabled:opacity-50" :disabled="offerActionSaving" @click="submitOfferDetailDecision('approve')">通过</button>
+                    <button type="button" class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50" :disabled="offerActionSaving" @click="submitOfferDetailDecision('reject')">驳回</button>
+                </template>
             </div>
         </div>
         <div v-if="offerDetailPreviewOpen" class="crm-esc-modal fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6" @click="closeOfferDetailPreview">

@@ -340,7 +340,100 @@ def test_full_approval_moves_to_onboarding(client_rbac, admin_auth, rms_engine, 
 
     offers = client_rbac.get("/api/rms/offers?status=approved", cookies=login.cookies)
     assert offers.status_code == 200
-    assert any(o["id"] == offer_id and o["status"] == "approved" for o in offers.json())
+    row = next(o for o in offers.json() if o["id"] == offer_id)
+    assert row["status"] == "approved"
+    assert row["can_view_detail"] is True
+    assert row.get("prior_approval_comments")
+
+
+def test_approved_offer_detail_visible_to_ops_dept_head(
+    client_rbac, admin_auth, rms_engine, uniq, approvers_config
+):
+    from tests.test_permission_datascope import _ensure_ops_dept_head
+
+    _grant_role_permissions(rms_engine, ROLE_VIEWER, ("rms.applications.read",))
+    login, app_id = _create_recommended_application(client_rbac, admin_auth, rms_engine, f"opsd_{uniq}")
+    dept_user = f"offer_dept_{uniq}"
+    ops_user = f"offer_ops_{uniq}"
+    dept_uid, ops_uid, gm_uid = _create_approver_users(client_rbac, admin_auth, uniq)
+    approvers_config(dept_uid, ops_uid, gm_uid)
+    _ensure_ops_dept_head(rms_engine, ops_uid)
+    _advance_to_pending_offer(client_rbac, login, app_id)
+    offer_id = _submit_offer(client_rbac, login, app_id).json()["id"]
+    assert _approve_as(client_rbac, dept_user, offer_id).status_code == 200
+    assert _approve_as(client_rbac, ops_user, offer_id).status_code == 200
+
+    ops_login = _login(client_rbac, ops_user)
+    listed = client_rbac.get("/api/rms/offers?status=approved", cookies=ops_login.cookies)
+    assert listed.status_code == 200, listed.text
+    row = next(o for o in listed.json() if o["id"] == offer_id)
+    assert row["can_view_detail"] is True
+    assert len(row.get("prior_approval_comments") or []) >= 1
+
+
+def test_can_view_offer_detail_service_rules(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    import main as crm_main
+    from auth.service import AuthContext, is_operations_dept_head
+    from services.rms_scope import can_view_offer_detail
+
+    suffix = f"ovd_{uniq}"
+    _login_del, _job_id, _cand_id, cid = _trial_job_and_candidate(
+        client_rbac, rms_engine, admin_auth, suffix
+    )
+    delivery_user = f"rms2_app_d_{suffix}"
+    delivery_uid = _user_id(rms_engine, delivery_user)
+
+    with rms_engine.begin() as conn:
+        delivery_dept_id = conn.execute(
+            text("SELECT delivery_dept_id FROM clients WHERE id = :cid"),
+            {"cid": cid},
+        ).scalar()
+        conn.execute(
+            text("UPDATE sys_dept SET head_user_id = :uid WHERE id = :did"),
+            {"uid": delivery_uid, "did": int(delivery_dept_id)},
+        )
+
+    with rms_engine.connect() as conn:
+        client_row = conn.execute(
+            text(
+                "SELECT delivery_owner_user_id, delivery_dept_id FROM clients WHERE id = :cid"
+            ),
+            {"cid": cid},
+        ).mappings().first()
+
+    class _Client:
+        delivery_owner_user_id = client_row["delivery_owner_user_id"]
+        delivery_dept_id = client_row["delivery_dept_id"]
+
+    stub_client = _Client()
+    delivery_ctx = AuthContext(
+        username=delivery_user,
+        user_id=delivery_uid,
+        roles=[ROLE_DELIVERY],
+        permissions=set(RMS_MVP_PERMS),
+    )
+    super_ctx = AuthContext(
+        username="admin",
+        user_id=1,
+        roles=[ROLE_SUPER_ADMIN],
+        permissions=set(),
+        is_super=True,
+    )
+    outsider_ctx = AuthContext(
+        username="outsider",
+        user_id=999999,
+        roles=[ROLE_VIEWER],
+        permissions={"rms.applications.read"},
+    )
+
+    with crm_main.SessionLocal() as db:
+        assert can_view_offer_detail(db, super_ctx, stub_client) is True
+        assert can_view_offer_detail(db, delivery_ctx, stub_client) is True
+        assert can_view_offer_detail(db, outsider_ctx, stub_client) is False
+        if is_operations_dept_head(db, delivery_uid):
+            assert can_view_offer_detail(db, delivery_ctx, stub_client) is True
 
 
 def test_reject_returns_to_pending_offer_not_in_offer_tab(

@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, List, Optional, Set, Tuple, Type
 
 from fastapi import HTTPException
-from sqlalchemy import column, or_, select, table
+from sqlalchemy import column, or_, select, table, text
 from sqlalchemy.orm import Query, Session
 
 from auth import data_scope as ds
@@ -327,6 +327,49 @@ def assert_can_submit_offer_approval(
     if can_act_as_offer_submitter(db, ctx, client):
         return
     raise HTTPException(status_code=403, detail="仅交付负责人或授权人员可发起 Offer 审批")
+
+
+def _is_client_delivery_dept_head(
+    db: Session,
+    ctx: AuthContext,
+    client: Any,
+) -> bool:
+    """True when user is head_user_id of the client's delivery department."""
+    if ctx.user_id is None:
+        return False
+    dept_id = getattr(client, CLIENT_DELIVERY_DEPT_COL, None)
+    if dept_id is None:
+        return False
+    row = db.execute(
+        text(
+            "SELECT head_user_id FROM sys_dept "
+            "WHERE id = :id AND status = 'active' LIMIT 1"
+        ),
+        {"id": int(dept_id)},
+    ).first()
+    if not row or row[0] is None:
+        return False
+    return int(row[0]) == int(ctx.user_id)
+
+
+def can_view_offer_detail(
+    db: Session,
+    ctx: AuthContext,
+    client: Any,
+) -> bool:
+    """Offer 详情只读：超管、交付 owner、交付部门负责人、经营部负责人。"""
+    if ctx.is_super:
+        return True
+    if ctx.user_id is None or client is None:
+        return False
+    delivery_owner = getattr(client, CLIENT_DELIVERY_OWNER_COL, None)
+    if delivery_owner is not None and int(delivery_owner) == int(ctx.user_id):
+        return True
+    if _is_client_delivery_dept_head(db, ctx, client):
+        return True
+    from auth.service import is_operations_dept_head
+
+    return is_operations_dept_head(db, ctx.user_id)
 
 
 def visible_candidate_ids(

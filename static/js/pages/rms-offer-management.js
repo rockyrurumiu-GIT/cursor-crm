@@ -543,6 +543,18 @@
       return Number(row.pending_approver_user_id) === uid;
     }
 
+    function canViewOfferDetailRow(row) {
+      if (!row) return false;
+      if (row.can_view_detail === true) return true;
+      return canApproveOfferRow(row);
+    }
+
+    function offerDetailReadOnly() {
+      var row = offerDetailModal.value;
+      if (!row) return true;
+      return !canApproveOfferRow(row);
+    }
+
     async function openOfferApprovalModal(appRow) {
       if (!appRow || appRow.id == null) return;
       offerApprovalError.value = "";
@@ -818,6 +830,8 @@
       closeOfferApprovalModal: closeOfferApprovalModal,
       submitOfferApproval: submitOfferApproval,
       canApproveOfferRow: canApproveOfferRow,
+      canViewOfferDetailRow: canViewOfferDetailRow,
+      offerDetailReadOnly: offerDetailReadOnly,
       offerDetailModal: offerDetailModal,
       offerDetailComment: offerDetailComment,
       offerDetailPreviewOpen: offerDetailPreviewOpen,

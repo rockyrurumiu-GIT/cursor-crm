@@ -7,6 +7,7 @@
 
   var SUMMARY_METRIC_KEYS = [
     "pushed_resume_count",
+    "pending_delivery_review_count",
     "internal_screen_passed",
     "duplicate_count",
     "pending_internal_screen",
@@ -37,7 +38,6 @@
     "onboarding_lost_names",
   ];
   var JOB_STAGE_RATE_SPECS = [
-    ["internal_screen_passed", "internal_screen_passed_rate", "pushed_resume_count"],
     ["duplicate_count", "duplicate_count_rate", "pushed_resume_count"],
     ["client_screen_passed", "client_screen_passed_rate", "internal_screen_passed"],
     ["interview_abandoned", "interview_abandoned_rate", "internal_screen_passed"],
@@ -73,6 +73,12 @@
     JOB_STAGE_RATE_SPECS.forEach(function (spec) {
       total[spec[1]] = jobStageRate(total[spec[0]] || 0, total[spec[2]] || 0);
     });
+    total.internal_screen_passed_denom = (total.pushed_resume_count || 0)
+      - (total.pending_delivery_review_count || 0);
+    total.internal_screen_passed_rate = jobStageRate(
+      total.internal_screen_passed || 0,
+      total.internal_screen_passed_denom
+    );
     total.scheduling_passed_rate = jobStageRate(
       (total.pending_interview || 0) + (total.first_interview_count || 0),
       (total.client_screen_passed || 0) - (total.scheduling_interview_count || 0)

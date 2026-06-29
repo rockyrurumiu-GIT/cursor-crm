@@ -1354,7 +1354,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                         <td class="col-compact">{{ row.headcount }}</td>
                                         <td>{{ row.location || '—' }}</td>
                                         <td class="col-compact">{{ row.pushed_resume_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'internal_screen_passed', 'pushed_resume_count', '内筛通过')">{{ jobStageMetricText(row, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'internal_screen_passed', 'internal_screen_passed_denom', '内筛通过')">{{ jobStageMetricText(row, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(row, 'duplicate_count', 'duplicate_count_rate') }}</td>
                                         <td class="col-compact">{{ row.pending_client_screen }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(row, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
@@ -1390,7 +1390,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                         <td class="col-compact">{{ clientJobStageTotal.headcount }}</td>
                                         <td>—</td>
                                         <td class="col-compact">{{ clientJobStageTotal.pushed_resume_count }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'internal_screen_passed', 'pushed_resume_count', '内筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'internal_screen_passed', 'internal_screen_passed_denom', '内筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(clientJobStageTotal, 'duplicate_count', 'duplicate_count_rate') }}</td>
                                         <td class="col-compact">{{ clientJobStageTotal.pending_client_screen }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
