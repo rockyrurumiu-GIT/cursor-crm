@@ -1476,6 +1476,60 @@ def test_grouped_1_pipeline_data_mode_total_option():
     assert 'value="total">总计</option>' in html
 
 
+def test_grouped_segment_limit_normalize_and_inspector_label():
+    from pathlib import Path
+
+    from services.dashboards import _normalize_widget_config, validate_widget_config
+
+    assert _normalize_widget_config({"grouped_segment_limit": 8})["grouped_segment_limit"] == 8
+    assert _normalize_widget_config({"grouped_segment_limit": 99})["grouped_segment_limit"] == 12
+    assert _normalize_widget_config({})["grouped_segment_limit"] == 12
+    out = validate_widget_config(
+        "grouped_1",
+        "rms_applications",
+        {
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "secondary_axis_field": "job_id",
+            "group_mode": "stacked",
+            "grouped_segment_limit": 10,
+        },
+    )
+    assert out["grouped_segment_limit"] == 10
+    html = (Path(__file__).resolve().parents[1] / "templates/pages/rms_dashboard.html").read_text(encoding="utf-8")
+    assert "显示岗位条目" in html
+
+
+def test_featured_flow_stack_compresses_overflow_jobs_into_other():
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    kit = root / "static/js/shared/dashboard-widget-kit.js"
+    script = f"""
+const fs = require("fs");
+const window = globalThis;
+eval(fs.readFileSync({str(kit)!r}, "utf8"));
+const K = window.DashboardWidgetKit;
+const rows = [
+  {{ label: "历史简历数", jobA: 2, jobB: 3, jobC: 1, jobD: 1, jobE: 1, jobF: 1, jobG: 1, jobH: 1, jobI: 1, jobJ: 1 }},
+  {{ label: "一面fail", jobA: 0, jobB: 1, jobC: 0, jobD: 0, jobE: 0, jobF: 0, jobG: 0, jobH: 0, jobI: 0, jobJ: 0 }},
+];
+const keys = ["jobA","jobB","jobC","jobD","jobE","jobF","jobG","jobH","jobI","jobJ"];
+const all = K.compressFeaturedFlowStackSeries(rows, keys, {{ grouped_segment_limit: 12 }});
+if (all.keys.length !== 10) throw new Error("expected 10 keys, got " + all.keys.length);
+const capped = K.compressFeaturedFlowStackSeries(rows, keys, {{ grouped_segment_limit: 6 }});
+if (capped.keys.length !== 6) throw new Error("expected 6 keys, got " + capped.keys.length);
+if (capped.keys[capped.keys.length - 1] !== "其他") throw new Error("expected 其他 tail");
+const otherTotal = capped.rows[0]["其他"];
+if (otherTotal !== 5) throw new Error("expected other=5, got " + otherTotal);
+console.log("ok");
+"""
+    proc = subprocess.run(["node", "-e", script], capture_output=True, text=True, cwd=root)
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "ok" in proc.stdout
+
+
 def test_recommended_by_filter_resolves_username(admin_auth):
     import main as crm_main
     from services.dashboards import _lookup_user_ids_for_filter

@@ -268,7 +268,9 @@
   opacity: 1; transform: translate(-50%, calc(-100% - 20px)) scale(1);
 }
 .line1-inspector-grid { display: grid; gap: 0.35rem; }
-.line1-other-block { margin-top: 0.85rem; margin-bottom: 0.35rem; }
+.line1-inspector-grid.line1-style-fields-block { gap: 0.65rem; margin-top: 0.65rem; }
+.line1-other-block { margin-top: 0.85rem; margin-bottom: 0; }
+.line1-other-block + .line1-style-fields-block { margin-top: 0.65rem; }
 .line1-other-block .inspector-section-title,
 .line1-other-block .line1-subsection-title { margin-bottom: 0.35rem; }
 .line1-style-color.field { margin-bottom: 0; }
@@ -288,6 +290,7 @@
   padding: 0.3rem 0.45rem; font-size: 0.83rem; color: #374151; background: #fff; box-sizing: border-box;
 }
 .line1-metric-select:focus { outline: none; border-color: #9aa9bd; }
+.line1-field-hint { display: block; font-size: 0.72rem; color: #98a2b3; margin-top: 0.2rem; line-height: 1.35; }
 .line1-toggle-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem 1rem; align-items: center; }
 .line1-toggle-row {
   display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
@@ -2003,8 +2006,8 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                     <label class="line1-toggle-row"><span>显示网格线</span><input type="checkbox" v-model="widgetForm.config.show_grid" /></label>
                                 </div>
                             </div>
-                            <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.source_key === 'rms_applications' && (widgetForm.config.primary_axis_field === 'status' || widgetForm.config.primary_axis_field === 'current_stage')" class="line1-inspector-grid">
-                                <div class="field line1-metric-field">
+                            <div class="line1-inspector-grid line1-style-fields-block">
+                                <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.source_key === 'rms_applications' && (widgetForm.config.primary_axis_field === 'status' || widgetForm.config.primary_axis_field === 'current_stage')" class="field line1-metric-field">
                                     <label>数据类型</label>
                                     <select class="line1-metric-select" v-model="widgetForm.config.pipeline_data_mode">
                                         <option value="active">活跃数据</option>
@@ -2012,8 +2015,11 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                         <option value="total">总计</option>
                                     </select>
                                 </div>
-                            </div>
-                            <div class="line1-inspector-grid">
+                                <div v-if="widgetForm.widget_type === 'grouped_1' && supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.config.group_mode === 'stacked'" class="field line1-metric-field">
+                                    <label>显示岗位条目</label>
+                                    <input class="line1-inline-input" type="number" min="1" max="12" step="1" v-model.number="widgetForm.config.grouped_segment_limit" />
+                                    <span class="line1-field-hint">1–12：显示前 N−1 个岗位 +「其他」（剩余合计）</span>
+                                </div>
                                 <div class="field line1-metric-field">
                                     <label>轴名称</label>
                                     <select class="line1-metric-select" v-model="widgetForm.config.axis_name_display">
@@ -2200,7 +2206,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
 <script src="/static/js/shared/line1-chart-kit.js?v=line1-20260628"></script>
 <script src="/static/js/shared/featured-bar-chart-kit.js?v=featured-bar-20260627"></script>
 <script src="/static/js/shared/flow-bar-chart-kit.js?v=flow-bar-polished-20260629"></script>
-<script src="/static/js/shared/dashboard-widget-kit.js?v=doughnut-legend-stable-20260629"></script>
+<script src="/static/js/shared/dashboard-widget-kit.js?v=grouped-segment-limit-20260629"></script>
 <script src="/static/js/pages/rms-core.js?v=rms-core-list-pagination-20260627"></script>
 <script src="/static/js/pages/rms-dashboard-core.js?v=featured-bar-rms-20260627"></script>
 <script src="/static/js/pages/rms-dashboard-metrics.js?v=dashboard-zero-resume-filter-20260627"></script>

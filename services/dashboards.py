@@ -325,6 +325,7 @@ def _normalize_widget_config(config: dict) -> dict:
         "show_line1_range": bool(c.get("show_line1_range", True)),
         "show_line1_fullscreen": bool(c.get("show_line1_fullscreen", True)),
         "show_line1_grid": bool(c.get("show_line1_grid", True)),
+        "grouped_segment_limit": _clamp_int(c.get("grouped_segment_limit"), 1, 12, 12),
     }
     x_mode = out["line1_x_axis_mode"]
     if x_mode not in LINE1_X_AXIS_MODES:
@@ -721,6 +722,8 @@ def validate_widget_config(
     if secondary_axis_field:
         out["show_group_composition"] = bool(norm.get("show_group_composition", True))
         out["pipeline_data_mode"] = norm["pipeline_data_mode"]
+        if widget_type == "grouped_1" and group_mode == "stacked":
+            out["grouped_segment_limit"] = _clamp_int(norm.get("grouped_segment_limit"), 1, 12, 12)
     if date_group:
         out["date_group"] = date_group
     if source_key == "roster_entries":

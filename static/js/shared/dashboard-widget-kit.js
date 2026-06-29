@@ -116,6 +116,7 @@
 
   var GROUPED_COMPOSITION_COLORS = ["#1e96e8", "#36c8e8", "#ffc04d", "#22c55e", "#a855f7", "#ef4444"];
   var GROUPED_COMPOSITION_MAX_SEGMENTS = 6;
+  var FEATURED_FLOW_STACK_DEFAULT_SEGMENTS = 12;
   var GROUPED_COMPOSITION_OTHER_LABEL = "其他";
 
   // 分组/堆叠纵向柱状图的统一蓝色配色（逆向自参考图）。
@@ -204,6 +205,12 @@
       show_summary_legend: c.show_summary_legend !== false,
       show_grid: c.show_grid !== false,
       bar_gradient: !!c.bar_gradient,
+      grouped_segment_limit: (function () {
+        if (c.grouped_segment_limit == null || c.grouped_segment_limit === "") return 12;
+        var n = Number(c.grouped_segment_limit);
+        if (!Number.isFinite(n)) return 12;
+        return Math.max(1, Math.min(12, Math.round(n)));
+      })(),
     };
   }
 
@@ -647,6 +654,9 @@
       if (c.secondary_axis_field) {
         out.show_group_composition = c.show_group_composition !== false;
         out.pipeline_data_mode = c.pipeline_data_mode || "active";
+        if (f.widget_type === "grouped_1" && c.group_mode === "stacked") {
+          out.grouped_segment_limit = featuredFlowStackSegmentLimit(c);
+        }
       }
       if (f.widget_type === "line_1") {
         var line1Mode = String(c.line1_value_mode || "sum").trim();
@@ -1026,11 +1036,62 @@
     });
   }
 
+  function featuredFlowStackSegmentLimit(cfg) {
+    cfg = cfg || {};
+    if (cfg.grouped_segment_limit != null && cfg.grouped_segment_limit !== "") {
+      var custom = Number(cfg.grouped_segment_limit);
+      if (Number.isFinite(custom)) return Math.max(1, Math.min(12, Math.round(custom)));
+    }
+    return FEATURED_FLOW_STACK_DEFAULT_SEGMENTS;
+  }
+
+  function compressFeaturedFlowStackSeries(rows, rawKeys, cfg) {
+    rawKeys = rawKeys || [];
+    rows = rows || [];
+    if (!rawKeys.length) return { keys: [], rows: [] };
+
+    var limit = featuredFlowStackSegmentLimit(cfg);
+    if (limit === 0 || rawKeys.length <= limit) {
+      return {
+        keys: rawKeys.slice(),
+        rows: rows.map(function (row) { return Object.assign({}, row); }),
+      };
+    }
+
+    var ranked = rawKeys.map(function (key) {
+      var total = rows.reduce(function (sum, row) { return sum + (Number(row[key]) || 0); }, 0);
+      return { key: key, total: total };
+    }).sort(function (a, b) { return b.total - a.total; });
+
+    var visibleKeys = ranked.slice(0, limit - 1).map(function (entry) { return entry.key; });
+    var hiddenKeys = ranked.slice(limit - 1).map(function (entry) { return entry.key; });
+    var otherKey = GROUPED_COMPOSITION_OTHER_LABEL;
+    visibleKeys.push(otherKey);
+
+    var newRows = rows.map(function (row) {
+      var out = { label: row.label };
+      visibleKeys.forEach(function (key) {
+        if (key === otherKey) return;
+        out[key] = Number(row[key]) || 0;
+      });
+      out[otherKey] = hiddenKeys.reduce(function (sum, key) {
+        return sum + (Number(row[key]) || 0);
+      }, 0);
+      return out;
+    });
+
+    return { keys: visibleKeys, rows: newRows };
+  }
+
   function renderFeaturedBarFlowStack(canvas, canvasId, destroyChartKey, w, data, cfg) {
     if (!canvas || !data || data.status !== "ok" || data.kind !== "grouped_series") return false;
-    var keys = (data.keys || []).slice(0, 6);
-    var rows = (data.data || []).slice(0, Math.max(1, Number(cfg.limit || 20)));
-    rows = rows.filter(function (row) { return featuredStackTotal(row, keys) > 0; }).slice(0, 8);
+    var compressed = compressFeaturedFlowStackSeries(
+      (data.data || []).slice(0, Math.max(1, Number(cfg.limit || 20))),
+      data.keys || [],
+      cfg
+    );
+    var keys = compressed.keys;
+    var rows = compressed.rows.filter(function (row) { return featuredStackTotal(row, keys) > 0; }).slice(0, 8);
     if (!keys.length || !rows.length) return false;
 
     destroyChartKey(canvasId);
@@ -1526,6 +1587,9 @@
     syncGroupedComposition: syncGroupedComposition,
     clearGroupedComposition: clearGroupedComposition,
     GROUPED_COMPOSITION_COLORS: GROUPED_COMPOSITION_COLORS,
+    featuredFlowStackSegmentLimit: featuredFlowStackSegmentLimit,
+    compressFeaturedFlowStackSeries: compressFeaturedFlowStackSeries,
+    GROUPED_COMPOSITION_OTHER_LABEL: GROUPED_COMPOSITION_OTHER_LABEL,
     featuredDoughnutColors: featuredDoughnutColors,
     featuredDoughnutDataset: featuredDoughnutDataset,
     doughnutLegendEntries: doughnutLegendEntries,

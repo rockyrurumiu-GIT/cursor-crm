@@ -994,6 +994,11 @@
                             <span>堆叠条形图</span>
                             <input type="checkbox" :checked="(widgetForm.config.group_mode || 'stacked') === 'stacked'" @change="toggleGroupMode" />
                         </div>
+                        <div v-if="widgetForm.widget_type === 'grouped_1' && supportsSecondary && widgetForm.config.secondary_axis_field && widgetForm.config.group_mode === 'stacked'" class="field">
+                            <label>显示岗位条目</label>
+                            <input type="number" min="1" max="12" step="1" v-model.number="widgetForm.config.grouped_segment_limit" />
+                            <span style="display:block;font-size:0.72rem;color:#98a2b3;margin-top:0.2rem;line-height:1.35;">1–12：显示前 N−1 个岗位 +「其他」（剩余合计）</span>
+                        </div>
                         <div v-if="supportsSecondary && widgetForm.config.secondary_axis_field" class="toggle-row">
                             <span>显示分组构成</span>
                             <input type="checkbox" v-model="widgetForm.config.show_group_composition" />
@@ -1085,7 +1090,7 @@
 {% endblock %}
 {% block handbook_assistant %}{% endblock %}
 {% block page_scripts %}
-<script src="/static/js/shared/dashboard-widget-kit.js?v=doughnut-legend-stable-20260629"></script>
+<script src="/static/js/shared/dashboard-widget-kit.js?v=grouped-segment-limit-20260629"></script>
 <script src="/static/js/shared/featured-line-chart-kit.js?v=featured-line-20260627"></script>
 <script src="/static/js/shared/line1-chart-kit.js?v=line1-20260628"></script>
 <script src="/static/js/shared/featured-bar-chart-kit.js?v=featured-bar-20260627"></script>

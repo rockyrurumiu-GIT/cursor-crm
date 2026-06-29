@@ -642,6 +642,14 @@
           if (fc.highlight_item === undefined || fc.highlight_item === "") fc.highlight_item = "latest";
           fc.extra_views = [];
         }
+        if (t === "grouped_1") {
+          var g1 = widgetForm.value.config;
+          if (g1.grouped_segment_limit == null) g1.grouped_segment_limit = 12;
+          if (g1.show_tooltip === undefined) g1.show_tooltip = true;
+          if (g1.show_summary_legend === undefined) g1.show_summary_legend = true;
+          if (g1.show_grid === undefined) g1.show_grid = true;
+          g1.extra_views = [];
+        }
         if (t === "pie" || t === "number" || t === "featured_line" || t === "line_1") {
           widgetForm.value.config.secondary_axis_field = "";
           widgetForm.value.config.group_mode = "stacked";

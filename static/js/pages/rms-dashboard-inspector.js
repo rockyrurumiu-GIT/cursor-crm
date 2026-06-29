@@ -1145,6 +1145,9 @@
         if (widgetForm.value.config.show_grid === undefined) widgetForm.value.config.show_grid = true;
         if (widgetForm.value.config.show_tooltip === undefined) widgetForm.value.config.show_tooltip = true;
         if (widgetForm.value.config.show_summary_legend === undefined) widgetForm.value.config.show_summary_legend = true;
+        if (t === "grouped_1" && widgetForm.value.config.grouped_segment_limit == null) {
+          widgetForm.value.config.grouped_segment_limit = 12;
+        }
       }
       flushPersistWidget();
     }
