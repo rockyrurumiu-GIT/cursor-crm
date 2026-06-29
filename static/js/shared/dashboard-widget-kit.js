@@ -52,6 +52,68 @@
     return { key: t[0], label: t[1], shades: buildHueShades(t[2]) };
   });
 
+  var FEATURED_DOUGHNUT_COLORS = ["#ef594d", "#ffe8bd", "#f8ddf3", "#eee7ff", "#e8e9ff", "#fbe6f5", "#f3edff"];
+
+  function maxValueIndex(values) {
+    var max = -Infinity;
+    var idx = -1;
+    (values || []).forEach(function (v, i) {
+      var n = Number(v) || 0;
+      if (n > max) {
+        max = n;
+        idx = i;
+      }
+    });
+    return max > 0 ? idx : -1;
+  }
+
+  function labelColorIndex(label) {
+    var s = String(label || "");
+    var hash = 0;
+    for (var i = 0; i < s.length; i++) {
+      hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+  }
+
+  // 环形图配色：最大扇区固定红色；其余按标签稳定取色（排序变化时颜色不跟着跳）。
+  function featuredDoughnutColors(values, labels) {
+    values = values || [];
+    labels = labels || [];
+    var maxIdx = maxValueIndex(values);
+    var soft = FEATURED_DOUGHNUT_COLORS.slice(1);
+    return values.map(function (_v, i) {
+      if (i === maxIdx) return FEATURED_DOUGHNUT_COLORS[0];
+      var label = labels[i] != null ? String(labels[i]) : String(i);
+      return soft[labelColorIndex(label) % soft.length];
+    });
+  }
+
+  function featuredDoughnutDataset(values, labels) {
+    values = values || [];
+    labels = labels || [];
+    var maxIdx = maxValueIndex(values);
+    return {
+      data: values,
+      backgroundColor: featuredDoughnutColors(values, labels),
+      borderColor: "#ffffff",
+      borderWidth: 0,
+      borderRadius: 14,
+      spacing: 8,
+      hoverOffset: 4,
+      offset: values.map(function (_v, i) { return i === maxIdx ? 2 : 0; }),
+    };
+  }
+
+  function doughnutLegendEntries(labels, values) {
+    labels = labels || [];
+    values = values || [];
+    var colors = featuredDoughnutColors(values, labels);
+    return labels.map(function (lab, i) {
+      return { label: lab, value: values[i], color: colors[i] };
+    });
+  }
+
   var GROUPED_COMPOSITION_COLORS = ["#1e96e8", "#36c8e8", "#ffc04d", "#22c55e", "#a855f7", "#ef4444"];
   var GROUPED_COMPOSITION_MAX_SEGMENTS = 6;
   var GROUPED_COMPOSITION_OTHER_LABEL = "其他";
@@ -269,7 +331,13 @@
     if (data.kind !== "series") return false;
     var chartType = resolveChartType(w, opts);
     if (!chartType) return false;
-    if (chartType === "doughnut") return chart.config.type === "doughnut";
+    if (chartType === "doughnut") {
+      if (chart.config.type !== "doughnut") return false;
+      var pieCfg = normalizeWidgetConfig(w.config || {});
+      var nextPieKey = pieStyleKey(pieCfg);
+      if (chart.$crmPieStyleKey != null && chart.$crmPieStyleKey !== nextPieKey) return false;
+      return true;
+    }
     if (chartType === "line") return chart.config.type === "line";
     if (chart.config.type !== "bar") return false;
     var wantAxis = resolveIndexAxis(w, opts);
@@ -295,10 +363,16 @@
     if (chartType === "doughnut") {
       chart.data.labels = labels.slice();
       chart.data.datasets[0].data = values.slice();
-      chart.data.datasets[0].backgroundColor = shadeRamp(cfg, labels.length);
-      if (chart.options.plugins && chart.options.plugins.centerTotal) {
-        chart.options.plugins.centerTotal.text = (data.prefix || "") + fmtNum(data.total);
+      Object.assign(chart.data.datasets[0], featuredDoughnutDataset(values.slice(), labels.slice()));
+      var prefix = data.prefix || "";
+      if (chart.options.plugins) {
+        if (chart.options.plugins.centerTotal) {
+          chart.options.plugins.centerTotal.text = prefix + fmtNum(data.total);
+          chart.options.plugins.centerTotal.display = cfg.show_value_center !== false;
+        }
+        chart.options.plugins.datalabels = doughnutDatalabelsPlugin(cfg, prefix);
       }
+      chart.$crmPieStyleKey = pieStyleKey(cfg);
       return true;
     }
     var topN = opts.limit != null ? opts.limit : (cfg.limit != null ? cfg.limit : 6);
@@ -377,11 +451,37 @@
       y: { beginAtZero: true, grid: { color: "#f4f5f7" }, border: { display: false }, ticks: { font: { size: 10 }, color: "#b0b5bc", padding: 6 } },
     };
   }
+  function pieStyleKey(cfg) {
+    cfg = cfg || {};
+    return (cfg.display_data_label || cfg.data_labels ? "1" : "0") + "/" + (cfg.show_value_center !== false ? "1" : "0");
+  }
+  function doughnutDatalabelsPlugin(cfg, prefix) {
+    if (!(cfg.display_data_label || cfg.data_labels)) {
+      return { display: false };
+    }
+    return {
+      display: function (c) { return Number(c.dataset.data[c.dataIndex] || 0) > 0; },
+      color: function (c) { return c.dataIndex === maxValueIndex(c.dataset.data) ? "#ffffff" : "#111827"; },
+      backgroundColor: function (c) { return c.dataIndex === maxValueIndex(c.dataset.data) ? "#050505" : null; },
+      borderRadius: 7,
+      padding: function (c) { return c.dataIndex === maxValueIndex(c.dataset.data) ? { top: 4, right: 7, bottom: 4, left: 7 } : 0; },
+      font: function (c) { return { size: c.dataIndex === maxValueIndex(c.dataset.data) ? 11 : 10, weight: c.dataIndex === maxValueIndex(c.dataset.data) ? "600" : "500" }; },
+      formatter: function (v) { return prefix + fmtNum(v); },
+      anchor: "center",
+      align: "center",
+      clamp: true,
+    };
+  }
   function doughnutChartOptions(cfg, prefix, totalText) {
     return chartMotionOptions({
-      responsive: true, maintainAspectRatio: false, cutout: "74%",
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "58%",
+      rotation: -45,
+      layout: { padding: { top: 18, right: 18, bottom: 18, left: 18 } },
       plugins: {
-        legend: { display: false }, datalabels: { display: false },
+        legend: { display: false },
+        datalabels: doughnutDatalabelsPlugin(cfg, prefix),
         centerTotal: { display: cfg.show_value_center !== false, text: totalText },
         tooltip: whiteTooltip(function (c) { return c.label + ": " + prefix + fmtNum(c.parsed); }),
       },
@@ -568,6 +668,8 @@
         out.show_tooltip = c.show_tooltip !== false;
         out.show_summary_legend = c.show_summary_legend !== false;
         out.show_grid = c.show_grid !== false;
+      } else if (f.widget_type === "pie") {
+        out.show_value_center = c.show_value_center !== false;
       }
     }
     return out;
@@ -1328,9 +1430,10 @@
     if (render === "doughnut" || (!render && w.widget_type === "pie")) {
       chartInstances[canvasId] = new Chart(canvas, {
         type: "doughnut",
-        data: { labels: labels, datasets: [{ data: values, backgroundColor: shadeRamp(cfg, labels.length), borderColor: "#fff", borderWidth: 2 }] },
+        data: { labels: labels, datasets: [featuredDoughnutDataset(values, labels)] },
         options: doughnutChartOptions(cfg, prefix, prefix + fmtNum(data.total)),
       });
+      chartInstances[canvasId].$crmPieStyleKey = pieStyleKey(cfg);
       return;
     }
     if (render === "horizontal_bar" || (!render && w.widget_type === "horizontal_bar")) {
@@ -1423,6 +1526,9 @@
     syncGroupedComposition: syncGroupedComposition,
     clearGroupedComposition: clearGroupedComposition,
     GROUPED_COMPOSITION_COLORS: GROUPED_COMPOSITION_COLORS,
+    featuredDoughnutColors: featuredDoughnutColors,
+    featuredDoughnutDataset: featuredDoughnutDataset,
+    doughnutLegendEntries: doughnutLegendEntries,
     extraRenderLabel: function (render) { return EXTRA_RENDER_LABELS[render] || render; },
   };
 })(window);

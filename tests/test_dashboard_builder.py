@@ -1476,6 +1476,24 @@ def test_grouped_1_pipeline_data_mode_total_option():
     assert 'value="total">总计</option>' in html
 
 
+def test_recommended_by_filter_resolves_username(admin_auth):
+    import main as crm_main
+    from services.dashboards import _lookup_user_ids_for_filter
+
+    user, _ = admin_auth
+    db = crm_main.SessionLocal()
+    try:
+        ids_eq = _lookup_user_ids_for_filter(db, user, "eq")
+        assert ids_eq
+        assert ids_eq[0] == 1
+        ids_contains = _lookup_user_ids_for_filter(db, user[:3], "contains")
+        assert 1 in ids_contains
+        ids_unknown = _lookup_user_ids_for_filter(db, "no_such_user_xyz", "eq")
+        assert ids_unknown == []
+    finally:
+        db.close()
+
+
 def test_bms_widget_data_grouped_series(client, admin_auth):
     headers = {**_admin_headers(admin_auth), "Content-Type": "application/json"}
     dash_id, tab_id = _make_tab(client, headers, "BMS Grouped Series")

@@ -281,12 +281,14 @@
   padding: 0.3rem 0.45rem; font-size: 0.83rem; color: #374151; background: #fff; box-sizing: border-box;
 }
 .line1-metric-select:focus { outline: none; border-color: #9aa9bd; }
-.line1-toggle-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; align-items: center; }
+.line1-toggle-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem 1rem; align-items: center; }
 .line1-toggle-row {
-  display: inline-flex; align-items: center; gap: 0.4rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;
+  width: 100%; box-sizing: border-box;
   font-size: 0.83rem; color: #374151; padding: 0.12rem 0; cursor: pointer; user-select: none;
 }
 .line1-toggle-row input[type="checkbox"] { margin: 0; flex-shrink: 0; cursor: pointer; }
+.inspector-section > .line1-other-block:first-child { margin-top: 0; }
 .line1-chart-empty { min-height: 120px; display: flex; align-items: center; justify-content: center; color: #98a2b3; font-size: 0.9rem; }
 .line1-x-axis { position: relative; height: 22px; margin-top: 0.25rem; }
 .line1-x-label {
@@ -386,7 +388,8 @@
 .bms-featured-bar-hit { cursor: default; }
 .bms-featured-bar-hover-tip {
   position: absolute;
-  min-width: 108px; max-width: 220px; padding: 0.55rem 0.65rem;
+  min-width: 108px; max-width: min(320px, calc(100vw - 24px)); padding: 0.55rem 0.65rem;
+  box-sizing: border-box;
   background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
   pointer-events: none; z-index: 4; opacity: 0; visibility: hidden;
@@ -420,7 +423,8 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .bms-featured-bar-hover-tip-row {
-  display: flex; align-items: center; gap: 0.45rem; font-size: 0.75rem; color: #6b7280;
+  display: flex; align-items: flex-start; gap: 0.45rem; font-size: 0.75rem; color: #6b7280;
+  min-width: 0;
 }
 .bms-featured-bar-hover-tip-swatch {
   width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
@@ -431,7 +435,10 @@
   background-size: 6px 6px;
   border: 1px solid #e5e7eb;
 }
-.bms-featured-bar-hover-tip-value { font-weight: 500; color: #6b7280; white-space: nowrap; }
+.bms-featured-bar-hover-tip-value {
+  flex: 1; min-width: 0; font-weight: 500; color: #6b7280;
+  line-height: 1.35; overflow-wrap: anywhere; word-break: break-word;
+}
 .bms-featured-bar-hover-tip-pct { color: #9ca3af; font-weight: 400; }
 .bms-featured-legend { margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid #eef0f2; }
 .bms-featured-legend-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; }
@@ -851,9 +858,8 @@ body.rms-dashboard-edit-mode #handbook-assistant {
 .color-popover-swatch { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; }
 .color-popover-swatch.active { border-color: #1f2328; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0; font-size: 0.83rem; color: #374151; }
-.filter-row { display: grid; grid-template-columns: 1fr 70px 1fr 24px; gap: 0.35rem; margin-bottom: 0.4rem; align-items: center; }
-.filter-row select, .filter-row input { padding: 0.3rem 0.4rem; font-size: 0.78rem; border: 1px solid #d8dce0; border-radius: 6px; }
-.filter-del { color: #cf222e; cursor: pointer; text-align: center; }
+.filter-row { display: grid; grid-template-columns: minmax(0, 1fr) 70px minmax(0, 1fr) auto; gap: 0.35rem; margin-bottom: 0.4rem; align-items: center; }
+.filter-row select, .filter-row input { padding: 0.3rem 0.4rem; font-size: 0.78rem; border: 1px solid #d8dce0; border-radius: 6px; min-width: 0; }
 .add-filter, .panel-add-link { font-size: 0.78rem; color: #2563eb; cursor: pointer; }
 .extra-view-tag { font-size: 0.65rem; font-weight: 600; color: #3f6b9e; background: #eef4ff; border: 1px solid #d6e4f7; border-radius: 4px; padding: 0.1rem 0.4rem; margin-right: 0.35rem; }
 .dash-card-extra-view { border-color: #c5d9f0; }
@@ -1579,8 +1585,8 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             <option value="in">包含于</option>
                             <option value="contains">包含</option>
                         </select>
-                        <input v-model="f.value" :placeholder="f.op === 'in' ? '逗号分隔' : '值'" />
-                        <span class="filter-del" @click="removeFilter(idx)">✕</span>
+                        <input v-model="f.value" :placeholder="filterValuePlaceholder(f)" />
+                        <span class="icon-btn danger" title="删除" @click.stop="removeFilter(idx)">✕</span>
                     </div>
                     <span class="add-filter" @click="addFilter()">+ 添加筛选</span>
                 </div>
@@ -1673,7 +1679,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                 <option value="pass_rate">五率通过率</option>
                             </select>
                         </div>
-                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker">
+                        <div v-if="!(widgetForm.config.style && widgetForm.config.style.chart_type === 'pie')" class="field color-picker-wrap" v-click-outside="closeColorPicker">
                             <label>颜色</label>
                             <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
                                 <span class="color-picker-value">
@@ -1863,7 +1869,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                     </template>
 
                     <div v-if="isChart" class="inspector-section">
-                        <div class="inspector-section-title">Style</div>
+                        <div v-if="widgetForm.widget_type !== 'pie'" class="inspector-section-title">Style</div>
                         <template v-if="widgetForm.widget_type === 'line_1'">
                             <div class="field color-picker-wrap line1-style-color" v-click-outside="closeColorPicker">
                                 <label>颜色</label>
@@ -1989,6 +1995,34 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                 </div>
                             </div>
                         </template>
+                        <template v-else-if="widgetForm.widget_type === 'pie'">
+                            <div class="line1-other-block">
+                                <div class="inspector-section-title">其他</div>
+                                <div class="line1-toggle-list">
+                                    <label class="line1-toggle-row"><span>数据标签</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></label>
+                                    <label class="line1-toggle-row"><span>Legend</span><input type="checkbox" v-model="widgetForm.config.display_legend" /></label>
+                                    <label class="line1-toggle-row"><span>中心显示总计</span><input type="checkbox" v-model="widgetForm.config.show_value_center" /></label>
+                                </div>
+                            </div>
+                            <div class="line1-inspector-grid">
+                                <div class="field line1-metric-field">
+                                    <label>轴名称</label>
+                                    <select class="line1-metric-select" v-model="widgetForm.config.axis_name_display">
+                                        <option v-for="v in (metadata.axis_name_displays || ['none', 'x', 'y', 'both'])" :key="v" :value="v">{{ axisNameDisplayLabel(v) }}</option>
+                                    </select>
+                                </div>
+                                <div class="line1-prefix-suffix-row">
+                                    <div class="field line1-inline-field">
+                                        <label>前缀</label>
+                                        <input class="line1-inline-input" v-model="widgetForm.config.prefix" placeholder="例如 $" />
+                                    </div>
+                                    <div class="field line1-inline-field">
+                                        <label>后缀</label>
+                                        <input class="line1-inline-input" v-model="widgetForm.config.suffix" placeholder="例如 %" />
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
                         <template v-else>
                         <div v-if="widgetForm.widget_type !== 'featured_bar'" class="field color-picker-wrap" v-click-outside="closeColorPicker">
                             <label>颜色</label>
@@ -2043,9 +2077,8 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             <span>显示分组构成</span>
                             <input type="checkbox" v-model="widgetForm.config.show_group_composition" />
                         </div>
-                        <div v-if="widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'line_1' && widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'grouped_1'" class="toggle-row"><span>数据标签</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></div>
-                        <div v-if="widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'grouped_1' && widgetForm.widget_type !== 'line_1'" class="toggle-row"><span>Legend</span><input type="checkbox" v-model="widgetForm.config.display_legend" /></div>
-                        <div v-if="widgetForm.widget_type === 'pie'" class="toggle-row"><span>中心显示总计</span><input type="checkbox" v-model="widgetForm.config.show_value_center" /></div>
+                        <div v-if="widgetForm.widget_type !== 'pie' && widgetForm.widget_type !== 'featured_line' && widgetForm.widget_type !== 'line_1' && widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'grouped_1'" class="toggle-row"><span>数据标签</span><input type="checkbox" v-model="widgetForm.config.display_data_label" /></div>
+                        <div v-if="widgetForm.widget_type !== 'pie' && widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'grouped_1' && widgetForm.widget_type !== 'line_1'" class="toggle-row"><span>Legend</span><input type="checkbox" v-model="widgetForm.config.display_legend" /></div>
                         <div v-if="widgetForm.widget_type === 'horizontal_bar'" class="field">
                             <label>显示条数</label>
                             <input type="number" min="1" max="100" v-model.number="widgetForm.config.limit" />
@@ -2116,11 +2149,11 @@ body.rms-dashboard-edit-mode #handbook-assistant {
 <script src="/static/js/shared/line1-chart-kit.js?v=line1-20260628"></script>
 <script src="/static/js/shared/featured-bar-chart-kit.js?v=featured-bar-20260627"></script>
 <script src="/static/js/shared/flow-bar-chart-kit.js?v=flow-bar-polished-20260629"></script>
-<script src="/static/js/shared/dashboard-widget-kit.js?v=grouped-html-legend-20260629"></script>
+<script src="/static/js/shared/dashboard-widget-kit.js?v=doughnut-legend-stable-20260629"></script>
 <script src="/static/js/pages/rms-core.js?v=rms-core-list-pagination-20260627"></script>
 <script src="/static/js/pages/rms-dashboard-core.js?v=featured-bar-rms-20260627"></script>
 <script src="/static/js/pages/rms-dashboard-metrics.js?v=dashboard-zero-resume-filter-20260627"></script>
-<script src="/static/js/pages/rms-dashboard-charts.js?v=pipeline-dialysis-ui-20260629"></script>
-<script src="/static/js/pages/rms-dashboard-inspector.js?v=grouped1-inspector-20260629"></script>
-<script src="/static/js/pages/rms-dashboard.js?v=featured-bar-rms-20260627"></script>
+<script src="/static/js/pages/rms-dashboard-charts.js?v=doughnut-legend-stable-20260629"></script>
+<script src="/static/js/pages/rms-dashboard-inspector.js?v=doughnut-legend-stable-20260629"></script>
+<script src="/static/js/pages/rms-dashboard.js?v=doughnut-legend-stable-20260629"></script>
 {% endblock %}

@@ -59,6 +59,46 @@
     var isRmsLine1Preset = deps.isRmsLine1Preset;
     var isRmsFeaturedBarPreset = deps.isRmsFeaturedBarPreset;
 
+    var FEATURED_DOUGHNUT_COLORS = ["#ef594d", "#ffe8bd", "#f8ddf3", "#eee7ff", "#e8e9ff", "#fbe6f5", "#f3edff"];
+
+    function maxValueIndex(values) {
+      var max = -Infinity;
+      var idx = -1;
+      (values || []).forEach(function (v, i) {
+        var n = Number(v) || 0;
+        if (n > max) {
+          max = n;
+          idx = i;
+        }
+      });
+      return max > 0 ? idx : -1;
+    }
+
+    function doughnutDataset(values, labels) {
+      if (KIT.featuredDoughnutDataset) return KIT.featuredDoughnutDataset(values, labels);
+      var maxIdx = maxValueIndex(values);
+      var soft = FEATURED_DOUGHNUT_COLORS.slice(1);
+      var colors = (values || []).map(function (_v, i) {
+        if (i === maxIdx) return FEATURED_DOUGHNUT_COLORS[0];
+        var label = labels && labels[i] != null ? String(labels[i]) : String(i);
+        var hash = 0;
+        for (var j = 0; j < label.length; j++) {
+          hash = ((hash << 5) - hash + label.charCodeAt(j)) | 0;
+        }
+        return soft[Math.abs(hash) % soft.length];
+      });
+      return {
+        data: values,
+        backgroundColor: colors,
+        borderColor: "#ffffff",
+        borderWidth: 0,
+        borderRadius: 14,
+        spacing: 8,
+        hoverOffset: 4,
+        offset: values.map(function (_v, i) { return i === maxIdx ? 2 : 0; }),
+      };
+    }
+
     function mergeTooltipLabel(baseOptions, labelFn) {
       if (!labelFn) return baseOptions;
       var plugins = Object.assign({}, baseOptions.plugins);
@@ -179,16 +219,25 @@
       return {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: "74%",
+        cutout: "58%",
+        rotation: -45,
         animation: { duration: 250 },
+        layout: { padding: { top: 18, right: 18, bottom: 18, left: 18 } },
         plugins: {
-          legend: {
-            display: true,
-            position: "bottom",
-            labels: { boxWidth: 10, padding: 8, font: { size: 10 }, color: "#6b7280" },
+          legend: { display: false },
+          datalabels: {
+            display: function (c) { return Number(c.dataset.data[c.dataIndex] || 0) > 0; },
+            color: function (c) { return c.dataIndex === maxValueIndex(c.dataset.data) ? "#ffffff" : "#111827"; },
+            backgroundColor: function (c) { return c.dataIndex === maxValueIndex(c.dataset.data) ? "#050505" : null; },
+            borderRadius: 7,
+            padding: function (c) { return c.dataIndex === maxValueIndex(c.dataset.data) ? { top: 4, right: 7, bottom: 4, left: 7 } : 0; },
+            font: function (c) { return { size: c.dataIndex === maxValueIndex(c.dataset.data) ? 11 : 10, weight: c.dataIndex === maxValueIndex(c.dataset.data) ? "600" : "500" }; },
+            formatter: function (v) { return presetTooltipValue(prefix, suffix, v); },
+            anchor: "center",
+            align: "center",
+            clamp: true,
           },
-          datalabels: { display: false },
-          centerTotal: { display: true, text: totalText },
+          centerTotal: { display: false, text: totalText },
           tooltip: whiteTooltip(function (c) {
             return c.label + ": " + presetTooltipValue(prefix, suffix, c.parsed);
           }),
@@ -513,7 +562,7 @@
             type: "doughnut",
             data: {
               labels: labels,
-              datasets: [{ data: values, backgroundColor: colors, borderColor: "#fff", borderWidth: 2 }],
+              datasets: [doughnutDataset(values, labels)],
             },
             options: finalizeOptions(doughnutChartOptionsForStyle(prefix, suffix, prefix + KIT.fmtNum(total) + suffix)),
           });

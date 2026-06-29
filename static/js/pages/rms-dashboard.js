@@ -941,7 +941,9 @@
 
         function extraRenderLabel(render) { return KIT.extraRenderLabel(render); }
         function themeColor(w) { return KIT.themeOf((w && w.config) || {}).base; }
-        function showLegend(w) { return (w.config || {}).show_legend !== false; }
+        function showLegend(w) {
+          return KIT.normalizeWidgetConfig((w && w.config) || {}).display_legend !== false;
+        }
         function legendOf(w) {
           var d = widgetData.value[w.id];
           if (!d) return [];
@@ -952,9 +954,19 @@
             });
           }
           if (d.kind !== "series") return [];
-          var colors = KIT.shadeRamp(w.config || {}, (d.labels || []).length);
-          return (d.labels || []).map(function (lab, i) {
-            return { label: lab, value: (d.values || [])[i], color: colors[i] };
+          var labels = d.labels || [];
+          var values = d.values || [];
+          if (w.widget_type === "pie") {
+            return KIT.doughnutLegendEntries
+              ? KIT.doughnutLegendEntries(labels, values)
+              : labels.map(function (lab, i) {
+                var colors = KIT.featuredDoughnutColors(values, labels);
+                return { label: lab, value: values[i], color: colors[i] };
+              });
+          }
+          var colors = KIT.shadeRamp(w.config || {}, labels.length);
+          return labels.map(function (lab, i) {
+            return { label: lab, value: values[i], color: colors[i] };
           });
         }
         function rosterTiles(w) {

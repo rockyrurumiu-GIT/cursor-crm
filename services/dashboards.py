@@ -802,11 +802,102 @@ def _parse_numeric(raw: Any) -> Optional[float]:
         return None
 
 
-def _apply_filters(q, Model: Type[Any], filters: list):
+_USER_FK_FILTER_FIELDS: FrozenSet[Tuple[str, str]] = frozenset({
+    ("rms_applications", "recommended_by"),
+    ("rms_jobs", "owner_user_id"),
+})
+
+
+def _is_user_fk_filter_field(source_key: Optional[str], field_key: str) -> bool:
+    return bool(source_key) and (source_key, field_key) in _USER_FK_FILTER_FIELDS
+
+
+def _lookup_user_ids_for_filter(db: Session, raw_value: Any, op: str) -> List[int]:
+    """Resolve sys_user ids from numeric ids and/or username/display_name tokens."""
+    if raw_value is None:
+        return []
+
+    if op == "in":
+        tokens = [p.strip() for p in str(raw_value).split(",") if p.strip()]
+    else:
+        text_val = str(raw_value).strip()
+        if not text_val:
+            return []
+        tokens = [text_val]
+
+    ids: List[int] = []
+    text_tokens: List[str] = []
+    for token in tokens:
+        try:
+            ids.append(int(token))
+        except (TypeError, ValueError):
+            text_tokens.append(token)
+
+    if not text_tokens:
+        return list(dict.fromkeys(ids))
+
+    match_mode = "contains" if op in ("contains", "not_contains") else "exact"
+    for token in text_tokens:
+        if match_mode == "contains":
+            pattern = f"%{token.lower()}%"
+            rows = db.execute(
+                text(
+                    "SELECT id FROM sys_user WHERE "
+                    "LOWER(username) LIKE :pat OR LOWER(COALESCE(display_name, '')) LIKE :pat"
+                ),
+                {"pat": pattern},
+            ).fetchall()
+        else:
+            rows = db.execute(
+                text(
+                    "SELECT id FROM sys_user WHERE "
+                    "LOWER(username) = LOWER(:tok) OR LOWER(COALESCE(display_name, '')) = LOWER(:tok)"
+                ),
+                {"tok": token},
+            ).fetchall()
+        ids.extend(int(row[0]) for row in rows)
+    return list(dict.fromkeys(ids))
+
+
+def _apply_user_fk_filter(q, col, op: str, user_ids: List[int]):
+    if op == "eq":
+        if not user_ids:
+            return q.filter(col == -1)
+        if len(user_ids) == 1:
+            return q.filter(col == user_ids[0])
+        return q.filter(col.in_(user_ids))
+    if op == "in":
+        return q.filter(col.in_(user_ids or [-1]))
+    if op == "contains":
+        return q.filter(col.in_(user_ids or [-1]))
+    if op == "not_contains":
+        if not user_ids:
+            return q
+        return q.filter(~col.in_(user_ids))
+    return None
+
+
+def _apply_filters(
+    q,
+    Model: Type[Any],
+    filters: list,
+    *,
+    db: Optional[Session] = None,
+    source_key: Optional[str] = None,
+):
     for flt in filters:
-        col = _column(Model, flt["field"])
+        field = flt["field"]
         val = flt.get("value", "")
         op = flt["op"]
+        col = _column(Model, field)
+
+        if db is not None and _is_user_fk_filter_field(source_key, field):
+            user_ids = _lookup_user_ids_for_filter(db, val, op)
+            user_q = _apply_user_fk_filter(q, col, op, user_ids)
+            if user_q is not None:
+                q = user_q
+                continue
+
         if op == "eq":
             q = q.filter(col == val)
         elif op == "ne":
@@ -827,6 +918,26 @@ def _apply_filters(q, Model: Type[Any], filters: list):
             parts = [p.strip() for p in str(val).split(",") if p.strip()]
             q = q.filter(col.in_(parts))
     return q
+
+
+def _narrow_apps_by_widget_filters(
+    db: Session,
+    source_key: str,
+    filters: list,
+    models: dict,
+    apps: List[Any],
+) -> List[Any]:
+    if not filters or not apps:
+        return apps
+    Model = _get_model(models, source_key)
+    app_ids = [getattr(app, "id", None) for app in apps]
+    app_ids = [aid for aid in app_ids if aid is not None]
+    if not app_ids:
+        return []
+    q = db.query(Model).filter(Model.id.in_(app_ids))
+    q = _apply_filters(q, Model, filters, db=db, source_key=source_key)
+    allowed = {row[0] for row in q.with_entities(Model.id).all()}
+    return [app for app in apps if getattr(app, "id", None) in allowed]
 
 
 def _date_bucket(col, date_group: str):
@@ -1433,6 +1544,11 @@ def _query_line1_rms_axis_series(
     RmsApplicationStatusHistory = models["RmsApplicationStatusHistory"]
     filters = dict(dashboard_filters or {})
     apps = rms_dash._scoped_apps(db, ctx, RmsApplication, RmsJob, Client, filters)
+    widget_filters = config.get("filters") or []
+    if widget_filters:
+        apps = _narrow_apps_by_widget_filters(
+            db, source_key, widget_filters, models, apps
+        )
     hist_map = rms_dash._hist_for_apps(db, [a.id for a in apps], RmsApplicationStatusHistory)
     mode = str(config.get("line1_x_axis_mode") or "all").strip()
     hide_empty = bool(
@@ -1483,6 +1599,11 @@ def _query_rms_pipeline_grouped_series(
     RmsApplicationStatusHistory = models["RmsApplicationStatusHistory"]
     filters = dict(dashboard_filters or {})
     apps = rms_dash._scoped_apps(db, ctx, RmsApplication, RmsJob, Client, filters)
+    widget_filters = config.get("filters") or []
+    if widget_filters:
+        apps = _narrow_apps_by_widget_filters(
+            db, source_key, widget_filters, models, apps
+        )
     hist_map = rms_dash._hist_for_apps(
         db, [a.id for a in apps], RmsApplicationStatusHistory
     )
@@ -1572,7 +1693,7 @@ def query_widget_data(
     q = _scoped_query(db, ctx, source_key, models)
     q = _apply_roster_active_pool(q, source_key, config, Model)
     q = _apply_rms_dashboard_filters(q, db, ctx, source_key, dashboard_filters, models)
-    q = _apply_filters(q, Model, filters)
+    q = _apply_filters(q, Model, filters, db=db, source_key=source_key)
 
     if secondary:
         return _query_grouped_series(db, source_key, config, models, q, Model)

@@ -402,7 +402,8 @@
 .bms-featured-bar-hit { cursor: default; }
 .bms-featured-bar-hover-tip {
   position: absolute;
-  min-width: 108px; max-width: 220px; padding: 0.55rem 0.65rem;
+  min-width: 108px; max-width: min(320px, calc(100vw - 24px)); padding: 0.55rem 0.65rem;
+  box-sizing: border-box;
   background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
   pointer-events: none; z-index: 4; opacity: 0; visibility: hidden;
@@ -436,7 +437,8 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .bms-featured-bar-hover-tip-row {
-  display: flex; align-items: center; gap: 0.45rem; font-size: 0.75rem; color: #6b7280;
+  display: flex; align-items: flex-start; gap: 0.45rem; font-size: 0.75rem; color: #6b7280;
+  min-width: 0;
 }
 .bms-featured-bar-hover-tip-swatch {
   width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
@@ -447,7 +449,10 @@
   background-size: 6px 6px;
   border: 1px solid #e5e7eb;
 }
-.bms-featured-bar-hover-tip-value { font-weight: 500; color: #6b7280; white-space: nowrap; }
+.bms-featured-bar-hover-tip-value {
+  flex: 1; min-width: 0; font-weight: 500; color: #6b7280;
+  line-height: 1.35; overflow-wrap: anywhere; word-break: break-word;
+}
 .bms-featured-bar-hover-tip-pct { color: #9ca3af; font-weight: 400; }
 .bms-featured-legend { margin-top: 0.65rem; padding-top: 0.55rem; border-top: 1px solid #eef0f2; }
 .bms-featured-legend-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0; }
@@ -541,9 +546,8 @@
 }
 .color-popover-swatch.active { border-color: #1f2328; box-shadow: 0 0 0 1px #fff inset; }
 .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 0.3rem 0; font-size: 0.83rem; color: #374151; }
-.filter-row { display: grid; grid-template-columns: 1fr 70px 1fr 24px; gap: 0.35rem; margin-bottom: 0.4rem; align-items: center; }
-.filter-row select, .filter-row input { padding: 0.3rem 0.4rem; font-size: 0.78rem; border: 1px solid #d8dce0; border-radius: 6px; }
-.filter-del { color: #cf222e; cursor: pointer; text-align: center; }
+.filter-row { display: grid; grid-template-columns: minmax(0, 1fr) 70px minmax(0, 1fr) auto; gap: 0.35rem; margin-bottom: 0.4rem; align-items: center; }
+.filter-row select, .filter-row input { padding: 0.3rem 0.4rem; font-size: 0.78rem; border: 1px solid #d8dce0; border-radius: 6px; min-width: 0; }
 .add-filter { font-size: 0.78rem; color: #2563eb; cursor: pointer; }
 
 /* simple modal (dashboard/tab) */
@@ -811,8 +815,8 @@
                                 <option value="in">包含于</option>
                                 <option value="contains">包含</option>
                             </select>
-                            <input v-model="f.value" :placeholder="f.op === 'in' ? '逗号分隔' : '值'" />
-                            <span class="filter-del" @click="removeFilter(idx)">✕</span>
+                            <input v-model="f.value" :placeholder="filterValuePlaceholder(f)" />
+                            <span class="icon-btn danger" title="删除" @click.stop="removeFilter(idx)">✕</span>
                         </div>
                         <span class="add-filter" @click="addFilter()">+ 添加筛选</span>
                     </div>
@@ -834,7 +838,7 @@
                 <template v-if="isChart">
                     <div class="panel-section">
                         <h4>样式</h4>
-                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker" v-if="widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'line_1'">
+                        <div class="field color-picker-wrap" v-click-outside="closeColorPicker" v-if="widgetForm.widget_type !== 'featured_bar' && widgetForm.widget_type !== 'line_1' && widgetForm.widget_type !== 'pie'">
                             <label>颜色</label>
                             <button type="button" class="color-picker-trigger" @click="colorPickerOpen = !colorPickerOpen">
                                 <span class="color-picker-value">
@@ -1051,9 +1055,9 @@
 {% endblock %}
 {% block handbook_assistant %}{% endblock %}
 {% block page_scripts %}
-<script src="/static/js/shared/dashboard-widget-kit.js?v=grouped-html-legend-20260629"></script>
+<script src="/static/js/shared/dashboard-widget-kit.js?v=doughnut-legend-stable-20260629"></script>
 <script src="/static/js/shared/featured-line-chart-kit.js?v=featured-line-20260627"></script>
 <script src="/static/js/shared/line1-chart-kit.js?v=line1-20260628"></script>
 <script src="/static/js/shared/featured-bar-chart-kit.js?v=featured-bar-20260627"></script>
-<script src="/static/js/pages/dashboards.js?v=grouped-composition-20260628"></script>
+<script src="/static/js/pages/dashboards.js?v=doughnut-featured-20260629"></script>
 {% endblock %}

@@ -665,6 +665,7 @@
     }
     function schedulePersistWidget(delayMs) {
       if (!canAutosaveWidget()) return;
+      syncWidgetFormToTab();
       previewWidgetChartFromForm();
       clearWidgetAutosaveTimer();
       widgetAutosaveTimer = setTimeout(function () {
@@ -693,13 +694,17 @@
 
     function previewWidgetChartFromForm() {
       if (!widgetForm.value || !widgetForm.value.id) return;
-      if (widgetForm.value.widget_type !== "line_1" && !isRmsLine1Preset(widgetForm.value)) return;
       syncWidgetFormToTab();
       var tab = activeTab.value;
       if (!tab || !tab.widgets) return;
       var w = tab.widgets.find(function (x) { return x.id === widgetForm.value.id; });
+      if (!w || !renderSingleWidget) return;
       var wd = widgetData.value[widgetForm.value.id];
-      if (w && renderSingleWidget && (isRmsLine1Preset(w) || wd)) {
+      if (wd && wd.status === "ok") {
+        renderSingleWidget(w, { animate: false });
+        return;
+      }
+      if (isRmsLine1Preset(w) || w.widget_type === "line_1") {
         renderSingleWidget(w, { animate: false });
         return;
       }
@@ -1153,6 +1158,15 @@
       widgetForm.value.config.filters.splice(idx, 1);
       flushPersistWidget();
     }
+    function filterValuePlaceholder(flt) {
+      flt = flt || {};
+      if (flt.op === "in") {
+        if (flt.field === "recommended_by") return "用户名，逗号分隔";
+        return "逗号分隔";
+      }
+      if (flt.field === "recommended_by") return "用户名，如 qianq";
+      return "值";
+    }
     function addExtraView() {
       if (!widgetForm.value.config) widgetForm.value.config = {};
       if (!Array.isArray(widgetForm.value.config.extra_views)) widgetForm.value.config.extra_views = [];
@@ -1232,6 +1246,7 @@
       selectWidgetType: selectWidgetType,
       addFilter: addFilter,
       removeFilter: removeFilter,
+      filterValuePlaceholder: filterValuePlaceholder,
       addExtraView: addExtraView,
       removeExtraView: removeExtraView,
       needsDataSource: needsDataSource,

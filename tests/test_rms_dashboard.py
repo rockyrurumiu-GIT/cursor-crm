@@ -2132,6 +2132,77 @@ def test_rms_widget_pipeline_active_grouped_job_labels(client_rbac, admin_auth, 
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
 
+def test_rms_widget_filter_recommended_by_username(client_rbac, admin_auth, rms_engine, uniq):
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"ref_{uniq}")
+    delivery_username = f"rms2_d_ref_{uniq}"
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id, source="内推", name="Ref Cand A"),
+    )
+    assert cand.status_code == 200, cand.text
+    app_a = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+    )
+    assert app_a.status_code == 200, app_a.text
+    cand_b = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id, source="内推", name="Ref Cand B"),
+    )
+    assert cand_b.status_code == 200, cand_b.text
+    app_b = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": cand_b.json()["id"]},
+    )
+    assert app_b.status_code == 200, app_b.text
+    with rms_engine.begin() as conn:
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = :status, current_stage = :status, "
+                "recommended_by = 1 WHERE id = :id"
+            ),
+            {"id": app_b.json()["id"], "status": "pending_first_interview"},
+        )
+        conn.execute(
+            text(
+                "UPDATE rms_applications SET status = :status, current_stage = :status WHERE id = :id"
+            ),
+            {"id": app_a.json()["id"], "status": "pending_first_interview"},
+        )
+
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        widget_type="featured_bar",
+        source_key="rms_applications",
+        config={
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "secondary_axis_field": "job_id",
+            "group_mode": "stacked",
+            "pipeline_data_mode": "active",
+            "filters": [{"field": "recommended_by", "op": "contains", "value": delivery_username}],
+        },
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["kind"] == "grouped_series"
+    pending_row = next(r for r in body["data"] if r["label"] == "待一面")
+    total = sum(pending_row.get(k, 0) for k in body.get("keys") or [])
+    assert total == 1.0
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
 def test_rms_pie_rejects_secondary_axis_400(client_rbac, admin_auth, rms_engine, uniq):
     login = _admin_login(client_rbac, admin_auth)
     overview = _rms_overview_tab(client_rbac, login.cookies)

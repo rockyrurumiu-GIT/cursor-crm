@@ -26,6 +26,58 @@
   };
   const DEFAULT_THEME = "blue";
 
+  const FEATURED_DOUGHNUT_COLORS = ["#ef594d", "#ffe8bd", "#f8ddf3", "#eee7ff", "#e8e9ff", "#fbe6f5", "#f3edff"];
+
+  function maxValueIndex(values) {
+    let max = -Infinity;
+    let idx = -1;
+    (values || []).forEach(function (v, i) {
+      const n = Number(v) || 0;
+      if (n > max) {
+        max = n;
+        idx = i;
+      }
+    });
+    return max > 0 ? idx : -1;
+  }
+
+  function labelColorIndex(label) {
+    const s = String(label || "");
+    let hash = 0;
+    for (let i = 0; i < s.length; i++) {
+      hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+  }
+
+  function featuredDoughnutColors(values, labels) {
+    values = values || [];
+    labels = labels || [];
+    const maxIdx = maxValueIndex(values);
+    const soft = FEATURED_DOUGHNUT_COLORS.slice(1);
+    return values.map(function (_v, i) {
+      if (i === maxIdx) return FEATURED_DOUGHNUT_COLORS[0];
+      const label = labels[i] != null ? String(labels[i]) : String(i);
+      return soft[labelColorIndex(label) % soft.length];
+    });
+  }
+
+  function featuredDoughnutDataset(values, labels) {
+    values = values || [];
+    labels = labels || [];
+    const maxIdx = maxValueIndex(values);
+    return {
+      data: values,
+      backgroundColor: featuredDoughnutColors(values, labels),
+      borderColor: "#ffffff",
+      borderWidth: 0,
+      borderRadius: 14,
+      spacing: 8,
+      hoverOffset: 4,
+      offset: values.map(function (_v, i) { return i === maxIdx ? 2 : 0; }),
+    };
+  }
+
   // Legacy multi-hue categorical — not used by chart widgets or margin present mode.
   const CATEGORICAL = ["#B4C4D8", "#C2D4C8", "#E8D4B0", "#E4C4BC", "#C9C0DC", "#D0D3D8", "#C5D0DE", "#DDD4C4"];
 
@@ -149,14 +201,28 @@
     };
   }
   function doughnutChartOptions(cfg, prefix, totalText) {
+    const showLabels = !!(cfg.display_data_label || cfg.data_labels);
     const r = chartResponsive();
     return {
       responsive: r.responsive,
       maintainAspectRatio: r.maintainAspectRatio,
-      cutout: "74%",
+      cutout: "58%",
+      rotation: -45,
+      layout: { padding: { top: 18, right: 18, bottom: 18, left: 18 } },
       plugins: {
         legend: { display: false },
-        datalabels: { display: false },
+        datalabels: showLabels ? {
+          display: function (c) { return Number(c.dataset.data[c.dataIndex] || 0) > 0; },
+          color: function (c) { return c.dataIndex === maxValueIndex(c.dataset.data) ? "#ffffff" : "#111827"; },
+          backgroundColor: function (c) { return c.dataIndex === maxValueIndex(c.dataset.data) ? "#050505" : null; },
+          borderRadius: 7,
+          padding: function (c) { return c.dataIndex === maxValueIndex(c.dataset.data) ? { top: 4, right: 7, bottom: 4, left: 7 } : 0; },
+          font: function (c) { return { size: c.dataIndex === maxValueIndex(c.dataset.data) ? 11 : 10, weight: c.dataIndex === maxValueIndex(c.dataset.data) ? "600" : "500" }; },
+          formatter: function (v) { return prefix + fmtNum(v); },
+          anchor: "center",
+          align: "center",
+          clamp: true,
+        } : { display: false },
         centerTotal: { display: cfg.show_value_center !== false, text: totalText },
         tooltip: whiteTooltip(function (c) { return c.label + ": " + prefix + fmtNum(c.parsed); }),
       },
@@ -654,9 +720,20 @@
       function legendOf(w) {
         const d = widgetData.value[w.id];
         if (!d || d.kind !== "series") return [];
-        const colors = shadeRamp(w.config || {}, (d.labels || []).length);
-        return (d.labels || []).map(function (lab, i) {
-          return { label: lab, value: (d.values || [])[i], color: colors[i] };
+        const labels = d.labels || [];
+        const values = d.values || [];
+        if (w.widget_type === "pie") {
+          if (KIT.doughnutLegendEntries) return KIT.doughnutLegendEntries(labels, values);
+          const colors = KIT.featuredDoughnutColors
+            ? KIT.featuredDoughnutColors(values, labels)
+            : featuredDoughnutColors(values, labels);
+          return labels.map(function (lab, i) {
+            return { label: lab, value: values[i], color: colors[i] };
+          });
+        }
+        const colors = shadeRamp(w.config || {}, labels.length);
+        return labels.map(function (lab, i) {
+          return { label: lab, value: values[i], color: colors[i] };
         });
       }
 
@@ -730,12 +807,7 @@
             type: "doughnut",
             data: {
               labels: labels,
-              datasets: [{
-                data: values,
-                backgroundColor: shadeRamp(cfg, labels.length),
-                borderColor: "#fff",
-                borderWidth: 2,
-              }],
+              datasets: [featuredDoughnutDataset(values, labels)],
             },
             options: doughnutChartOptions(cfg, prefix, prefix + fmtNum(data.total)),
           });
@@ -1015,6 +1087,15 @@
         widgetForm.value.config.filters.splice(idx, 1);
         flushPersistWidget();
       }
+      function filterValuePlaceholder(flt) {
+        flt = flt || {};
+        if (flt.op === "in") {
+          if (flt.field === "recommended_by") return "用户名，逗号分隔";
+          return "逗号分隔";
+        }
+        if (flt.field === "recommended_by") return "用户名，如 qianq";
+        return "值";
+      }
 
       function blankExtraView() {
         return { render: "doughnut", x: 0, y: 0, w: 6, h: 6, limit: 6, title: "" };
@@ -1211,7 +1292,7 @@
         selectDashboard,
         openDashboardModal, saveDashboard, deleteActiveDashboard,
         openTabModal, saveTab, openWidgetPanel, closePanel, selectWidgetType,
-        addFilter, removeFilter, addExtraView, removeExtraView, deleteWidget,
+        addFilter, removeFilter, filterValuePlaceholder, addExtraView, removeExtraView, deleteWidget,
         duplicateWidget, changeRosterClient,
       };
     },
