@@ -2992,46 +2992,28 @@ def test_rms_dashboard_obsolete_seed_widgets_cleaned(client_rbac, admin_auth, rm
 
 
 def test_rms_dashboard_tab_ia_v2_sync(client_rbac, admin_auth, rms_engine, uniq):
+    """User-deleted RMS tabs are not recreated by seed_default_dashboards ia sync."""
     import main as crm_main
-    from services.dashboards import (
-        _dump_json,
-        _parse_json,
-        _widget_block,
-        seed_default_dashboards,
-    )
+    from services.dashboards import seed_default_dashboards
 
     login = _delivery_login(client_rbac, admin_auth, uniq)
-
-    def tab_snapshot():
-        boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
-        tabs = boards[0]["tabs"]
-        return [t["name"] for t in tabs], sum(
-            1 for t in tabs if t["name"] == "客户岗位分析"
-        )
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    assert boards
+    client_job = next(
+        (t for t in boards[0]["tabs"] if t["name"] == "客户岗位分析"),
+        None,
+    )
+    assert client_job is not None
+    tab_id = client_job["id"]
 
     db = crm_main.SessionLocal()
     try:
-        client_job_tab = (
-            db.query(crm_main.DashboardTab)
-            .join(
-                crm_main.DashboardDashboard,
-                crm_main.DashboardTab.dashboard_id == crm_main.DashboardDashboard.id,
-            )
-            .filter(
-                crm_main.DashboardDashboard.scope == "rms",
-                crm_main.DashboardTab.name == "客户岗位分析",
-            )
-            .first()
-        )
-        assert client_job_tab is not None
-        layout = _parse_json(client_job_tab.layout_json or "{}", {})
-        layout.pop("widgets_locked", None)
-        client_job_tab.layout_json = _dump_json(layout)
-        for w in db.query(crm_main.DashboardWidget).filter(
-            crm_main.DashboardWidget.tab_id == client_job_tab.id
-        ).all():
-            if _widget_block(w) == "table_client_job_stage":
-                db.delete(w)
+        db.query(crm_main.DashboardWidget).filter(
+            crm_main.DashboardWidget.tab_id == tab_id
+        ).delete(synchronize_session=False)
+        db.query(crm_main.DashboardTab).filter(
+            crm_main.DashboardTab.id == tab_id
+        ).delete(synchronize_session=False)
         db.commit()
 
         seed_default_dashboards(
@@ -3049,21 +3031,11 @@ def test_rms_dashboard_tab_ia_v2_sync(client_rbac, admin_auth, rms_engine, uniq)
     finally:
         db.close()
 
-    names, client_job_count = tab_snapshot()
-    assert "生命周期转化" in names
-    assert "历史转化" not in names
-    assert client_job_count == 1
-    client_tab = next(
-        t for t in client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()[0]["tabs"]
-        if t["name"] == "客户岗位分析"
-    )
-    blocks = {(w.get("config") or {}).get("block") for w in client_tab["widgets"]}
-    assert "table_client_job_stage" in blocks
-    table_widgets = [
-        w for w in client_tab["widgets"]
-        if (w.get("config") or {}).get("block") == "table_client_job_stage"
+    names = [
+        t["name"]
+        for t in client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()[0]["tabs"]
     ]
-    assert len(table_widgets) == 1
+    assert "客户岗位分析" not in names
 
 
 def test_dashboard_interview_metrics_exclude_rollback_to_pending_first(

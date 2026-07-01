@@ -2456,86 +2456,8 @@ def _sync_rms_tab_ia_v2(
     DashboardTab,
     DashboardWidget,
 ) -> None:
-    """Rename/migrate RMS tabs to v2 IA; idempotent (HC-5)."""
-    changed = False
-    now = _now()
-    dashboards = db.query(DashboardDashboard).filter(DashboardDashboard.scope == "rms").all()
-    for d in dashboards:
-        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
-        by_name = {(t.name or "").strip(): t for t in tabs}
-
-        lifecycle_tab = by_name.get("生命周期转化")
-        history_tab = by_name.get("历史转化")
-        if lifecycle_tab is None and history_tab is not None:
-            history_tab.name = "生命周期转化"
-            layout = _parse_json(history_tab.layout_json or "{}", {})
-            layout["rms_template"] = "lifecycle"
-            history_tab.layout_json = _dump_json(layout)
-            history_tab.updated_at = now
-            lifecycle_tab = history_tab
-            changed = True
-
-        client_job_tab = by_name.get("客户岗位分析")
-        if client_job_tab is None:
-            max_sort = max((int(t.sort_order or 0) for t in tabs), default=-1)
-            client_job_tab = DashboardTab(
-                dashboard_id=d.id,
-                name="客户岗位分析",
-                sort_order=min(2, max_sort + 1),
-                layout_json=_dump_json({"rms_template": "client_job"}),
-                created_at=now,
-                updated_at=now,
-            )
-            db.add(client_job_tab)
-            db.flush()
-            tabs.append(client_job_tab)
-            by_name["客户岗位分析"] = client_job_tab
-            changed = True
-
-        if lifecycle_tab and client_job_tab:
-            lifecycle_locked = _tab_widgets_locked(lifecycle_tab)
-            client_job_locked = _tab_widgets_locked(client_job_tab)
-            if not lifecycle_locked and not client_job_locked:
-                lifecycle_widgets = db.query(DashboardWidget).filter(
-                    DashboardWidget.tab_id == lifecycle_tab.id
-                ).all()
-                client_has_table = _tab_has_block(
-                    db, client_job_tab.id, "table_client_job_stage", DashboardWidget
-                )
-                for w in lifecycle_widgets:
-                    if _widget_block(w) != "table_client_job_stage":
-                        continue
-                    if client_has_table:
-                        db.query(DashboardWidget).filter(DashboardWidget.id == w.id).delete(
-                            synchronize_session=False
-                        )
-                    else:
-                        w.tab_id = client_job_tab.id
-                        w.updated_at = now
-                        client_has_table = True
-                    changed = True
-
-        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
-        for tab in tabs:
-            name = (tab.name or "").strip()
-            if name in _RMS_TAB_SORT and int(tab.sort_order or 0) != _RMS_TAB_SORT[name]:
-                tab.sort_order = _RMS_TAB_SORT[name]
-                tab.updated_at = now
-                changed = True
-
-        tabs = db.query(DashboardTab).filter(DashboardTab.dashboard_id == d.id).all()
-        for tab in tabs:
-            if _tab_widgets_locked(tab):
-                continue
-            template = _rms_tab_template(tab)
-            if template in ("lifecycle", "client_job"):
-                count = db.query(DashboardWidget).filter(DashboardWidget.tab_id == tab.id).count()
-                if count == 0:
-                    _seed_rms_tab_widgets(db, tab.id, template, DashboardWidget, now)
-                    changed = True
-
-    if changed:
-        db.commit()
+    """No-op: user-deleted or customized RMS tabs must not be recreated or reordered on startup."""
+    return
 
 
 def _sync_rms_client_job_required_widgets(
