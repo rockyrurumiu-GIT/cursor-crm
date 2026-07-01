@@ -21,6 +21,7 @@
     var rmsRequest = deps.rmsRequest;
     var toast = deps.toast;
     var loadApplications = deps.loadApplications;
+    var jobs = deps.jobs;
     var offerApprovalModal = ref(null);
     var offerApprovalForm = reactive({
       full_name: "",
@@ -66,6 +67,7 @@
     var offerScrollWrap = ref(null);
     var offerFilter = reactive({
       keyword: "",
+      recommended_by: "",
       statuses: [],
       probation: "",
       gmAmount: "",
@@ -88,6 +90,13 @@
       if (!sel.length) return "状态";
       if (sel.length === 1) return offerStatusLabel(sel[0]);
       return "已选" + sel.length + "项";
+    });
+    var Core = global.CrmRmsCore || {};
+    var offerRecommenderFilterOptions = computed(function () {
+      var users = jobs && jobs.userOptions ? jobs.userOptions.value : [];
+      return Core.buildRecommenderFilterOptions
+        ? Core.buildRecommenderFilterOptions(offerState.items, users, function (row) { return row.recommended_by; })
+        : [];
     });
 
     function resetOfferApprovalForm() {
@@ -287,6 +296,12 @@
 
     var filteredOfferRecords = computed(function () {
       var rows = offerState.items.slice();
+      if (offerFilter.recommended_by !== "" && offerFilter.recommended_by != null) {
+        var wantRec = Number(offerFilter.recommended_by);
+        rows = rows.filter(function (row) {
+          return Number(row.recommended_by) === wantRec;
+        });
+      }
       if ((offerFilter.statuses || []).length) {
         var selectedStatuses = offerFilter.statuses;
         rows = rows.filter(function (row) {
@@ -363,6 +378,7 @@
 
     function resetOfferFilter() {
       offerFilter.keyword = "";
+      offerFilter.recommended_by = "";
       offerFilter.statuses.splice(0, offerFilter.statuses.length);
       offerStatusDraft.value = [];
       offerStatusDropdownOpen.value = false;
@@ -796,6 +812,7 @@
       scrollOffersToTop: scrollOffersToTop,
       offerState: offerState,
       offerFilter: offerFilter,
+      offerRecommenderFilterOptions: offerRecommenderFilterOptions,
       filteredOfferRecords: filteredOfferRecords,
       pagedOfferRecords: offerPagination.pagedRows,
       offerCurrentPage: offerPagination.offerCurrentPage || offerPagination.currentPage,

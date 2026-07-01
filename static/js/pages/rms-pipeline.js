@@ -57,6 +57,7 @@
       keyword: "",
       client_id: "",
       job_id: "",
+      recommended_by: "",
       statuses: [],
       activeOnly: true,
       date_from: "",
@@ -87,6 +88,7 @@
           activeOnly: appliedStatuses.length ? false : pipelineFilter.activeOnly,
           date_from: pipelineFilter.date_from,
           date_to: pipelineFilter.date_to,
+          recommended_by: pipelineFilter.recommended_by,
         },
         getJobs: function () { return jobs.jobsState.items; },
         getCandidates: function () { return candidatesState.items; },
@@ -122,6 +124,7 @@
       pipelineFilter.keyword = "";
       pipelineFilter.client_id = "";
       pipelineFilter.job_id = "";
+      pipelineFilter.recommended_by = "";
       pipelineFilter.statuses.splice(0, pipelineFilter.statuses.length);
       pipelineStatusDraft.value = [];
       pipelineFilter.activeOnly = true;

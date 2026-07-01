@@ -16,6 +16,7 @@
     var Labels = deps.Labels;
     var toast = deps.toast;
     var loadApplications = deps.loadApplications;
+    var jobs = deps.jobs;
     var CandidateReport = deps.RmsCandidateReport || {};
     var appCandidateName = deps.appCandidateName || function () { return ""; };
     var appClientName = deps.appClientName || function () { return ""; };
@@ -25,10 +26,26 @@
     var deliveryReviewState = reactive({ loading: false, items: [], error: "" });
     var deliveryReviewFilterPanelExpanded = ref(false);
     var deliveryReviewKeyword = ref("");
+    var deliveryReviewFilter = reactive({
+      recommended_by: "",
+    });
     var deliveryReviewScrollWrap = ref(null);
+
+    var deliveryReviewRecommenderFilterOptions = computed(function () {
+      var users = jobs && jobs.userOptions ? jobs.userOptions.value : [];
+      return Core.buildRecommenderFilterOptions
+        ? Core.buildRecommenderFilterOptions(deliveryReviewState.items, users, function (a) { return a.recommended_by; })
+        : [];
+    });
 
     var filteredDeliveryReviewItems = computed(function () {
       var rows = deliveryReviewState.items.slice();
+      if (deliveryReviewFilter.recommended_by !== "" && deliveryReviewFilter.recommended_by != null) {
+        var wantRec = Number(deliveryReviewFilter.recommended_by);
+        rows = rows.filter(function (a) {
+          return Number(a.recommended_by) === wantRec;
+        });
+      }
       var q = (deliveryReviewKeyword.value || "").trim().toLowerCase();
       if (!q) return rows;
       return rows.filter(function (a) {
@@ -64,6 +81,12 @@
       var el = deliveryReviewScrollWrap.value;
       if (el) el.scrollTop = 0;
     }
+
+    function resetDeliveryReviewFilter() {
+      deliveryReviewKeyword.value = "";
+      deliveryReviewFilter.recommended_by = "";
+    }
+
     var reviewModal = ref(null);
     var reviewFailPromptOpen = ref(false);
     var reviewModalSaving = ref(false);
@@ -154,6 +177,9 @@
       deliveryReviewState: deliveryReviewState,
       deliveryReviewFilterPanelExpanded: deliveryReviewFilterPanelExpanded,
       deliveryReviewKeyword: deliveryReviewKeyword,
+      deliveryReviewFilter: deliveryReviewFilter,
+      deliveryReviewRecommenderFilterOptions: deliveryReviewRecommenderFilterOptions,
+      resetDeliveryReviewFilter: resetDeliveryReviewFilter,
       deliveryReviewScrollWrap: deliveryReviewScrollWrap,
       scrollDeliveryReviewToTop: scrollDeliveryReviewToTop,
       filteredDeliveryReviewItems: filteredDeliveryReviewItems,

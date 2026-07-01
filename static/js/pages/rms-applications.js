@@ -29,6 +29,7 @@
     var parseDateOnly = Labels.parseDateOnly || function () { return null; };
     var statusMatchesFilter = Labels.statusMatchesFilter || function () { return true; };
     var jobById = Labels.jobById || function () { return null; };
+    var Core = global.CrmRmsCore || {};
 
     var applicationFilterPanelExpanded = ref(false);
     var applicationsScrollWrap = ref(null);
@@ -37,10 +38,17 @@
       keyword: "",
       client_id: "",
       job_id: "",
+      recommended_by: "",
       statuses: [],
       date_from: "",
       date_to: "",
       hide_roster_converted: false,
+    });
+    var recommenderFilterOptions = computed(function () {
+      var users = jobs && jobs.userOptions ? jobs.userOptions.value : [];
+      return Core.buildRecommenderFilterOptions
+        ? Core.buildRecommenderFilterOptions(applicationsState.items, users, function (a) { return a.recommended_by; })
+        : [];
     });
 
     var applicationProgressOptions = (Labels.PIPELINE_FILTER_STATUSES || Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
@@ -116,6 +124,12 @@
           return Number(a.job_id) === wantJob;
         });
       }
+      if (applicationsFilter.recommended_by !== "" && applicationsFilter.recommended_by != null) {
+        var wantRec = Number(applicationsFilter.recommended_by);
+        rows = rows.filter(function (a) {
+          return Number(a.recommended_by) === wantRec;
+        });
+      }
       if ((applicationsFilter.statuses || []).length) {
         var selectedStatuses = applicationsFilter.statuses;
         rows = rows.filter(function (a) {
@@ -141,7 +155,6 @@
       return rows;
     });
 
-    var Core = global.CrmRmsCore || {};
     var applicationsPagination = Core.createListPagination
       ? Core.createListPagination({
           ref: ref,
@@ -164,6 +177,7 @@
       applicationsFilter.keyword = "";
       applicationsFilter.client_id = "";
       applicationsFilter.job_id = "";
+      applicationsFilter.recommended_by = "";
       applicationsFilter.statuses.splice(0, applicationsFilter.statuses.length);
       applicationStatusDraft.value = [];
       applicationStatusDropdownOpen.value = false;
@@ -375,6 +389,7 @@
       scrollApplicationsToTop: scrollApplicationsToTop,
       applicationsState: applicationsState,
       applicationsFilter: applicationsFilter,
+      recommenderFilterOptions: recommenderFilterOptions,
       applicationProgressOptions: applicationProgressOptions,
       applicationStatusDropdownOpen: applicationStatusDropdownOpen,
       applicationStatusDraft: applicationStatusDraft,

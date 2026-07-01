@@ -498,6 +498,9 @@
       if (filters.job_id !== "" && filters.job_id != null) {
         if (Number(a.job_id) !== Number(filters.job_id)) continue;
       }
+      if (filters.recommended_by !== "" && filters.recommended_by != null) {
+        if (Number(a.recommended_by) !== Number(filters.recommended_by)) continue;
+      }
       var statusList = filters.statuses;
       if (!Array.isArray(statusList)) {
         statusList = filters.status !== "" && filters.status != null ? [filters.status] : [];

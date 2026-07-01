@@ -1596,6 +1596,10 @@
                     <option value="">推荐岗位</option>
                     <option v-for="j in jobsState.items" :key="'aj'+j.id" :value="String(j.id)">{{ j.title || ('#'+j.id) }}</option>
                 </select>
+                <select v-model="applicationsFilter.recommended_by" class="crm-filter-item crm-filter-control w-[8rem]">
+                    <option value="">推荐人</option>
+                    <option v-for="u in recommenderFilterOptions" :key="'ar'+u.id" :value="String(u.id)">{{ u.label }}</option>
+                </select>
                 <div class="crm-filter-item rms-pipeline-status-filter">
                     <button type="button" class="crm-filter-control w-[9rem] text-left flex items-center justify-between" @click="toggleApplicationStatusDropdown">
                         <span class="truncate" :class="!(applicationsFilter.statuses || []).length ? 'text-[#9ca3af]' : ''">{{ applicationStatusFilterSummary }}</span>
@@ -1717,9 +1721,20 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="pointer-events-none absolute left-3 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-[#9AA0A6]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
                     <input v-model.trim="deliveryReviewKeyword" type="search" placeholder="搜索候选人/客户/岗位…" class="h-9 w-full rounded-[6px] border border-[#D7DBE0] pl-9 pr-3 text-sm transition-colors duration-150 focus:outline-none focus:border-[#16A39A] focus:ring-2 focus:ring-[#16A39A]/30" />
                 </div>
+                <button type="button" @click="deliveryReviewFilterPanelExpanded = !deliveryReviewFilterPanelExpanded" :class="deliveryReviewFilterPanelExpanded ? 'border-[#16A39A] text-[#16A39A]' : 'border-[#D7DBE0] text-[#1A1D1F]'" class="inline-flex h-9 items-center gap-1.5 rounded-[6px] border bg-white px-3 text-sm font-medium transition-colors hover:bg-[#F9FAFB]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                    筛选
+                </button>
                 <p class="ml-auto min-w-0 self-end leading-none pb-[7px] text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">
                     合计（符合筛选条件）：<span>{{ filteredDeliveryReviewItems.length }}</span> 条
                 </p>
+            </div>
+            <div v-if="deliveryReviewFilterPanelExpanded" class="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#EEF0F2] pt-2.5">
+                <select v-model="deliveryReviewFilter.recommended_by" class="crm-filter-item crm-filter-control w-[8rem]">
+                    <option value="">推荐人</option>
+                    <option v-for="u in deliveryReviewRecommenderFilterOptions" :key="'dr-rec'+u.id" :value="String(u.id)">{{ u.label }}</option>
+                </select>
+                <button type="button" class="crm-filter-item crm-filter-reset shrink-0" @click="resetDeliveryReviewFilter">清除筛选</button>
             </div>
         </div>
 
@@ -1826,6 +1841,10 @@
                 <select v-model="pipelineFilter.job_id" class="crm-filter-item crm-filter-control w-[10rem]">
                     <option value="">岗位</option>
                     <option v-for="j in jobsState.items" :key="'pj'+j.id" :value="String(j.id)">{{ j.title || ('#'+j.id) }}</option>
+                </select>
+                <select v-model="pipelineFilter.recommended_by" class="crm-filter-item crm-filter-control w-[8rem]">
+                    <option value="">推荐人</option>
+                    <option v-for="u in recommenderFilterOptions" :key="'pr'+u.id" :value="String(u.id)">{{ u.label }}</option>
                 </select>
                 <div class="crm-filter-item rms-pipeline-status-filter">
                     <button type="button" class="crm-filter-control w-[9rem] text-left flex items-center justify-between" @click="togglePipelineStatusDropdown">
@@ -1969,6 +1988,10 @@
                 </p>
             </div>
             <div v-if="offerFilterPanelExpanded" class="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#EEF0F2] pt-2.5">
+                <select v-model="offerFilter.recommended_by" class="crm-filter-item crm-filter-control w-[8rem]">
+                    <option value="">推荐人</option>
+                    <option v-for="u in offerRecommenderFilterOptions" :key="'of-rec'+u.id" :value="String(u.id)">{{ u.label }}</option>
+                </select>
                 <div class="crm-filter-item rms-pipeline-status-filter">
                     <button type="button" class="crm-filter-control w-[7rem] text-left flex items-center justify-between" @click="toggleOfferStatusDropdown">
                         <span class="truncate" :class="!(offerFilter.statuses || []).length ? 'text-[#9ca3af]' : ''">{{ offerStatusFilterSummary }}</span>

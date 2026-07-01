@@ -309,6 +309,26 @@
     global.addEventListener("resize", hidePopup);
   }
 
+  function buildRecommenderFilterOptions(items, users, pickUserId) {
+    var Labels = global.RmsApplicationLabels || {};
+    var userLabelById = Labels.userLabelById || function (list, userId) {
+      return userId == null || userId === "" ? "—" : String(userId);
+    };
+    var idSet = new Set();
+    (Array.isArray(items) ? items : []).forEach(function (row) {
+      var uid = Number(typeof pickUserId === "function" ? pickUserId(row) : row.recommended_by);
+      if (Number.isFinite(uid) && uid > 0) idSet.add(uid);
+    });
+    var opts = [];
+    idSet.forEach(function (id) {
+      opts.push({ id: id, label: userLabelById(users || [], id) });
+    });
+    opts.sort(function (a, b) {
+      return String(a.label).localeCompare(String(b.label), "zh-CN");
+    });
+    return opts;
+  }
+
   global.CrmRmsCore = {
     JOB_SALARY_CAP_MIN: JOB_SALARY_CAP_MIN,
     JOB_SALARY_CAP_MAX: JOB_SALARY_CAP_MAX,
@@ -328,6 +348,7 @@
     showValidationPrompt: showValidationPrompt,
     showRmsBootError: showRmsBootError,
     initOfferApprovalHintPopovers: initOfferApprovalHintPopovers,
+    buildRecommenderFilterOptions: buildRecommenderFilterOptions,
     rmsRequest: rmsRequest,
   };
 })(typeof window !== "undefined" ? window : globalThis);
