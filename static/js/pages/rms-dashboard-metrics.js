@@ -10,7 +10,6 @@
     "pending_delivery_review_count",
     "internal_screen_passed",
     "duplicate_count",
-    "pending_internal_screen",
     "pending_client_screen",
     "scheduling_interview_count",
     "client_screen_passed",
@@ -100,7 +99,7 @@
     function jobPendingTotal(row) {
       if (!row) return 0;
       return (
-        (row.pending_internal_screen || 0)
+        (row.pending_delivery_review_count || 0)
         + (row.pending_client_screen || 0)
         + (row.scheduling_interview_count || 0)
         + (row.pending_interview || 0)

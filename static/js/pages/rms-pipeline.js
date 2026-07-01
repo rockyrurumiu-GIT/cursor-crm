@@ -15,7 +15,7 @@
     if (Labels.filterProgressStatus) {
       normalized = Labels.filterProgressStatus(raw);
     } else if (raw === "recommended") {
-      normalized = "pending_internal_screen";
+      normalized = "recommended";
     } else if (raw === "screening") {
       normalized = "pending_client_screen";
     } else if (raw === "interview") {
@@ -63,7 +63,7 @@
       date_to: "",
     });
 
-    var progressOptions = (Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
+    var progressOptions = (Labels.PIPELINE_FILTER_STATUSES || Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
       return { value: s, label: Labels.progressLabel ? Labels.progressLabel(s) : s };
     });
     var pipelineStatusDropdownOpen = ref(false);

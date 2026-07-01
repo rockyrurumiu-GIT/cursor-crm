@@ -11,7 +11,6 @@ DELIVERY_REVIEW_STATUSES = frozenset({"pending", "passed", "failed"})
 
 # Display labels — keep in sync with static/js/pages/rms-application-labels.js
 APPLICATION_PROGRESS_LABELS: dict[str, str] = {
-    "pending_internal_screen": "待内筛",
     "internal_screen_failed": "内筛fail",
     "pending_client_screen": "待客筛",
     "client_screen_failed": "客筛fail",
@@ -50,9 +49,9 @@ RECEIVE_STATUS_LABELS: dict[str, str] = {
 }
 
 DELIVERY_REVIEW_STATUS_LABELS: dict[str, str] = {
-    "pending": "待内审",
-    "passed": "内审通过",
-    "failed": "内审失败",
+    "pending": "待内筛",
+    "passed": "内筛通过",
+    "failed": "内筛失败",
 }
 
 JOB_PRIORITY_LABELS: dict[str, str] = {
@@ -113,6 +112,7 @@ def resolve_rms_group_label(source_key: str, field_key: str, raw: Any) -> str:
     return s
 
 LEGACY_STATUS_NORMALIZE: dict[str, str] = {
+    "pending_internal_screen": "recommended",
     "screening": "pending_client_screen",
     "interview": "pending_first_interview",
     "offer": "pending_offer",
@@ -138,7 +138,7 @@ APPLICATION_PROGRESS_TERMINAL = frozenset({
 APPLICATION_TERMINAL = APPLICATION_PROGRESS_TERMINAL
 
 ACTIVE_PIPELINE_STATUSES = frozenset({
-    "pending_internal_screen",
+    "recommended",
     "pending_client_screen",
     "scheduling_interview",
     "pending_first_interview",
@@ -153,7 +153,6 @@ ACTIVE_PIPELINE_STATUSES = frozenset({
 # Excludes terminal/inactive progress: hired, onboarding, and all fail/drop statuses.
 JOB_ACTIVE_RECOMMENDATION_RAW_STATUSES = frozenset({
     "recommended",
-    "pending_internal_screen",
     "screening",
     "pending_client_screen",
     "scheduling_interview",
@@ -166,7 +165,6 @@ JOB_ACTIVE_RECOMMENDATION_RAW_STATUSES = frozenset({
 })
 
 APPLICATION_PROGRESS_STATUSES = frozenset({
-    "pending_internal_screen",
     "internal_screen_failed",
     "pending_client_screen",
     "client_screen_failed",
@@ -191,7 +189,6 @@ APPLICATION_PROGRESS_STATUSES = frozenset({
 
 # Ordered pipeline — keep values in sync with static/js/pages/rms-application-labels.js
 APPLICATION_PROGRESS_ORDER: Tuple[str, ...] = (
-    "pending_internal_screen",
     "internal_screen_failed",
     "pending_client_screen",
     "client_screen_failed",
@@ -215,7 +212,6 @@ APPLICATION_PROGRESS_ORDER: Tuple[str, ...] = (
 )
 
 ALLOWED_TRANSITIONS: dict[str, set[str]] = {
-    "pending_internal_screen": {"internal_screen_failed", "pending_client_screen"},
     "pending_client_screen": {
         "client_screen_failed",
         "client_screen_duplicate",

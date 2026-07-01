@@ -16,7 +16,7 @@ from schemas.rms import (
 from services import rms_scope as rms_ds
 
 _PIPELINE_LABELS = {
-    "pending_internal_screen": "待内筛",
+    "recommended": "待内筛",
     "pending_client_screen": "待客筛",
     "scheduling_interview": "约面中",
     "pending_first_interview": "待一面",
@@ -28,7 +28,7 @@ _PIPELINE_LABELS = {
 }
 
 _STAGE_ENTER = {
-    "internal_screen": "pending_internal_screen",
+    "internal_screen": "recommended",
     "client_screen": "pending_client_screen",
     "scheduling": "scheduling_interview",
     "first_interview": "pending_first_interview",
@@ -94,7 +94,6 @@ _SUMMARY_METRIC_KEYS = (
     "pending_delivery_review_count",
     "internal_screen_passed",
     "duplicate_count",
-    "pending_internal_screen",
     "pending_client_screen",
     "scheduling_interview_count",
     "client_screen_passed",
@@ -260,7 +259,7 @@ def _pending_delivery_review_count(
     hist_map: Dict[int, List[Any]],
     filters: Dict[str, Any],
 ) -> int:
-    """周期内推送且快照仍为 recommended（待内审）的推荐数。"""
+    """周期内推送且快照仍为 recommended（待内筛）的推荐数。"""
     date_from, date_to = _period_bounds(filters)
     snapshot_as_of = _snapshot_as_of(filters)
     count = 0
@@ -800,8 +799,6 @@ def _metrics_for_apps(
             histories, "client_screen_duplicate", date_from, date_to
         ):
             metrics["duplicate_count"] += 1
-        if status_snapshot == "pending_internal_screen":
-            metrics["pending_internal_screen"] += 1
         if status_snapshot == "pending_client_screen":
             metrics["pending_client_screen"] += 1
         if status_snapshot in _SCHEDULING_INTERVIEW_SNAPSHOT_STATUSES:
@@ -913,7 +910,7 @@ _JOB_STAGE_RATE_SPECS = (
 
 
 def _internal_screen_pass_rate_parts(metrics: Dict[str, Any]) -> tuple[int, int, str]:
-    """内筛通过率 = 内筛通过 / (推送简历数 - 待内审)。"""
+    """内筛通过率 = 内筛通过 / (推送简历数 - 待内筛)。"""
     numerator = int(metrics.get("internal_screen_passed") or 0)
     denominator = int(metrics.get("pushed_resume_count") or 0) - int(
         metrics.get("pending_delivery_review_count") or 0
@@ -1238,7 +1235,7 @@ def list_delivery_dept_users(
 
 PIPELINE_ACTIVE_BUCKET_SPECS: Tuple[Tuple[str, str], ...] = (
     ("active_recommendation", "活跃推荐数"),
-    ("pending_internal_screen", "待内筛"),
+    ("pending_delivery_review", "待内筛"),
     ("pending_client_screen", "待客筛"),
     ("pending_first_interview", "待一面"),
     ("pending_second_interview", "待二面"),
@@ -1269,8 +1266,8 @@ def _app_matches_pipeline_active_bucket(
     status = _status_at(app, histories, snapshot_as_of)
     if bucket_key == "active_recommendation":
         return status in ACTIVE_PIPELINE_STATUSES
-    if bucket_key == "pending_internal_screen":
-        return status == "pending_internal_screen"
+    if bucket_key == "pending_delivery_review":
+        return status == "recommended"
     if bucket_key == "pending_client_screen":
         return status == "pending_client_screen"
     if bucket_key == "pending_first_interview":

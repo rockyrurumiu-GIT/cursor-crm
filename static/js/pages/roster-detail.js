@@ -4,7 +4,7 @@
  * Requires: Vue 3 CDN; window.__ROSTER_CLIENT_ID__ set in template before this script.
  */
 
-const { createApp, ref, onMounted, reactive, computed, watch, nextTick } = Vue;
+const { createApp, ref, onMounted, onUnmounted, reactive, computed, watch, nextTick } = Vue;
 const CLIENT_ID = window.__ROSTER_CLIENT_ID__;
 const IS_GLOBAL_ROSTER = !CLIENT_ID || Number(CLIENT_ID) === 0;
 /** 与 GM 测算器一致：不含税月报价 = 含税月报价 ÷ 1.0672 */
@@ -330,9 +330,11 @@ const rosterDetailApp = createApp({
             return u === 'hourly';
         });
         const fileInput = ref(null);
+        const customerFilterOpen = ref(false);
+        const customerFilterRoot = ref(null);
         const filters = reactive({
             keyword: '',
-            customerName: '',
+            selectedClientIds: [],
             workLocation: '',
             regularizationStatus: '',
             entryDateBefore: '',
@@ -440,7 +442,55 @@ const rosterDetailApp = createApp({
             return Array.from(set).sort((a, b) => a.localeCompare(b, 'zh-CN'));
         };
         const workLocationOptions = computed(() => uniqueOptions('work_location'));
-        const customerNameOptions = computed(() => uniqueOptions('customer_name'));
+        const customerFilterOptions = computed(() => {
+            const idSet = new Set();
+            for (const row of rows.value) {
+                const id = Number(row.client_id);
+                if (Number.isFinite(id) && id > 0) idSet.add(id);
+            }
+            const nameById = new Map(
+                (crmClients.value || []).map((c) => [Number(c.id), String(c && c.name != null ? c.name : '').trim()]),
+            );
+            const opts = [];
+            for (const id of idSet) {
+                const name = nameById.get(id) || `客户#${id}`;
+                opts.push({ id, name });
+            }
+            opts.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'));
+            return opts;
+        });
+        const customerFilterSelectAll = computed({
+            get() {
+                const all = customerFilterOptions.value;
+                if (!all.length) return false;
+                const selSet = new Set(
+                    (Array.isArray(filters.selectedClientIds) ? filters.selectedClientIds : [])
+                        .map((id) => Number(id))
+                        .filter((id) => Number.isFinite(id) && id > 0),
+                );
+                if (!selSet.size) return false;
+                return all.every((opt) => selSet.has(opt.id));
+            },
+            set(checked) {
+                if (checked) {
+                    const all = customerFilterOptions.value;
+                    filters.selectedClientIds.splice(0, filters.selectedClientIds.length, ...all.map((opt) => opt.id));
+                } else {
+                    filters.selectedClientIds.splice(0);
+                }
+            },
+        });
+        const customerFilterSummary = computed(() => {
+            const ids = filters.selectedClientIds;
+            const n = Array.isArray(ids) ? ids.length : 0;
+            if (!n) return '客户（全部）';
+            const nameById = new Map(customerFilterOptions.value.map((opt) => [opt.id, opt.name]));
+            if (n === 1) {
+                const id = Number(ids[0]);
+                return (Number.isFinite(id) && nameById.get(id)) || '客户（全部）';
+            }
+            return `已选 ${n} 个客户`;
+        });
         const positionTitleOptions = computed(() => uniqueOptions('position_title'));
         const tableFieldKeys = computed(() => {
             let fields;
@@ -544,8 +594,15 @@ const rosterDetailApp = createApp({
                 if (filters.positionTitle && hasFieldData('position_title')) {
                     if (ci(row.position_title) !== ci(filters.positionTitle)) return false;
                 }
-                if (filters.customerName && IS_GLOBAL_ROSTER) {
-                    if (ci(row.customer_name) !== ci(filters.customerName)) return false;
+                if (IS_GLOBAL_ROSTER) {
+                    const selectedIds = Array.isArray(filters.selectedClientIds) ? filters.selectedClientIds : [];
+                    if (selectedIds.length > 0) {
+                        const selectedSet = new Set(
+                            selectedIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0),
+                        );
+                        const rowClientId = Number(row.client_id);
+                        if (!selectedSet.has(rowClientId)) return false;
+                    }
                 }
                 if (showOnlyChecked.value && !isRowChecked(row.id)) return false;
                 return true;
@@ -575,7 +632,10 @@ const rosterDetailApp = createApp({
         watch(filteredRows, () => { if (currentPage.value > totalPages.value) currentPage.value = totalPages.value; });
         const emptyStateText = computed(() => {
             if (showOnlyChecked.value) return checkedCount.value ? '暂无符合筛选条件的勾选条目' : '暂无勾选条目';
-            if (Object.values(filters).some((value) => String(value || '').trim() !== '')) return '暂无符合筛选条件的数据';
+            if (Object.values(filters).some((value) => {
+                if (Array.isArray(value)) return value.length > 0;
+                return String(value || '').trim() !== '';
+            })) return '暂无符合筛选条件的数据';
             if (IS_GLOBAL_ROSTER) return '暂无数据，可通过「导入 CSV」批量维护；新增员工请进入对应客户的花名册';
             return '暂无数据，请点击「新增行」或「导入 CSV」';
         });
@@ -1170,9 +1230,15 @@ const rosterDetailApp = createApp({
             await loadRows();
             await loadLogs();
         };
+        const onDocClickCloseCustomerFilter = (e) => {
+            if (!customerFilterOpen.value) return;
+            const root = customerFilterRoot.value;
+            if (root && !root.contains(e.target)) customerFilterOpen.value = false;
+        };
         const clearFilters = () => {
             filters.keyword = '';
-            filters.customerName = '';
+            filters.selectedClientIds.splice(0);
+            customerFilterOpen.value = false;
             filters.workLocation = '';
             filters.regularizationStatus = '';
             filters.entryDateBefore = '';
@@ -1431,6 +1497,7 @@ const rosterDetailApp = createApp({
             }
         };
         onMounted(async () => {
+            document.addEventListener('click', onDocClickCloseCustomerFilter);
             await loadBrief();
             await loadRows();
             loadCrmClients();
@@ -1446,8 +1513,11 @@ const rosterDetailApp = createApp({
                 });
             });
         });
+        onUnmounted(() => {
+            document.removeEventListener('click', onDocClickCloseCustomerFilter);
+        });
         return {
-            rows, filteredRows, pagedRows, currentPage, pageSize, totalPages, pageNumbers, goPage, filters, workLocationOptions, customerNameOptions, positionTitleOptions,
+            rows, filteredRows, pagedRows, currentPage, pageSize, totalPages, pageNumbers, goPage, filters, workLocationOptions, customerFilterOptions, customerFilterSelectAll, customerFilterOpen, customerFilterRoot, customerFilterSummary, positionTitleOptions,
             brief, loading, showForm, editingId, form, formFields: activeFormFields, formCompactFields, formTextareaFields, detailCompactFields, detailTextareaFields,
             fileInput, rosterFooter, isZNTX, showStdReleaseLeaveCols, emptyRowColspan, rosterFootMiddleColspan, rosterFootAfterMetricsColspan, rosterFooterRemarkColspan,
             showLogs, logsLoading, logs, showValidation, validationScope, validationFindings, validationCopied,

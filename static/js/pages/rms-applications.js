@@ -43,7 +43,7 @@
       hide_roster_converted: false,
     });
 
-    var applicationProgressOptions = (Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
+    var applicationProgressOptions = (Labels.PIPELINE_FILTER_STATUSES || Labels.APPLICATION_PROGRESS_STATUSES || []).map(function (s) {
       return {
         value: s,
         label: Labels.progressLabel ? Labels.progressLabel(s) : s,

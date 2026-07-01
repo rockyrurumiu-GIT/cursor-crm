@@ -1745,7 +1745,7 @@ def test_rms_group_label_resolver():
 
     assert application_progress_label("first_interview_passed") == "一面通过"
     assert application_progress_label("hired") == "已入职"
-    assert application_progress_label("pending_internal_screen") == "待内筛"
+    assert application_progress_label("recommended") == "待内筛"
     assert resolve_rms_group_label("rms_applications", "current_stage", "hired") == "已入职"
     assert resolve_rms_group_label("rms_jobs", "priority", "high") == "高"
 
@@ -2138,6 +2138,58 @@ def test_rms_widget_pipeline_active_grouped_series(client_rbac, admin_auth, rms_
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
 
 
+def test_rms_widget_pipeline_active_counts_recommended_as_pending_delivery_review(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"piperec_{uniq}")
+    cand = client_rbac.post(
+        "/api/rms/candidates",
+        cookies=login_del.cookies,
+        json=_candidate_json(job_id, source="内推", name="Pipe Rec Cand"),
+    )
+    assert cand.status_code == 200, cand.text
+    app = client_rbac.post(
+        "/api/rms/applications",
+        cookies=login_del.cookies,
+        json={"job_id": job_id, "candidate_id": cand.json()["id"]},
+    )
+    assert app.status_code == 200, app.text
+    assert app.json()["status"] == "recommended"
+
+    login = _admin_login(client_rbac, admin_auth)
+    overview = _rms_overview_tab(client_rbac, login.cookies)
+    created = _create_rms_widget(
+        client_rbac,
+        login.cookies,
+        overview["id"],
+        widget_type="featured_bar",
+        source_key="rms_applications",
+        config={
+            "metric": "count",
+            "primary_axis_field": "current_stage",
+            "secondary_axis_field": "job_id",
+            "group_mode": "stacked",
+            "pipeline_data_mode": "active",
+            "display_data_label": True,
+        },
+    )
+    assert created.status_code == 200, created.text
+    wid = created.json()["id"]
+    data = client_rbac.get(f"/api/rms/dashboard-widgets/{wid}/data", cookies=login.cookies)
+    assert data.status_code == 200, data.text
+    body = data.json()
+    assert body["kind"] == "grouped_series"
+    labels = [row["label"] for row in body.get("data") or []]
+    assert "待内筛" in labels
+    assert "活跃推荐数" in labels
+    active_row = next(r for r in body["data"] if r["label"] == "活跃推荐数")
+    pending_row = next(r for r in body["data"] if r["label"] == "待内筛")
+    keys = body.get("keys") or []
+    assert sum(active_row.get(k, 0) for k in keys) >= 1.0
+    assert sum(pending_row.get(k, 0) for k in keys) >= 1.0
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
 def test_rms_widget_pipeline_active_grouped_job_labels(client_rbac, admin_auth, rms_engine, uniq):
     from sqlalchemy import text
 
@@ -2289,7 +2341,7 @@ def test_rms_applications_current_stage_pipeline_order(client_rbac, admin_auth, 
 
     login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"ord_{uniq}")
     app_ids = []
-    stages = ["hired", "pending_internal_screen", "pending_client_screen"]
+    stages = ["hired", "recommended", "pending_client_screen"]
     for st in stages:
         cand = client_rbac.post(
             "/api/rms/candidates",
@@ -2463,7 +2515,7 @@ def test_rms_widget_data_manual_primary_axis_order(client_rbac, admin_auth, rms_
     from schemas.rms import application_progress_label
 
     login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"manual_{uniq}")
-    stages = ["pending_internal_screen", "pending_client_screen", "pending_first_interview"]
+    stages = ["recommended", "pending_client_screen", "pending_first_interview"]
     for st in stages:
         cand = client_rbac.post(
             "/api/rms/candidates",
@@ -2520,7 +2572,7 @@ def test_rms_widget_sort_sum_desc(client_rbac, admin_auth, rms_engine, uniq):
     from schemas.rms import application_progress_label
 
     login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"sum_{uniq}")
-    stages = ["pending_internal_screen", "pending_client_screen", "pending_first_interview"]
+    stages = ["recommended", "pending_client_screen", "pending_first_interview"]
     counts = [5, 1, 3]
     for st, cnt in zip(stages, counts):
         for i in range(cnt):
@@ -2570,7 +2622,7 @@ def test_rms_widget_sort_sum_desc(client_rbac, admin_auth, rms_engine, uniq):
     values = body.get("values") or []
     assert values == sorted(values, reverse=True)
     by_label = dict(zip(labels, values))
-    assert by_label[application_progress_label("pending_internal_screen")] == 5
+    assert by_label[application_progress_label("recommended")] == 5
     assert by_label[application_progress_label("pending_first_interview")] == 3
     assert by_label[application_progress_label("pending_client_screen")] == 1
     client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
@@ -2582,7 +2634,7 @@ def test_rms_widget_sort_position_on_status_field(client_rbac, admin_auth, rms_e
     from schemas.rms import APPLICATION_PROGRESS_ORDER, application_progress_label
 
     login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"st_{uniq}")
-    stages = ["hired", "pending_internal_screen", "pending_client_screen"]
+    stages = ["hired", "recommended", "pending_client_screen"]
     for st in stages:
         cand = client_rbac.post(
             "/api/rms/candidates",
@@ -2696,7 +2748,7 @@ def test_rms_dashboard_lifecycle_funnel_rates(client_rbac, admin_auth, rms_engin
 def test_lifecycle_funnel_internal_screen_entered_matches_resume_count(
     client_rbac, admin_auth, rms_engine, uniq
 ):
-    """内审路径跳过 pending_internal_screen；漏斗「进入」应链式等于简历数。"""
+    """交付内筛 pending 态为 recommended；漏斗「进入」应链式等于简历数。"""
     from sqlalchemy import text
 
     login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"lfis_{uniq}")
@@ -2773,7 +2825,7 @@ def test_lifecycle_funnel_internal_screen_entered_matches_resume_count(
 def test_internal_screen_pass_rate_excludes_pending_delivery_review(
     client_rbac, admin_auth, rms_engine, uniq
 ):
-    """内筛通过率分母 = 推送简历数 - 待内审（快照仍为 recommended）。"""
+    """内筛通过率分母 = 推送简历数 - 待内筛（快照仍为 recommended）。"""
     from sqlalchemy import text
 
     login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"ispr_{uniq}")
@@ -2814,7 +2866,7 @@ def test_internal_screen_pass_rate_excludes_pending_delivery_review(
         json={"result": "failed", "note": "不符"},
     )
     assert r.status_code == 200, r.text
-    # app_ids[3] 仍为待内审
+    # app_ids[3] 仍为待内筛
 
     dash = client_rbac.get(
         f"/api/rms/dashboard?job_ids={job_id}&date_from={period_day}&date_to={period_day}",

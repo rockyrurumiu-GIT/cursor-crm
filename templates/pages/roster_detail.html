@@ -42,6 +42,18 @@
     .roster-filter-row {
         overflow: visible;
     }
+    .roster-filter-text {
+        width: 110px;
+        min-width: 110px;
+    }
+    .roster-customer-filter-btn.crm-filter-control {
+        cursor: pointer;
+        text-align: left;
+    }
+    .roster-customer-filter-panel {
+        min-width: 12rem;
+        max-height: 14rem;
+    }
     .roster-filter-control {
         min-width: 72px;
     }
@@ -550,10 +562,22 @@
                 </span>
             </div>
             <div v-if="filterPanelExpanded" class="crm-filter-row roster-filter-row text-sm mt-2.5 border-t border-[#EEF0F2] pt-2.5">
-            <select v-if="hasFilterField('customerName')" v-model="filters.customerName" class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control">
-                <option value="">客户（全部）</option>
-                <option v-for="v in customerNameOptions" :key="`cn-${v}`" :value="v">{{ v }}</option>
-            </select>
+            <div v-if="hasFilterField('customerName')" ref="customerFilterRoot" class="crm-filter-item roster-filter-item roster-filter-text relative">
+                <button type="button" class="crm-filter-control roster-filter-control roster-filter-text roster-customer-filter-btn w-full truncate" @click.stop="customerFilterOpen = !customerFilterOpen">{{ customerFilterSummary }}</button>
+                <div v-show="customerFilterOpen" class="roster-customer-filter-panel absolute left-0 top-full z-50 mt-1 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg" @click.stop>
+                    <template v-if="customerFilterOptions.length">
+                        <label class="flex cursor-pointer items-center gap-2 border-b border-gray-100 bg-gray-50 px-2 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-100">
+                            <input v-model="customerFilterSelectAll" type="checkbox" class="rounded border-gray-300" />
+                            <span>全选</span>
+                        </label>
+                        <label v-for="opt in customerFilterOptions" :key="opt.id" class="flex cursor-pointer items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50">
+                            <input v-model="filters.selectedClientIds" type="checkbox" class="rounded border-gray-300" :value="opt.id" />
+                            <span class="min-w-0 truncate">{{ opt.name }}</span>
+                        </label>
+                    </template>
+                    <div v-else class="px-2 py-2 text-sm text-gray-400">暂无客户</div>
+                </div>
+            </div>
             <select v-if="hasFilterField('workLocation')" v-model="filters.workLocation" class="crm-filter-item roster-filter-item crm-filter-control roster-filter-control">
                 <option value="">工作地（全部）</option>
                 <option v-for="v in workLocationOptions" :key="`wl-${v}`" :value="v">{{ v }}</option>

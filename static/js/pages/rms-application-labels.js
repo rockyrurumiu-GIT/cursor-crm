@@ -12,7 +12,6 @@
   };
 
   var APPLICATION_PROGRESS_LABELS = {
-    pending_internal_screen: "待内筛",
     internal_screen_failed: "内筛fail",
     pending_client_screen: "待客筛",
     client_screen_failed: "客筛fail",
@@ -45,7 +44,6 @@
   };
 
   var ALLOWED_PROGRESS_TRANSITIONS = {
-    pending_internal_screen: ["internal_screen_failed", "pending_client_screen"],
     pending_client_screen: ["client_screen_failed", "scheduling_interview", "client_screen_duplicate"],
     scheduling_interview: ["interview_scheduling_failed", "pending_first_interview"],
     pending_first_interview: ["first_interview_failed", "first_interview_passed"],
@@ -57,6 +55,7 @@
   };
 
   var LEGACY_STATUS_NORMALIZE = {
+    pending_internal_screen: "recommended",
     screening: "pending_client_screen",
     interview: "pending_first_interview",
     offer: "pending_offer",
@@ -64,7 +63,6 @@
 
   /** Keep in sync with schemas/rms.py APPLICATION_PROGRESS_STATUSES */
   var APPLICATION_PROGRESS_STATUSES = [
-    "pending_internal_screen",
     "internal_screen_failed",
     "pending_client_screen",
     "client_screen_failed",
@@ -154,7 +152,6 @@
   function filterProgressStatus(status) {
     var raw = status == null ? "" : String(status).trim();
     if (!raw) return "";
-    if (raw === "recommended") return "pending_internal_screen";
     return normalizeProgressStatus(raw);
   }
 
@@ -293,8 +290,8 @@
   function timelineLabelForHistoryItem(h) {
     if (!h) return "—";
     var reason = String(h.reason || "").trim();
-    if (reason === "delivery_review_passed") return "内审通过";
-    if (reason === "delivery_review_failed") return "内审失败";
+    if (reason === "delivery_review_passed") return "内筛通过";
+    if (reason === "delivery_review_failed") return "内筛失败";
     if (reason === "status_correction") {
       return "状态修正 · " + progressLabel(h.to_status);
     }
@@ -574,9 +571,9 @@
   }
 
   var DELIVERY_REVIEW_STATUS_LABELS = {
-    pending: "待内审",
-    passed: "内审通过",
-    failed: "内审失败",
+    pending: "待内筛",
+    passed: "内筛通过",
+    failed: "内筛失败",
   };
 
   function createAppDisplayHelpers(options) {
@@ -656,11 +653,15 @@
     };
   }
 
+  /** Progress filter options — includes recommended (待内筛) before pipeline stages. */
+  var PIPELINE_FILTER_STATUSES = ["recommended"].concat(APPLICATION_PROGRESS_STATUSES);
+
   global.RmsApplicationLabels = {
     RECEIVE_STATUS_LABELS: RECEIVE_STATUS_LABELS,
     DELIVERY_REVIEW_STATUS_LABELS: DELIVERY_REVIEW_STATUS_LABELS,
     APPLICATION_PROGRESS_LABELS: APPLICATION_PROGRESS_LABELS,
     APPLICATION_PROGRESS_STATUSES: APPLICATION_PROGRESS_STATUSES,
+    PIPELINE_FILTER_STATUSES: PIPELINE_FILTER_STATUSES,
     ALLOWED_PROGRESS_TRANSITIONS: ALLOWED_PROGRESS_TRANSITIONS,
     progressLabel: progressLabel,
     receiveLabel: receiveLabel,
