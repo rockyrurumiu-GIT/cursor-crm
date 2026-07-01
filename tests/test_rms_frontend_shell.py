@@ -826,7 +826,12 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert 'data-rms-action="progress-transition"' not in apps_region
     assert "transitionProgress" not in apps_region
     assert 'data-rms-action="progress-confirm-open"' in pipe_region
+    assert 'data-rms-action="roster-convert-open"' in pipe_region
+    assert "openRosterConvertModal(a, { fromOnboarding: true })" in pipe_region
+    assert "canConvertToRoster" in pipe_region
+    assert "rms-progress-status--hired" in html
     assert 'data-rms-action="correction-picker-open"' in pipe_region
+    assert "isApplicationProgressLocked" in pipe_region
     assert "openCorrectionPickerModal" in pipe_region
     assert 'aria-label="修改"' in pipe_region or "openCorrectionPickerModal" in pipe_region
     assert 'aria-label="历史"' in pipe_region or "openStatusHistoryModal" in pipe_region
@@ -840,6 +845,8 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     applications_js = (REPO_ROOT / "static/js/pages/rms-applications.js").read_text(encoding="utf-8")
     assert "openProgressConfirmModal" in pipeline_js
     assert "progressOptionsForCorrection" in pipeline_js
+    assert "isApplicationProgressLocked" in pipeline_js
+    assert "recommenderFilterOptions" in pipeline_js
     assert "validate: function" in pipeline_js
     assert "minLengthMessage" in pipeline_js
     base_html = (REPO_ROOT / "templates/base.html").read_text(encoding="utf-8")
@@ -874,13 +881,13 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "function closeStatusHistoryModal" in applications_js
     assert "removeApplication" in apps_region
     assert "确认删除推荐记录" in apps_region
-    assert "转入花名册" in apps_region
-    assert 'data-rms-action="roster-convert-open"' in apps_region
-    assert "openRosterConvertModal" in apps_region
+    roster_js = (REPO_ROOT / "static/js/pages/rms-roster-conversion.js").read_text(encoding="utf-8")
+    assert "openRosterConvertModal" in roster_js
+    assert "rosterConvertModalTitle" in roster_js
+    assert "fromOnboarding" in roster_js
     assert "data-rms-roster-required" in html
     assert "报价(含税)" in html
     assert "报价系数" in html
-    roster_js = (REPO_ROOT / "static/js/pages/rms-roster-conversion.js").read_text(encoding="utf-8")
     assert "submitRosterConvert" in roster_js
     assert "openRosterGmCalculatorFromRms" in roster_js
     assert "openRosterGmCalculatorFromRms" in html
@@ -899,15 +906,9 @@ def test_rms_page_shell_markers(client_rbac, admin_auth):
     assert "tools.gm_calc.read" in roster_detail_js
     assert 'v-if="!formReadonly && canUseGmCalc"' in roster_detail_html
     assert 'aria-label="简历"' in apps_region or ">简历</a>" in apps_region
-    assert "hide_roster_converted" in applications_js
-    assert "applicationsFilter" in applications_js
     assert "applicationStatusFilterSummary" in apps_region
     assert "applicationStatusFilterSummary" in applications_js
-    assert "待转花名册" in apps_region
-    assert "已转花名册" in html
     assert "filteredApplications" in applications_js
-    assert "隐藏已转入花名册" in apps_region
-    assert "显示已转入花名册" in apps_region
 
     assert "Plan 34" not in html
     assert "占位" not in html

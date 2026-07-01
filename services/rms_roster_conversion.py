@@ -11,7 +11,7 @@ from schemas.delivery_roster import (
     ROSTER_CREATE_REQUIRED_FIELDS,
     ROSTER_REQUIRED_LABELS,
 )
-from schemas.rms import utc_date_str
+from schemas.rms import utc_date_str, validate_hired_at
 from services import rms_applications as app_svc
 from services import rms_scope as rms_ds
 from services.delivery_roster import (
@@ -32,6 +32,8 @@ from services.quote_finance import (
 )
 
 ScopeAction = Literal["read", "write"]
+
+_CONVERTIBLE_STATUSES = frozenset({"hired", "onboarding"})
 
 OFFER_FINANCIAL_ROSTER_KEYS = (
     "quote_unit",
@@ -143,8 +145,11 @@ def _load_convertible_application(
     if not row:
         raise HTTPException(status_code=404, detail="推荐记录不存在")
 
-    if (row.status or "").strip() != "hired":
-        raise HTTPException(status_code=400, detail="仅已入职推荐记录可转入花名册")
+    if (row.status or "").strip() not in _CONVERTIBLE_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="仅已入职或在途推荐记录可转入花名册",
+        )
 
     if getattr(row, "converted_to_roster_entry_id", None):
         raise HTTPException(status_code=409, detail="该推荐记录已转入花名册")
@@ -281,6 +286,7 @@ def convert_application_to_roster(
     Client: Type[Any],
     RosterEntry: Type[Any],
     RmsOfferRecord: Type[Any],
+    RmsApplicationStatusHistory: Type[Any],
     AuditLog: Type[Any],
 ) -> Dict[str, Any]:
     app, candidate, _job, _client = _load_convertible_application(
@@ -293,6 +299,7 @@ def convert_application_to_roster(
         RmsJob=RmsJob,
         Client=Client,
     )
+    status_before = (app.status or "").strip()
     offer = _approved_offer_for_application(db, application_id, RmsOfferRecord)
     if not offer:
         raise HTTPException(status_code=400, detail="未找到已通过的 Offer 审批，无法转入花名册")
@@ -305,7 +312,30 @@ def convert_application_to_roster(
         if source:
             data["zntx_onboarding_channel"] = source
 
+    hired_at_value = ""
+    if status_before == "onboarding":
+        hired_at_value = validate_hired_at(str(data.get("entry_date") or ""))
+
     try:
+        now = utc_date_str()
+        if status_before == "onboarding":
+            app.status = "hired"
+            app.current_stage = "hired"
+            app.hired_at = hired_at_value
+            app.last_activity_at = now
+            app.updated_at = now
+            db.add(
+                RmsApplicationStatusHistory(
+                    application_id=app.id,
+                    from_status="onboarding",
+                    to_status="hired",
+                    reason="transition",
+                    note="",
+                    changed_by=ctx.user_id,
+                    changed_at=now,
+                )
+            )
+
         entry = add_roster_entry(db, int(app.client_id), data, RosterEntry)
         db.flush()
         app.converted_to_roster_entry_id = entry.id

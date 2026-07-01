@@ -42,7 +42,6 @@
       statuses: [],
       date_from: "",
       date_to: "",
-      hide_roster_converted: false,
     });
     var recommenderFilterOptions = computed(function () {
       var users = jobs && jobs.userOptions ? jobs.userOptions.value : [];
@@ -107,11 +106,6 @@
 
     var filteredApplications = computed(function () {
       var rows = applicationsState.items.slice();
-      if (applicationsFilter.hide_roster_converted) {
-        rows = rows.filter(function (a) {
-          return !a.converted_to_roster_entry_id;
-        });
-      }
       if (applicationsFilter.client_id !== "" && applicationsFilter.client_id != null) {
         var wantClient = Number(applicationsFilter.client_id);
         rows = rows.filter(function (a) {
@@ -183,7 +177,6 @@
       applicationStatusDropdownOpen.value = false;
       applicationsFilter.date_from = "";
       applicationsFilter.date_to = "";
-      applicationsFilter.hide_roster_converted = false;
     }
 
     function toggleApplicationStatusDropdown() {

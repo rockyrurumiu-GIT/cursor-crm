@@ -879,6 +879,8 @@ def transition_application_status(
     RmsOfferRecord: Optional[Type[Any]] = None,
 ) -> Dict[str, Any]:
     row = _get_writable_application(db, ctx, application_id, RmsApplication, Client)
+    if getattr(row, "converted_to_roster_entry_id", None):
+        raise HTTPException(status_code=400, detail="已转入花名册，不可修改招聘进展")
     raw_from = (row.status or "").strip() or "recommended"
     if raw_from == "recommended":
         raise HTTPException(

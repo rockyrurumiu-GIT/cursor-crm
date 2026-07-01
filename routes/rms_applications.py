@@ -370,6 +370,7 @@ def register_rms_applications_routes(
             Client=Client,
             RosterEntry=RosterEntry,
             RmsOfferRecord=RmsOfferRecord,
+            RmsApplicationStatusHistory=RmsApplicationStatusHistory,
             AuditLog=AuditLog,
         )
 

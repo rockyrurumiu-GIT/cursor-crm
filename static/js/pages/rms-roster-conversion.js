@@ -220,13 +220,19 @@
       window.open("/tools/calc?" + parts.join("&"), "_blank");
     }
 
-    async function openRosterConvertModal(appRow) {
+    async function openRosterConvertModal(appRow, options) {
+      var opts = options && typeof options === "object" ? options : {};
       rosterConvertError.value = "";
       rosterConvertSaving.value = false;
       rosterOfferFinancialLocked.value = false;
       rosterQuoteTaxDisplay.value = "";
       resetRosterConvertForm();
-      rosterConvertModal.value = { applicationId: appRow.id, clientId: appRow.client_id, quoteTaxUnit: "" };
+      rosterConvertModal.value = {
+        applicationId: appRow.id,
+        clientId: appRow.client_id,
+        quoteTaxUnit: "",
+        fromOnboarding: !!opts.fromOnboarding,
+      };
       var r = await rmsRequest("GET", "/api/rms/applications/" + appRow.id + "/roster-draft");
       if (!r.ok) {
         rosterConvertError.value = r.message || "加载花名册草稿失败";
@@ -294,10 +300,18 @@
         rosterConvertError.value = r.message || "转入花名册失败";
         return;
       }
+      var successMsg = rosterConvertModal.value && rosterConvertModal.value.fromOnboarding
+        ? "已成功入职并转入花名册"
+        : "已成功转入花名册";
       closeRosterConvertModal();
-      toast("已成功转入花名册", false);
+      toast(successMsg, false);
       await loadApplications();
     }
+
+    var rosterConvertModalTitle = computed(function () {
+      if (!rosterConvertModal.value) return "转入花名册";
+      return rosterConvertModal.value.fromOnboarding ? "已入职" : "转入花名册";
+    });
 
     return {
       rosterConvertModal: rosterConvertModal,
@@ -317,6 +331,7 @@
       closeRosterConvertModal: closeRosterConvertModal,
       openConvertedRosterEntry: openConvertedRosterEntry,
       submitRosterConvert: submitRosterConvert,
+      rosterConvertModalTitle: rosterConvertModalTitle,
     };
   }
 

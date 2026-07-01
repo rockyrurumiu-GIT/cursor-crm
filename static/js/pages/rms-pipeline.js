@@ -102,6 +102,12 @@
     });
 
     var Core = global.CrmRmsCore || {};
+    var recommenderFilterOptions = computed(function () {
+      var users = jobs && jobs.userOptions ? jobs.userOptions.value : [];
+      return Core.buildRecommenderFilterOptions
+        ? Core.buildRecommenderFilterOptions(applicationsState.items, users, function (a) { return a.recommended_by; })
+        : [];
+    });
     var pipelinePagination = Core.createListPagination
       ? Core.createListPagination({
           ref: ref,
@@ -263,6 +269,10 @@
 
     async function openProgressConfirmModal(app, targetStatus, mode, dialogError) {
       if (!app || app.id == null || !targetStatus) return;
+      if (Labels.isApplicationProgressLocked && Labels.isApplicationProgressLocked(app)) {
+        toast("已转入花名册，不可修改招聘进展", true);
+        return;
+      }
       if (typeof global.crmConfirmActionDialog !== "function") {
         toast("确认对话框不可用", true);
         return;
@@ -351,6 +361,10 @@
 
     async function openCorrectionPickerModal(app) {
       if (!app || app.id == null) return;
+      if (Labels.isApplicationProgressLocked && Labels.isApplicationProgressLocked(app)) {
+        toast("已转入花名册，不可修改招聘进展", true);
+        return;
+      }
       if (typeof global.crmConfirmActionDialog !== "function") {
         toast("确认对话框不可用", true);
         return;
@@ -398,6 +412,7 @@
       pipelineScrollWrap: pipelineScrollWrap,
       scrollPipelineToTop: scrollPipelineToTop,
       pipelineFilter: pipelineFilter,
+      recommenderFilterOptions: recommenderFilterOptions,
       pipelineStatusDropdownOpen: pipelineStatusDropdownOpen,
       pipelineStatusDraft: pipelineStatusDraft,
       pipelineStatusFilterSummary: pipelineStatusFilterSummary,
@@ -415,6 +430,9 @@
       pipelinePageSize: pipelinePagination.pageSize,
       progressOptions: progressOptions,
       progressOptionsForCorrection: progressOptionsForCorrection,
+      isApplicationProgressLocked: function (app) {
+        return Labels.isApplicationProgressLocked ? Labels.isApplicationProgressLocked(app) : false;
+      },
       openCorrectionPickerModal: openCorrectionPickerModal,
       openProgressConfirmModal: openProgressConfirmModal,
       submitProgressConfirm: submitProgressConfirm,

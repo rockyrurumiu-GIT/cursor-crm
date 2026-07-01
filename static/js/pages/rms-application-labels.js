@@ -196,6 +196,11 @@
     return idx;
   }
 
+  function isApplicationProgressLocked(app) {
+    if (!app) return false;
+    return app.converted_to_roster_entry_id != null && app.converted_to_roster_entry_id !== "";
+  }
+
   function progressOptionsForCorrection(currentStatus) {
     var cur = normalizeProgressStatus(currentStatus);
     var curIdx = progressOrderIndex(cur);
@@ -690,6 +695,7 @@
     candidateById: candidateById,
     userLabelById: userLabelById,
     createAppDisplayHelpers: createAppDisplayHelpers,
+    isApplicationProgressLocked: isApplicationProgressLocked,
     isPipelineEligible: isPipelineEligible,
     isPipelineListRow: isPipelineListRow,
     isApplicationTerminal: isApplicationTerminal,

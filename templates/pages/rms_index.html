@@ -821,6 +821,16 @@
         color: #15803d;
         border: 1px solid #bbf7d0;
     }
+    .rms-progress-status--hired {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.1rem 0.45rem;
+        border-radius: 9999px;
+        background: #dcfce7;
+        color: #15803d;
+        border: 1px solid #bbf7d0;
+        line-height: 1.3;
+    }
     .rms-apps-filter-checkbox {
         display: inline-flex;
         align-items: center;
@@ -1580,12 +1590,6 @@
                 <p class="ml-auto min-w-0 self-end leading-none pb-[7px] text-[0.825rem] font-semibold tracking-[0.02em] text-[#6B7280]">
                     合计（符合筛选条件）：<span>{{ filteredApplications.length }}</span> 条
                 </p>
-                <span class="group relative inline-flex">
-                    <button type="button" @click="applicationsFilter.hide_roster_converted = !applicationsFilter.hide_roster_converted" :class="applicationsFilter.hide_roster_converted ? 'border-amber-300 bg-amber-100 text-amber-800' : 'border-amber-300 bg-white text-amber-700 hover:bg-amber-50'" class="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border transition-colors" :aria-label="applicationsFilter.hide_roster_converted ? '显示已转入花名册' : '隐藏已转入花名册'">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="h-[18px] w-[18px]" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M3 12h12M3 18h6"/></svg>
-                    </button>
-                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">{{ applicationsFilter.hide_roster_converted ? '显示已转入花名册' : '隐藏已转入花名册' }}</span>
-                </span>
             </div>
             <div v-if="applicationFilterPanelExpanded" class="mt-2.5 flex flex-wrap items-center gap-2 border-t border-[#EEF0F2] pt-2.5">
                 <select v-model="applicationsFilter.client_id" class="crm-filter-item crm-filter-control w-[10rem]">
@@ -1663,12 +1667,10 @@
                         <td class="crm-td">{{ deliveryReviewLabel(a.delivery_review_status) }}</td>
                         <td class="crm-td rms-offer-progress-cell">
                             <span class="inline-flex items-center flex-wrap gap-x-1 gap-y-0.5">
-                                <span class="rms-offer-progress-label">
+                                <span :class="['rms-offer-progress-label', a.status === 'hired' ? 'rms-progress-status--hired' : '']">
                                     <span>{{ progressLabel(a.status) }}</span>
                                     <span v-if="a.status === 'offer_approval_pending'" class="rms-offer-approval-hint-wrap" :data-hint="offerApprovalPendingHint(a)" tabindex="0" :aria-label="offerApprovalPendingHint(a)"><span class="rms-offer-approval-hint">?</span></span>
                                 </span>
-                                <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
-                                <span v-else-if="a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
                             </span>
                         </td>
                         <td class="crm-td">{{ protectionLabel(a.status) }}</td>
@@ -1683,10 +1685,6 @@
                                 <span class="group relative inline-flex">
                                     <button type="button" class="crm-op-btn-edit" @click="openStatusHistoryModal(a)" aria-label="状态历史"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button>
                                     <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">状态历史</span>
-                                </span>
-                                <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id && canConvertToRoster" class="group relative inline-flex">
-                                    <button type="button" class="crm-op-btn-edit" data-rms-action="roster-convert-open" @click="openRosterConvertModal(a)" aria-label="转入花名册"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg></button>
-                                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">转入花名册</span>
                                 </span>
                                 <span v-if="canDeleteApplications" class="group relative inline-flex">
                                     <button type="button" class="crm-op-btn-delete" data-crm-delete-title="确认删除推荐记录" :data-crm-delete-target="'将删除推荐：' + (appCandidateName(a) || ('#' + a.id)) + ' · ' + (appJobTitle(a) || '—')" data-crm-delete-hint="将同时删除状态历史、面试、Offer 等关联数据；候选人本身不会被删除。" @click="removeApplication(a)" aria-label="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg></button>
@@ -1905,14 +1903,12 @@
                         <td class="crm-td"><div class="crm-cell-clip">{{ appDeliveryLabel(a) }}</div></td>
                         <td class="crm-td rms-pipeline-progress">
                             <span class="inline-flex items-center flex-nowrap gap-x-1">
-                                <span class="rms-offer-progress-label">
+                                <span :class="['rms-offer-progress-label', a.status === 'hired' ? 'rms-progress-status--hired' : '']">
                                     <span>{{ progressLabel(a.status) }}</span>
                                     <span v-if="pipelineInterviewScheduleLabel(a)" class="rms-pipeline-onboard-date">{{ pipelineInterviewScheduleLabel(a) }}</span>
                                     <span v-if="pipelineOnboardDateLabel(a)" class="rms-pipeline-onboard-date">{{ pipelineOnboardDateLabel(a) }}</span>
                                     <span v-if="a.status === 'offer_approval_pending'" class="rms-offer-approval-hint-wrap" :data-hint="offerApprovalPendingHint(a)" tabindex="0" :aria-label="offerApprovalPendingHint(a)"><span class="rms-offer-approval-hint">?</span></span>
                                 </span>
-                                <span v-if="a.status === 'hired' && !a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
-                                <span v-else-if="a.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
                             </span>
                         </td>
                         <td class="crm-td">{{ formatRmsDate(a.recommended_at) }}</td>
@@ -1925,7 +1921,7 @@
                                 </template>
                                 <template v-else-if="a.status === 'onboarding'">
                                     <button type="button" class="rms-progress-btn rms-progress-btn--red" data-rms-action="transit-lost-open" @click="openTransitLostModal(a)">在途流失</button>
-                                    <button type="button" :class="progressActionBtnClass('hired')" data-rms-action="progress-confirm-open" @click="openProgressConfirmModal(a, 'hired', 'transition')">已入职</button>
+                                    <button v-if="canConvertToRoster" type="button" :class="progressActionBtnClass('hired')" data-rms-action="roster-convert-open" @click="openRosterConvertModal(a, { fromOnboarding: true })">已入职</button>
                                 </template>
                                 <template v-else>
                                     <template v-for="next in progressTransitionsFor(a.status)" :key="'pt'+a.id+'-'+next">
@@ -1938,7 +1934,7 @@
                         </td>
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div v-if="canWriteApplications" class="crm-op-actions">
-                                <span class="group relative inline-flex">
+                                <span v-if="!isApplicationProgressLocked(a)" class="group relative inline-flex">
                                     <button type="button" class="crm-op-btn-edit" data-rms-action="correction-picker-open" @click="openCorrectionPickerModal(a)" aria-label="修改"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
                                     <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">修改</span>
                                 </span>
@@ -2204,11 +2200,7 @@
                         <span class="rms-app-progress-summary-label">{{ item.label }}</span>
                         <span class="rms-app-progress-summary-value">
                             <template v-if="item.label === '当前进展'">
-                                <span class="inline-flex items-center flex-wrap gap-x-1 gap-y-0.5">
-                                    <span>{{ item.value }}</span>
-                                    <span v-if="applicationDetailModal.status === 'hired' && !applicationDetailModal.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--pending">待转花名册</span>
-                                    <span v-else-if="applicationDetailModal.converted_to_roster_entry_id" class="rms-roster-tag rms-roster-tag--done">已转花名册</span>
-                                </span>
+                                <span :class="applicationDetailModal.status === 'hired' ? 'rms-progress-status--hired' : ''">{{ item.value }}</span>
                             </template>
                             <template v-else>{{ item.value }}</template>
                         </span>
@@ -2558,7 +2550,7 @@
     <div v-if="rosterConvertModal" class="crm-esc-modal crm-form-modal-overlay z-[200]">
         <div class="crm-form-modal-panel max-w-5xl rounded-xl shadow-2xl" @click.stop>
             <div class="px-5 py-4 border-b border-[#d0d7de] flex justify-between items-center shrink-0">
-                <h3 class="font-bold text-lg">转入花名册</h3>
+                <h3 class="font-bold text-lg">{{ rosterConvertModalTitle }}</h3>
                 <button type="button" class="text-2xl text-[#57606a] hover:text-[#1f2328] leading-none" @click="closeRosterConvertModal">&times;</button>
             </div>
             <div class="flex-1 min-h-0 overflow-y-auto p-5">

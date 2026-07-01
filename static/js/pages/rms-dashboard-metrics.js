@@ -107,7 +107,6 @@
         + (row.pending_final_interview || 0)
         + (row.pending_offer_count || 0)
         + (row.onboarding_count || 0)
-        + (row.pending_roster_conversion_count || 0)
       );
     }
 
@@ -161,14 +160,9 @@
 
     var pendingBacklogRows = computed(function () {
       var rows = (data.value && data.value.pipeline_overview) || [];
-      var out = rows.map(function (p) {
+      return rows.map(function (p) {
         return { label: p.label || p.status, count: p.count || 0 };
       });
-      var total = clientJobStageTotal.value;
-      if (total && total.pending_roster_conversion_count) {
-        out.push({ label: "待转花名册", count: total.pending_roster_conversion_count });
-      }
-      return out;
     });
 
     var jobPendingBacklogRows = computed(function () {

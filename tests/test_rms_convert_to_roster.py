@@ -100,6 +100,37 @@ def _seed_approved_offer(
         )
 
 
+def _onboarding_application(client, rms_engine, admin_auth, uniq: str):
+    login, job_id, cand_id, client_id = _trial_job_and_candidate(
+        client, rms_engine, admin_auth, uniq
+    )
+    created = client.post(
+        "/api/rms/applications",
+        cookies=login.cookies,
+        json={"job_id": job_id, "candidate_id": cand_id},
+    )
+    assert created.status_code == 200, created.text
+    app_id = created.json()["id"]
+    review = client.post(
+        f"/api/rms/applications/{app_id}/delivery-review",
+        cookies=login.cookies,
+        json={"result": "passed"},
+    )
+    assert review.status_code == 200, review.text
+    _advance_to_onboarding(client, login, app_id, engine=rms_engine)
+    _seed_approved_offer(
+        rms_engine,
+        app_id=app_id,
+        client_id=client_id,
+        candidate_id=cand_id,
+        job_id=job_id,
+    )
+    cand = client.get(f"/api/rms/candidates/{cand_id}", cookies=login.cookies).json()
+    client_row = client.get(f"/api/clients/{client_id}", cookies=login.cookies).json()
+    job = client.get(f"/api/rms/jobs/{job_id}", cookies=login.cookies).json()
+    return login, app_id, client_id, cand, client_row, job
+
+
 def _hired_application(client, rms_engine, admin_auth, uniq: str):
     login, job_id, cand_id, client_id = _trial_job_and_candidate(
         client, rms_engine, admin_auth, uniq
@@ -160,6 +191,62 @@ def _full_roster_payload(cand, client_row, job, **overrides):
     }
     base.update(overrides)
     return base
+
+
+def test_onboarding_roster_draft_prefill(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id, client_id, cand, client_row, job = _onboarding_application(
+        client_rbac, rms_engine, admin_auth, uniq
+    )
+    r = client_rbac.get(
+        f"/api/rms/applications/{app_id}/roster-draft",
+        cookies=login.cookies,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["application_id"] == app_id
+    assert body["client_id"] == client_id
+    payload = body["roster_payload"]
+    assert payload["full_name"] == cand["name"]
+    assert payload["entry_date"] == "2026-06-15"
+
+
+def test_onboarding_convert_sets_hired_and_roster(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id, client_id, cand, client_row, job = _onboarding_application(
+        client_rbac, rms_engine, admin_auth, f"{uniq}onb"
+    )
+    payload = _full_roster_payload(
+        cand, client_row, job, contact_info=_unique_phone(f"{uniq}onb")
+    )
+    r = client_rbac.post(
+        f"/api/rms/applications/{app_id}/convert-to-roster",
+        cookies=login.cookies,
+        json=payload,
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    app = body["application"]
+    assert app["status"] == "hired"
+    assert app["current_stage"] == "hired"
+    assert app["hired_at"][:10] == payload["entry_date"]
+    assert app["converted_to_roster_entry_id"] == body["roster_entry"]["id"]
+
+    with rms_engine.connect() as conn:
+        hist = conn.execute(
+            text(
+                """
+                SELECT from_status, to_status, reason
+                FROM rms_application_status_history
+                WHERE application_id = :id
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ),
+            {"id": app_id},
+        ).fetchone()
+    assert hist is not None
+    assert hist[0] == "onboarding"
+    assert hist[1] == "hired"
+    assert hist[2] == "transition"
 
 
 def test_non_hired_roster_draft_returns_400(client_rbac, admin_auth, rms_engine, uniq):
@@ -387,6 +474,37 @@ def test_convert_already_converted_409(client_rbac, admin_auth, rms_engine, uniq
         cookies=login.cookies,
     )
     assert draft.status_code == 409
+
+
+def test_converted_application_status_change_rejected(client_rbac, admin_auth, rms_engine, uniq):
+    login, app_id, _client_id, cand, client_row, job = _hired_application(
+        client_rbac, rms_engine, admin_auth, f"{uniq}lock"
+    )
+    payload = _full_roster_payload(
+        cand, client_row, job, contact_info=_unique_phone(f"{uniq}lock")
+    )
+    converted = client_rbac.post(
+        f"/api/rms/applications/{app_id}/convert-to-roster",
+        cookies=login.cookies,
+        json=payload,
+    )
+    assert converted.status_code == 200, converted.text
+
+    correction = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "onboarding", "mode": "correction", "note": "试图回退"},
+    )
+    assert correction.status_code == 400
+    assert "花名册" in correction.json()["detail"]
+
+    transition = client_rbac.post(
+        f"/api/rms/applications/{app_id}/status",
+        cookies=login.cookies,
+        json={"to_status": "onboarding", "mode": "transition"},
+    )
+    assert transition.status_code == 400
+    assert "花名册" in transition.json()["detail"]
 
 
 def test_migration_011_columns(crm_main):
