@@ -2996,6 +2996,30 @@ def test_internal_screen_pass_rate_excludes_pending_delivery_review(
     assert internal["pass_rate"] == "66.7%"
 
 
+def test_client_screen_pass_rate_excludes_pending_client_screen():
+    """客筛通过率分母 = 内筛通过 - 待客户筛选。"""
+    from services.rms_dashboard import _attach_job_stage_rates, _client_screen_pass_rate_parts
+
+    num, denom, rate = _client_screen_pass_rate_parts({
+        "client_screen_passed": 17,
+        "internal_screen_passed": 34,
+        "pending_client_screen": 14,
+    })
+    assert num == 17
+    assert denom == 20
+    assert rate == "85%"
+
+    out = _attach_job_stage_rates({
+        "client_screen_passed": 1,
+        "internal_screen_passed": 3,
+        "pending_client_screen": 1,
+        "pushed_resume_count": 3,
+        "pending_delivery_review_count": 0,
+    })
+    assert out["client_screen_passed_denom"] == 2
+    assert out["client_screen_passed_rate"] == "50%"
+
+
 def test_rms_dashboard_recruiter_recommended_count(client_rbac, admin_auth, rms_engine, uniq):
     login_del, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"rec_{uniq}")
     cand = client_rbac.post(

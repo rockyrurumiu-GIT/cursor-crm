@@ -130,12 +130,18 @@
 .num-wrap { display: flex; flex-direction: column; justify-content: center; gap: 0.35rem; width: 100%; }
 .num-value { font-size: 2rem; line-height: 1.1; font-weight: 600; color: #1f2328; }
 .num-sub { font-size: 0.78rem; color: #98a2b3; }
-.rms-kpi-chart-area { display: flex; flex-direction: column; width: 100%; min-height: 0; flex: 1; gap: 0.3rem; }
-.rms-kpi-chart-head { flex-shrink: 0; line-height: 1.15; margin: 0; padding: 0; text-align: left; align-self: flex-start; }
+.rms-kpi-chart-area { display: flex; flex-direction: column; width: 100%; min-height: 0; flex: 1; gap: 0.15rem; }
+.rms-kpi-chart-head {
+  flex-shrink: 0; margin: 0; padding: 0; line-height: 1.1;
+  text-align: left; align-self: flex-start;
+}
 .rms-kpi-chart-total { display: block; font-size: 1.35rem; font-weight: 700; color: #1f2328; letter-spacing: -0.02em; }
-.dash-card:has(.rms-kpi-chart-area) .card-head { margin-bottom: 0.2rem; }
+.dash-card:has(.rms-kpi-chart-area) .card-head { margin-bottom: 0.15rem; }
 .rms-kpi-chart-total-note { display: block; margin-top: 0.12rem; font-size: 0.72rem; color: #98a2b3; }
 .rms-kpi-chart-wrap { flex: 1; min-height: 100px; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.rms-kpi-chart-wrap .bms-featured-bar-card { min-height: 0; padding: 0 6px 0; border-radius: 0; }
+.rms-kpi-chart-wrap .bms-featured-bar-chart { min-height: 100px; }
+.rms-kpi-chart-wrap .bms-featured-bar-svg { min-height: 100px; }
 .rms-kpi-chart-wrap canvas { min-height: 100px !important; }
 .rms-kpi-chart-wrap .bms-featured-line-mount,
 .rms-kpi-chart-wrap .bms-featured-bar-mount,
@@ -419,17 +425,16 @@
 .bms-featured-bar-flow-pill { fill: #050505; }
 .bms-featured-bar-flow-pill-text { fill: #fff; font-size: 14px; font-weight: 720; font-family: system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
 .bms-featured-bar-average-label {
-  position: absolute; left: 0; z-index: 3; pointer-events: none;
+  position: absolute; left: auto; right: 0.35rem; z-index: 3; pointer-events: none;
   transform: translateY(-50%);
   display: inline-flex; align-items: center;
-  padding: 0.28rem 0.55rem 0.28rem 0.46rem;
-  background: #1f2328; color: #fff;
-  font-size: 1.25rem; font-weight: 600; line-height: 1.2;
-  border-radius: 6px 2px 2px 6px; white-space: nowrap;
+  padding: 0.16rem 0.42rem;
+  background: #111827; color: #fff;
+  font-size: 0.72rem; font-weight: 600; line-height: 1.15;
+  border-radius: 5px; white-space: nowrap;
 }
 .bms-featured-bar-average-label::after {
-  content: ""; position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
-  border: 5px solid transparent; border-left-color: #1f2328;
+  display: none;
 }
 .bms-featured-bar-average-label--compact {
   left: auto; right: 0.35rem; max-width: none;
@@ -972,10 +977,14 @@
 .rms-job-stage-table tbody tr:hover .rms-job-stage-sticky-time {
   background: #F9FAFB;
 }
+.rms-job-stage-table tbody tr.total-row {
+  background: #d4e4f7;
+}
 .rms-job-stage-table tbody tr.total-row .rms-job-stage-sticky-job,
 .rms-job-stage-table tbody tr.total-row .rms-job-stage-sticky-client,
 .rms-job-stage-table tbody tr.total-row .rms-job-stage-sticky-time {
   background: #d4e4f7;
+  box-shadow: none;
 }
 #main-shell.bms-sidebar-dark #rms-dashboard-app .rms-job-stage-table thead .rms-job-stage-sticky-job,
 #main-shell.bms-sidebar-dark #rms-dashboard-app .rms-job-stage-table thead .rms-job-stage-sticky-client,
@@ -1011,7 +1020,7 @@
 .rms-job-stage-table tbody tr.total-row td.col-job-title { color: #1e3a5f; }
 .rms-job-stage-table tbody tr:last-child td { border-bottom: none; }
 .rms-job-stage-table tbody tr.total-row td {
-  background: #d4e4f7;
+  background: transparent;
   color: #1e3a5f;
   font-weight: 700;
   border-top: 2px solid #1f5a94;
@@ -1020,12 +1029,13 @@
   padding-bottom: 9px;
 }
 .rms-job-stage-table .metric-with-rate { cursor: help; }
-.rms-job-stage-table .metric-loss-with-hint {
+.rms-job-stage-table td.metric-loss-with-hint {
   cursor: default;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
   white-space: nowrap;
+}
+.rms-job-stage-table td.metric-loss-with-hint > span:first-child {
+  display: inline-block;
+  vertical-align: middle;
 }
 .rms-job-stage-table .metric-loss-with-hint .rms-job-stage-hint-wrap {
   display: inline-flex;
@@ -1714,7 +1724,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'internal_screen_passed', 'internal_screen_passed_denom', '内筛通过')">{{ jobStageMetricText(row, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(row, 'duplicate_count', 'duplicate_count_rate') }}</td>
                                         <td class="col-compact">{{ row.pending_client_screen }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(row, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(row, 'client_screen_passed', 'client_screen_passed_denom', '客筛通过')">{{ jobStageMetricText(row, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
                                         <td>{{ row.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate metric-loss-with-hint">
                                             <span>{{ jobStageMetricText(row, 'interview_abandoned', 'interview_abandoned_rate') }}</span>
@@ -1750,7 +1760,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'internal_screen_passed', 'internal_screen_passed_denom', '内筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'internal_screen_passed', 'internal_screen_passed_rate') }}</td>
                                         <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'duplicate_count', 'pushed_resume_count', '重复')">{{ jobStageMetricText(clientJobStageTotal, 'duplicate_count', 'duplicate_count_rate') }}</td>
                                         <td class="col-compact">{{ clientJobStageTotal.pending_client_screen }}</td>
-                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'client_screen_passed', 'internal_screen_passed', '客筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
+                                        <td class="metric-with-rate" :title="jobStageMetricTitle(clientJobStageTotal, 'client_screen_passed', 'client_screen_passed_denom', '客筛通过')">{{ jobStageMetricText(clientJobStageTotal, 'client_screen_passed', 'client_screen_passed_rate') }}</td>
                                         <td>{{ clientJobStageTotal.scheduling_interview_count }}</td>
                                         <td class="metric-with-rate metric-loss-with-hint">
                                             <span>{{ jobStageMetricText(clientJobStageTotal, 'interview_abandoned', 'interview_abandoned_rate') }}</span>

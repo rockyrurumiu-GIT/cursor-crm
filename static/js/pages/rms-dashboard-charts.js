@@ -187,10 +187,14 @@
         prefix: opts && opts.prefix != null ? String(opts.prefix) : "",
         suffix: opts && opts.suffix != null ? String(opts.suffix) : "",
         average_label: style.average_label || "Avg",
-        show_average_line: compact ? false : style.show_average_line !== false,
+        show_average_line: (compact || RMS_NO_AVG_FEATURED_BAR_BLOCKS[blockKey])
+          ? false
+          : style.show_average_line !== false,
         show_tooltip: style.show_tooltip !== false,
         show_summary_legend: style.show_summary_legend !== false,
-        highlight_item: style.highlight_item === "max" ? "max" : "latest",
+        highlight_item: RMS_KPI_FEATURED_BAR_MAX_HIGHLIGHT[blockKey]
+          ? "max"
+          : (style.highlight_item === "max" ? "max" : "latest"),
         show_data_labels: style.show_data_labels === true || style.show_values === true,
         label_font_boost: compact ? RMS_COMPACT_FEATURED_BAR_LABEL_BOOST : 0,
         label_axis_mode: (compact || blockKey === "kpi_resume_to_hire_rate") ? "client_suffix" : "auto",
@@ -385,9 +389,19 @@
 
     var KPI_RESUME_TO_HIRE_RATE_SCALE = { percentScaleMin: 0, percentScaleMax: 40 };
 
+    var RMS_NO_AVG_FEATURED_BAR_BLOCKS = {
+      chart_pending_backlog: true,
+      kpi_hc: true,
+      chart_client_hired_ranking: true,
+    };
     var RMS_COMPACT_FEATURED_BAR_BLOCKS = {
       kpi_hc: true,
       chart_client_hired_ranking: true,
+    };
+    var RMS_KPI_FEATURED_BAR_MAX_HIGHLIGHT = {
+      kpi_hc: true,
+      chart_client_hired_ranking: true,
+      kpi_resume_to_hire_rate: true,
     };
     var RMS_COMPACT_FEATURED_BAR_LABEL_BOOST = 5;
 
@@ -534,7 +548,9 @@
             suffix: suffix,
             comparison_label: style.comparison_label || "较上期",
             average_label: style.average_label || "",
-            show_average_line: style.show_average_line !== false,
+            show_average_line: RMS_NO_AVG_FEATURED_BAR_BLOCKS[opts.blockKey]
+              ? false
+              : style.show_average_line !== false,
             show_comparison: style.show_comparison !== false,
             highlight_latest: style.highlight_latest !== false,
             featured_value_mode: style.featured_value_mode || "auto",

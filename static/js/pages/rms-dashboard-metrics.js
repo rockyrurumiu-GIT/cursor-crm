@@ -38,7 +38,6 @@
   ];
   var JOB_STAGE_RATE_SPECS = [
     ["duplicate_count", "duplicate_count_rate", "pushed_resume_count"],
-    ["client_screen_passed", "client_screen_passed_rate", "internal_screen_passed"],
     ["interview_abandoned", "interview_abandoned_rate", "internal_screen_passed"],
     ["first_interview_passed_count", "first_interview_passed_rate", "first_interview_count"],
     ["second_interview_passed_count", "second_interview_passed_rate", "second_interview_count"],
@@ -77,6 +76,12 @@
     total.internal_screen_passed_rate = jobStageRate(
       total.internal_screen_passed || 0,
       total.internal_screen_passed_denom
+    );
+    total.client_screen_passed_denom = (total.internal_screen_passed || 0)
+      - (total.pending_client_screen || 0);
+    total.client_screen_passed_rate = jobStageRate(
+      total.client_screen_passed || 0,
+      total.client_screen_passed_denom
     );
     total.scheduling_passed_rate = jobStageRate(
       (total.pending_interview || 0) + (total.first_interview_count || 0),

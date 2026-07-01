@@ -918,7 +918,6 @@ def _metrics_for_apps(
 
 _JOB_STAGE_RATE_SPECS = (
     ("duplicate_count", "duplicate_count_rate", "pushed_resume_count"),
-    ("client_screen_passed", "client_screen_passed_rate", "internal_screen_passed"),
     ("interview_abandoned", "interview_abandoned_rate", "internal_screen_passed"),
     ("first_interview_passed_count", "first_interview_passed_rate", "first_interview_count"),
     ("second_interview_passed_count", "second_interview_passed_rate", "second_interview_count"),
@@ -934,6 +933,15 @@ def _internal_screen_pass_rate_parts(metrics: Dict[str, Any]) -> tuple[int, int,
     numerator = int(metrics.get("internal_screen_passed") or 0)
     denominator = int(metrics.get("pushed_resume_count") or 0) - int(
         metrics.get("pending_delivery_review_count") or 0
+    )
+    return numerator, denominator, _rate(numerator, denominator, decimals=0)
+
+
+def _client_screen_pass_rate_parts(metrics: Dict[str, Any]) -> tuple[int, int, str]:
+    """客筛通过率 = 客筛通过 / (内筛通过 - 待客户筛选)。"""
+    numerator = int(metrics.get("client_screen_passed") or 0)
+    denominator = int(metrics.get("internal_screen_passed") or 0) - int(
+        metrics.get("pending_client_screen") or 0
     )
     return numerator, denominator, _rate(numerator, denominator, decimals=0)
 
@@ -984,6 +992,8 @@ def _attach_job_stage_rates(metrics: Dict[str, int]) -> Dict[str, Any]:
         out
     )
     out["internal_screen_passed_denom"] = internal_denom
+    _, client_denom, out["client_screen_passed_rate"] = _client_screen_pass_rate_parts(out)
+    out["client_screen_passed_denom"] = client_denom
     _, _, out["scheduling_passed_rate"] = _scheduling_pass_rate_parts(out)
     return out
 

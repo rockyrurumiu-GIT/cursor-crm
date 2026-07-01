@@ -103,6 +103,9 @@
     if (block === "chart_client_hired_ranking") {
       style.show_average_line = false;
     }
+    if (block === "chart_pending_backlog") {
+      style.show_average_line = false;
+    }
     if (block === "chart_recruiter_recommend_vs_hired") {
       style.show_group_composition = true;
     }
@@ -504,7 +507,8 @@
           widgetForm.value.config.style.average_label = "Avg";
         }
         if (widgetForm.value.config.style.show_average_line === undefined) {
-          widgetForm.value.config.style.show_average_line = true;
+          var avgBlock = widgetForm.value.config.block || "";
+          widgetForm.value.config.style.show_average_line = avgBlock !== "chart_pending_backlog";
         }
         if (widgetForm.value.config.style.show_tooltip === undefined) {
           widgetForm.value.config.style.show_tooltip = true;

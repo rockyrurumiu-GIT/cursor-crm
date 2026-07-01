@@ -6,9 +6,9 @@
 
   var FEATURED_BLUE = "#1e96e8";
   var MAX_POINTS = 12;
-  var AXIS_LABEL_FONT_SIZE = 22;
-  var AXIS_LABEL_FONT_SIZE_FEW = 23;
-  var BAR_VALUE_LABEL_FONT_SIZE = 22;
+  var AXIS_LABEL_FONT_SIZE = 13;
+  var AXIS_LABEL_FONT_SIZE_FEW = 13;
+  var BAR_VALUE_LABEL_FONT_SIZE = 12;
   var MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   function fmtNum(v) {
@@ -233,9 +233,10 @@
   }
 
   function appendSvgAxisLabels(svg, points, activeIdx, n, padL, slotW, padT, chartH, axisFontSize, labelAxisMode) {
-    var labelCY = padT + chartH + 20;
+    var labelCY = padT + chartH + 14;
     var fontSize = axisFontSize || (n > 8 ? AXIS_LABEL_FONT_SIZE : AXIS_LABEL_FONT_SIZE_FEW);
-    var pillH = Math.max(34, Math.round(fontSize * 1.45));
+    var pillH = Math.max(22, Math.round(fontSize * 1.35));
+    var pillRx = Math.round(pillH / 2);
     var i;
     for (i = 0; i < n; i++) {
       var cx = padL + i * slotW + slotW / 2;
@@ -249,7 +250,7 @@
         svg.push(
           '<rect class="bms-featured-bar-axis-pill-bg" x="' + (cx - tw / 2).toFixed(2)
           + '" y="' + (labelCY - pillH / 2).toFixed(2) + '" width="' + tw.toFixed(2)
-          + '" height="' + pillH + '" rx="9" fill="#eaf5ff"/>'
+          + '" height="' + pillH + '" rx="' + pillRx + '" fill="#eaf5ff"/>'
         );
         svg.push(
           '<text class="bms-featured-bar-axis-pill-text" x="' + cx.toFixed(2) + '" y="' + labelCY
@@ -260,8 +261,8 @@
       } else {
         svg.push(
           '<text class="bms-featured-bar-axis-label" x="' + cx.toFixed(2) + '" y="' + labelCY
-          + '" text-anchor="middle" dominant-baseline="middle" fill="#9ca3af" font-size="' + fontSize
-          + '" font-family="system-ui,-apple-system,sans-serif">'
+          + '" text-anchor="middle" dominant-baseline="middle" fill="#6b7280" font-size="' + fontSize
+          + '" font-weight="500" font-family="system-ui,-apple-system,sans-serif">'
           + escapeSvgText(displayLabel) + "</text>"
         );
       }
@@ -278,7 +279,7 @@
     var padR = 24;
     var padT = 52;
     var labelSizes = resolveLabelFontSizes(n, model.labelFontBoost);
-    var padB = 48 + Math.round((Number(model.labelFontBoost) || 0) * 0.8);
+    var padB = 32 + Math.round((Number(model.labelFontBoost) || 0) * 0.6);
     var chartW = w - padL - padR;
     var chartH = h - padT - padB;
     var dataMax = Math.max.apply(null, points.map(function (p) { return p.value; }).concat([model.averageValue, 1]));
@@ -328,8 +329,10 @@
     var barMetas = [];
     var activeMeta = null;
     var avgLineYPct = null;
+    var avgLineYSvg = null;
     if (model.showAverageLine) {
       var avgY = padT + chartH - ((model.averageValue - scaleMin) / scaleSpan) * chartH;
+      avgLineYSvg = avgY;
       avgLineYPct = (avgY / h) * 100;
       svg.push('<line class="bms-featured-bar-avg" x1="' + padL + '" y1="' + avgY.toFixed(2) + '" x2="' + (w - padR) + '" y2="' + avgY.toFixed(2) + '" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 6"/>');
     }
@@ -404,15 +407,62 @@
       activeMeta: activeMeta,
       barMetas: barMetas,
       avgLineYPct: avgLineYPct,
+      avgLineYSvg: avgLineYSvg,
       geometry: {
         w: w,
         h: h,
         padL: padL,
+        padR: padR,
+        padT: padT,
         chartW: chartW,
         n: n,
         slotW: slotW,
       },
     };
+  }
+
+  function mapSvgPointToContainer(svgEl, containerEl, svgX, svgY, viewBox) {
+    viewBox = viewBox || { w: 760, h: 360 };
+    if (!svgEl || !containerEl) return null;
+    var svgRect = svgEl.getBoundingClientRect();
+    var containerRect = containerEl.getBoundingClientRect();
+    if (!svgRect.width || !svgRect.height) return null;
+    var scale = Math.min(svgRect.width / viewBox.w, svgRect.height / viewBox.h);
+    var renderedW = viewBox.w * scale;
+    var renderedH = viewBox.h * scale;
+    var offsetX = (svgRect.width - renderedW) / 2;
+    var offsetY = (svgRect.height - renderedH) / 2;
+    return {
+      left: svgRect.left - containerRect.left + offsetX + svgX * scale,
+      top: svgRect.top - containerRect.top + offsetY + svgY * scale,
+    };
+  }
+
+  function syncFeaturedBarOverlayPositions(chartWrap, built) {
+    if (!chartWrap || !built) return null;
+    var svgEl = chartWrap.querySelector(".bms-featured-bar-svg");
+    var geo = built.geometry;
+    if (!svgEl || !geo) return null;
+
+    var avgLabel = chartWrap.querySelector(".bms-featured-bar-average-label");
+    if (avgLabel && built.avgLineYSvg != null) {
+      var avgPt = mapSvgPointToContainer(svgEl, chartWrap, geo.w - geo.padR, built.avgLineYSvg, geo);
+      if (avgPt) {
+        avgLabel.style.top = avgPt.top + "px";
+        avgLabel.style.left = "auto";
+        avgLabel.style.right = Math.max(4, chartWrap.clientWidth - avgPt.left) + "px";
+        avgLabel.style.transform = "translateY(-50%)";
+      }
+    }
+
+    var layout = {
+      activeMeta: built.activeMeta,
+      barMetas: built.barMetas,
+      avgLineYSvg: built.avgLineYSvg,
+      geometry: geo,
+    };
+    chartWrap._featuredBarLayout = layout;
+    return layout;
   }
 
   function barIndexAtClientX(clientX, svgEl, geo) {
@@ -607,8 +657,19 @@
         avgLabel.className += " bms-featured-bar-average-label--compact";
       }
       avgLabel.textContent = model.averageLabel;
-      avgLabel.style.top = built.avgLineYPct + "%";
       chartWrap.appendChild(avgLabel);
+    }
+
+    chartWrap._featuredBarBuilt = built;
+    function runOverlaySync() {
+      syncFeaturedBarOverlayPositions(chartWrap, built);
+      if (typeof mountEl._featuredBarOnLayout === "function") {
+        mountEl._featuredBarOnLayout(chartWrap._featuredBarLayout, chartWrap);
+      }
+    }
+    runOverlaySync();
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(runOverlaySync);
     }
 
     var unbindHover = bindBarHoverTips(chartWrap, model, built.barMetas || [], built.geometry);
@@ -621,12 +682,13 @@
 
     var ro = null;
     if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(function () { /* responsive via CSS */ });
+      ro = new ResizeObserver(function () { runOverlaySync(); });
       ro.observe(mountEl);
     }
     mountEl._featuredBarCleanup = function () {
       if (typeof unbindHover === "function") unbindHover();
       if (ro) ro.disconnect();
+      mountEl._featuredBarOnLayout = null;
     };
   }
 
@@ -634,5 +696,7 @@
     normalizeFeaturedBarData: normalizeFeaturedBarData,
     renderFeaturedBarChart: renderFeaturedBarChart,
     destroyFeaturedBarChart: destroyFeaturedBarChart,
+    mapSvgPointToContainer: mapSvgPointToContainer,
+    syncFeaturedBarOverlayPositions: syncFeaturedBarOverlayPositions,
   };
 })(typeof window !== "undefined" ? window : globalThis);
