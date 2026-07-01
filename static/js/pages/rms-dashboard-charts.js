@@ -49,6 +49,8 @@
     var pendingBacklogRows = deps.pendingBacklogRows;
     var jobPendingBacklogRows = deps.jobPendingBacklogRows;
     var clientHiredRankingRows = deps.clientHiredRankingRows;
+    var clientHcRows = deps.clientHcRows;
+    var clientResumeToHireRateRows = deps.clientResumeToHireRateRows;
     var recruiterRecommendVsHiredRows = deps.recruiterRecommendVsHiredRows;
     var pipelineDialysisGrouped = deps.pipelineDialysisGrouped;
 
@@ -110,8 +112,13 @@
       return Object.assign({}, baseOptions, { plugins: plugins });
     }
 
-    function horizontalBarOptionsForStyle(prefix, suffix, style) {
+    function horizontalBarOptionsForStyle(prefix, suffix, style, labelBoost) {
+      prefix = prefix != null ? String(prefix) : "";
+      suffix = suffix != null ? String(suffix) : "";
       var opts = horizontalBarOptions(prefix, suffix);
+      if (opts.plugins) {
+        opts.plugins.datalabels = presetDataLabelsConfig(style, prefix, suffix, "horizontal_bar", labelBoost);
+      }
       if (opts.scales && opts.scales.x && opts.scales.x.grid) {
         opts.scales.x.grid.display = style.show_grid !== false;
       }
@@ -147,7 +154,77 @@
       return prefix + String(parsed) + suffix;
     }
 
-    function verticalBarOptionsForStyle(prefix, suffix, style) {
+    function presetDataLabelText(prefix, suffix, value) {
+      prefix = prefix != null ? String(prefix) : "";
+      suffix = suffix != null ? String(suffix) : "";
+      if (value == null || value === "" || Number(value) === 0) return "";
+      if (suffix) return prefix + String(value) + suffix;
+      if (prefix && prefix.length <= 2) return prefix + String(value);
+      return String(value);
+    }
+
+    function presetDataLabelsConfig(style, prefix, suffix, chartType, labelBoost) {
+      var show = style && (style.show_data_labels === true || style.show_values === true);
+      if (!show) return { display: false };
+      var anchor = chartType === "line" ? "end" : "end";
+      var align = chartType === "line" ? "top" : chartType === "horizontal_bar" ? "end" : "end";
+      var boost = Number(labelBoost) || 0;
+      return {
+        display: true,
+        anchor: anchor,
+        align: align,
+        clip: false,
+        color: "#98a2b3",
+        font: { size: 20 + boost, weight: "500" },
+        formatter: function (v) { return presetDataLabelText(prefix, suffix, v); },
+      };
+    }
+
+    function featuredBarRenderConfig(style, opts) {
+      var blockKey = opts && opts.blockKey ? String(opts.blockKey) : "";
+      var compact = !!RMS_COMPACT_FEATURED_BAR_BLOCKS[blockKey];
+      return {
+        prefix: opts && opts.prefix != null ? String(opts.prefix) : "",
+        suffix: opts && opts.suffix != null ? String(opts.suffix) : "",
+        average_label: style.average_label || "Avg",
+        show_average_line: compact ? false : style.show_average_line !== false,
+        show_tooltip: style.show_tooltip !== false,
+        show_summary_legend: style.show_summary_legend !== false,
+        highlight_item: style.highlight_item === "max" ? "max" : "latest",
+        show_data_labels: style.show_data_labels === true || style.show_values === true,
+        label_font_boost: compact ? RMS_COMPACT_FEATURED_BAR_LABEL_BOOST : 0,
+        label_axis_mode: (compact || blockKey === "kpi_resume_to_hire_rate") ? "client_suffix" : "auto",
+        compact_avg_label: blockKey === "kpi_resume_to_hire_rate",
+      };
+    }
+
+    function clientNameSuffix(label) {
+      var s = String(label || "").trim();
+      var idx = s.lastIndexOf("-");
+      if (idx < 0 || idx >= s.length - 1) return "";
+      var suffix = s.slice(idx + 1).trim();
+      if (/^[A-Za-z][A-Za-z0-9]*$/.test(suffix)) return suffix.toUpperCase();
+      return "";
+    }
+
+    function presetChartAxisLabels(rows, opts) {
+      var blockKey = opts && opts.blockKey ? String(opts.blockKey) : "";
+      var useSuffix = !!RMS_COMPACT_FEATURED_BAR_BLOCKS[blockKey] || blockKey === "kpi_resume_to_hire_rate";
+      if (!useSuffix) {
+        return rows.map(function (r) { return r.label; });
+      }
+      return rows.map(function (r) {
+        var code = clientNameSuffix(r.label);
+        return code || r.label;
+      });
+    }
+
+    function presetLabelBoost(opts) {
+      var blockKey = opts && opts.blockKey ? String(opts.blockKey) : "";
+      return RMS_COMPACT_FEATURED_BAR_BLOCKS[blockKey] ? RMS_COMPACT_FEATURED_BAR_LABEL_BOOST : 0;
+    }
+
+    function verticalBarOptionsForStyle(prefix, suffix, style, labelBoost) {
       prefix = prefix != null ? String(prefix) : "";
       suffix = suffix != null ? String(suffix) : "";
       return {
@@ -156,7 +233,7 @@
         animation: { duration: 250 },
         plugins: {
           legend: { display: false },
-          datalabels: { display: false },
+          datalabels: presetDataLabelsConfig(style, prefix, suffix, "bar", labelBoost),
           tooltip: whiteTooltip(function (c) {
             return presetTooltipValue(prefix, suffix, c.parsed);
           }),
@@ -177,7 +254,7 @@
       };
     }
 
-    function lineChartOptionsForStyle(prefix, suffix, style, legend) {
+    function lineChartOptionsForStyle(prefix, suffix, style, legend, labelBoost) {
       prefix = prefix != null ? String(prefix) : "";
       suffix = suffix != null ? String(suffix) : "";
       return {
@@ -191,7 +268,7 @@
             position: "bottom",
             labels: { boxWidth: 10, padding: 8, font: { size: 10 }, color: "#6b7280" },
           },
-          datalabels: { display: false },
+          datalabels: presetDataLabelsConfig(style, prefix, suffix, "line", labelBoost),
           tooltip: whiteTooltip(function (c) {
             var label = c.dataset.label ? c.dataset.label + ": " : "";
             return label + presetTooltipValue(prefix, suffix, c.parsed);
@@ -280,20 +357,39 @@
       };
     }
 
-    function applyPercentScaleToOptions(base, chartType) {
+    function applyPercentScaleToOptions(base, chartType, scaleOpts) {
+      scaleOpts = scaleOpts || {};
       if (!base || !base.scales) return base;
       var axisKey = chartType === "horizontal_bar" ? "x" : "y";
       var axis = base.scales[axisKey];
       if (!axis) return base;
+      var min = scaleOpts.min != null ? Number(scaleOpts.min) : 0;
+      var max = scaleOpts.max != null ? Number(scaleOpts.max) : 100;
       base.scales[axisKey] = Object.assign({}, axis, {
-        min: 0,
-        max: 100,
+        min: min,
+        max: max,
         ticks: Object.assign({}, axis.ticks || {}, {
           callback: function (value) { return value + "%"; },
         }),
       });
       return base;
     }
+
+    function presetPercentScaleConfig(opts) {
+      if (!opts || opts.percentScaleMax == null) return {};
+      return {
+        value_scale_min: opts.percentScaleMin != null ? opts.percentScaleMin : 0,
+        value_scale_max: opts.percentScaleMax,
+      };
+    }
+
+    var KPI_RESUME_TO_HIRE_RATE_SCALE = { percentScaleMin: 0, percentScaleMax: 40 };
+
+    var RMS_COMPACT_FEATURED_BAR_BLOCKS = {
+      kpi_hc: true,
+      chart_client_hired_ranking: true,
+    };
+    var RMS_COMPACT_FEATURED_BAR_LABEL_BOOST = 5;
 
     function scheduleFeaturedPresetRender(fn) {
       var run = function () {
@@ -382,12 +478,12 @@
         };
         var widget = {
           title: opts.title || "",
-          config: line1ConfigFromStyle(
+          config: Object.assign({}, line1ConfigFromStyle(
             style,
             prefix,
             suffix,
             typeof line1PeriodLabel === "function" ? line1PeriodLabel(appliedFilters || {}) : ""
-          ),
+          ), presetPercentScaleConfig(opts)),
         };
         global.CrmLine1ChartKit.render(mount, widget, apiData, {
           lineColor: accent,
@@ -433,7 +529,7 @@
         };
         var widget = {
           title: opts.title || "",
-          config: {
+          config: Object.assign({
             prefix: prefix,
             suffix: suffix,
             comparison_label: style.comparison_label || "较上期",
@@ -445,7 +541,8 @@
             show_point_values: style.show_point_values === true,
             lifecycle_pass_rate: opts.blockKey === "chart_lifecycle_pass_rate"
               || (opts.blockKey === "lifecycle_funnel" && (style.metric || "count") === "pass_rate"),
-          },
+            compact_avg_label: opts.blockKey === "kpi_resume_to_hire_rate",
+          }, presetPercentScaleConfig(opts)),
         };
         global.CrmFeaturedLineChartKit.renderFeaturedLine(mount, widget, apiData, { lineColor: accent });
         return true;
@@ -499,15 +596,10 @@
         };
         var widget = {
           title: opts.title || "",
-          config: {
-            prefix: prefix,
-            suffix: suffix,
-            average_label: style.average_label || "Avg",
-            show_average_line: style.show_average_line !== false,
-            show_tooltip: style.show_tooltip !== false,
-            show_summary_legend: style.show_summary_legend !== false,
-            highlight_item: style.highlight_item === "max" ? "max" : "latest",
-          },
+          config: Object.assign(
+            featuredBarRenderConfig(style, opts),
+            presetPercentScaleConfig(opts)
+          ),
         };
         global.CrmFeaturedBarChartKit.renderFeaturedBarChart(mount, widget, apiData);
         return true;
@@ -546,9 +638,15 @@
       var palette = paletteForStyle(style);
       var accent = palette[KIT.selectedShade(presetStyleColorCfg(style))];
       var customTooltipLabel = opts.tooltipLabel;
+      var labelBoost = presetLabelBoost(opts);
       function finalizeOptions(base) {
         var out = base;
-        if (opts.percentScale) out = applyPercentScaleToOptions(out, chartType);
+        if (opts.percentScale) {
+          out = applyPercentScaleToOptions(out, chartType, {
+            min: opts.percentScaleMin,
+            max: opts.percentScaleMax,
+          });
+        }
         if (typeof customTooltipLabel === "function") {
           out = mergeTooltipLabel(out, function (c) {
             return customTooltipLabel(c, rows);
@@ -561,7 +659,7 @@
         if (!canvas) return;
         destroyChartKey(canvasId);
         if (!rows.length) return;
-        var labels = rows.map(function (r) { return r.label; });
+        var labels = presetChartAxisLabels(rows, opts);
         var values = rows.map(presetRowValue);
         var colors = presetBarColorsFromStyle(style, rows.length);
         if (chartType === "pie") {
@@ -592,7 +690,7 @@
                 borderWidth: 2,
               }],
             },
-            options: finalizeOptions(lineChartOptionsForStyle(prefix, suffix, style, false)),
+            options: finalizeOptions(lineChartOptionsForStyle(prefix, suffix, style, false, labelBoost)),
           });
           return;
         }
@@ -610,7 +708,7 @@
                 categoryPercentage: 0.68,
               }],
             },
-            options: finalizeOptions(verticalBarOptionsForStyle(prefix, suffix, style)),
+            options: finalizeOptions(verticalBarOptionsForStyle(prefix, suffix, style, labelBoost)),
           });
           return;
         }
@@ -627,7 +725,7 @@
               categoryPercentage: 0.68,
             }],
           },
-          options: finalizeOptions(horizontalBarOptionsForStyle(prefix, suffix, style)),
+          options: finalizeOptions(horizontalBarOptionsForStyle(prefix, suffix, style, labelBoost)),
         });
       });
     }
@@ -831,11 +929,12 @@
       });
     }
 
-    function renderHorizontalCountChart(canvasId, rows, emptyLabel, style, w) {
+    function renderHorizontalCountChart(canvasId, rows, emptyLabel, style, w, blockKey) {
       renderPresetSeriesChart(canvasId, rows, style, {
         prefix: emptyLabel || "",
         suffix: "",
         title: w && w.title,
+        blockKey: blockKey || (w && w.config && w.config.block),
       });
     }
 
@@ -1005,6 +1104,50 @@
         "入职",
         style,
         w
+      );
+    }
+
+    function renderKpiHcChart(canvasId, w) {
+      var block = "kpi_hc";
+      var style = rmsPresetStyle(w && w.config, block);
+      renderPresetSeriesChart(
+        canvasId,
+        applyPresetStyleRows(clientHcRows.value, style),
+        style,
+        {
+          prefix: "",
+          suffix: "",
+          title: w && w.title,
+          blockKey: block,
+        }
+      );
+    }
+
+    function clientResumeToHireRateTooltip(c, chartRows) {
+      var row = chartRows[c.dataIndex];
+      var pct = presetTooltipValue("", "%", c.parsed);
+      if (!row) return pct;
+      if (row.resume_count != null && row.resume_count > 0) {
+        return row.label + ": " + pct + " (" + (row.hired_count || 0) + "/" + row.resume_count + ")";
+      }
+      return row.label + ": " + pct;
+    }
+
+    function renderKpiResumeToHireRateChart(canvasId, w) {
+      var block = "kpi_resume_to_hire_rate";
+      var style = rmsPresetStyle(w && w.config, block);
+      renderPresetSeriesChart(
+        canvasId,
+        applyPresetStyleRowsForSeries(clientResumeToHireRateRows.value, style),
+        style,
+        Object.assign({
+          prefix: "",
+          suffix: "%",
+          title: w && w.title,
+          percentScale: true,
+          tooltipLabel: clientResumeToHireRateTooltip,
+          blockKey: block,
+        }, KPI_RESUME_TO_HIRE_RATE_SCALE)
       );
     }
 
@@ -1225,6 +1368,14 @@
       }
       if (block === "chart_client_hired_ranking") {
         renderClientHiredRankingChart(rmsId, w);
+        return;
+      }
+      if (block === "kpi_hc") {
+        renderKpiHcChart(rmsId, w);
+        return;
+      }
+      if (block === "kpi_resume_to_hire_rate") {
+        renderKpiResumeToHireRateChart(rmsId, w);
         return;
       }
       if (block === "chart_recruiter_recommend_vs_hired") {

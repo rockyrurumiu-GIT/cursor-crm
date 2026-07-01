@@ -2,7 +2,7 @@
 {% block title %}招聘Dashboard · ITO BMS{% endblock %}
 {% block shell_extra_class %}bms-shell-flat{% endblock %}
 {% block head_extra %}
-<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="/static/js/vendor/vue.global.prod.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
@@ -25,6 +25,17 @@
   height: 2px; background: #1f2328; border-radius: 1px 1px 0 0;
 }
 .dash-tw-tab--edit { cursor: pointer; }
+.dash-tw-tab.is-tab-draggable { cursor: grab; touch-action: none; user-select: none; }
+.dash-tw-tab.is-tab-draggable:active { cursor: grabbing; }
+.dash-tw-tabs.is-tab-dragging .dash-tw-tab.is-tab-draggable:hover { color: inherit; }
+.dash-tw-tab.is-tab-drag-source { opacity: 0; pointer-events: none; }
+.dash-tab-drag-ghost {
+  position: fixed; z-index: 220; pointer-events: none;
+  padding: 0.7rem 1rem 0.55rem; font-size: 0.875rem; font-weight: 600;
+  line-height: 1.25; color: #1f2328; background: #fff;
+  border: 1px solid #e0e2e6; border-radius: 8px;
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.16); white-space: nowrap;
+}
 .dash-tw-tab-label {
   display: inline-block;
   min-width: 1ch;
@@ -119,6 +130,16 @@
 .num-wrap { display: flex; flex-direction: column; justify-content: center; gap: 0.35rem; width: 100%; }
 .num-value { font-size: 2rem; line-height: 1.1; font-weight: 600; color: #1f2328; }
 .num-sub { font-size: 0.78rem; color: #98a2b3; }
+.rms-kpi-chart-area { display: flex; flex-direction: column; width: 100%; min-height: 0; flex: 1; gap: 0.3rem; }
+.rms-kpi-chart-head { flex-shrink: 0; line-height: 1.15; margin: 0; padding: 0; text-align: left; align-self: flex-start; }
+.rms-kpi-chart-total { display: block; font-size: 1.35rem; font-weight: 700; color: #1f2328; letter-spacing: -0.02em; }
+.dash-card:has(.rms-kpi-chart-area) .card-head { margin-bottom: 0.2rem; }
+.rms-kpi-chart-total-note { display: block; margin-top: 0.12rem; font-size: 0.72rem; color: #98a2b3; }
+.rms-kpi-chart-wrap { flex: 1; min-height: 100px; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.rms-kpi-chart-wrap canvas { min-height: 100px !important; }
+.rms-kpi-chart-wrap .bms-featured-line-mount,
+.rms-kpi-chart-wrap .bms-featured-bar-mount,
+.rms-kpi-chart-wrap .bms-line1-mount { flex: 1; min-height: 100px; width: 100%; }
 .chart-area { display: flex; flex-direction: column; width: 100%; min-height: 0; gap: 0.6rem; }
 .dash-card .chart-area { padding: 4px 2px 0; }
 .chart-canvas-wrap { position: relative; flex: 1; min-width: 0; min-height: 260px; display: flex; flex-direction: column; }
@@ -184,6 +205,14 @@
   border-left: 5px solid #111827;
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
+}
+.bms-featured-line-average-label--compact {
+  left: auto; right: 0.35rem; max-width: none;
+  padding: 0.16rem 0.42rem; font-size: 0.72rem; font-weight: 600; line-height: 1.15;
+  border-radius: 5px; white-space: nowrap;
+}
+.bms-featured-line-average-label--compact::after {
+  display: none;
 }
 .bms-featured-line-axis {
   position: relative; min-height: 1.4rem; margin-top: 0.55rem; overflow: visible; padding-bottom: 0.15rem;
@@ -393,14 +422,22 @@
   position: absolute; left: 0; z-index: 3; pointer-events: none;
   transform: translateY(-50%);
   display: inline-flex; align-items: center;
-  padding: 0.22rem 0.5rem 0.22rem 0.42rem;
+  padding: 0.28rem 0.55rem 0.28rem 0.46rem;
   background: #1f2328; color: #fff;
-  font-size: 0.68rem; font-weight: 600; line-height: 1.2;
+  font-size: 1.25rem; font-weight: 600; line-height: 1.2;
   border-radius: 6px 2px 2px 6px; white-space: nowrap;
 }
 .bms-featured-bar-average-label::after {
   content: ""; position: absolute; right: -5px; top: 50%; transform: translateY(-50%);
   border: 5px solid transparent; border-left-color: #1f2328;
+}
+.bms-featured-bar-average-label--compact {
+  left: auto; right: 0.35rem; max-width: none;
+  padding: 0.16rem 0.42rem; font-size: 0.72rem; font-weight: 600; line-height: 1.15;
+  border-radius: 5px; white-space: nowrap;
+}
+.bms-featured-bar-average-label--compact::after {
+  display: none;
 }
 .bms-featured-bar-hit { cursor: default; }
 .bms-featured-bar-hover-tip {
@@ -509,7 +546,7 @@
   outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
 }
 .inspector-style-stack .toggle-row { padding: 0; }
-.rms-dash-filter-shell { width: 100%; }
+.rms-dash-filter-shell { width: 100%; font-size: 0.875rem; }
 .rms-dash-filter-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
   overflow: visible;
@@ -538,6 +575,22 @@
   width: 10rem;
   min-width: 10rem;
   max-width: 12.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+.rms-dash-filter-job .truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+.rms-dash-filter-job-caret {
+  margin-left: 0.25rem;
+  flex-shrink: 0;
+  color: #57606a;
 }
 .rms-dash-filter-date {
   min-width: 8rem;
@@ -594,8 +647,268 @@
   width: 100%;
   border-top: 1px solid #EEF0F2;
   margin-top: 0.25rem;
-  padding-top: 0.5rem;
+  padding: 0.5rem 0.25rem 0.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
+.rms-roster-check-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  gap: 0.5rem;
+}
+.rms-roster-check-toolbar {
+  flex-shrink: 0;
+  width: 100%;
+  border: 1px solid #E5E7EB;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.625rem;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+.rms-roster-check-scroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+.rms-roster-check-pagination {
+  flex-shrink: 0;
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.25rem 1rem;
+}
+.rms-icon-tip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.rms-icon-tip {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  pointer-events: none;
+  white-space: nowrap;
+  border-radius: 6px;
+  background: #1A1D1F;
+  color: #fff;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.rms-icon-tip--below { top: 100%; margin-top: 0.375rem; }
+.rms-icon-tip--above { bottom: 100%; margin-bottom: 0.375rem; }
+.rms-icon-tip-wrap:hover .rms-icon-tip { opacity: 1; }
+.rms-pagination-meta {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #6B7280;
+}
+.rms-pagination-meta strong {
+  font-weight: 600;
+  color: #1A1D1F;
+}
+.rms-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.rms-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border-radius: 6px;
+  border: 1px solid #D7DBE0;
+  background: #fff;
+  font-size: 0.875rem;
+  color: #1A1D1F;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.rms-page-btn:hover:not(:disabled) { background: #F9FAFB; }
+.rms-page-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.rms-page-btn.is-active {
+  border-color: #456595;
+  background: #456595;
+  color: #fff;
+}
+.rms-page-size {
+  display: inline-flex;
+  align-items: center;
+  height: 2rem;
+  margin-left: 0.25rem;
+  padding: 0 0.625rem;
+  border-radius: 6px;
+  border: 1px solid #D7DBE0;
+  background: #fff;
+  font-size: 0.875rem;
+  color: #6B7280;
+}
+.rms-roster-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.rms-roster-search-wrap {
+  position: relative;
+  width: 100%;
+  max-width: 15rem;
+  flex: 1 1 12rem;
+  min-width: 10rem;
+}
+.rms-roster-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: #9AA0A6;
+  pointer-events: none;
+}
+.rms-roster-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 2.25rem;
+  border: 1px solid #D7DBE0;
+  border-radius: 6px;
+  padding: 0 0.75rem 0 2.25rem;
+  font-size: 0.875rem;
+  color: #1A1D1F;
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.rms-roster-search-input:focus {
+  outline: none;
+  border-color: #16A39A;
+  box-shadow: 0 0 0 2px rgba(22, 163, 154, 0.3);
+}
+.rms-roster-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 2.25rem;
+  padding: 0 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #D7DBE0;
+  background: #fff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1A1D1F;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.rms-roster-filter-btn:hover { background: #F9FAFB; }
+.rms-roster-filter-btn.is-active {
+  border-color: #16A39A;
+  color: #16A39A;
+}
+.rms-roster-filter-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+.rms-roster-toolbar-total {
+  margin-left: auto;
+  min-width: 0;
+  align-self: flex-end;
+  padding-bottom: 7px;
+  line-height: 1;
+  font-size: 0.825rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #6B7280;
+}
+.rms-roster-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 6px;
+  border: 1px solid #D7DBE0;
+  background: #fff;
+  color: #5B5F6E;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+.rms-roster-icon-btn:hover:not(:disabled) {
+  background: #F9FAFB;
+  color: #1A1D1F;
+}
+.rms-roster-icon-btn:disabled { cursor: not-allowed; opacity: 0.4; }
+.rms-roster-icon-btn svg { width: 18px; height: 18px; }
+.rms-roster-filter-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+  padding-top: 0.625rem;
+  border-top: 1px solid #EEF0F2;
+}
+.rms-roster-filter-status-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.75rem;
+}
+.rms-roster-filter-status-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #6B7280;
+}
+.rms-roster-filter-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: #1A1D1F;
+  cursor: pointer;
+}
+.rms-roster-filter-check input {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin: 0;
+  border-radius: 0.25rem;
+  border: 1px solid #D7DBE0;
+  accent-color: #16A39A;
+}
+.rms-roster-filter-select {
+  width: 10rem;
+  font-size: 0.875rem;
+}
+.rms-roster-td-muted { color: #6B7280; white-space: nowrap; }
+.rms-roster-status-badge,
+.rms-roster-conv-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.rms-roster-status-badge--matched { background: #ecfdf3; color: #15803d; border: 1px solid #bbf7d0; }
+.rms-roster-status-badge--missing { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.rms-roster-status-badge--date_mismatch { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.rms-roster-status-badge--ambiguous { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+.rms-roster-conv-badge--done { background: #ecfdf3; color: #15803d; border: 1px solid #bbf7d0; }
+.rms-roster-conv-badge--unbound { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.rms-roster-conv-badge--pending { background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; }
 .rms-job-stage-table { width: 100%; min-width: 56rem; border-collapse: collapse; font-size: 0.78rem; --rms-job-stage-sticky-job-width: 9.5rem; --rms-job-stage-sticky-client-width: 6.5rem; --rms-job-stage-sticky-time-width: 4.5rem; }
 .rms-job-stage-table .rms-job-stage-sticky-job,
 .rms-job-stage-table .rms-job-stage-sticky-client,
@@ -709,13 +1022,17 @@
 .rms-job-stage-table .metric-with-rate { cursor: help; }
 .rms-job-stage-table .metric-loss-with-hint {
   cursor: default;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
   white-space: nowrap;
 }
 .rms-job-stage-table .metric-loss-with-hint .rms-job-stage-hint-wrap {
   display: inline-flex;
   align-items: center;
   vertical-align: middle;
-  margin-left: 0.15rem;
+  margin-left: 0;
+  flex-shrink: 0;
 }
 .rms-job-stage-hint {
   display: inline-flex;
@@ -793,6 +1110,7 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  margin-left: auto;
 }
 .rms-dash-filter-actions .rms-dash-filter-toggle {
   flex-shrink: 0;
@@ -826,6 +1144,7 @@
 .modal-form-body .field { margin-bottom: 0; }
 .modal-form-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem; padding-top: 0.85rem; border-top: 1px solid #eceef1; }
 .modal-form-body textarea.crm-form-control { height: auto; min-height: 4.5rem; resize: vertical; }
+.rms-modal-hint { margin: 0; font-size: 0.75rem; color: #98a2b3; }
 .dash-card.editing { border-style: dashed; border-color: #d5d9de; position: relative; }
 .dash-card.editing:hover { border-color: #9aa9bd; box-shadow: 0 2px 10px rgba(16,24,40,0.06); }
 .dash-card.editing.is-active { border-color: #7B96B8; box-shadow: 0 2px 12px rgba(16,24,40,0.08); }
@@ -976,30 +1295,34 @@ body.rms-dashboard-edit-mode #handbook-assistant {
         <h1 class="text-2xl font-bold text-gray-900">招聘 Dashboard</h1>
     </div>
     <div class="dash-page-tabs-row" v-if="activeDashboard">
-        <nav class="dash-tw-tabs" aria-label="标签页">
-            <template v-for="t in activeDashboard.tabs" :key="t.id">
+        <nav class="dash-tw-tabs" :class="{ 'is-tab-dragging': tabDragIndex != null }" aria-label="标签页">
+            <template v-for="item in tabDisplayList" :key="item.tab.id">
                 <button v-if="editMode && canWrite" type="button"
-                    :class="['dash-tw-tab', 'dash-tw-tab--edit', activeTabId === t.id ? 'active' : '']"
-                    @click="selectTab(t.id)">
+                    :class="['dash-tw-tab', 'dash-tw-tab--edit', 'is-tab-draggable', activeTabId === item.tab.id ? 'active' : '', item.isDragging && tabDragIndex != null ? 'is-tab-drag-source' : '']"
+                    @pointerdown="onTabPointerDown(item.origIdx, item.tab, $event)"
+                    @click="onTabClick(item.tab.id)">
                     <span
                         class="dash-tw-tab-label"
                         contenteditable="true"
                         spellcheck="false"
-                        :ref="bindTabLabelEl(t)"
-                        :aria-label="'标签页名称：' + (t.name || '')"
+                        :ref="bindTabLabelEl(item.tab)"
+                        :aria-label="'标签页名称：' + (item.tab.name || '')"
                         @click.stop
+                        @pointerdown.stop
                         @keydown.enter.prevent="$event.target.blur()"
-                        @input="onTabNameInput(t, $event)"
-                        @blur="saveTabNameInline(t, $event)"
+                        @input="onTabNameInput(item.tab, $event)"
+                        @blur="saveTabNameInline(item.tab, $event)"
                     ></span>
                 </button>
                 <button v-else type="button"
-                    :class="['dash-tw-tab', activeTabId === t.id ? 'active' : '']"
-                    @click="selectTab(t.id)">{{ t.name }}</button>
+                    :class="['dash-tw-tab', canWrite ? 'is-tab-draggable' : '', activeTabId === item.tab.id ? 'active' : '', item.isDragging && tabDragIndex != null ? 'is-tab-drag-source' : '']"
+                    @pointerdown="onTabPointerDown(item.origIdx, item.tab, $event)"
+                    @click="onTabClick(item.tab.id)">{{ item.tab.name }}</button>
             </template>
             <button v-if="editMode && canWrite" type="button" class="dash-tw-tab-add" @click="openTabModal()">
                 <span class="dash-tw-tab-add-icon" aria-hidden="true">+</span> 新建标签页
             </button>
+            <div v-if="tabDragIndex != null" class="dash-tab-drag-ghost" :style="tabDragGhostStyle()">{{ tabDragGhostLabel }}</div>
         </nav>
         <div class="dash-page-tabs-right">
             <div v-if="editMode && canWrite" class="dash-page-tabs-actions">
@@ -1014,30 +1337,30 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                     @click="deleteActiveTab()">删除标签页</button>
             </div>
             <div class="dash-toolbar-right">
-                <span class="group relative inline-flex">
+                <span class="rms-icon-tip-wrap">
                     <button type="button" class="dash-icon-btn" :disabled="loading" @click="loadDashboard" aria-label="刷新">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
                     </button>
-                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">刷新</span>
+                    <span class="rms-icon-tip rms-icon-tip--below">刷新</span>
                 </span>
-                <span class="group relative inline-flex">
+                <span class="rms-icon-tip-wrap">
                     <button type="button" class="dash-icon-btn" @click="goRosterTab" aria-label="核对已入职与花名册">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2m-6 9 2 2 4-4"/></svg>
                     </button>
-                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">核对已入职与花名册</span>
+                    <span class="rms-icon-tip rms-icon-tip--below">核对已入职与花名册</span>
                 </span>
                 <template v-if="canWrite">
-                    <span v-if="!editMode" class="group relative inline-flex">
+                    <span v-if="!editMode" class="rms-icon-tip-wrap">
                         <button type="button" class="dash-icon-btn dash-icon-btn-primary" @click="editMode = true" aria-label="编辑">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                         </button>
-                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">编辑</span>
+                        <span class="rms-icon-tip rms-icon-tip--below">编辑</span>
                     </span>
-                    <span v-else class="group relative inline-flex">
+                    <span v-else class="rms-icon-tip-wrap">
                         <button type="button" class="dash-icon-btn dash-icon-btn-primary" @click="editMode = false" aria-label="完成">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg>
                         </button>
-                        <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">完成</span>
+                        <span class="rms-icon-tip rms-icon-tip--below">完成</span>
                     </span>
                 </template>
             </div>
@@ -1084,9 +1407,9 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                           @pointerdown="onCardResizePointerDown(item, $event)"></span>
                     <template v-if="item.widget.widget_type === 'rms_block'">
                     <template v-if="item.block === 'filter'">
-                        <div class="rms-dash-filter-shell text-sm">
+                        <div class="rms-dash-filter-shell">
                             <div class="rms-dash-filter-toolbar">
-                                <span class="group relative inline-flex">
+                                <span class="rms-icon-tip-wrap">
                                     <button type="button"
                                         class="rms-dash-filter-toggle"
                                         :class="{ 'is-active': filterPanelExpanded }"
@@ -1095,7 +1418,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                         @click.stop="filterPanelExpanded = !filterPanelExpanded">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
                                     </button>
-                                    <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">筛选</span>
+                                    <span class="rms-icon-tip rms-icon-tip--below">筛选</span>
                                 </span>
                                 <div v-show="filterPanelExpanded" class="crm-filter-row rms-dash-filter-row">
                             <select v-if="clientOptions.length" v-model="filters.client_id" class="crm-filter-item crm-filter-control rms-dash-filter-compact" :title="clientFieldLabel">
@@ -1106,11 +1429,11 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             <div class="crm-filter-item rms-job-filter-dropdown" ref="jobFilterRef">
                                 <template v-if="filteredJobOptions.length">
                                     <button type="button"
-                                        class="crm-filter-control rms-dash-filter-job text-left flex items-center justify-between"
+                                        class="crm-filter-control rms-dash-filter-job"
                                         :title="jobFieldLabel"
                                         @click.stop="toggleJobFilterDropdown">
                                         <span class="truncate" :class="!(jobFilterDropdownOpen ? jobIdsDraft : appliedFilters.job_ids || []).length ? 'rms-filter-placeholder' : ''">{{ jobFilterSummary }}</span>
-                                        <span class="text-[#57606a] ml-1 shrink-0">{{ jobFilterDropdownOpen ? '▴' : '▾' }}</span>
+                                        <span class="rms-dash-filter-job-caret">{{ jobFilterDropdownOpen ? '▴' : '▾' }}</span>
                                     </button>
                                     <div v-if="jobFilterDropdownOpen" class="rms-job-filter-panel" @click.stop>
                                         <label
@@ -1154,8 +1477,8 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                 <input v-model="filters.date_to" type="date" class="crm-filter-date-input" title="统计周期止" />
                             </div>
                                 </div>
-                                <div class="crm-filter-item rms-dash-filter-actions ml-auto">
-                                    <span class="group relative inline-flex">
+                                <div class="crm-filter-item rms-dash-filter-actions">
+                                    <span class="rms-icon-tip-wrap">
                                         <button type="button"
                                             class="rms-dash-filter-toggle"
                                             :class="{ 'is-active': !appliedFilters.include_zero_resume_jobs }"
@@ -1169,7 +1492,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6"/>
                                             </svg>
                                         </button>
-                                        <span class="pointer-events-none absolute left-1/2 bottom-full z-50 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">{{ appliedFilters.include_zero_resume_jobs ? '隐藏0简历岗位(点击"开")' : '隐藏0简历岗位(点击"关")' }}</span>
+                                        <span class="rms-icon-tip rms-icon-tip--above">{{ appliedFilters.include_zero_resume_jobs ? '隐藏0简历岗位(点击"开")' : '隐藏0简历岗位(点击"关")' }}</span>
                                     </span>
                                     <button type="button" class="tbtn" :disabled="loading" @click.stop="cancelFilters">取消</button>
                                     <button type="button" class="tbtn tbtn-primary" :disabled="loading" @click.stop="applyFilters">应用</button>
@@ -1192,9 +1515,18 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                         </div>
                     </template>
                     <template v-else-if="item.block === 'kpi_hc' && data">
-                        <div class="num-wrap">
-                            <span class="num-value">{{ data.demand_overview.open_hc_total }}</span>
-                            <span class="num-sub">HC 总数</span>
+                        <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
+                        <p v-else-if="!rmsChartHasData('kpi_hc')" class="state-msg">暂无数据</p>
+                        <div v-else class="rms-kpi-chart-area">
+                            <div class="rms-kpi-chart-head">
+                                <span class="rms-kpi-chart-total" :style="{ color: kpiChartAccentColor(item.widget) }">{{ data.demand_overview.open_hc_total }}</span>
+                            </div>
+                            <div class="chart-canvas-wrap rms-kpi-chart-wrap">
+                                <canvas v-if="!isRmsFeaturedChartPreset(item.widget)" :key="'kpi-cv-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || 'horizontal_bar')" :id="chartCanvasId(item.widget)"></canvas>
+                                <div v-else-if="isRmsFeaturedLinePreset(item.widget)" :key="'kpi-fl-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || '')" :id="featuredPresetMountId(item.widget)" class="bms-featured-line-mount"></div>
+                                <div v-else-if="isRmsLine1Preset(item.widget)" :key="'kpi-l1-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || '')" :id="line1PresetMountId(item.widget)" class="bms-line1-mount"></div>
+                                <div v-else-if="isRmsFeaturedBarPreset(item.widget)" :key="'kpi-fb-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || '')" :id="featuredPresetMountId(item.widget)" class="bms-featured-bar-mount"></div>
+                            </div>
                         </div>
                     </template>
                     <template v-else-if="item.block === 'kpi_resume_count'">
@@ -1210,14 +1542,39 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                         </div>
                     </template>
                     <template v-else-if="item.block === 'kpi_resume_to_hire_rate'">
-                        <div class="num-wrap">
-                            <span class="num-value">{{ resumeToHireRate }}</span>
-                            <span class="num-sub">百简历入职转化率</span>
+                        <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
+                        <p v-else-if="!rmsChartHasData('kpi_resume_to_hire_rate')" class="state-msg">暂无数据</p>
+                        <div v-else class="rms-kpi-chart-area">
+                            <div class="rms-kpi-chart-head">
+                                <span class="rms-kpi-chart-total" :style="{ color: kpiChartAccentColor(item.widget) }">{{ resumeToHireRate }}</span>
+                            </div>
+                            <div class="chart-canvas-wrap rms-kpi-chart-wrap">
+                                <canvas v-if="!isRmsFeaturedChartPreset(item.widget)" :key="'kpi-cv-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || 'horizontal_bar')" :id="chartCanvasId(item.widget)"></canvas>
+                                <div v-else-if="isRmsFeaturedLinePreset(item.widget)" :key="'kpi-fl-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || '')" :id="featuredPresetMountId(item.widget)" class="bms-featured-line-mount"></div>
+                                <div v-else-if="isRmsLine1Preset(item.widget)" :key="'kpi-l1-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || '')" :id="line1PresetMountId(item.widget)" class="bms-line1-mount"></div>
+                                <div v-else-if="isRmsFeaturedBarPreset(item.widget)" :key="'kpi-fb-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || '')" :id="featuredPresetMountId(item.widget)" class="bms-featured-bar-mount"></div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template v-else-if="item.block === 'chart_client_hired_ranking'">
+                        <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
+                        <p v-else-if="!rmsChartHasData('chart_client_hired_ranking')" class="state-msg">暂无数据</p>
+                        <div v-else class="rms-kpi-chart-area">
+                            <div class="rms-kpi-chart-head">
+                                <span class="rms-kpi-chart-total" :style="{ color: kpiChartAccentColor(item.widget) }">{{ clientHiredRankingTotal }}</span>
+                            </div>
+                            <div class="chart-canvas-wrap rms-kpi-chart-wrap">
+                                <canvas v-if="!isRmsFeaturedChartPreset(item.widget)" :key="'chr-cv-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || 'horizontal_bar')" :id="chartCanvasId(item.widget)"></canvas>
+                                <div v-else-if="isRmsFeaturedLinePreset(item.widget)" :key="'chr-fl-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || '')" :id="featuredPresetMountId(item.widget)" class="bms-featured-line-mount"></div>
+                                <div v-else-if="isRmsLine1Preset(item.widget)" :key="'chr-l1-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || '')" :id="line1PresetMountId(item.widget)" class="bms-line1-mount"></div>
+                                <div v-else-if="isRmsFeaturedBarPreset(item.widget)" :key="'chr-fb-' + item.widget.id + '-' + ((item.widget.config.style && item.widget.config.style.chart_type) || '')" :id="featuredPresetMountId(item.widget)" class="bms-featured-bar-mount"></div>
+                            </div>
                         </div>
                     </template>
 
                     <!-- 图表 -->
-                    <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter' || item.block === 'chart_pending_backlog' || item.block === 'lifecycle_funnel' || item.block === 'chart_lifecycle_pass_rate' || item.block === 'chart_job_pending_backlog' || item.block === 'chart_client_hired_ranking' || item.block === 'chart_recruiter_recommend_vs_hired' || item.block === 'chart_pipeline_dialysis' || item.block === 'chart_client_job_stage_grouped' || item.block === 'chart_client_job_stage_stacked' || item.block === 'chart_client_job_stage_funnel'">
+                    <template v-else-if="item.block === 'chart_pipeline' || item.block === 'chart_history_pass' || item.block === 'chart_recruiter' || item.block === 'chart_pending_backlog' || item.block === 'lifecycle_funnel' || item.block === 'chart_lifecycle_pass_rate' || item.block === 'chart_job_pending_backlog' || item.block === 'chart_recruiter_recommend_vs_hired' || item.block === 'chart_pipeline_dialysis' || item.block === 'chart_client_job_stage_grouped' || item.block === 'chart_client_job_stage_stacked' || item.block === 'chart_client_job_stage_funnel'">
                         <p v-if="loading && tabNeedsDashboardData" class="state-msg">加载中…</p>
                         <p v-else-if="!rmsChartHasData(item.block)" class="state-msg">暂无数据</p>
                         <div v-else class="chart-area">
@@ -1424,13 +1781,13 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                 </tbody>
                             </table>
                         </div>
-                        <div v-if="clientJobStageRows.length" class="rms-job-stage-pagination flex flex-wrap items-center justify-between gap-3 px-1 pb-1">
-                            <p class="text-[0.8rem] text-[#6B7280]">共 <span class="font-semibold text-[#1A1D1F]">{{ clientJobStageRows.length }}</span> 条，第 {{ clientJobStageCurrentPage }} / {{ clientJobStageTotalPages }} 页</p>
-                            <div class="flex items-center gap-1.5">
-                                <button type="button" @click="clientJobStageGoPage(clientJobStageCurrentPage - 1)" :disabled="clientJobStageCurrentPage <= 1" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">上一页</button>
-                                <button v-for="p in clientJobStagePageNumbers" :key="'cjs-pg-'+p" type="button" @click="clientJobStageGoPage(p)" :class="p === clientJobStageCurrentPage ? 'border-[#456595] bg-[#456595] text-white' : 'border-[#D7DBE0] bg-white text-[#1A1D1F] hover:bg-[#F9FAFB]'" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border px-2 text-sm transition-colors">{{ p }}</button>
-                                <button type="button" @click="clientJobStageGoPage(clientJobStageCurrentPage + 1)" :disabled="clientJobStageCurrentPage >= clientJobStageTotalPages" class="inline-flex h-8 min-w-8 items-center justify-center rounded-[6px] border border-[#D7DBE0] bg-white px-2 text-sm text-[#1A1D1F] transition-colors hover:bg-[#F9FAFB] disabled:cursor-not-allowed disabled:opacity-40">下一页</button>
-                                <span class="ml-1 inline-flex h-8 items-center rounded-[6px] border border-[#D7DBE0] bg-white px-2.5 text-sm text-[#6B7280]">{{ clientJobStagePageSize }} 条 / 页</span>
+                        <div v-if="clientJobStageRows.length" class="rms-job-stage-pagination">
+                            <p class="rms-pagination-meta">共 <strong>{{ clientJobStageRows.length }}</strong> 条，第 {{ clientJobStageCurrentPage }} / {{ clientJobStageTotalPages }} 页</p>
+                            <div class="rms-pagination-controls">
+                                <button type="button" @click="clientJobStageGoPage(clientJobStageCurrentPage - 1)" :disabled="clientJobStageCurrentPage <= 1" class="rms-page-btn">上一页</button>
+                                <button v-for="p in clientJobStagePageNumbers" :key="'cjs-pg-'+p" type="button" @click="clientJobStageGoPage(p)" :class="['rms-page-btn', p === clientJobStageCurrentPage ? 'is-active' : '']">{{ p }}</button>
+                                <button type="button" @click="clientJobStageGoPage(clientJobStageCurrentPage + 1)" :disabled="clientJobStageCurrentPage >= clientJobStageTotalPages" class="rms-page-btn">下一页</button>
+                                <span class="rms-page-size">{{ clientJobStagePageSize }} 条 / 页</span>
                             </div>
                         </div>
                         </div>
@@ -1469,23 +1826,83 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                         </div>
                     </template>
                     <template v-else-if="item.block === 'table_roster'">
-                        <table class="rms-stage-table" v-if="rosterCheck && rosterCheck.items.length">
-                            <thead><tr>
-                                <th>候选人</th><th>客户</th><th>入职日</th><th>核对结果</th><th>转入状态</th><th>说明</th>
-                            </tr></thead>
-                            <tbody>
-                                <tr v-for="row in rosterCheck.items" :key="row.application_id">
-                                    <td>{{ row.candidate_name }}</td>
-                                    <td>{{ row.client_name }}</td>
-                                    <td>{{ formatRmsDate(row.hired_at) }}</td>
-                                    <td>{{ row.roster_status }}</td>
-                                    <td>{{ rosterConversionLabel(row) }}</td>
-                                    <td>{{ row.message }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <p v-else-if="rosterLoading" class="state-msg">核对中…</p>
-                        <p v-else class="state-msg">点击「执行核对」加载花名册比对结果</p>
+                        <div class="rms-roster-check-panel">
+                            <div class="rms-roster-check-toolbar">
+                                <div class="rms-roster-toolbar-row">
+                                    <div class="rms-roster-search-wrap">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="rms-roster-search-icon" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.3-4.3M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z"/></svg>
+                                        <input v-model.trim="rosterFilterKeyword" type="search" placeholder="搜索候选人、客户、说明…" class="rms-roster-search-input" />
+                                    </div>
+                                    <button type="button"
+                                        @click="rosterFilterPanelExpanded = !rosterFilterPanelExpanded"
+                                        :class="['rms-roster-filter-btn', rosterFilterPanelExpanded ? 'is-active' : '']">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M6 12h12M10 19h4"/></svg>
+                                        筛选
+                                    </button>
+                                    <p class="rms-roster-toolbar-total">
+                                        合计：<span>{{ rosterFilteredRows.length }}</span> 条
+                                    </p>
+                                    <span class="rms-icon-tip-wrap">
+                                        <button type="button" class="rms-roster-icon-btn" :disabled="rosterLoading" @click="loadRosterCheck" aria-label="执行核对">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>
+                                        </button>
+                                        <span class="rms-icon-tip rms-icon-tip--below">执行核对</span>
+                                    </span>
+                                </div>
+                                <div v-if="rosterFilterPanelExpanded" class="rms-roster-filter-panel">
+                                    <div class="rms-roster-filter-status-group">
+                                        <span class="rms-roster-filter-status-label">核对结果</span>
+                                        <label v-for="opt in rosterFilterStatusOptions" :key="'rfs-'+opt.value" class="rms-roster-filter-check">
+                                            <input type="checkbox" :checked="rosterFilterStatuses.includes(opt.value)" @change="toggleRosterStatusFilter(opt.value)" />
+                                            <span>{{ opt.label }}</span>
+                                        </label>
+                                    </div>
+                                    <select v-model="rosterFilterConversion" class="crm-filter-item crm-filter-control rms-roster-filter-select">
+                                        <option value="">转入状态</option>
+                                        <option v-for="opt in rosterFilterConversionOptions" :key="'rfc-'+opt.value" :value="opt.value">{{ opt.label }}</option>
+                                    </select>
+                                    <button type="button" class="crm-filter-item crm-filter-reset" @click="clearRosterTableFilters">清除筛选</button>
+                                </div>
+                            </div>
+                            <p v-if="rosterLoading" class="state-msg">核对中…</p>
+                            <p v-else-if="!rosterCheck || !rosterCheck.items.length" class="state-msg">点击「执行核对」加载花名册比对结果</p>
+                            <p v-else-if="!rosterFilteredRows.length" class="state-msg">无符合筛选条件的记录</p>
+                            <template v-else>
+                                <div class="rms-roster-check-scroll crm-skin">
+                                    <table class="crm-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM5 20a7 7 0 0 1 14 0"/></svg>候选人</th>
+                                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.5 8.5h17v10a1.5 1.5 0 0 1-1.5 1.5h-14A1.5 1.5 0 0 1 3.5 18.5v-10ZM8.5 8.5V6.5a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v2"/></svg>客户</th>
+                                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M4 11h16M5 21h14a2 2 0 0 0 2-2V7H3v12a2 2 0 0 0 2 2Z"/></svg>入职日</th>
+                                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7"/></svg>核对结果</th>
+                                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M16 4l4 4-4 4M20 8H9M8 20l-4-4 4-4M4 16h11"/></svg>转入状态</th>
+                                                <th class="crm-th"><svg class="ct-th-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h14"/></svg>说明</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="row in rosterCheckPagedRows" :key="row.application_id">
+                                                <td class="crm-td crm-name-cell"><span class="crm-name-link">{{ row.candidate_name || '—' }}</span></td>
+                                                <td class="crm-td">{{ row.client_name || '—' }}</td>
+                                                <td class="crm-td rms-roster-td-muted">{{ formatRmsDate(row.hired_at) }}</td>
+                                                <td class="crm-td"><span :class="rosterStatusBadgeClass(row.roster_status)" class="rms-roster-status-badge">{{ rosterStatusLabel(row.roster_status) }}</span></td>
+                                                <td class="crm-td"><span :class="rosterConversionBadgeClass(row)" class="rms-roster-conv-badge">{{ rosterConversionLabel(row) }}</span></td>
+                                                <td class="crm-td rms-roster-td-muted">{{ row.message || '—' }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div v-if="rosterFilteredRows.length" class="rms-roster-check-pagination">
+                                    <p class="rms-pagination-meta">共 <strong>{{ rosterFilteredRows.length }}</strong> 条，第 {{ rosterCheckCurrentPage }} / {{ rosterCheckTotalPages }} 页</p>
+                                    <div class="rms-pagination-controls">
+                                        <button type="button" @click="rosterCheckGoPage(rosterCheckCurrentPage - 1)" :disabled="rosterCheckCurrentPage <= 1" class="rms-page-btn">上一页</button>
+                                        <button v-for="p in rosterCheckPageNumbers" :key="'rc-pg-'+p" type="button" @click="rosterCheckGoPage(p)" :class="['rms-page-btn', p === rosterCheckCurrentPage ? 'is-active' : '']">{{ p }}</button>
+                                        <button type="button" @click="rosterCheckGoPage(rosterCheckCurrentPage + 1)" :disabled="rosterCheckCurrentPage >= rosterCheckTotalPages" class="rms-page-btn">下一页</button>
+                                        <span class="rms-page-size">10 条 / 页</span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
                     </template>
 
                     <template v-else>
@@ -1783,6 +2200,10 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                             <div class="toggle-row"><span>显示摘要图例</span><input type="checkbox" v-model="widgetForm.config.style.show_summary_legend" /></div>
                             <div class="toggle-row"><span>高亮最大值</span><input type="checkbox" :checked="(widgetForm.config.style.highlight_item || 'latest') === 'max'" @change="widgetForm.config.style.highlight_item = $event.target.checked ? 'max' : 'latest'" /></div>
                         </template>
+                        <div v-if="isRmsPresetDataLabelsSupported(widgetForm.config.style)" class="toggle-row">
+                            <span>数据标签</span>
+                            <input type="checkbox" v-model="widgetForm.config.style.show_data_labels" />
+                        </div>
                         <div v-if="isRmsPresetGroupedChartBlock(widgetForm.config.block)" class="toggle-row">
                             <span>显示分组构成</span>
                             <input type="checkbox" v-model="widgetForm.config.style.show_group_composition" />
@@ -1795,7 +2216,6 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                                     <option value="loss">损耗数据</option>
                                 </select>
                             </div>
-                            <div class="toggle-row"><span>显示标签数据</span><input type="checkbox" v-model="widgetForm.config.style.show_data_labels" /></div>
                             <div class="toggle-row"><span>堆叠条形图</span><input type="checkbox" :checked="(widgetForm.config.style.group_mode || 'grouped') === 'stacked'" @change="togglePresetGroupMode" /></div>
                         </template>
                         <div v-if="!(widgetForm.config.style && widgetForm.config.style.chart_type === 'line_1')" class="toggle-row">
@@ -2163,7 +2583,7 @@ body.rms-dashboard-edit-mode #handbook-assistant {
                     <label class="crm-field-label" for="rms-dashboard-desc-input">描述</label>
                     <textarea id="rms-dashboard-desc-input" v-model="dashboardForm.description" class="crm-form-control text-sm" rows="2" placeholder="可选"></textarea>
                 </div>
-                <p class="text-xs text-[#98a2b3]">将自动创建总览 / 生命周期转化 / 客户岗位分析 / 招聘人效 / 花名册核对五个标签页。</p>
+                <p class="rms-modal-hint">将自动创建总览 / 生命周期转化 / 客户岗位分析 / 招聘人效 / 花名册核对五个标签页。</p>
             </div>
             <div class="modal-form-actions">
                 <button type="button" class="tbtn" @click="showDashboardModal = false">取消</button>
@@ -2202,15 +2622,15 @@ body.rms-dashboard-edit-mode #handbook-assistant {
 {% endraw %}
 {% endblock %}
 {% block page_scripts %}
-<script src="/static/js/shared/featured-line-chart-kit.js?v=featured-line-20260627"></script>
-<script src="/static/js/shared/line1-chart-kit.js?v=line1-20260628"></script>
-<script src="/static/js/shared/featured-bar-chart-kit.js?v=featured-bar-20260627"></script>
+<script src="/static/js/shared/featured-line-chart-kit.js?v=avg-compact-20260702"></script>
+<script src="/static/js/shared/line1-chart-kit.js?v=percent-scale-20260701"></script>
+<script src="/static/js/shared/featured-bar-chart-kit.js?v=avg-accent-20260702"></script>
 <script src="/static/js/shared/flow-bar-chart-kit.js?v=flow-bar-polished-20260629"></script>
 <script src="/static/js/shared/dashboard-widget-kit.js?v=grouped-segment-limit-20260629"></script>
 <script src="/static/js/pages/rms-core.js?v=rms-core-list-pagination-20260627"></script>
 <script src="/static/js/pages/rms-dashboard-core.js?v=featured-bar-rms-20260627"></script>
-<script src="/static/js/pages/rms-dashboard-metrics.js?v=dashboard-zero-resume-filter-20260627"></script>
-<script src="/static/js/pages/rms-dashboard-charts.js?v=doughnut-legend-stable-20260629"></script>
-<script src="/static/js/pages/rms-dashboard-inspector.js?v=doughnut-legend-stable-20260629"></script>
-<script src="/static/js/pages/rms-dashboard.js?v=doughnut-legend-stable-20260629"></script>
+<script src="/static/js/pages/rms-dashboard-metrics.js?v=kpi-head-20260701"></script>
+<script src="/static/js/pages/rms-dashboard-charts.js?v=avg-compact-20260702"></script>
+<script src="/static/js/pages/rms-dashboard-inspector.js?v=avg-accent-20260702"></script>
+<script src="/static/js/pages/rms-dashboard.js?v=avg-accent-20260702"></script>
 {% endblock %}

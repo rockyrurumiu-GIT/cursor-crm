@@ -94,6 +94,15 @@
     return { min: min - span * 0.08, max: max + span * 0.08 };
   }
 
+  function resolveValueScaleDomain(cfg, values) {
+    if (cfg && cfg.value_scale_max != null && Number.isFinite(Number(cfg.value_scale_max))) {
+      var fixedMin = cfg.value_scale_min != null && Number.isFinite(Number(cfg.value_scale_min))
+        ? Number(cfg.value_scale_min) : 0;
+      return { min: fixedMin, max: Number(cfg.value_scale_max) };
+    }
+    return computeYDomain(values);
+  }
+
   function thinAxisLabels(labels, maxLabels) {
     maxLabels = maxLabels || 8;
     if (labels.length <= maxLabels) {
@@ -111,7 +120,7 @@
     return v.toFixed(1);
   }
 
-  function createChartGeometry(points) {
+  function createChartGeometry(points, cfg) {
     var w = 1000;
     var h = 320;
     var padL = 52;
@@ -121,7 +130,7 @@
     var chartW = w - padL - padR;
     var chartH = h - padT - padB;
     var values = points.map(function (p) { return p.value; });
-    var domain = computeYDomain(values);
+    var domain = resolveValueScaleDomain(cfg, values);
     var n = points.length;
     function xAt(i) {
       if (n <= 1) return padL + chartW / 2;
@@ -145,8 +154,8 @@
     return { w: w, h: h, padT: padT, padB: padB, domain: domain, n: n, xAt: xAt, xPctAt: xPctAt, yAt: yAt, indexAtClientX: indexAtClientX };
   }
 
-  function buildStaticSvg(points, accent, showGrid) {
-    var geo = createChartGeometry(points);
+  function buildStaticSvg(points, accent, showGrid, cfg) {
+    var geo = createChartGeometry(points, cfg);
     var w = geo.w;
     var h = geo.h;
     var padL = 52;
@@ -394,7 +403,7 @@
     chartWrap.className = "line1-chart-wrap";
     var hoverCleanup = null;
     if (!model.empty) {
-      var built = buildStaticSvg(model.points, accent, showGrid);
+      var built = buildStaticSvg(model.points, accent, showGrid, cfg);
       chartWrap.innerHTML = built.html;
       var geo = built.geometry;
       if (showTooltip) {

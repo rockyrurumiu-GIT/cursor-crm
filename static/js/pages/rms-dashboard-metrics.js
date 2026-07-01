@@ -190,6 +190,79 @@
         .filter(function (r) { return r.count > 0; });
     });
 
+    var clientHiredRankingTotal = computed(function () {
+      return clientHiredRankingRows.value.reduce(function (sum, r) {
+        return sum + (r.count || 0);
+      }, 0);
+    });
+
+    function aggregateClientMetricRows(metricFn, filterFn) {
+      var byClient = {};
+      clientJobStageRows.value.forEach(function (r) {
+        var patch = metricFn(r);
+        if (!patch) return;
+        var key = String(r.client_id || r.client_name || "—");
+        if (!byClient[key]) {
+          byClient[key] = Object.assign({
+            label: r.client_name || ("客户#" + r.client_id),
+            client_id: r.client_id,
+          }, patch);
+        } else {
+          Object.keys(patch).forEach(function (k) {
+            if (typeof patch[k] === "number") byClient[key][k] = (byClient[key][k] || 0) + patch[k];
+          });
+        }
+      });
+      return Object.keys(byClient)
+        .map(function (k) {
+          var row = byClient[k];
+          row.label = truncateJobLabel(row.label, 10);
+          row.count = row.count != null ? row.count : 0;
+          row.value = row.value != null ? row.value : row.count;
+          return row;
+        })
+        .filter(filterFn)
+        .sort(function (a, b) { return (b.value || 0) - (a.value || 0); });
+    }
+
+    var clientHcRows = computed(function () {
+      var items = (data.value && data.value.demand_overview && data.value.demand_overview.open_hc_by_client) || [];
+      return items
+        .map(function (r) {
+          var hc = r.headcount || 0;
+          return {
+            label: truncateJobLabel(r.client_name || ("客户#" + r.client_id), 10),
+            client_id: r.client_id,
+            count: hc,
+            value: hc,
+          };
+        })
+        .filter(function (row) { return row.count > 0; });
+    });
+
+    var clientResumeToHireRateRows = computed(function () {
+      return aggregateClientMetricRows(
+        function (r) {
+          var resumes = r.pushed_resume_count || 0;
+          var hired = r.hired_count || 0;
+          if (resumes <= 0 && hired <= 0) return null;
+          return { resume_count: resumes, hired_count: hired, count: 0, value: 0, pass_rate: "—", pass_rate_value: null };
+        },
+        function (row) { return (row.resume_count || 0) > 0; }
+      ).map(function (row) {
+        var denom = row.resume_count || 0;
+        var num = row.hired_count || 0;
+        if (denom > 0) {
+          var pct = Math.round(1000 * num / denom) / 10;
+          row.value = pct;
+          row.pass_rate_value = pct;
+          row.pass_rate = pct + "%";
+          row.count = pct;
+        }
+        return row;
+      });
+    });
+
     var recruiterRecommendVsHiredRows = computed(function () {
       return (data.value && data.value.recruiter_performance) || [];
     });
@@ -287,6 +360,9 @@
       pendingBacklogRows: pendingBacklogRows,
       jobPendingBacklogRows: jobPendingBacklogRows,
       clientHiredRankingRows: clientHiredRankingRows,
+      clientHiredRankingTotal: clientHiredRankingTotal,
+      clientHcRows: clientHcRows,
+      clientResumeToHireRateRows: clientResumeToHireRateRows,
       recruiterRecommendVsHiredRows: recruiterRecommendVsHiredRows,
       pipelineDialysisGrouped: pipelineDialysisGrouped,
       pipelineDialysisHasData: pipelineDialysisHasData,

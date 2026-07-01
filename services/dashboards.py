@@ -380,6 +380,8 @@ RMS_PRESET_STYLE_BLOCKS: FrozenSet[str] = frozenset({
     "chart_client_hired_ranking",
     "chart_recruiter_recommend_vs_hired",
     "chart_pipeline_dialysis",
+    "kpi_hc",
+    "kpi_resume_to_hire_rate",
 })
 RMS_PRESET_STYLE_KEYS: FrozenSet[str] = frozenset({
     "color", "color_shade", "sort", "show_grid", "bar_radius", "max_items", "show_values", "palette",
@@ -482,7 +484,7 @@ def _sanitize_rms_preset_style(raw: dict) -> dict:
         "show_line1_grid": bool(raw.get("show_line1_grid", True)),
         "pipeline_data_mode": pipeline_data_mode,
         "group_mode": group_mode,
-        "show_data_labels": bool(raw.get("show_data_labels", True)),
+        "show_data_labels": bool(raw.get("show_data_labels", False)),
     }
 
 

@@ -18,6 +18,8 @@
     chart_client_hired_ranking: true,
     chart_recruiter_recommend_vs_hired: true,
     chart_pipeline_dialysis: true,
+    kpi_hc: true,
+    kpi_resume_to_hire_rate: true,
   };
 
   var RMS_PRESET_GROUPED_CHART_BLOCKS = {
@@ -67,6 +69,7 @@
       sort: "value_desc",
       chart_type: "horizontal_bar",
       show_values: false,
+      show_data_labels: false,
       show_grid: true,
       bar_radius: RMS_CHART_BAR_RADIUS,
       max_items: 8,
@@ -89,6 +92,17 @@
       style.chart_type = "line";
       style.metric = "pass_rate";
     }
+    if (block === "kpi_resume_to_hire_rate") {
+      style.chart_type = "line";
+      style.max_items = 12;
+    }
+    if (block === "kpi_hc") {
+      style.max_items = 12;
+      style.show_average_line = false;
+    }
+    if (block === "chart_client_hired_ranking") {
+      style.show_average_line = false;
+    }
     if (block === "chart_recruiter_recommend_vs_hired") {
       style.show_group_composition = true;
     }
@@ -108,6 +122,13 @@
 
   function isRmsPresetGroupedChartBlock(block) {
     return !!RMS_PRESET_GROUPED_CHART_BLOCKS[block];
+  }
+
+  function isRmsPresetDataLabelsSupported(style) {
+    if (!style) return false;
+    var chartType = style.chart_type || "horizontal_bar";
+    if (chartType === "pie" || chartType === "featured_line" || chartType === "line_1") return false;
+    return true;
   }
 
   function rmsPresetStyle(config, block) {
@@ -150,6 +171,15 @@
 
   function paletteForStyle(style) {
     return KIT.widgetPalette(presetStyleColorCfg(style));
+  }
+
+  function kpiChartAccentColor(widget) {
+    if (!widget || !widget.config) return "#1f2328";
+    var block = widget.config.block || "";
+    var style = rmsPresetStyle(widget.config, block);
+    var palette = paletteForStyle(style);
+    var shade = KIT.selectedShade(presetStyleColorCfg(style));
+    return palette[shade] || "#1f2328";
   }
 
   function presetBarColorsFromStyle(style, n) {
@@ -494,7 +524,7 @@
       syncWidgetFormToTab();
       var wid = widgetForm.value.id;
       if (wid != null) {
-        refreshWidgetChart(wid, { animate: false });
+        previewWidgetChartFromForm();
       }
       flushPersistWidget();
     }
@@ -522,10 +552,10 @@
       filter: { w: 12, h: 1, title: "筛选" },
       kpi_clients: { w: 4, h: 3, title: "有需求客户数" },
       kpi_jobs: { w: 4, h: 3, title: "需求总数" },
-      kpi_hc: { w: 4, h: 3, title: "HC 总数" },
+      kpi_hc: { w: 4, h: 5, title: "HC 总数" },
       kpi_resume_count: { w: 4, h: 3, title: "简历数" },
       kpi_hired_count: { w: 4, h: 3, title: "入职数" },
-      kpi_resume_to_hire_rate: { w: 4, h: 3, title: "百简历入职转化率" },
+      kpi_resume_to_hire_rate: { w: 4, h: 5, title: "百简历入职转化率" },
       chart_pipeline: { w: 8, h: 6, title: "招聘管道（活动态）" },
       chart_pending_backlog: { w: 4, h: 6, title: "待处理积压" },
       filter_summary: { w: 4, h: 6, title: "当前筛选" },
@@ -617,12 +647,24 @@
         h: f.h,
       };
       if (res && typeof res === "object") {
+        var localConfig = payload.config;
+        var remoteConfig = res.config != null ? res.config : localConfig;
+        if (
+          localConfig
+          && localConfig.style
+          && isRmsPresetStyleBlock(localConfig.block || (f.config && f.config.block))
+          && (!remoteConfig.style || typeof remoteConfig.style !== "object")
+        ) {
+          remoteConfig = Object.assign({}, remoteConfig, {
+            style: rmsPresetStyle(f.config, localConfig.block || remoteConfig.block),
+          });
+        }
         Object.assign(payload, {
           id: res.id != null ? res.id : payload.id,
           title: res.title != null ? res.title : payload.title,
           widget_type: res.widget_type != null ? res.widget_type : payload.widget_type,
           source_key: res.source_key != null ? res.source_key : payload.source_key,
-          config: res.config != null ? res.config : payload.config,
+          config: remoteConfig,
           x: res.x != null ? res.x : payload.x,
           y: res.y != null ? res.y : payload.y,
           w: res.w != null ? res.w : payload.w,
@@ -707,6 +749,14 @@
       }
       if (isRmsLine1Preset(w) || w.widget_type === "line_1" || isRmsFeaturedBarPreset(w)) {
         renderSingleWidget(w, { animate: false });
+        return;
+      }
+      if (isRmsPresetStyleBlock(widgetBlock(w))) {
+        nextTick(function () {
+          nextTick(function () {
+            renderSingleWidget(w, { animate: false });
+          });
+        });
         return;
       }
       if (refreshWidgetChart) refreshWidgetChart(widgetForm.value.id, { animate: false });
@@ -1233,11 +1283,13 @@
       rmsPresetStyle: rmsPresetStyle,
       applyPresetStyleRows: applyPresetStyleRows,
       paletteForStyle: paletteForStyle,
+      kpiChartAccentColor: kpiChartAccentColor,
       presetBarColorsFromStyle: presetBarColorsFromStyle,
       presetStyleColorCfg: presetStyleColorCfg,
       presetRowValue: presetRowValue,
       isRmsPresetStyleBlock: isRmsPresetStyleBlock,
       isRmsPresetGroupedChartBlock: isRmsPresetGroupedChartBlock,
+      isRmsPresetDataLabelsSupported: isRmsPresetDataLabelsSupported,
       panelOpen: panelOpen,
       panelView: panelView,
       activePicker: activePicker,
@@ -1312,6 +1364,7 @@
     rmsPresetStyle: rmsPresetStyle,
     applyPresetStyleRows: applyPresetStyleRows,
     paletteForStyle: paletteForStyle,
+    kpiChartAccentColor: kpiChartAccentColor,
     presetBarColorsFromStyle: presetBarColorsFromStyle,
     presetStyleColorCfg: presetStyleColorCfg,
     presetRowValue: presetRowValue,

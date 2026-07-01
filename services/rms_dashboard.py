@@ -449,19 +449,39 @@ def _demand_overview(
     RmsJob: Type[Any],
     Client: Type[Any],
     filters: Dict[str, Any],
-) -> Dict[str, int]:
+) -> Dict[str, Any]:
     q = _scoped_jobs_query(db, ctx, RmsJob, Client, filters)
     q = q.filter(RmsJob.status == "open")
     rows = q.all()
     clients: Set[int] = set()
     hc = 0
+    by_client: Dict[int, int] = defaultdict(int)
     for j in rows:
-        clients.add(int(j.client_id))
-        hc += int(j.headcount or 0)
+        cid = int(j.client_id)
+        clients.add(cid)
+        job_hc = int(j.headcount or 0)
+        hc += job_hc
+        by_client[cid] += job_hc
+    client_names: Dict[int, str] = {}
+    if clients:
+        for cid, name in (
+            db.query(Client.id, Client.name).filter(Client.id.in_(clients)).all()
+        ):
+            client_names[int(cid)] = (name or "").strip()
+    open_hc_by_client = [
+        {
+            "client_id": cid,
+            "client_name": client_names.get(cid, "") or f"客户#{cid}",
+            "headcount": count,
+        }
+        for cid, count in sorted(by_client.items(), key=lambda item: (-item[1], item[0]))
+        if count > 0
+    ]
     return {
         "open_client_count": len(clients),
         "open_job_count": len(rows),
         "open_hc_total": hc,
+        "open_hc_by_client": open_hc_by_client,
     }
 
 

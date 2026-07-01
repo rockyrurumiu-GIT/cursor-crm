@@ -6,6 +6,9 @@
 
   var FEATURED_BLUE = "#1e96e8";
   var MAX_POINTS = 12;
+  var AXIS_LABEL_FONT_SIZE = 22;
+  var AXIS_LABEL_FONT_SIZE_FEW = 23;
+  var BAR_VALUE_LABEL_FONT_SIZE = 22;
   var MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   function fmtNum(v) {
@@ -17,6 +20,14 @@
 
   function formatValue(prefix, suffix, value) {
     return (prefix || "") + fmtNum(value) + (suffix || "");
+  }
+
+  function formatBarDataLabel(model, value) {
+    var prefix = model.valuePrefix || "";
+    var suffix = model.valueSuffix || "";
+    if (suffix) return formatValue(prefix, suffix, value);
+    if (prefix && prefix.length <= 2) return prefix + fmtNum(value);
+    return fmtNum(value);
   }
 
   function currentPeriodLabel(dateGroup) {
@@ -35,7 +46,20 @@
     return y + "-" + m;
   }
 
-  function shortAxisLabel(label) {
+  function clientNameSuffix(label) {
+    var s = String(label || "").trim();
+    var idx = s.lastIndexOf("-");
+    if (idx < 0 || idx >= s.length - 1) return "";
+    var suffix = s.slice(idx + 1).trim();
+    if (/^[A-Za-z][A-Za-z0-9]*$/.test(suffix)) return suffix.toUpperCase();
+    return "";
+  }
+
+  function shortAxisLabel(label, labelAxisMode) {
+    if (labelAxisMode === "client_suffix") {
+      var code = clientNameSuffix(label);
+      if (code) return code;
+    }
     var s = String(label || "");
     var monthMatch = /^(\d{4})-(\d{2})$/.exec(s);
     if (monthMatch) {
@@ -146,6 +170,12 @@
       showAverageLine: showAverageLine,
       showTooltip: showTooltip,
       showSummaryLegend: showSummaryLegend,
+      valueScaleMin: cfg.value_scale_min,
+      valueScaleMax: cfg.value_scale_max,
+      showDataLabels: cfg.show_data_labels === true,
+      labelFontBoost: Number(cfg.label_font_boost) || 0,
+      labelAxisMode: cfg.label_axis_mode || "auto",
+      compactAvgLabel: cfg.compact_avg_label === true,
     };
   }
 
@@ -186,23 +216,31 @@
     return escapeHtml(text);
   }
 
-  function axisDisplayLabel(label, slotW, n) {
-    var s = shortAxisLabel(label);
-    var fontSize = n > 8 ? 12 : 13;
+  function axisDisplayLabel(label, slotW, fontSize, labelAxisMode) {
+    var s = shortAxisLabel(label, labelAxisMode);
+    fontSize = fontSize || AXIS_LABEL_FONT_SIZE;
     var maxChars = Math.max(2, Math.floor((slotW - 6) / (fontSize * 0.62)));
     if (s.length > maxChars) return s.slice(0, Math.max(1, maxChars - 1)) + "…";
     return s;
   }
 
-  function appendSvgAxisLabels(svg, points, activeIdx, n, padL, slotW, padT, chartH) {
-    var labelCY = padT + chartH + 14;
-    var fontSize = n > 8 ? 12 : 13;
-    var pillH = 22;
+  function resolveLabelFontSizes(n, boost) {
+    boost = Number(boost) || 0;
+    return {
+      axis: (n > 8 ? AXIS_LABEL_FONT_SIZE : AXIS_LABEL_FONT_SIZE_FEW) + boost,
+      barValue: BAR_VALUE_LABEL_FONT_SIZE + boost,
+    };
+  }
+
+  function appendSvgAxisLabels(svg, points, activeIdx, n, padL, slotW, padT, chartH, axisFontSize, labelAxisMode) {
+    var labelCY = padT + chartH + 20;
+    var fontSize = axisFontSize || (n > 8 ? AXIS_LABEL_FONT_SIZE : AXIS_LABEL_FONT_SIZE_FEW);
+    var pillH = Math.max(34, Math.round(fontSize * 1.45));
     var i;
     for (i = 0; i < n; i++) {
       var cx = padL + i * slotW + slotW / 2;
       var fullLabel = points[i].label;
-      var displayLabel = axisDisplayLabel(fullLabel, slotW, n);
+      var displayLabel = axisDisplayLabel(fullLabel, slotW, fontSize, labelAxisMode);
       var isActive = i === activeIdx && activeIdx >= 0;
       svg.push('<g class="bms-featured-bar-axis-g">');
       svg.push("<title>" + escapeHtml(fullLabel) + "</title>");
@@ -239,16 +277,22 @@
     var padL = 48;
     var padR = 24;
     var padT = 52;
-    var padB = 34;
+    var labelSizes = resolveLabelFontSizes(n, model.labelFontBoost);
+    var padB = 48 + Math.round((Number(model.labelFontBoost) || 0) * 0.8);
     var chartW = w - padL - padR;
     var chartH = h - padT - padB;
-    var maxVal = Math.max.apply(null, points.map(function (p) { return p.value; }).concat([model.averageValue, 1]));
+    var dataMax = Math.max.apply(null, points.map(function (p) { return p.value; }).concat([model.averageValue, 1]));
+    var scaleMin = model.valueScaleMin != null && Number.isFinite(Number(model.valueScaleMin))
+      ? Number(model.valueScaleMin) : 0;
+    var scaleMax = model.valueScaleMax != null && Number.isFinite(Number(model.valueScaleMax))
+      ? Number(model.valueScaleMax) : dataMax;
+    var scaleSpan = scaleMax - scaleMin || 1;
     var slotW = chartW / n;
     var barW = Math.max(44, Math.min(60, slotW * 0.62));
     var activeIdx = model.activeIndex;
 
     function barHeight(v) {
-      return Math.max(4, (v / maxVal) * chartH);
+      return Math.max(4, ((v - scaleMin) / scaleSpan) * chartH);
     }
     function barX(i) {
       return padL + i * slotW + (slotW - barW) / 2;
@@ -285,7 +329,7 @@
     var activeMeta = null;
     var avgLineYPct = null;
     if (model.showAverageLine) {
-      var avgY = padT + chartH - (model.averageValue / maxVal) * chartH;
+      var avgY = padT + chartH - ((model.averageValue - scaleMin) / scaleSpan) * chartH;
       avgLineYPct = (avgY / h) * 100;
       svg.push('<line class="bms-featured-bar-avg" x1="' + padL + '" y1="' + avgY.toFixed(2) + '" x2="' + (w - padR) + '" y2="' + avgY.toFixed(2) + '" stroke="#9ca3af" stroke-width="2" stroke-dasharray="6 6"/>');
     }
@@ -333,6 +377,16 @@
         isActive: isActive,
       });
 
+      if (model.showDataLabels && hasValue) {
+        var labelText = formatBarDataLabel(model, barVal);
+        svg.push(
+          '<text class="bms-featured-bar-value-label' + (isActive ? " bms-featured-bar-value-label--active" : "")
+          + '" x="' + centerX.toFixed(2) + '" y="' + (by - 12).toFixed(2)
+          + '" text-anchor="middle" fill="' + (isActive ? "#1570b8" : "#6b7280")
+          + '" font-size="' + labelSizes.barValue + '" font-weight="600">' + escapeHtml(labelText) + "</text>"
+        );
+      }
+
       var hitY = padT;
       var hitH = chartH;
       svg.push(
@@ -342,7 +396,7 @@
       );
     }
 
-    appendSvgAxisLabels(svg, points, activeIdx, n, padL, slotW, padT, chartH);
+    appendSvgAxisLabels(svg, points, activeIdx, n, padL, slotW, padT, chartH, labelSizes.axis, model.labelAxisMode);
 
     svg.push('</svg>');
     return {
@@ -549,6 +603,9 @@
     if (model.showAverageLine && built.avgLineYPct != null) {
       var avgLabel = document.createElement("div");
       avgLabel.className = "bms-featured-bar-average-label";
+      if (model.compactAvgLabel) {
+        avgLabel.className += " bms-featured-bar-average-label--compact";
+      }
       avgLabel.textContent = model.averageLabel;
       avgLabel.style.top = built.avgLineYPct + "%";
       chartWrap.appendChild(avgLabel);

@@ -351,6 +351,9 @@
         var pendingBacklogRows = metrics.pendingBacklogRows;
         var jobPendingBacklogRows = metrics.jobPendingBacklogRows;
         var clientHiredRankingRows = metrics.clientHiredRankingRows;
+        var clientHiredRankingTotal = metrics.clientHiredRankingTotal;
+        var clientHcRows = metrics.clientHcRows;
+        var clientResumeToHireRateRows = metrics.clientResumeToHireRateRows;
         var recruiterRecommendVsHiredRows = metrics.recruiterRecommendVsHiredRows;
         var pipelineDialysisGrouped = metrics.pipelineDialysisGrouped;
         var pipelineDialysisHasData = metrics.pipelineDialysisHasData;
@@ -524,6 +527,12 @@
           }
           if (block === "chart_client_hired_ranking") {
             return clientHiredRankingRows.value.length > 0;
+          }
+          if (block === "kpi_hc") {
+            return clientHcRows.value.length > 0;
+          }
+          if (block === "kpi_resume_to_hire_rate") {
+            return clientResumeToHireRateRows.value.length > 0;
           }
           if (block === "chart_recruiter_recommend_vs_hired") {
             return recruiterRecommendVsHiredRows.value.length > 0;
@@ -810,6 +819,8 @@
           pendingBacklogRows: pendingBacklogRows,
           jobPendingBacklogRows: jobPendingBacklogRows,
           clientHiredRankingRows: clientHiredRankingRows,
+          clientHcRows: clientHcRows,
+          clientResumeToHireRateRows: clientResumeToHireRateRows,
           recruiterRecommendVsHiredRows: recruiterRecommendVsHiredRows,
           pipelineDialysisGrouped: pipelineDialysisGrouped,
           jobStageChartRows: jobStageChartRows,
@@ -1194,6 +1205,105 @@
           return "未转入";
         }
 
+        var rosterFilterKeyword = ref("");
+        var rosterFilterPanelExpanded = ref(false);
+        var rosterFilterStatuses = ref([]);
+        var rosterFilterConversion = ref("");
+        var rosterFilterStatusOptions = [
+          { value: "matched", label: "一致" },
+          { value: "missing", label: "缺失" },
+          { value: "date_mismatch", label: "不一致" },
+          { value: "ambiguous", label: "多匹配" },
+        ];
+        var rosterFilterConversionOptions = [
+          { value: "converted", label: "已转入" },
+          { value: "not_converted", label: "未转入" },
+          { value: "unbound", label: "疑似已存在，未绑定" },
+        ];
+
+        function rosterStatusLabel(status) {
+          var map = {
+            matched: "一致",
+            missing: "缺失",
+            date_mismatch: "不一致",
+            ambiguous: "多匹配",
+          };
+          return map[status] || status || "—";
+        }
+
+        function rosterStatusBadgeClass(status) {
+          var known = ["matched", "missing", "date_mismatch", "ambiguous"];
+          if (known.indexOf(status) < 0) return "rms-roster-conv-badge--pending";
+          return "rms-roster-status-badge--" + status;
+        }
+
+        function rosterConversionBadgeClass(row) {
+          if (!row) return "rms-roster-conv-badge--pending";
+          if (row.converted_to_roster_entry_id) return "rms-roster-conv-badge--done";
+          if (row.roster_status === "matched") return "rms-roster-conv-badge--unbound";
+          return "rms-roster-conv-badge--pending";
+        }
+
+        function toggleRosterStatusFilter(status) {
+          var list = rosterFilterStatuses.value.slice();
+          var idx = list.indexOf(status);
+          if (idx >= 0) list.splice(idx, 1);
+          else list.push(status);
+          rosterFilterStatuses.value = list;
+        }
+
+        function clearRosterTableFilters() {
+          rosterFilterKeyword.value = "";
+          rosterFilterStatuses.value = [];
+          rosterFilterConversion.value = "";
+        }
+
+        var rosterCheckItems = computed(function () {
+          return rosterCheck.value && Array.isArray(rosterCheck.value.items) ? rosterCheck.value.items : [];
+        });
+
+        var rosterFilteredRows = computed(function () {
+          var rows = rosterCheckItems.value;
+          var kw = (rosterFilterKeyword.value || "").trim().toLowerCase();
+          var statuses = rosterFilterStatuses.value || [];
+          var conv = rosterFilterConversion.value || "";
+          return rows.filter(function (row) {
+            if (statuses.length && statuses.indexOf(row.roster_status) < 0) return false;
+            if (conv === "converted" && !row.converted_to_roster_entry_id) return false;
+            if (conv === "not_converted" && row.converted_to_roster_entry_id) return false;
+            if (conv === "unbound" && !(row.roster_status === "matched" && !row.converted_to_roster_entry_id)) return false;
+            if (kw) {
+              var hay = [
+                row.candidate_name,
+                row.client_name,
+                row.message,
+                rosterStatusLabel(row.roster_status),
+                rosterConversionLabel(row),
+              ].join(" ").toLowerCase();
+              if (hay.indexOf(kw) < 0) return false;
+            }
+            return true;
+          });
+        });
+
+        var rosterCheckPagination = RmsCore.createListPagination
+          ? RmsCore.createListPagination({
+              ref: ref,
+              computed: computed,
+              watch: watch,
+              filteredRows: rosterFilteredRows,
+              prefix: "rosterCheck",
+              pageSize: 10,
+            })
+          : {
+              pagedRows: rosterFilteredRows,
+              rosterCheckCurrentPage: ref(1),
+              rosterCheckTotalPages: computed(function () { return 1; }),
+              rosterCheckPageNumbers: computed(function () { return [1]; }),
+              rosterCheckGoPage: function () {},
+              pageSize: 10,
+            };
+
         function findTabWithBlock(blockKey) {
           for (var i = 0; i < dashboards.value.length; i++) {
             var d = dashboards.value[i];
@@ -1340,6 +1450,202 @@
           if (!d || !d.tabs) return;
           d.tabs.forEach(function (t) { saveTabNameInline(t); });
         }
+
+        var tabDragIndex = ref(null);
+        var tabDragOverIndex = ref(null);
+        var tabDragGhostLabel = ref("");
+        var tabDragGhostPos = reactive({ x: 0, y: 0 });
+        var tabDragState = null;
+        var tabDragPending = null;
+        var tabDragDidMove = false;
+        var TAB_DRAG_HYSTERESIS = 12;
+
+        function cacheTabButtonRects() {
+          var nav = document.querySelector(".dash-tw-tabs");
+          if (!nav) return [];
+          var buttons = nav.querySelectorAll(".dash-tw-tab:not(.dash-tw-tab-add)");
+          var rects = [];
+          for (var i = 0; i < buttons.length; i++) {
+            var r = buttons[i].getBoundingClientRect();
+            rects.push({ left: r.left, right: r.right, width: r.width });
+          }
+          return rects;
+        }
+
+        function rawTabDropIndex(clientX, rects, from) {
+          var n = rects.length;
+          for (var i = 0; i < n; i++) {
+            if (i === from) continue;
+            var mid = rects[i].left + rects[i].width / 2;
+            if (clientX < mid) return i > from ? i - 1 : i;
+          }
+          return n - 1;
+        }
+
+        function tabDropBoundary(rects, from, lo) {
+          var hi = lo + 1;
+          var sepIdx = lo < from ? lo : lo + 1;
+          if (sepIdx === from) sepIdx = lo < from ? hi : lo;
+          if (sepIdx >= rects.length) sepIdx = rects.length - 1;
+          if (sepIdx < 0) sepIdx = 0;
+          var r = rects[sepIdx];
+          return r.left + r.width / 2;
+        }
+
+        var tabDisplayList = computed(function () {
+          var d = activeDashboard.value;
+          if (!d || !d.tabs) return [];
+          var tabs = d.tabs;
+          var from = tabDragIndex.value;
+          var to = tabDragOverIndex.value;
+          var entries = tabs.map(function (t, i) {
+            return { tab: t, origIdx: i, isDragging: from != null && i === from };
+          });
+          if (from == null || to == null || from === to) return entries;
+          var moved = entries.splice(from, 1)[0];
+          entries.splice(to, 0, moved);
+          return entries;
+        });
+
+        function resetTabDrag() {
+          tabDragState = null;
+          tabDragPending = null;
+          tabDragIndex.value = null;
+          tabDragOverIndex.value = null;
+          tabDragGhostLabel.value = "";
+        }
+
+        function tabDragGhostStyle() {
+          return {
+            left: tabDragGhostPos.x + "px",
+            top: tabDragGhostPos.y + "px",
+          };
+        }
+
+        function tabDropIndex(clientX) {
+          if (!tabDragState || !tabDragState.cachedRects || !tabDragState.cachedRects.length) {
+            return tabDragOverIndex.value != null ? tabDragOverIndex.value : 0;
+          }
+          var rects = tabDragState.cachedRects;
+          var from = tabDragState.fromIdx;
+          var current = tabDragOverIndex.value != null ? tabDragOverIndex.value : from;
+          var raw = rawTabDropIndex(clientX, rects, from);
+          if (raw === current) return current;
+          if (Math.abs(raw - current) === 1) {
+            var boundary = tabDropBoundary(rects, from, Math.min(raw, current));
+            if (raw > current) {
+              if (clientX < boundary + TAB_DRAG_HYSTERESIS) return current;
+            } else if (clientX > boundary - TAB_DRAG_HYSTERESIS) {
+              return current;
+            }
+          }
+          return raw;
+        }
+
+        function persistTabOrder(tabs) {
+          var updates = [];
+          tabs.forEach(function (t, i) {
+            if ((t.sort_order || 0) !== i) {
+              t.sort_order = i;
+              updates.push(api("PUT", "/api/rms/dashboard-tabs/" + t.id, { sort_order: i }));
+            }
+          });
+          if (!updates.length) return Promise.resolve();
+          return Promise.all(updates).catch(function (e) {
+            error.value = e.message || String(e);
+            return loadBoards();
+          });
+        }
+
+        function commitTabReorder(fromIdx, toIdx) {
+          if (fromIdx === toIdx || !activeDashboard.value || !activeDashboard.value.tabs) return;
+          var tabs = activeDashboard.value.tabs;
+          var moved = tabs.splice(fromIdx, 1)[0];
+          tabs.splice(toIdx, 0, moved);
+          persistTabOrder(tabs);
+        }
+
+        function beginTabDrag(pending, evt) {
+          var el = pending.el;
+          if (!el) return;
+          var rect = el.getBoundingClientRect();
+          tabDragState = {
+            fromIdx: pending.fromIdx,
+            pointerId: pending.pointerId,
+            offsetX: evt.clientX - rect.left,
+            offsetY: evt.clientY - rect.top,
+            cachedRects: cacheTabButtonRects(),
+          };
+          tabDragIndex.value = pending.fromIdx;
+          tabDragOverIndex.value = pending.fromIdx;
+          tabDragGhostLabel.value = pending.label || "";
+          tabDragGhostPos.x = rect.left;
+          tabDragGhostPos.y = rect.top;
+          tabDragDidMove = true;
+        }
+
+        function onTabPointerMove(evt) {
+          if (!tabDragState || evt.pointerId !== tabDragState.pointerId) return;
+          tabDragGhostPos.x = evt.clientX - tabDragState.offsetX;
+          tabDragGhostPos.y = evt.clientY - tabDragState.offsetY;
+          var toIdx = tabDropIndex(evt.clientX);
+          if (toIdx !== tabDragOverIndex.value) tabDragOverIndex.value = toIdx;
+        }
+
+        function onTabPointerEnd(evt) {
+          document.removeEventListener("pointermove", onTabPointerMovePending);
+          document.removeEventListener("pointerup", onTabPointerEnd);
+          document.removeEventListener("pointercancel", onTabPointerEnd);
+          if (tabDragPending && evt.pointerId === tabDragPending.pointerId) {
+            tabDragPending = null;
+            return;
+          }
+          if (!tabDragState || evt.pointerId !== tabDragState.pointerId) return;
+          document.removeEventListener("pointermove", onTabPointerMove);
+          var fromIdx = tabDragState.fromIdx;
+          var toIdx = tabDragOverIndex.value != null ? tabDragOverIndex.value : fromIdx;
+          resetTabDrag();
+          commitTabReorder(fromIdx, toIdx);
+        }
+
+        function onTabPointerMovePending(evt) {
+          if (!tabDragPending || evt.pointerId !== tabDragPending.pointerId) return;
+          var dx = evt.clientX - tabDragPending.startX;
+          var dy = evt.clientY - tabDragPending.startY;
+          if (!tabDragState && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+            beginTabDrag(tabDragPending, evt);
+            tabDragPending = null;
+            document.removeEventListener("pointermove", onTabPointerMovePending);
+            document.addEventListener("pointermove", onTabPointerMove);
+          }
+          if (tabDragState) onTabPointerMove(evt);
+        }
+
+        function onTabPointerDown(idx, tab, ev) {
+          if (!canWrite.value || ev.button !== 0) return;
+          if (ev.target && ev.target.closest && ev.target.closest(".dash-tw-tab-label")) return;
+          ev.preventDefault();
+          tabDragPending = {
+            fromIdx: idx,
+            pointerId: ev.pointerId,
+            startX: ev.clientX,
+            startY: ev.clientY,
+            label: tab ? (tab.name || "") : "",
+            el: ev.currentTarget,
+          };
+          document.addEventListener("pointermove", onTabPointerMovePending);
+          document.addEventListener("pointerup", onTabPointerEnd);
+          document.addEventListener("pointercancel", onTabPointerEnd);
+        }
+
+        function onTabClick(tabId) {
+          if (tabDragDidMove) {
+            tabDragDidMove = false;
+            return;
+          }
+          selectTab(tabId);
+        }
+
         function syncWidgetTitleDraftsFromTab() {
           var tab = activeTab.value;
           var drafts = {};
@@ -1645,6 +1951,7 @@
           resumeCount: resumeCount,
           hiredCount: hiredCount,
           resumeToHireRate: resumeToHireRate,
+          clientHiredRankingTotal: clientHiredRankingTotal,
           clientJobStageRows: clientJobStageRows,
           clientJobStagePagedRows: clientJobStagePagination.pagedRows,
           clientJobStageCurrentPage: clientJobStagePagination.clientJobStageCurrentPage || clientJobStagePagination.currentPage,
@@ -1687,9 +1994,32 @@
           openDisplayItemPanel: openDisplayItemPanel,
           selectDashboard: selectDashboard,
           selectTab: selectTab,
+          onTabClick: onTabClick,
+          onTabPointerDown: onTabPointerDown,
+          tabDisplayList: tabDisplayList,
+          tabDragIndex: tabDragIndex,
+          tabDragGhostLabel: tabDragGhostLabel,
+          tabDragGhostStyle: tabDragGhostStyle,
           loadDashboard: loadDashboard,
           loadRosterCheck: loadRosterCheck,
           rosterConversionLabel: rosterConversionLabel,
+          rosterStatusLabel: rosterStatusLabel,
+          rosterStatusBadgeClass: rosterStatusBadgeClass,
+          rosterConversionBadgeClass: rosterConversionBadgeClass,
+          rosterFilterKeyword: rosterFilterKeyword,
+          rosterFilterPanelExpanded: rosterFilterPanelExpanded,
+          rosterFilterStatuses: rosterFilterStatuses,
+          rosterFilterConversion: rosterFilterConversion,
+          rosterFilterStatusOptions: rosterFilterStatusOptions,
+          rosterFilterConversionOptions: rosterFilterConversionOptions,
+          toggleRosterStatusFilter: toggleRosterStatusFilter,
+          clearRosterTableFilters: clearRosterTableFilters,
+          rosterFilteredRows: rosterFilteredRows,
+          rosterCheckPagedRows: rosterCheckPagination.pagedRows,
+          rosterCheckCurrentPage: rosterCheckPagination.rosterCheckCurrentPage || rosterCheckPagination.currentPage,
+          rosterCheckTotalPages: rosterCheckPagination.rosterCheckTotalPages || rosterCheckPagination.totalPages,
+          rosterCheckPageNumbers: rosterCheckPagination.rosterCheckPageNumbers || rosterCheckPagination.pageNumbers,
+          rosterCheckGoPage: rosterCheckPagination.rosterCheckGoPage || rosterCheckPagination.goPage,
           loadWidgetData: loadWidgetData,
           refreshWidgetChart: refreshWidgetChart,
           reloadActiveTabData: reloadActiveTabData,

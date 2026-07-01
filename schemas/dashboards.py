@@ -35,22 +35,25 @@ RMS_BLOCK_KEYS_LEGACY: FrozenSet[str] = frozenset({
     "chart_client_job_stage_grouped",
     "chart_client_job_stage_stacked",
     "chart_client_job_stage_funnel",
+    # Retired from addable picker; existing boards may still reference these blocks.
+    "kpi_clients",
+    "roster_kpi_matched", "roster_kpi_missing", "roster_kpi_mismatch", "roster_kpi_ambiguous",
+    "chart_pipeline_dialysis",
+    "chart_recruiter_recommend_vs_hired",
+    "table_recruiter",
+    "table_roster",
+    "roster_header",
 })
 
 RMS_BLOCK_KEYS_NEW: FrozenSet[str] = frozenset({
     "filter",
-    "kpi_clients", "kpi_jobs", "kpi_hc",
+    "kpi_jobs", "kpi_hc",
     "kpi_resume_count", "kpi_hired_count", "kpi_resume_to_hire_rate",
     "chart_pipeline", "filter_summary",
     "chart_pending_backlog",
     "lifecycle_funnel", "chart_lifecycle_pass_rate", "table_lifecycle_detail",
-    "chart_recruiter", "table_recruiter",
+    "chart_recruiter",
     "chart_job_pending_backlog", "chart_client_hired_ranking",
-    "chart_recruiter_recommend_vs_hired",
-    "chart_pipeline_dialysis",
-    "roster_header",
-    "roster_kpi_matched", "roster_kpi_missing", "roster_kpi_mismatch", "roster_kpi_ambiguous",
-    "table_roster",
     "table_client_job_stage",
 })
 

@@ -81,6 +81,12 @@ def test_dashboard_returns_structure(client_rbac, admin_auth, rms_engine, uniq):
     assert "total" in summary
     assert "period_label" in summary
     assert "open_job_count" in body["demand_overview"]
+    assert "open_hc_by_client" in body["demand_overview"]
+    hc_by_client = body["demand_overview"]["open_hc_by_client"]
+    assert isinstance(hc_by_client, list)
+    assert sum(int(row.get("headcount") or 0) for row in hc_by_client) == int(
+        body["demand_overview"].get("open_hc_total") or 0
+    )
     assert "lifecycle_funnel" in body
     assert "pipeline_dialysis" in body
     pd = body["pipeline_dialysis"]
@@ -308,6 +314,30 @@ def test_rms_dashboard_tab_rename(client_rbac, admin_auth, rms_engine, uniq):
         cookies=login.cookies,
     )
     assert empty.status_code == 400
+
+
+def test_rms_dashboard_tab_reorder_sort_only(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    tabs = boards[0]["tabs"]
+    assert len(tabs) >= 2
+    first, second = tabs[0], tabs[1]
+    original_first_order = first["sort_order"]
+    swapped = client_rbac.put(
+        f"/api/rms/dashboard-tabs/{first['id']}",
+        json={"sort_order": second["sort_order"]},
+        cookies=login.cookies,
+    )
+    assert swapped.status_code == 200, swapped.text
+    assert swapped.json()["sort_order"] == second["sort_order"]
+    assert swapped.json()["name"] == first["name"]
+    restored = client_rbac.put(
+        f"/api/rms/dashboard-tabs/{first['id']}",
+        json={"sort_order": original_first_order},
+        cookies=login.cookies,
+    )
+    assert restored.status_code == 200, restored.text
 
 
 def test_rms_preset_style_config_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
@@ -782,6 +812,50 @@ def test_rms_preset_style_clamps_invalid_values(client_rbac, admin_auth, rms_eng
     client_rbac.delete(f"/api/rms/dashboard-widgets/{created.json()['id']}", cookies=login.cookies)
 
 
+def test_rms_kpi_hc_preset_style_roundtrip(client_rbac, admin_auth, rms_engine, uniq):
+    user, pwd = admin_auth
+    login = _login(client_rbac, user, pwd)
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    overview = next(t for t in boards[0]["tabs"] if t["name"] == "总览")
+    tab_id = overview["id"]
+    created = client_rbac.post(
+        f"/api/rms/dashboard-tabs/{tab_id}/widgets",
+        json={
+            "title": "HC 总数",
+            "widget_type": "rms_block",
+            "source_key": "",
+            "config": {
+                "block": "kpi_hc",
+                "style": {
+                    "color": "green",
+                    "color_shade": 2,
+                    "sort": "value_desc",
+                    "chart_type": "featured_line",
+                    "max_items": 12,
+                },
+            },
+            "x": 0,
+            "y": 50,
+            "w": 4,
+            "h": 5,
+        },
+        cookies=login.cookies,
+    )
+    assert created.status_code == 200, created.text
+    body = created.json()
+    wid = body["id"]
+    assert body["config"]["block"] == "kpi_hc"
+    assert body["config"]["style"]["chart_type"] == "featured_line"
+    assert body["config"]["style"]["max_items"] == 12
+
+    boards = client_rbac.get("/api/rms/dashboard-boards", cookies=login.cookies).json()
+    overview = next(t for t in boards[0]["tabs"] if t["name"] == "总览")
+    saved = next(w for w in overview["widgets"] if w["id"] == wid)
+    assert saved["config"]["style"]["chart_type"] == "featured_line"
+
+    client_rbac.delete(f"/api/rms/dashboard-widgets/{wid}", cookies=login.cookies)
+
+
 def test_rms_backfill_missing_client_job_table(client_rbac, admin_auth, rms_engine, uniq):
     import main as crm_main
     from services.dashboards import _dump_json, _parse_json, seed_default_dashboards
@@ -885,15 +959,23 @@ def test_rms_dashboard_metadata(client_rbac, admin_auth, rms_engine, uniq):
     assert any(b["key"] == "kpi_jobs" for b in body["rms_blocks"])
     assert any(b["key"] == "table_client_job_stage" for b in body["rms_blocks"])
     assert any(b["key"] == "lifecycle_funnel" for b in body["rms_blocks"])
-    assert any(b["key"] == "chart_pipeline_dialysis" for b in body["rms_blocks"])
     addable_keys = {b["key"] for b in body["rms_blocks"]}
-    assert "chart_pipeline_dialysis" in addable_keys
     for legacy_key in (
         "chart_client_job_stage_grouped",
         "chart_client_job_stage_stacked",
         "chart_client_job_stage_funnel",
         "chart_history_pass",
         "table_history",
+        "kpi_clients",
+        "roster_kpi_matched",
+        "roster_kpi_missing",
+        "roster_kpi_mismatch",
+        "roster_kpi_ambiguous",
+        "chart_pipeline_dialysis",
+        "chart_recruiter_recommend_vs_hired",
+        "table_recruiter",
+        "table_roster",
+        "roster_header",
     ):
         assert legacy_key not in addable_keys
 
@@ -1433,6 +1515,32 @@ def test_client_job_stage_total_equals_rows(client_rbac, admin_auth, rms_engine,
         assert int(total.get(key) or 0) == row_sum, key
     hc_sum = sum(int(row.get("headcount") or 0) for row in rows)
     assert int(total.get("headcount") or 0) == hc_sum
+
+
+def test_demand_overview_hc_by_client_matches_total_including_zero_resume_jobs(
+    client_rbac, admin_auth, rms_engine, uniq
+):
+    """open_hc_by_client sums opening HC (not job count), including 0-resume open jobs."""
+    login, job_id = _delivery_open_job(client_rbac, rms_engine, admin_auth, f"hcz_{uniq}")
+    admin_user, admin_pwd = admin_auth
+    patched = client_rbac.put(
+        f"/api/rms/jobs/{job_id}",
+        headers=auth_header(admin_user, admin_pwd),
+        json={"headcount": 5},
+    )
+    assert patched.status_code == 200, patched.text
+    r = client_rbac.get(f"/api/rms/dashboard?job_ids={job_id}", cookies=login.cookies)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    overview = body["demand_overview"]
+    row = _job_row(body["client_job_stage_summary"], job_id)
+    assert int(row.get("pushed_resume_count") or 0) == 0
+    assert int(overview["open_hc_total"]) >= 5
+    hc_by_client = overview["open_hc_by_client"]
+    assert sum(int(item.get("headcount") or 0) for item in hc_by_client) == int(
+        overview["open_hc_total"]
+    )
+    assert any(int(item.get("headcount") or 0) >= 5 for item in hc_by_client)
 
 
 def test_client_job_stage_snapshot_scheduling_and_onboarding(

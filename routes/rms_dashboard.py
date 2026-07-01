@@ -21,8 +21,8 @@ class RmsDashboardBody(BaseModel):
 
 
 class RmsTabBody(BaseModel):
-    name: str = ""
-    sort_order: int = 0
+    name: Optional[str] = None
+    sort_order: Optional[int] = None
     layout_json: dict = Field(default_factory=dict)
     rms_template: Optional[str] = None
 

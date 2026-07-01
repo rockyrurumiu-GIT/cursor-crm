@@ -69,6 +69,14 @@
     var span = max - min;
     return { min: min - span * 0.08, max: max + span * 0.08 };
   }
+  function resolveValueScaleDomain(cfg, values) {
+    if (cfg && cfg.value_scale_max != null && Number.isFinite(Number(cfg.value_scale_max))) {
+      var fixedMin = cfg.value_scale_min != null && Number.isFinite(Number(cfg.value_scale_min))
+        ? Number(cfg.value_scale_min) : 0;
+      return { min: fixedMin, max: Number(cfg.value_scale_max) };
+    }
+    return computeYDomain(values);
+  }
   function emptyFeaturedLineModel(widget, cfg, apiData) {
     return {
       title: (widget && widget.title) || "统计趋势",
@@ -157,6 +165,9 @@
       deltaDirection: deltaDirection,
       averageValue: averageValue,
       lineColor: LINE_COLOR,
+      valueScaleMin: cfg.value_scale_min,
+      valueScaleMax: cfg.value_scale_max,
+      compactAvgLabel: cfg.compact_avg_label === true,
     };
   }
   function destroyFeaturedLine(mountEl) {
@@ -182,7 +193,10 @@
     var chartW = w - padL - padR;
     var chartH = h - padT - padB;
     var values = points.map(function (p) { return p.value; });
-    var domain = computeYDomain(values);
+    var domain = resolveValueScaleDomain({
+      value_scale_min: model.valueScaleMin,
+      value_scale_max: model.valueScaleMax,
+    }, values);
     var n = points.length;
     var activeIdx = n >= 1 ? Math.min(Math.max(model.activeIndex, 0), n - 1) : 0;
     function xAt(i) {
@@ -298,6 +312,9 @@
       if (model.showAverageLine) {
         var avgLabel = document.createElement("div");
         avgLabel.className = "bms-featured-line-average-label";
+        if (model.compactAvgLabel) {
+          avgLabel.className += " bms-featured-line-average-label--compact";
+        }
         avgLabel.textContent = model.averageLabel;
         if (chartBuilt.avgLineYPct != null) {
           avgLabel.style.top = chartBuilt.avgLineYPct + "%";
