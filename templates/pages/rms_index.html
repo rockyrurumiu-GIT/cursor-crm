@@ -2088,7 +2088,10 @@
                         <td class="crm-td crm-sticky-right-op whitespace-nowrap">
                             <div v-if="canViewOfferDetailRow(row)" class="crm-op-actions">
                                 <span class="group relative inline-flex">
-                                    <button type="button" class="crm-op-btn-detail" :disabled="offerActionSaving" @click="openOfferDetailModal(row)" :aria-label="canApproveOfferRow(row) ? '审批' : '详情'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6a1 1 0 0 1 1 1v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v0a1 1 0 0 1 1-1Z"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg></button>
+                                    <button type="button" class="crm-op-btn-detail" :disabled="offerActionSaving" @click="openOfferDetailModal(row)" :aria-label="canApproveOfferRow(row) ? '审批' : '详情'">
+                                        <svg v-if="canApproveOfferRow(row)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4h6a1 1 0 0 1 1 1v0a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v0a1 1 0 0 1 1-1Z"/><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></svg>
+                                        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                                    </button>
                                     <span class="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 -translate-x-1/2 whitespace-nowrap rounded-md bg-[#1A1D1F] px-2 py-1 text-xs text-white opacity-0 shadow-sm transition-opacity duration-150 group-hover:opacity-100">{{ canApproveOfferRow(row) ? '审批' : '详情' }}</span>
                                 </span>
                             </div>
